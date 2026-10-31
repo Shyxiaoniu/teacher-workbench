@@ -1,0 +1,22 @@
+# 构建上下文只留运行必需的东西，镜像更小、构建更快
+.git
+.gitignore
+.gitattributes
+.github
+.workbuddy
+_analysis
+_backup
+*.zip
+*.log
+
+# 运行期数据：真实班级 / 学生 / 密码哈希绝不能烤进镜像
+app/data
+**/__pycache__
+**/*.pyc
+**/.DS_Store
+
+# 编排与文档不进镜像
+Dockerfile
+docker-compose.yml
+.dockerignore
+README.md

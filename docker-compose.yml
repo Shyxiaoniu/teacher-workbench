@@ -1,0 +1,49 @@
+# ============================================================
+# 班级工作台 2.0 · 一键编排
+# ------------------------------------------------------------
+#   docker compose up -d --build      # 构建 + 启动
+#   docker compose logs -f            # 看日志
+#   docker compose down               # 停止（数据卷保留）
+#
+# 端口改了不用重建镜像：改 .env 里的 WORKBENCH_PORT，或
+#   WORKBENCH_PORT=18080 docker compose up -d
+# ============================================================
+services:
+  workbench:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: teacher-workbench:2.0.0
+    container_name: teacher-workbench
+    restart: unless-stopped
+    ports:
+      # 左边是宿主机端口（教室局域网访问用），右边固定为容器内端口
+      - "${WORKBENCH_PORT:-20020}:20020"
+    environment:
+      TZ: Asia/Shanghai
+      PORT: "20020"
+      BIND: "0.0.0.0"
+      DATA_DIR: /app/data
+    volumes:
+      # 命名卷：班级 / 学生 / 考勤 / 作业 / 成绩 / 配置全在这里，删容器不丢
+      # 想直接看文件可换成 bind mount：- ./app/data:/app/data
+      - workbench-data:/app/data
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import sys,urllib.request;r=urllib.request.urlopen('http://127.0.0.1:20020/api/v2/ping',timeout=3);sys.exit(0 if r.status==200 else 1)"
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  workbench-data:
+    name: teacher-workbench-data
