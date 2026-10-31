@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>文件提交</title>
+<style>
+  :root{--brand:#0F6E56;--brand-soft:#E1F5EE;--bg:#F7F9F8;--surface:#fff;--border:#DDE5E1;--text:#1A2E28;--muted:#5F6E68;--err:#E24B4A;--ok:#1D9E75}
+  *{box-sizing:border-box}
+  body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--text);max-width:640px;margin:24px auto;padding:0 16px}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px;box-shadow:0 2px 10px rgba(15,110,86,.06)}
+  h2{margin:0 0 4px;color:var(--brand);font-size:20px}
+  .sub{color:var(--muted);font-size:13px;margin-bottom:16px;line-height:1.6}
+  label{display:block;margin:14px 0 5px;font-weight:600;font-size:13px}
+  input[type=text],textarea,input[type=file]{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:10px;font-size:14px;background:var(--surface);color:var(--text);font-family:inherit}
+  input:focus,textarea:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
+  input.ro{background:var(--bg);color:var(--muted);border-style:dashed}
+  input.bad{border-color:var(--err);box-shadow:0 0 0 3px rgba(226,75,74,.15)}
+  input.good{border-color:var(--ok);box-shadow:0 0 0 3px rgba(29,158,117,.15)}
+  .req{color:var(--err);margin-left:3px}
+  .hint{font-size:12px;margin-top:4px;min-height:16px;line-height:1.5}
+  .hint.ok{color:var(--ok)} .hint.err{color:var(--err)}
+  button{margin-top:18px;width:100%;background:var(--brand);color:#fff;border:0;padding:12px;border-radius:10px;font-size:15px;cursor:pointer}
+  button:disabled{opacity:.6;cursor:not-allowed}
+  .note{background:var(--brand-soft);border:1px solid var(--border);color:var(--muted);border-radius:10px;padding:9px 13px;font-size:12px;margin-bottom:6px;line-height:1.6}
+  .note.ok-note{color:var(--ok)} .note.warn-note{color:#B7791F;background:#FDF3E3;border-color:#F0D9A8}
+  #msg{margin-top:14px;font-size:14px;min-height:20px}
+  .ok{color:var(--ok)} .err{color:var(--err)}
+  .files{font-size:12px;color:var(--muted);margin-top:6px}
+  .api{font-size:11px;color:var(--muted);word-break:break-all;margin-top:6px}
+</style>
+</head>
+<body>
+  <div class="card">
+    <h2 id="title">文件提交</h2>
+    <div class="sub" id="subTitle"></div>
+    <div class="note" id="rosterInfo">加载班级信息中…</div>
+
+    <label>学号<span class="req">*</span></label>
+    <input id="sid" type="text" placeholder="例如 20250301" inputmode="numeric" autocomplete="off">
+    <div class="hint" id="sidHint"></div>
+
+    <label>姓名</label>
+    <input id="sname" type="text" placeholder="系统将自动匹配" autocomplete="off">
+    <div class="hint" id="snameHint"></div>
+
+    <label>班级</label>
+    <input id="sclass" type="text" placeholder="如 七(3)班" autocomplete="off">
+
+    <label>作品标题</label>
+    <input id="title2" type="text" placeholder="例如：我的听音识传说手抄报">
+
+    <label>作品简介</label>
+    <textarea id="intro" rows="3" placeholder="简要说明你的作品（选填）"></textarea>
+
+    <label>上传作品文件<span class="req">*</span></label>
+    <input id="files" type="file" multiple>
+    <div class="files" id="fileInfo"></div>
+
+    <button id="btn" onclick="submitFile()">提交作品</button>
+    <div id="msg"></div>
+    <div class="api" id="apiInfo"></div>
+  </div>
+
+<script>
+// 从活动页生成的链接读取参数：api=活动提交地址, title=活动标题, desc=说明, class=班级名
+const params = new URLSearchParams(location.search);
+let API = params.get('api') || 'http://127.0.0.1:5055/api/class-activity';
+const ACT_TITLE = params.get('title') || '文件提交';
+const ACT_DESC  = params.get('desc') || '请上传你的作品文件。同一学号重复提交将覆盖为最新版本。';
+const CLASS_PARAM = params.get('class') || '';   // 班级名（仅此短参数，花名册由服务端按班级下发）
+
+// ---- 班级花名册（从提交服务同源拉取，保持链接简短）----
+let ROSTER = null;            // { c, s:[[no,name],...] }
+let ROSTER_MAP = {};          // 学号 -> 姓名
+async function loadRoster() {
+  if (!CLASS_PARAM) return false;
+  try {
+    const r = await fetch(location.origin + '/api/roster?class=' + encodeURIComponent(CLASS_PARAM), { cache: 'no-store' });
+    if (!r.ok) return false;
+    const j = await r.json();
+    const arr = (j && j.students) || [];
+    if (!arr.length) return false;
+    ROSTER = { c: (j.cls || CLASS_PARAM), s: arr.map(x => [String(x.sid || '').trim(), String(x.name || '').trim()]).filter(x => x[0]) };
+    ROSTER.s.forEach(([no, name]) => { ROSTER_MAP[no] = name; });
+    return true;
+  } catch (e) { return false; }
+}
+
+const $ = id => document.getElementById(id);
+function setMsg(t, c){ const m=$('msg'); m.textContent=t; m.className=c||''; }
+function setHint(id, t, c){ const h=$(id); h.textContent=t; h.className='hint'+(c?(' '+c):''); }
+
+$('files').addEventListener('change', e=>{
+  const fs = e.target.files; let s = fs.length ? ('已选 '+fs.length+' 个文件：'+Array.from(fs).map(f=>f.name).join('、')) : '';
+  $('fileInfo').textContent = s;
+});
+
+// 学号输入：自动匹配姓名 + 班级，并做校验
+function onSid(){
+  const no = $('sid').value.trim();
+  const sidEl = $('sid'), nameEl = $('sname');
+  if (!no) {
+    sidEl.classList.remove('good','bad');
+    nameEl.value = ''; nameEl.readOnly = false; nameEl.classList.remove('good','bad');
+    setHint('sidHint',''); setHint('snameHint','');
+    return;
+  }
+  if (!ROSTER) { sidEl.classList.remove('good','bad'); setHint('sidHint',''); return; }
+  const name = ROSTER_MAP[no];
+  if (name) {
+    sidEl.classList.add('good'); sidEl.classList.remove('bad');
+    setHint('sidHint','✓ 学号已匹配：'+name+' · '+(ROSTER.c||''),'ok');
+    nameEl.value = name; nameEl.readOnly = true;
+    nameEl.classList.add('good'); nameEl.classList.remove('bad');
+    setHint('snameHint','✓ 姓名已自动填入，无需修改','ok');
+  } else {
+    sidEl.classList.add('bad'); sidEl.classList.remove('good');
+    setHint('sidHint','⚠ 学号不在本班名单中，请核对后重填','err');
+    nameEl.value = ''; nameEl.readOnly = false; nameEl.classList.remove('good','bad');
+    setHint('snameHint','');
+  }
+}
+// 姓名输入：与学号匹配到的姓名比对
+function onName(){
+  if (!ROSTER) return;
+  const no = $('sid').value.trim();
+  const name = ROSTER_MAP[no];
+  if (!name) return;                       // 学号本身不匹配时由 onSid 提示
+  const typed = $('sname').value.trim();
+  if (typed && typed !== name) {
+    $('sname').classList.add('bad'); $('sname').classList.remove('good');
+    setHint('snameHint','⚠ 姓名与学号不匹配（该学号对应：'+name+'）','err');
+  } else {
+    $('sname').classList.add('good'); $('sname').classList.remove('bad');
+    setHint('snameHint','✓ 姓名与学号一致','ok');
+  }
+}
+$('sid').addEventListener('input', onSid);
+$('sname').addEventListener('input', onName);
+
+function load(){
+  document.getElementById('title').textContent = ACT_TITLE;
+  document.title = ACT_TITLE + ' · 文件提交';
+  document.getElementById('subTitle').textContent = ACT_DESC;
+  document.getElementById('apiInfo').textContent = '提交至：' + API;
+}
+
+async function submitFile(){
+  const sid = $('sid').value.trim();
+  if (!sid){ setMsg('请填写学号','err'); return; }
+  let finalName = $('sname').value.trim();
+  let finalClass = $('sclass').value.trim();
+  if (ROSTER) {
+    const name = ROSTER_MAP[sid];
+    if (!name){ setMsg('✗ 学号不在本班名单中，请核对后重填','err'); $('sid').classList.add('bad'); return; }
+    if (finalName && finalName !== name){ setMsg('✗ 姓名与学号不匹配（该学号对应：'+name+'）','err'); $('sname').classList.add('bad'); return; }
+    finalName = name; finalClass = ROSTER.c || '';   // 以花名册为准，防止篡改
+  }
+  const fileEls = $('files').files;
+  if (!fileEls.length){ setMsg('请选择要上传的文件','err'); return; }
+  $('btn').disabled = true; setMsg('上传中…');
+  try{
+    const fd = new FormData();
+    fd.append('学号', sid);
+    fd.append('姓名', finalName);
+    fd.append('班级', finalClass);
+    fd.append('作品标题', $('title2').value.trim());
+    fd.append('作品简介', $('intro').value.trim());
+    for (const f of fileEls) fd.append('作品文件', f, f.name);
+    const r = await fetch(API, { method:'POST', body: fd, mode:'cors' });
+    const j = await r.json().catch(()=>({}));
+    if (r.ok) setMsg('✓ 提交成功，'+ (finalName?('「'+finalName+'」'):'') +'已存入活动「' + ACT_TITLE + '」','ok');
+    else setMsg('✗ ' + (j.error || j.message || ('提交失败（'+r.status+'）')),'err');
+  }catch(e){ setMsg('✗ '+e.message,'err'); }
+  finally{ $('btn').disabled = false; }
+}
+
+(async function(){
+  load();
+  const ok = await loadRoster();
+  if (ok) {
+    $('sclass').value = ROSTER.c || '';
+    $('sclass').readOnly = true; $('sclass').classList.add('ro');
+    $('sname').readOnly = true;            // 学号匹配后自动填入并锁定
+    $('rosterInfo').textContent = '本班花名册已加载：共 ' + ROSTER.s.length + ' 人。填写学号后系统将自动匹配你的姓名与班级，填错会即时提示。';
+    $('rosterInfo').className = 'note ok-note';
+  } else {
+    $('sclass').readOnly = false; $('sclass').classList.remove('ro');
+    $('sname').readOnly = false;
+    const why = CLASS_PARAM ? '未能从服务端获取本班花名册' : '链接未携带班级信息';
+    $('rosterInfo').textContent = why + '，请手动填写班级，学号/姓名将不会自动核对（建议老师在选择班级后再生成链接）。';
+    $('rosterInfo').className = 'note warn-note';
+  }
+})();
+</script>
+</body>
+</html>

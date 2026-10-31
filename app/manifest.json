@@ -1,0 +1,18 @@
+{
+  "id": "/",
+  "name": "班级工作台",
+  "short_name": "班级工作台",
+  "description": "桂城一中班级工作台 · 座位 / 考勤 / 作业 / 成绩 / 德育一体",
+  "lang": "zh-CN",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#F7FAF9",
+  "theme_color": "#0F6E56",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

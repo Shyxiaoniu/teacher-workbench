@@ -1,0 +1,20 @@
+# 运行期数据：含教师密码哈希、班级 / 学生 / 家长信息、上传文件、每日快照
+app/data/
+
+# 打包产物（单个 zip 超过 Gitee 100MB 限制，且可从源码重新构建）
+*.zip
+
+# 本地分析与备份目录（截图、报告、旧版快照）
+_analysis/
+_backup/
+.workbuddy/
+
+# 各种临时文件
+__pycache__/
+*.py[cod]
+*.log
+.DS_Store
+Thumbs.db
+
+# 本地环境变量（端口等），不应入库
+.env
