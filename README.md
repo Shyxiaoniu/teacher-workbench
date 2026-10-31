@@ -166,6 +166,7 @@ compose 里的镜像名已参数化，构建时直接打成 ACR 地址，不需�
 ```bash
 # 1) 登录（用户名一般是阿里云账号全名，密码取 ACR 控制台的「固定密码」）
 docker login registry.cn-hangzhou.aliyuncs.com
+# 地域按自己的实例替换域名：cn-beijing / cn-shanghai / cn-guangzhou / cn-shenzhen …
 
 # 2) 构建并推送
 export IMAGE_REPO=registry.cn-hangzhou.aliyuncs.com/<命名空间>/teacher-workbench
