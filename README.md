@@ -40,7 +40,171 @@ docker compose up -d --build
 
 打开 `http://<本机IP>:20020/teacher/` → 首次进入会要求**设置教师密码**（密码只存在数据卷里）。
 
-### 1.1 服务编排与启动顺序
+> 仓库里已带 `docker-compose.yml`，只是部署的话**不需要复制任何配置**，上面那一条命令就够了。
+> 1.1 给出完整文件内容，供单独分发、粘贴到别的目录，或与仓库文件对照。
+
+### 1.1 完整配置示例（可直接复制）
+
+把下面整段保存为 `docker-compose.yml`，与 `Dockerfile`（以及 `app/` 目录）放在同一层，
+然后 `docker compose up -d --build` 即可。
+
+```yaml
+# ============================================================
+# 班级工作台 2.0 · Docker Compose 编排
+# ------------------------------------------------------------
+# 服务与启动顺序：
+#   init ──(成功退出)──▶ workbench ──(healthy)──▶ 就绪可用
+# ============================================================
+name: teacher-workbench
+
+services:
+  # ---------------------------------------------------------
+  # init：一次性数据卷初始化
+  # 命名卷首次挂载会继承镜像里的属主（10001），一般不需要这一层；
+  # 但当数据卷是旧卷、或改成了 bind mount（宿主机目录属主不是 10001）时，
+  # 主服务会因写不了数据目录而直接退出。这一层先把属主修正，再放行主服务。
+  # ---------------------------------------------------------
+  init:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ${IMAGE_REPO:-teacher-workbench}:${IMAGE_TAG:-2.0.0}
+    container_name: teacher-workbench-init
+    # root 才有权限改卷属主；只做这一件事，跑完立刻退出
+    user: "0:0"
+    entrypoint: ["/bin/sh", "-c"]
+    # 注意：Compose 会把命令里的 $XXX 当变量插值，脚本内的 shell 变量必须写成 $$XXX，
+    # 这里干脆不用变量，避免踩坑。
+    command:
+      - |
+        set -eu
+        if [ ! -w /app/data ] || [ "$(stat -c %u /app/data 2>/dev/null || echo 0)" != "10001" ]; then
+          echo "[init] 数据卷属主异常，正在修正 -> 10001:10001"
+          chown -R 10001:10001 /app/data
+        else
+          echo "[init] 数据卷属主正常（10001），无需修改"
+        fi
+        mkdir -p /app/data/files /app/data/backup \
+                 /app/data/submissions/enh /app/data/submissions/uploads
+        chown -R 10001:10001 /app/data
+        echo "[init] 数据卷就绪"
+    volumes:
+      - workbench-data:/app/data
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+    restart: "no"
+    network_mode: none          # 不需要网络，只碰数据卷
+    security_opt:
+      - no-new-privileges:true
+
+  # ---------------------------------------------------------
+  # workbench：主服务（唯一对外端口）
+  # ---------------------------------------------------------
+  workbench:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ${IMAGE_REPO:-teacher-workbench}:${IMAGE_TAG:-2.0.0}
+    container_name: teacher-workbench
+    # 启动顺序：init 成功退出之后才启动本服务
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    # 宿主机 IP:宿主机端口 : 容器端口（容器内固定 20020，换端口不用重建镜像）
+    ports:
+      - "${WORKBENCH_HOST_IP:-0.0.0.0}:${WORKBENCH_PORT:-20020}:20020"
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      # 以下变量由 entrypoint.sh 与 server.py 读取，决定监听地址与数据落盘位置
+      PORT: "20020"
+      BIND: "0.0.0.0"
+      WB_DATA_DIR: /app/data
+      WB_SUBMISSION_DATA_DIR: /app/data/submissions
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      # 单一数据卷：SQLite / 配置 / 上传 / 每日快照 / 提交系统数据全在里面
+      - workbench-data:/app/data
+      # 想直接在宿主机上看文件，把上一行换成（Linux 需先 chown -R 10001:10001 ./app/data）：
+      # - ./app/data:/app/data
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import sys,urllib.request;r=urllib.request.urlopen('http://127.0.0.1:20020/api/v2/ping',timeout=3);sys.exit(0 if r.status==200 else 1)"
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    # 给 SQLite 留时间做 WAL 检查点，避免直接 kill 导致下次启动回放
+    stop_grace_period: 15s
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  workbench-data:
+    # 固定卷名：换 compose 项目名、重装容器都不会丢数据
+    name: ${WORKBENCH_VOLUME:-teacher-workbench-data}
+```
+
+> 上面这段与仓库根目录的 `docker-compose.yml` **完全一致**；若日后两者不一致，以仓库文件为准。
+> 改端口/卷名请用下面的 `.env`，**不要直接改这个 YAML**，否则下次拉代码会冲突。
+
+可选：同目录放一个 `.env` 覆盖默认值，不写就用默认值（**不要放任何密码**）：
+
+```dotenv
+WORKBENCH_PORT=20020
+WORKBENCH_HOST_IP=0.0.0.0
+TZ=Asia/Shanghai
+WORKBENCH_VOLUME=teacher-workbench-data
+# 本地构建留空；推拉 ACR 时填完整仓库地址
+IMAGE_REPO=
+IMAGE_TAG=2.0.0
+```
+
+完整带注释的版本见仓库根目录的 `.env.example`（复制为 `.env` 即可）。
+
+**没有源码、只有镜像时**不必用这份 YAML 构建：把 `IMAGE_REPO` 指向已发布的 ACR 地址，
+加 `--no-build` 直接跑（详见 1.9）：
+
+```bash
+IMAGE_REPO=crpi-2xt9f8f2tdrrpst5.cn-guangzhou.personal.cr.aliyuncs.com/niugebox/teacher-workbench \
+IMAGE_TAG=2.0.0 docker compose up -d --no-build
+```
+
+### 1.2 主要配置项的含义与适用场景
+
+| 配置项 | 含义 | 适用场景 / 何时需要动它 |
+|---|---|---|
+| `init` 服务 | 一次性容器：修正数据卷属主为 `10001`、补建 `files/ backup/ submissions/` 子目录 | 首次用命名卷、或改成 bind mount 后属主不对时；有它就不用再手动 `chown` |
+| `depends_on` + `service_completed_successfully` | 主服务必须等 `init` **成功退出**才启动 | 避免"容器先起来、发现数据目录写不了再崩"。本项目没有需要并行启动的服务 |
+| `restart: unless-stopped` | 崩溃、重启机器后自动拉起（手动 `stop` 的不拉） | 长期挂在办公室电脑或服务器上；调试想手动控制时改成 `"no"` |
+| `ports` 三段式 | `宿主IP:宿主端口:容器端口` | 只给本机用 → 第一段填 `127.0.0.1`；端口冲突 → 改第二段的 `WORKBENCH_PORT` |
+| `volumes: workbench-data:/app/data` | 命名卷装全部数据（库/附件/快照/提交） | 默认推荐；想在资源管理器里直接翻文件 → 换 bind mount `./app/data:/app/data` |
+| `healthcheck` | 每 30s 打一次 `/api/v2/ping`，3 次失败标记 `unhealthy` | 配合 `up -d --wait` 写开机自启；给反向代理/监控做探活；不关心可整段删掉 |
+| `stop_grace_period: 15s` | 停止前留 15 秒给 SQLite 做 WAL 检查点 | 经常重启或会直接断电的环境；不建议调小 |
+| `security_opt: no-new-privileges` | 禁止容器内进程提权 | 所有场景都建议保留，几乎零成本 |
+| `logging: json-file 10m×3` | 日志轮转，最多占 30MB | 长期运行必需，否则日志会无限增长占满磁盘 |
+| `user: "0:0"`（仅 `init`） | 只有 root 能改卷属主 | 只在 `init` 里用；主服务必须保持非 root `10001` |
+| `IMAGE_REPO` / `IMAGE_TAG` | 镜像仓库与标签 | 推/拉 ACR、固定版本、同机跑多版本时 |
+| `WB_DATA_DIR` / `WB_SUBMISSION_DATA_DIR` | 主库与提交系统的落盘位置 | 只在改挂载点时同步改；两者必须在同一个数据卷内 |
+
+**四种典型场景，分别要改什么：**
+
+| 场景 | 建议配置 |
+|---|---|
+| 办公室电脑 / 教室一体机（老师自己用） | 什么都不用改，`docker compose up -d --build` 即可 |
+| 学校服务器 / NAS（多人长期访问） | 保持 `restart: unless-stopped`；用 `up -d --wait` 挂开机自启；防火墙放行端口 |
+| 只允许本机、前面挂 nginx / 反代 | `WORKBENCH_HOST_IP=127.0.0.1`，由反向代理对外 |
+| 同机多实例（初一/初二各一套） | `WORKBENCH_PORT` 与 `WORKBENCH_VOLUME` 各给不同值，其余不用改 |
+
+### 1.3 服务编排与启动顺序
 
 本项目是**单进程**架构——教师端、学生端、增量同步、旧提交接口都在同一个 Python 进程里，
 共用一个端口；不依赖外部数据库、缓存或消息队列。所以编排只需要两个服务：
@@ -61,7 +225,7 @@ init ──service_completed_successfully──▶ workbench ──healthcheck /
 - `workbench` 健康检查打公开接口 `/api/v2/ping`（不需要登录），连续 3 次失败标记 `unhealthy`；
   用 `docker compose up -d --wait` 会一直等到 `healthy` 才返回，适合写进开机自启脚本。
 
-### 1.2 容器镜像与构建方式
+### 1.4 容器镜像与构建方式
 
 - **基础镜像**：`python:3.12-slim` + `tzdata`（时区必需，否则晚上 8 点后考勤会跨天归档）。
 - **构建上下文**：仓库根目录，只 `COPY app/ /app/`；`.dockerignore` 已排除 `.git`、`_analysis`、
@@ -75,9 +239,9 @@ docker compose build --no-cache          # 完全重建
 docker build -t teacher-workbench:2.0.0 .   # 不用 compose 时
 ```
 
-镜像名与标签已参数化，改 `IMAGE_REPO` / `IMAGE_TAG` 即可打成 ACR 地址（见 1.7）。
+镜像名与标签已参数化，改 `IMAGE_REPO` / `IMAGE_TAG` 即可打成 ACR 地址（见 1.9）。
 
-### 1.3 端口映射
+### 1.5 端口映射
 
 ```yaml
 ports:
@@ -95,7 +259,7 @@ WORKBENCH_PORT=18080 docker compose up -d       # 临时换端口
 # 或 cp .env.example .env 后改 WORKBENCH_PORT=18080
 ```
 
-### 1.4 环境变量
+### 1.6 环境变量
 
 | 变量 | 作用 | 默认 | 何时需要改 |
 |---|---|---|---|
@@ -112,7 +276,7 @@ WORKBENCH_PORT=18080 docker compose up -d       # 临时换端口
 **没有任何密码、密钥或数据库连接串需要配置**：服务不连外部组件，教师密码在首次访问时
 由网页设置，只保存在数据卷里。`.env` 只放端口、时区、卷名这类非敏感参数。
 
-### 1.5 数据卷挂载
+### 1.7 数据卷挂载
 
 | 宿主机 | 容器内 | 模式 | 内容 |
 |---|---|---|---|
@@ -130,7 +294,7 @@ WORKBENCH_PORT=18080 docker compose up -d       # 临时换端口
 | `backup/` | 每日快照 `workbench-YYYYMMDD.db` | 启动时自动 VACUUM 快照，保留 14 份 |
 | `submissions/` | `roster.json`、`submissions.json`、`uploads/`、`enh/` | 旧提交系统的名册、提交记录与上传件 |
 
-### 1.6 本地启动与停止
+### 1.8 本地启动与停止
 
 ```bash
 # 启动
@@ -159,7 +323,7 @@ curl -s http://127.0.0.1:20020/api/v2/ping                   # {"ok": true, "ser
 curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:20020/s/   # 200 = 学生端可访问
 ```
 
-### 1.7 推送到阿里云 ACR / 从 ACR 部署
+### 1.9 推送到阿里云 ACR / 从 ACR 部署
 
 **已发布镜像**（阿里云 ACR 个人版，广州，`linux/amd64`）：
 
@@ -216,7 +380,7 @@ docker run -d --name teacher-workbench --restart unless-stopped \
 
 登录凭据由 Docker 保存在本机 `~/.docker/config.json`，**不要**写进 `docker-compose.yml` 或提交到仓库。
 
-### 1.8 不用 compose 的单容器方式
+### 1.10 不用 compose 的单容器方式
 
 ```bash
 docker build -t teacher-workbench:2.0.0 .
@@ -228,7 +392,7 @@ docker run -d --name workbench --restart unless-stopped \
 需要先 `sudo chown -R 10001:10001 <目录>`，否则容器启动时会明确报"数据目录不可写"并退出。
 
 
-### 1.9 备份建议
+### 1.11 备份建议
 
 浏览器侧的「导出备份」仍然可用：教师端右上角 ⚙ 系统设置 → 数据与备份，导出的
 `.cwbackup` / `.json` 与容器卷是两条独立的备份路径，建议都留一份。卷内 `backup/`
