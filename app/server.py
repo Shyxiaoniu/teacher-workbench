@@ -33,7 +33,9 @@ import projection as PJ                # noqa: E402
 import ports as PORTX                  # noqa: E402
 from store import Store, TABLES        # noqa: E402
 
-DATA_DIR = os.path.join(ROOT, "data")
+# 数据目录：默认与程序同级的 data/（本机直接用不受影响）；
+# 容器部署时用 WB_DATA_DIR 指到挂载卷，不设该变量则行为与以前完全一致。
+DATA_DIR = os.environ.get("WB_DATA_DIR") or os.path.join(ROOT, "data")
 DB_PATH = os.path.join(DATA_DIR, "workbench.db")
 CONFIG_PATH = os.path.join(DATA_DIR, "config.json")
 UPLOAD_DIR = os.path.join(DATA_DIR, "files")

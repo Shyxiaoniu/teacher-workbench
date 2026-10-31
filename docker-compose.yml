@@ -1,33 +1,99 @@
 # ============================================================
-# 班级工作台 2.0 · 一键编排
+# 班级工作台 2.0 · Docker Compose 编排
 # ------------------------------------------------------------
-#   docker compose up -d --build      # 构建 + 启动
-#   docker compose logs -f            # 看日志
-#   docker compose down               # 停止（数据卷保留）
+# 服务与启动顺序：
+#   init ──(成功退出)──▶ workbench ──(healthy)──▶ 就绪可用
 #
-# 端口改了不用重建镜像：改 .env 里的 WORKBENCH_PORT，或
-#   WORKBENCH_PORT=18080 docker compose up -d
+#   init       一次性容器：修正数据卷属主、补建子目录，跑完即退出（restart: "no"）
+#   workbench  主服务：教师端 / 学生端 / 同步服务 / 旧提交接口，单进程单端口
+#
+# 常用命令：
+#   docker compose up -d --build       构建并启动（后台）
+#   docker compose ps                  查看状态（STATUS=healthy 即可用）
+#   docker compose logs -f workbench   跟踪日志
+#   docker compose stop                停止（容器保留，数据保留）
+#   docker compose start               再次启动
+#   docker compose down                停止并删除容器（数据卷保留）
+#   docker compose down -v             连数据卷一起删（危险）
+#
+# 推到阿里云 ACR（镜像名已参数化，无需改本文件）：
+#   IMAGE_REPO=registry.cn-hangzhou.aliyuncs.com/<命名空间>/teacher-workbench \
+#   IMAGE_TAG=2.0.0 docker compose build
+#   docker compose push
 # ============================================================
+name: teacher-workbench
+
 services:
+  # ---------------------------------------------------------
+  # init：一次性数据卷初始化
+  # 命名卷首次挂载会继承镜像里的属主（10001），一般不需要这一层；
+  # 但当数据卷是旧卷、或改成了 bind mount（宿主机目录属主不是 10001）时，
+  # 主服务会因写不了数据目录而直接退出。这一层先把属主修正，再放行主服务。
+  # ---------------------------------------------------------
+  init:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ${IMAGE_REPO:-teacher-workbench}:${IMAGE_TAG:-2.0.0}
+    container_name: teacher-workbench-init
+    # root 才有权限改卷属主；只做这一件事，跑完立刻退出
+    user: "0:0"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        need=0
+        [ "$(stat -c %u /app/data 2>/dev/null || echo 0)" = "10001" ] || need=1
+        [ -w /app/data ] || need=1
+        if [ "$need" = "1" ]; then
+          echo "[init] 修正数据卷属主 -> 10001:10001"
+          chown -R 10001:10001 /app/data
+        else
+          echo "[init] 数据卷属主正常，无需修改"
+        fi
+        mkdir -p /app/data/files /app/data/backup \
+                 /app/data/submissions/enh /app/data/submissions/uploads
+        chown -R 10001:10001 /app/data
+        echo "[init] 数据卷就绪"
+    volumes:
+      - workbench-data:/app/data
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+    restart: "no"
+    network_mode: none          # 不需要网络，只碰数据卷
+    security_opt:
+      - no-new-privileges:true
+
+  # ---------------------------------------------------------
+  # workbench：主服务（唯一对外端口）
+  # ---------------------------------------------------------
   workbench:
     build:
       context: .
       dockerfile: Dockerfile
-    image: teacher-workbench:2.0.0
+    image: ${IMAGE_REPO:-teacher-workbench}:${IMAGE_TAG:-2.0.0}
     container_name: teacher-workbench
+    # 启动顺序：init 成功退出之后才启动本服务
+    depends_on:
+      init:
+        condition: service_completed_successfully
     restart: unless-stopped
+    # 宿主机 IP:宿主机端口 : 容器端口（容器内固定 20020，换端口不用重建镜像）
     ports:
-      # 左边是宿主机端口（教室局域网访问用），右边固定为容器内端口
-      - "${WORKBENCH_PORT:-20020}:20020"
+      - "${WORKBENCH_HOST_IP:-0.0.0.0}:${WORKBENCH_PORT:-20020}:20020"
     environment:
-      TZ: Asia/Shanghai
+      TZ: ${TZ:-Asia/Shanghai}
+      # 以下变量由 entrypoint.sh 与 server.py 读取，决定监听地址与数据落盘位置
       PORT: "20020"
       BIND: "0.0.0.0"
-      DATA_DIR: /app/data
+      WB_DATA_DIR: /app/data
+      WB_SUBMISSION_DATA_DIR: /app/data/submissions
+      PYTHONUNBUFFERED: "1"
     volumes:
-      # 命名卷：班级 / 学生 / 考勤 / 作业 / 成绩 / 配置全在这里，删容器不丢
-      # 想直接看文件可换成 bind mount：- ./app/data:/app/data
+      # 单一数据卷：SQLite / 配置 / 上传 / 每日快照 / 提交系统数据全在里面
       - workbench-data:/app/data
+      # 想直接在宿主机上看文件，把上一行换成（Linux 需先 chown -R 10001:10001 ./app/data）：
+      # - ./app/data:/app/data
     healthcheck:
       test:
         - CMD
@@ -38,6 +104,10 @@ services:
       timeout: 5s
       start_period: 20s
       retries: 3
+    # 给 SQLite 留时间做 WAL 检查点，避免直接 kill 导致下次启动回放
+    stop_grace_period: 15s
+    security_opt:
+      - no-new-privileges:true
     logging:
       driver: json-file
       options:
@@ -46,4 +116,5 @@ services:
 
 volumes:
   workbench-data:
-    name: teacher-workbench-data
+    # 固定卷名：换 compose 项目名、重装容器都不会丢数据
+    name: ${WORKBENCH_VOLUME:-teacher-workbench-data}

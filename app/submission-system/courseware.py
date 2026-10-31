@@ -33,7 +33,8 @@ import xml.etree.ElementTree as ET
 
 ROOT = os.path.dirname(os.path.abspath(__file__))          # submission-system/
 WB_ROOT = os.path.dirname(ROOT)                            # 工作台根
-DATA = os.path.join(ROOT, "data")
+# 同 submission-server：容器部署时由 WB_SUBMISSION_DATA_DIR 指到数据卷
+DATA = os.environ.get("WB_SUBMISSION_DATA_DIR") or os.path.join(ROOT, "data")
 CFG_PATH = os.path.join(DATA, "courseware.json")
 DEFAULT_ROOT = os.path.join(WB_ROOT, "courseware")         # 默认自动生成的位置
 MAX_UPLOAD = 300 * 1024 * 1024                             # 单文件上限 300MB

@@ -11,6 +11,8 @@ _backup
 
 # 运行期数据：真实班级 / 学生 / 密码哈希绝不能烤进镜像
 app/data
+# 提交系统的名册 / 提交记录 / 上传文件同样不在镜像里（容器内改由数据卷提供）
+app/submission-system/data
 **/__pycache__
 **/*.pyc
 **/.DS_Store
@@ -19,4 +21,7 @@ app/data
 Dockerfile
 docker-compose.yml
 .dockerignore
+.env
+.env.*
+!.env.example
 README.md

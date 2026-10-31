@@ -41,7 +41,8 @@ import urllib.error
 import courseware as CW
 
 ROOT = os.path.dirname(os.path.abspath(__file__))      # submission-system/
-DATA = os.path.join(ROOT, "data")
+# 同 submission-server：容器部署时由 WB_SUBMISSION_DATA_DIR 指到数据卷
+DATA = os.environ.get("WB_SUBMISSION_DATA_DIR") or os.path.join(ROOT, "data")
 ENH_DIR = os.path.join(DATA, "enh")
 for _d in (ENH_DIR, os.path.join(ENH_DIR, "uploads"),
            os.path.join(ENH_DIR, "subs_files"), os.path.join(ENH_DIR, "materials")):

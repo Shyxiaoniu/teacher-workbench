@@ -32,7 +32,9 @@ import enhance as ENH
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 PUBLIC = os.path.join(ROOT, "public")
-DATA = os.path.join(ROOT, "data")
+# 提交系统数据目录：默认 submission-system/data/；容器里用 WB_SUBMISSION_DATA_DIR
+# 指到主数据卷下的 submissions/，避免容器重建丢名册与提交记录。
+DATA = os.environ.get("WB_SUBMISSION_DATA_DIR") or os.path.join(ROOT, "data")
 DEFAULT_UPLOAD = os.path.join(DATA, "uploads")
 # 静态根目录：默认指向工作台根（class-workbench 目录），使本服务可同时托管
 # index.html 与 /submit/* 学生提交页；launch_workbench.py 会用 --static 传入工作台根。

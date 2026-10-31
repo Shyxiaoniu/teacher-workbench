@@ -18,7 +18,8 @@ ENV TZ=Asia/Shanghai \
     PYTHONDONTWRITEBYTECODE=1 \
     PORT=20020 \
     BIND=0.0.0.0 \
-    DATA_DIR=/app/data
+    WB_DATA_DIR=/app/data \
+    WB_SUBMISSION_DATA_DIR=/app/data/submissions
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends tzdata \
@@ -37,6 +38,7 @@ COPY docker/entrypoint.sh /app/docker-entrypoint.sh
 RUN useradd --create-home --uid 10001 workbench \
     && chmod +x /app/docker-entrypoint.sh \
     && mkdir -p /app/data/files /app/data/backup \
+              /app/data/submissions/enh /app/data/submissions/uploads \
     && chown -R workbench:workbench /app
 
 USER workbench
