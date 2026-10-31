@@ -8,16 +8,17 @@
 - **学生端** `/s/`：一键签到、查看学习资料、完成并提交作业（只读投影 + 白名单写入）
 - **技术栈**：Python 3 标准库单进程 HTTP 服务 + SQLite（WAL）+ 原生 JS 单页应用，**零第三方依赖**
 
-**仓库**：<https://gitee.com/shyxiaoniu/teacher-workbench>（私有）
+**仓库**：<https://gitee.com/shyxiaoniu/teacher-workbench>（公开，MIT 以外未定许可，欢迎 issue）
 
 ```bash
 git clone https://gitee.com/shyxiaoniu/teacher-workbench.git
 cd teacher-workbench
 ```
 
-> 仓库只放源码与部署配置。运行期数据（`app/data/`：密码哈希、班级与学生信息、上传附件）
-> 已被 `.gitignore` 排除，不会随代码上传。
-> 根目录的 `workbench.json` 是既有的一次数据快照（2026-10-09 由备份工具推送），保持原样未改动。
+> 仓库只放源码与部署配置，**不含任何真实班级数据**。
+> 运行期数据（`app/data/`：密码哈希、班级与学生信息、上传附件）与数据快照
+> （`workbench.json`）均已被 `.gitignore` 排除，不会随代码上传；
+> 克隆下来的是空工作台，首次访问 `/teacher/` 会让你设置自己的账号密码。
 
 ---
 
