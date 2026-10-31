@@ -82,6 +82,37 @@ def new_class_code():
 
 
 # ---------------------------------------------------------------------------
+# 口令强度
+# ---------------------------------------------------------------------------
+# 教师账号＝这个班全部数据的钥匙（名单、成绩、家长电话都在里面）。
+# 以前只要求 4 位，`1234`「abcd」都能设；部署到公网后，
+# 4 位纯数字在 20 次/分钟的限速下几小时就能撞开。
+WEAK_PASSWORDS = {
+    "12345678", "123456789", "1234567890", "password", "password1", "passw0rd",
+    "admin", "admin123", "administrator", "11111111", "00000000", "88888888",
+    "66666666", "abc12345", "qwerty", "qwerty123", "1qaz2wsx", "iloveyou",
+    "teacher", "teacher123", "class123", "woaini1314", "a1234567", "abcd1234",
+}
+
+
+def weak_password(pwd, min_len=8):
+    """返回「为什么不行」，空串表示通过。"""
+    p = str(pwd or "")
+    if len(p) < min_len:
+        return "密码至少 %d 位（这个账号能看到全班数据，别用短密码）" % min_len
+    if len(p) > 128:
+        return "密码太长（128 位以内就够）"
+    low = p.lower()
+    if low in WEAK_PASSWORDS:
+        return "这个密码太常见了，换一个"
+    if len(set(p)) == 1:
+        return "密码不能是同一个字符重复"
+    if low.isdigit():
+        return "密码不能全是数字，掺几个字母更安全"
+    return ""
+
+
+# ---------------------------------------------------------------------------
 # 口令：PBKDF2-HMAC-SHA256
 # ---------------------------------------------------------------------------
 ITERATIONS = 120000
@@ -198,6 +229,18 @@ class Sessions(object):
             for t in [t for t, s in self._d.items() if s["role"] == role and t != except_token]:
                 self._d.pop(t, None)
 
+    def gc(self):
+        """清掉过期会话。
+
+        以前只在 get() 里惰性删除：没人再拿着旧 cookie 来访问，那条记录就永远留着。
+        一学期下来（加上每次登录都新建）内存里会堆几万条死会话。
+        """
+        now = time.time()
+        with self._lock:
+            for t in [t for t, s in self._d.items() if s.get("exp", 0) < now]:
+                self._d.pop(t, None)
+            return len(self._d)
+
 
 def parse_cookie(header, name="wb_sid"):
     if not header:
@@ -210,15 +253,31 @@ def parse_cookie(header, name="wb_sid"):
 
 
 def client_ip(handler):
+    """真实客户端 IP。
+
+    只有在「直连方是本机」时才信 X-Forwarded-For —— 那说明前面挂着同机的
+    反向代理（nginx/Caddy 反代到 127.0.0.1）。其它情况一律用 TCP 对端地址：
+    否则任何人都能伪造 XFF 绕过按 IP 的限速，或者把登录失败记录栽给别人。
+    """
     try:
-        return (handler.client_address or ["", ""])[0]
+        peer = (handler.client_address or ["", ""])[0]
     except Exception:
         return ""
+    if peer in ("127.0.0.1", "::1"):
+        try:
+            xff = handler.headers.get("X-Forwarded-For") or ""
+        except Exception:
+            xff = ""
+        first = xff.split(",")[0].strip()
+        if first:
+            return first
+    return peer
 
 
 # 登录限速：同 IP 10 次/分钟
 _RL = {}
 _RL_LOCK = threading.RLock()
+_RL_MAX_KEYS = 5000      # 表本身也要有上限，否则可以被海量 key 撑爆内存
 
 
 def rate_ok(key, limit=10, window=60):
@@ -230,4 +289,11 @@ def rate_ok(key, limit=10, window=60):
             return False
         arr.append(now)
         _RL[key] = arr
+        if len(_RL) > _RL_MAX_KEYS:
+            # 先丢已经过窗的，再不行就丢掉最旧的一批（限速宁可短暂放宽，也不能把内存吃光）
+            for k in [k for k, v in _RL.items() if not v or now - v[-1] > window]:
+                _RL.pop(k, None)
+            if len(_RL) > _RL_MAX_KEYS:
+                for k in sorted(_RL, key=lambda x: _RL[x][-1] if _RL.get(x) else 0)[:1000]:
+                    _RL.pop(k, None)
         return True

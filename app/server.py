@@ -20,7 +20,7 @@ import threading
 import urllib.parse
 import urllib.request
 import importlib.util
-from http.server import ThreadingHTTPServer
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, ROOT)
@@ -59,8 +59,26 @@ CFG = A.load_config(CONFIG_PATH)
 SESS = A.Sessions()
 COND = threading.Condition()
 STARTED = time.time()
-VERSION = "2.0.1"
+VERSION = "2.0.2"
 ONLINE_WINDOW = 300      # 5 分钟内活跃算在线
+
+# SSE 长连接上限（每个连接一个线程）
+_SSE_MAX = 200
+_SSE_N = [0]
+_SSE_LOCK = threading.Lock()
+
+
+def _sse_enter():
+    with _SSE_LOCK:
+        if _SSE_N[0] >= _SSE_MAX:
+            return False
+        _SSE_N[0] += 1
+        return True
+
+
+def _sse_leave():
+    with _SSE_LOCK:
+        _SSE_N[0] = max(0, _SSE_N[0] - 1)
 
 # 配置（模块开关 / 可见字段 / 账号密码）改动时自增：SSE 靠它把“设置变了”
 # 推给所有在线页面。数据改动走 STORE 的 rev，两套互不干扰。
@@ -143,6 +161,16 @@ def now_str():
     return time.strftime("%Y-%m-%d %H:%M:%S")
 
 
+def _is_private_ip(ip):
+    """回环 / 内网地址判定（用于「首次设置账号」这种只该在本地完成的操作）。"""
+    import ipaddress
+    try:
+        a = ipaddress.ip_address(str(ip or "").strip())
+    except Exception:
+        return False
+    return bool(a.is_loopback or a.is_private or a.is_link_local)
+
+
 def today_str():
     return time.strftime("%Y-%m-%d")
 
@@ -213,7 +241,28 @@ class Handler(LEG.Handler):
     # ------------------------------------------------------------------
     # 基础响应
     # ------------------------------------------------------------------
+    def end_headers(self):
+        """统一补安全响应头。
+
+        · nosniff：防止浏览器把 .txt 当 HTML/JS 执行；
+        · SAMEORIGIN：本应用的页面不该被别的站点套 iframe（点击劫持）；
+        · Referrer-Policy：跳外链时不把带 session 的 URL 带出去；
+        · Permissions-Policy：本应用不用摄像头/麦克风/定位。
+        """
+        if not getattr(self, "_sec_sent", False):
+            self._sec_sent = True
+            try:
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.send_header("X-Frame-Options", "SAMEORIGIN")
+                self.send_header("Referrer-Policy", "same-origin")
+                self.send_header("Permissions-Policy",
+                                 "geolocation=(), microphone=(), camera=()")
+            except Exception:
+                pass
+        BaseHTTPRequestHandler.end_headers(self)
+
     def _json(self, obj, code=200):
+        self._sec_sent = False
         body = json.dumps(obj, ensure_ascii=False).encode("utf-8")
         self.send_response(code)
         self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -222,16 +271,25 @@ class Handler(LEG.Handler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _html(self, html, code=200):
+    def _html(self, html, code=200, csp=True):
+        self._sec_sent = False
         body = html.encode("utf-8")
         self.send_response(code)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        if csp:
+            # 服务端渲染的登录 / 二维码 / 找回密码页只用同源资源与内联脚本，
+            # 可以直接上严格一点的 CSP（教师端 3 万行单文件不适用，见 README）
+            self.send_header("Content-Security-Policy",
+                             "default-src 'self'; img-src 'self' data:; "
+                             "style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; "
+                             "connect-src 'self'; form-action 'self'; frame-ancestors 'self'")
         self.end_headers()
         self.wfile.write(body)
 
     def _redirect(self, url, cookie=None):
+        self._sec_sent = False
         self.send_response(302)
         self.send_header("Location", url)
         if cookie:
@@ -243,8 +301,14 @@ class Handler(LEG.Handler):
         # hours 是小时数（不是秒）：Max-Age 必须是 hours*3600。
         # 之前调用方传的是 12*3600，等于把 cookie 续了 4.9 年，
         # 服务端会话早就过期了、浏览器还留着，学生端就会“莫名跳登录页”。
-        return ("wb_sid=%s; Path=/; Max-Age=%d; HttpOnly; SameSite=Lax"
-                % (token, int(float(hours) * 3600)))
+        # Secure：只有经 HTTPS（含反向代理）访问时才加，
+        # 否则纯 HTTP 的教室局域网会直接登录不了。
+        secure = ""
+        proto = (self.headers.get("X-Forwarded-Proto") or "").split(",")[0].strip().lower()
+        if proto == "https":
+            secure = "; Secure"
+        return ("wb_sid=%s; Path=/; Max-Age=%d; HttpOnly; SameSite=Lax%s"
+                % (token, int(float(hours) * 3600), secure))
 
     def _session(self):
         return SESS.get(A.parse_cookie(self.headers.get("Cookie")))
@@ -265,10 +329,32 @@ class Handler(LEG.Handler):
         except Exception:
             return False
 
+    def _setup_allowed(self):
+        """首次创建管理员账号的窗口限制。
+
+        三条同时满足才允许：
+          · 账号还没设置（调用方已判断）；
+          · 进程启动 24 小时内，避免一个长期空转的实例一直敞着注册口；
+          · 请求来自回环或内网地址，公网陌生人不能抢先注册。
+        在 NAS/服务器上从别的机器打开也属于内网，正常流程不受影响。
+        实在要从公网初始化，可以设环境变量 WB_ALLOW_REMOTE_SETUP=1。
+        """
+        if os.environ.get("WB_ALLOW_REMOTE_SETUP") == "1":
+            return True, ""
+        if time.time() - STARTED > 24 * 3600:
+            return False, ("首次设置窗口已过（服务启动超过 24 小时）。"
+                           "请重启一次服务，或在教师机上打开页面完成设置。")
+        ip = A.client_ip(self)
+        if _is_private_ip(ip):
+            return True, ""
+        return False, ("首次设置只允许在局域网/本机完成。"
+                       "请在教师机（或同一内网的电脑）上打开页面创建账号。")
+
     # ------------------------------------------------------------------
     # GET
     # ------------------------------------------------------------------
     def do_GET(self):
+        self._sec_sent = False
         u = urllib.parse.urlparse(self.path)
         path = urllib.parse.unquote(u.path)
         qs = urllib.parse.parse_qs(u.query)
@@ -305,9 +391,13 @@ class Handler(LEG.Handler):
         except (BrokenPipeError, ConnectionResetError):
             pass
         except Exception as e:
-            sys.stderr.write("[get] %s -> %s\n" % (path, e))
+            # 只把异常写进服务端日志；回给浏览器的是一句固定的话。
+            # 以前直接把异常字符串拼进响应，等于把文件路径、SQL、变量名
+            # 这些内部细节送给任何能触发错误的人。
+            eid = "%08x" % (int(time.time() * 1000) & 0xFFFFFFFF)
+            sys.stderr.write("[get] %s -> [%s] %r\n" % (path, eid, e))
             try:
-                self._json({"ok": False, "msg": "服务端异常：%s" % e}, 500)
+                self._json({"ok": False, "msg": "服务端出错了（错误号 %s），请看教师机控制台日志" % eid}, 500)
             except Exception:
                 pass
 
@@ -326,7 +416,9 @@ class Handler(LEG.Handler):
             with open(full, "rb") as f:
                 body = f.read()
         except Exception as e:
-            return self._html("<h1>无法读取教师端页面</h1><p>%s</p>" % e, 500)
+            sys.stderr.write("[teacher] 读取 index.html 失败: %r\n" % (e,))
+            return self._html("<h1>无法读取教师端页面</h1>"
+                              "<p>部署包可能不完整，请把整个文件夹重新拷贝一次。</p>", 500)
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
@@ -346,6 +438,10 @@ class Handler(LEG.Handler):
         # 教师端静态资源只有登录后才给（vendor / icons / submit-enh.js 等）
         if not self._is_teacher():
             return self._json({"ok": False, "msg": "unauthorized"}, 401)
+        # 走与旧服务同一套白名单：教师端只需要页面里引用得到的那几个目录，
+        # 不该顺手把 /teacher/data/config.json 这种也发出去（里面有口令哈希）。
+        if LEG._forbidden(rel):
+            return self._json({"ok": False, "msg": "forbidden"}, 403)
         full = os.path.normpath(os.path.join(ROOT, rel))
         if not full.startswith(os.path.normpath(ROOT)):
             return self._json({"ok": False, "msg": "forbidden"}, 403)
@@ -367,10 +463,19 @@ class Handler(LEG.Handler):
             rel = "index.html"
         if ".." in rel.split("/"):
             return self._json({"ok": False, "msg": "forbidden"}, 403)
-        full = os.path.normpath(os.path.join(ROOT, "student", rel))
-        if not full.startswith(os.path.normpath(os.path.join(ROOT, "student"))):
+        base = os.path.normpath(os.path.join(ROOT, "student"))
+        full = os.path.normpath(os.path.join(base, rel))
+        # commonpath 而不是 startswith：startswith 会把 /a/bc 判成 /a/b 的子路径
+        try:
+            if os.path.commonpath([base, full]) != base:
+                return self._json({"ok": False, "msg": "forbidden"}, 403)
+        except ValueError:
             return self._json({"ok": False, "msg": "forbidden"}, 403)
         if not os.path.isfile(full):
+            return self._html("<h1>页面不存在</h1>", 404)
+        # 学生端目录只应有页面/脚本/样式/图标；别的一律不给（防止误放数据文件）
+        if not full.lower().endswith((".html", ".js", ".css", ".png", ".svg",
+                                      ".ico", ".webmanifest", ".jpg", ".webp")):
             return self._html("<h1>页面不存在</h1>", 404)
         import mimetypes
         ctype = mimetypes.guess_type(full)[0] or "application/octet-stream"
@@ -389,6 +494,7 @@ class Handler(LEG.Handler):
     # POST
     # ------------------------------------------------------------------
     def do_POST(self):
+        self._sec_sent = False
         u = urllib.parse.urlparse(self.path)
         path = urllib.parse.unquote(u.path)
         try:
@@ -400,9 +506,10 @@ class Handler(LEG.Handler):
         except (BrokenPipeError, ConnectionResetError):
             pass
         except Exception as e:
-            sys.stderr.write("[post] %s -> %s\n" % (path, e))
+            eid = "%08x" % (int(time.time() * 1000) & 0xFFFFFFFF)
+            sys.stderr.write("[post] %s -> [%s] %r\n" % (path, eid, e))
             try:
-                self._json({"ok": False, "msg": "服务端异常：%s" % e}, 500)
+                self._json({"ok": False, "msg": "服务端出错了（错误号 %s），请看教师机控制台日志" % eid}, 500)
             except Exception:
                 pass
 
@@ -438,7 +545,7 @@ class Handler(LEG.Handler):
                 out["must_change"] = bool(cred and cred.get("must_change"))
             return self._json(out)
         if path == "/api/v2/public/classes":
-            return self._public_classes()
+            return self._public_classes(qs)
         if path == "/api/v2/public/students":
             return self._public_students(qs)
         if path == "/api/v2/sync":
@@ -463,8 +570,14 @@ class Handler(LEG.Handler):
         want = (qs.get("scope") or [scope])[0]
         if want == "teacher" and scope != "teacher":
             return self._json({"ok": False, "msg": "越权"}, 403)
-        since = int((qs.get("since") or ["0"])[0] or 0)
-        limit = int((qs.get("limit") or [CFG["sync"].get("page_size", 800)])[0])
+        try:
+            since = int(float((qs.get("since") or ["0"])[0] or 0))
+        except Exception:
+            since = 0
+        try:
+            limit = int(float((qs.get("limit") or [CFG["sync"].get("page_size", 800)])[0]))
+        except Exception:
+            limit = CFG["sync"].get("page_size", 800)
         limit = max(50, min(limit, 5000))
 
         if since <= 0:
@@ -499,7 +612,20 @@ class Handler(LEG.Handler):
         s = self._session()
         if not s:
             return self._json({"ok": False, "msg": "未登录"}, 401)
-        since = int((qs.get("since") or ["0"])[0] or 0)
+        # 长连接要有人数上限：每个 SSE 占一个线程 + 一个 socket，
+        # 一个脚本开几百个连接就能把服务拖垮（ThreadingHTTPServer 没有连接池上限）。
+        if not _sse_enter():
+            return self._json({"ok": False, "msg": "同时在线页面太多，请稍后再试"}, 503)
+        try:
+            return self._sse_loop(qs)
+        finally:
+            _sse_leave()
+
+    def _sse_loop(self, qs):
+        try:
+            since = int(float((qs.get("since") or ["0"])[0] or 0))
+        except Exception:
+            since = 0
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream; charset=utf-8")
         self.send_header("Cache-Control", "no-cache, no-transform")
@@ -571,12 +697,34 @@ class Handler(LEG.Handler):
             "has_qa": bool(sec["question"] and sec["answer_hash"]),
             "question": sec["question"],
             "qa_hint": ("密保问题：" + sec["question"]) if sec["question"] else "",
-            "min_len": 4,
+            "min_len": 8,
             "config_rev": CFG_VER[0],
         })
 
-    def _public_classes(self):
+    def _need_public_code(self, qs):
+        """从公网拉名单时要求带班级码。
+
+        班级名单是「真实姓名 + 学号」，属于个人信息。校内网（私网来源）本来
+        全班都连在同一张网里，直接放行不改变体验；从公网访问就必须带上班主任
+        口头告知的班级码，否则任何人都能把整所学校的名单爬下来。
+        """
+        ip = A.client_ip(self)
+        if _is_private_ip(ip):
+            return None
+        if not A.rate_ok("pub:" + ip, 60, 60):
+            return self._json({"ok": False, "msg": "请求太频繁，请 1 分钟后再试"}, 429)
+        code = ((qs or {}).get("code") or [""])[0]
+        want = str(CFG.get("class_code") or "")
+        if want and str(code).upper() == want.upper():
+            return None
+        return self._json({"ok": False, "need_code": True,
+                           "msg": "从外网访问需要班级码，问一下老师"}, 401)
+
+    def _public_classes(self, qs):
         """登录页的班级下拉。只给 id + 名称，不含任何学生信息。"""
+        bad = self._need_public_code(qs)
+        if bad:
+            return bad
         rows = [{"id": c.get("id"), "name": c.get("name", "班级")}
                 for c in STORE.table_rows("classes")]
         rows.sort(key=lambda x: str(x["name"]))
@@ -586,8 +734,11 @@ class Handler(LEG.Handler):
         """选定班级后拉该班名单（学号 + 姓名），供下拉选择。
 
         只暴露“这个班有哪些人”，不暴露任何联系方式；密码仍然是必须的，
-        所以知道学号也不能冒充别人。
+        所以知道学号也不能冒充别人。公网来源见 _need_public_code。
         """
+        bad = self._need_public_code(qs)
+        if bad:
+            return bad
         cid = (qs.get("class_id") or [""])[0]
         if not cid:
             return self._json({"ok": False, "msg": "缺少 class_id"}, 400)
@@ -689,15 +840,24 @@ class Handler(LEG.Handler):
     # ------------------------------------------------------------------
     def _v2_post(self, path):
         body = self._read_json()
+        if body is None:
+            return          # 请求体过大，_read_json 已经回过 413 了
         if path == "/api/v2/auth/setup":
             if CFG["teacher"].get("password_hash"):
                 return self._json({"ok": False, "msg": "账号已设置"}, 400)
+            # 首次设置账号只允许「刚启动的这段时间 + 内网来源」。
+            # 否则部署完到你打开浏览器之间，任何人先访问一次就能把管理员账号设成他的
+            # —— 之后你只能清库重来，中间所有数据都归他。
+            ok_setup, why_setup = self._setup_allowed()
+            if not ok_setup:
+                return self._json({"ok": False, "msg": why_setup}, 403)
             user = str(body.get("username") or "").strip() or "teacher"
             pwd = str(body.get("password") or "")
             if len(user) < 2:
                 return self._json({"ok": False, "msg": "账号至少 2 个字符"}, 400)
-            if len(pwd) < 4:
-                return self._json({"ok": False, "msg": "密码至少 4 位"}, 400)
+            bad = A.weak_password(pwd)
+            if bad:
+                return self._json({"ok": False, "msg": bad}, 400)
             CFG["teacher"]["username"] = user
             CFG["teacher"]["password_hash"] = A.hash_password(pwd)
             q = str(body.get("question") or "").strip()
@@ -817,8 +977,9 @@ class Handler(LEG.Handler):
             pwd = str(body.get("password") or "")
             # 先校验新密码格式，再核销票据：老师把两次密码打得不一样、
             # 或者只输了 3 位，不该让这张一次性票据白白作废（还得重新答密保）。
-            if len(pwd) < 4:
-                return self._json({"ok": False, "msg": "新密码至少 4 位"}, 400)
+            bad = A.weak_password(pwd)
+            if bad:
+                return self._json({"ok": False, "msg": bad}, 400)
             if not take_ticket(body.get("ticket")):
                 return self._json({"ok": False,
                                    "msg": "验证已过期，请重新回答密保问题"}, 400)
@@ -866,8 +1027,9 @@ class Handler(LEG.Handler):
             new = str(body.get("new") or "")
             if not A.verify_password(old, CFG["teacher"].get("password_hash")):
                 return self._json({"ok": False, "msg": "当前密码不正确"}, 401)
-            if len(new) < 4:
-                return self._json({"ok": False, "msg": "新密码至少 4 位"}, 400)
+            bad = A.weak_password(new)
+            if bad:
+                return self._json({"ok": False, "msg": bad}, 400)
             if new == old:
                 return self._json({"ok": False, "msg": "新密码和原密码一样"}, 400)
             CFG["teacher"]["password_hash"] = A.hash_password(new)
@@ -919,8 +1081,8 @@ class Handler(LEG.Handler):
                 st["password_mode"] = "uniform" if body["password_mode"] == "uniform" else "per"
             if "initial_password" in body:
                 v = str(body.get("initial_password") or "").strip()
-                if len(v) < 4:
-                    return self._json({"ok": False, "msg": "初始密码至少 4 位"}, 400)
+                if len(v) < 6:
+                    return self._json({"ok": False, "msg": "初始密码至少 6 位（学生要能记住，但别用 123456 这种）"}, 400)
                 st["initial_password"] = v
             if "force_change" in body:
                 st["force_change"] = bool(body["force_change"])
@@ -954,8 +1116,9 @@ class Handler(LEG.Handler):
             if new:
                 if not A.verify_password(old, CFG["teacher"].get("password_hash")):
                     return self._json({"ok": False, "msg": "原密码不正确"}, 401)
-                if len(new) < 4:
-                    return self._json({"ok": False, "msg": "新密码至少 4 位"}, 400)
+                bad = A.weak_password(new)
+                if bad:
+                    return self._json({"ok": False, "msg": bad}, 400)
                 CFG["teacher"]["password_hash"] = A.hash_password(new)
             cfg_save()
             notify_cfg()
@@ -1004,9 +1167,23 @@ class Handler(LEG.Handler):
         if hw_id in (None, ""):
             return self._json({"ok": False, "msg": "缺少 homework_id"}, 400)
         sid = s.get("student_id")
-        rid = int(float(hw_id)) * 100000 + int(float(sid))
+        st = student_row(sid)
+        # 作业必须真实存在、且属于本班。
+        # 以前直接拿 hw_id 拼 rid 写库：给个不存在的 id 就凭空造出一条提交记录，
+        # 给别的班的 id 就写进了别人的作业里。
+        hw = STORE.get_row("homeworks", str(hw_id))
+        if not hw:
+            return self._json({"ok": False, "msg": "这项作业不存在（可能已被老师删除）"}, 404)
+        if str(hw.get("class_id")) != str((st or {}).get("class_id")):
+            return self._json({"ok": False, "msg": "这不是你们班的作业"}, 403)
+        try:
+            rid = int(float(hw_id)) * 100000 + int(float(sid))
+        except Exception:
+            rid = "hw%s-%s" % (hw_id, sid)
         note = str(body.get("note") or "")[:2000]
         status = str(body.get("status") or "submitted")
+        if status not in ("submitted", "done", "practice", "checked"):
+            status = "submitted"
         old = STORE.get_row("homework_records", rid) or {}
         old_status = str(old.get("status") or "")
         if old_status in ("checked", "done", "graded") and status in ("submitted", "done"):
@@ -1078,8 +1255,27 @@ class Handler(LEG.Handler):
 
         p = self._current_period()
         period = body.get("period")
-        period = int(float(period)) if period not in (None, "") else (
-            int(float(p.get("seq") or p.get("id") or 1)) if p else 1)
+        if period not in (None, ""):
+            try:
+                period = int(float(period))
+            except Exception:
+                return self._json({"ok": False, "msg": "节次不对"}, 400)
+            # 只接受作息表里真实存在的节次。
+            # 以前爱填几填几：学生可以把 1～20 节全部签到一遍，
+            # 统计里就出现一整天「全勤」的假记录。
+            valid = set()
+            for r in STORE.table_rows("periods"):
+                for k in ("seq", "id"):
+                    try:
+                        valid.add(int(float(r.get(k))))
+                    except Exception:
+                        pass
+            if valid and period not in valid:
+                return self._json({"ok": False, "msg": "没有这一节课"}, 400)
+            if not (1 <= period <= 20):
+                return self._json({"ok": False, "msg": "节次超出范围"}, 400)
+        else:
+            period = (int(float(p.get("seq") or p.get("id") or 1)) if p else 1)
         d = today_str()
         rid = "ck%s-%s-%s" % (sid, d, period)
         old = STORE.get_row("attendance", rid) or {}
@@ -1126,11 +1322,18 @@ class Handler(LEG.Handler):
         if not self._is_teacher():
             return self._json({"ok": False, "msg": "未登录"}, 401)
         cur = CFG.setdefault(kind, {})
+        allowed = set(PJ.MODULE_SCOPES) if kind == "modules" else set(cur.keys())
+        changed = {}
         for k, v in (body or {}).items():
-            if k in cur or kind == "modules":
+            # 只接受已知开关：以前 modules 允许任意 key，随便 POST 一个
+            # {"xx":true} 就往 config.json 里塞一条永远没人读的垃圾字段。
+            if k in allowed:
                 cur[k] = bool(v)
+                changed[k] = cur[k]
+        if not changed:
+            return self._json({"ok": False, "msg": "没有可修改的开关"}, 400)
         cfg_save()
-        STORE.audit("teacher", "toggle-" + kind, json.dumps(body, ensure_ascii=False))
+        STORE.audit("teacher", "toggle-" + kind, json.dumps(changed, ensure_ascii=False))
         notify_cfg()
         return self._json({"ok": True, kind: cur})
 
@@ -1163,6 +1366,50 @@ class Handler(LEG.Handler):
 
 def _port():
     return PORT
+
+
+# ---------------------------------------------------------------------------
+# 把主服务的「身份 / 学生 / 花名册」注入旧提交系统
+# ---------------------------------------------------------------------------
+# 旧模块（/api/enh、/api/cw、/api/config…）原本完全没有身份概念，默认
+# 「同一个 Wi-Fi 里都是自己人」。现在它们被复用在同一进程里，就统一按主服务的
+# 会话判断角色；单独运行旧服务时钩子为空，那边会退化成「只认本机」。
+def _leg_role(handler):
+    s = handler._session()
+    if not s:
+        return ("", None)
+    return (s["role"], s.get("student_id"))
+
+
+def _leg_student_sid(handler):
+    """会话里的内部学生 id → 旧模块用的学号（student_no，缺省回落到 id）。"""
+    s = handler._session()
+    if not s or s["role"] != "student":
+        return ""
+    r = student_row(s.get("student_id"))
+    if not r:
+        return ""
+    return str(r.get("student_no") or r.get("id") or "")
+
+
+def _leg_roster():
+    """花名册投影：与学生表同源，避免「教师端加了人、提交页看不到」。"""
+    names = {str(c.get("id")): c.get("name", "") for c in STORE.table_rows("classes")}
+    out = []
+    for s in STORE.table_rows("students"):
+        out.append({"cls": names.get(str(s.get("class_id")), ""),
+                    "sid": str(s.get("student_no") or s.get("id") or ""),
+                    "name": str(s.get("name") or "")})
+    return out
+
+
+LEG.ROLE_FN = _leg_role
+LEG.STUDENT_SID_FN = _leg_student_sid
+LEG.ROSTER_PROVIDER = _leg_roster
+try:
+    LEG.ENH.ROSTER_PROVIDER = _leg_roster
+except Exception:
+    pass
 
 
 def main():
@@ -1234,6 +1481,18 @@ def main():
         print("            可以手动指定端口：python server.py --port 20200")
         sys.exit(2)
     httpd.daemon_threads = True
+
+    # 会话/限速表的定期清理：长时间运行（教室整学期不关机）时防止内存缓慢增长
+    def _janitor():
+        while True:
+            time.sleep(600)
+            try:
+                n = SESS.gc()
+                if n > 200:
+                    sys.stderr.write("[workbench] 清理过期会话，剩余 %d 个\n" % n)
+            except Exception:
+                pass
+    threading.Thread(target=_janitor, daemon=True).start()
 
     # SSE 长连接被浏览器正常关闭时会抛 ConnectionAborted；
     # 这不是错误，不要往控制台刷几十行堆栈吓老师。

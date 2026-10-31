@@ -518,6 +518,8 @@
       '<div class="login"><div class="logo">班</div><h1>进入班级</h1>' +
       '<p>选班级、选自己的学号，再输密码。名单来自老师的工作台，不用手打。</p>' +
       '<label>班级</label><select id="cls"><option value="">加载中…</option></select>' +
+      '<label>班级码</label><input id="code" placeholder="校内网不用填；外网访问时问老师要" ' +
+      'autocomplete="off" maxlength="12">' +
       '<label>学号 / 姓名</label><select id="stu" disabled><option value="">请先选班级</option></select>' +
       '<label>姓名</label><input id="nm" readonly placeholder="选学号后自动带出">' +
       '<label>密码</label><input id="pwd" type="password" autocomplete="current-password" placeholder="老师给你的密码">' +
@@ -526,28 +528,46 @@
       '<div class="empty" style="font-size:12px;padding-top:16px">' +
       '第一次登录用老师设的初始密码，进去后可以在「我的」里改。</div></div>';
 
-    var cls = $('#cls'), stu = $('#stu'), nm = $('#nm');
-    api('/api/v2/public/classes').then(function (j) {
-      if (!j.ok || !j.classes || !j.classes.length) {
-        cls.innerHTML = '<option value="">还没有班级，等老师建班</option>';
-        $('#err').textContent = '老师的班级还没建好，稍后再试';
-        return;
-      }
-      cls.innerHTML = '<option value="">请选择班级</option>' + j.classes.map(function (c) {
-        return '<option value="' + esc(c.id) + '">' + esc(c.name) + '</option>';
-      }).join('');
-      if (j.classes.length === 1) {
-        cls.value = j.classes[0].id;
-        loadStudents(j.classes[0].id);
-      }
-    }).catch(function () {
-      $('#err').textContent = '连不上老师电脑，确认在同一 Wi-Fi';
-    });
+    var cls = $('#cls'), stu = $('#stu'), nm = $('#nm'), codeEl = $('#code');
+    function codeQs() {
+      var c = (codeEl && codeEl.value || '').trim();
+      return c ? ('&code=' + encodeURIComponent(c)) : '';
+    }
+    function loadClasses() {
+      api('/api/v2/public/classes?x=1' + codeQs()).then(function (j) {
+        if (!j.ok) {
+          $('#err').textContent = j.msg || '请填写班级码（问一下老师）';
+          if (j.need_code && codeEl) codeEl.focus();
+          return;
+        }
+        if (!j.classes || !j.classes.length) {
+          cls.innerHTML = '<option value="">还没有班级，等老师建班</option>';
+          $('#err').textContent = '老师的班级还没建好，稍后再试';
+          return;
+        }
+        cls.innerHTML = '<option value="">请选择班级</option>' + j.classes.map(function (c) {
+          return '<option value="' + esc(c.id) + '">' + esc(c.name) + '</option>';
+        }).join('');
+        if (j.classes.length === 1) {
+          cls.value = j.classes[0].id;
+          loadStudents(j.classes[0].id);
+        }
+      }).catch(function () {
+        $('#err').textContent = '连不上老师电脑，确认在同一 Wi-Fi';
+      });
+    }
+    loadClasses();
+    if (codeEl) codeEl.onchange = loadClasses;
 
     function loadStudents(cid) {
       stu.disabled = true;
       stu.innerHTML = '<option value="">加载中…</option>';
-      api('/api/v2/public/students?class_id=' + encodeURIComponent(cid)).then(function (j) {
+      api('/api/v2/public/students?class_id=' + encodeURIComponent(cid) + codeQs()).then(function (j) {
+        if (!j.ok) {
+          stu.innerHTML = '<option value="">' + esc(j.msg || '名单加载失败') + '</option>';
+          $('#err').textContent = j.msg || '名单加载失败';
+          return;
+        }
         var list = (j.students || []);
         if (!list.length) {
           stu.innerHTML = '<option value="">这个班还没有学生</option>';
@@ -581,7 +601,8 @@
       btn.disabled = true; btn.textContent = '正在进入…';
       api('/api/v2/auth/student', {
         method: 'POST',
-        body: JSON.stringify({ class_id: cls.value, student_id: stu.value, password: pwd })
+        body: JSON.stringify({ class_id: cls.value, student_id: stu.value, password: pwd,
+                               code: (codeEl && codeEl.value || '').trim() })
       }).then(function (j) {
         if (!j.ok) {
           err.textContent = j.msg || '进入失败';

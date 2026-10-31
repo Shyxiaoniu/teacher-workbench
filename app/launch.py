@@ -26,7 +26,10 @@ import webbrowser
 import urllib.request
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
-DATA = os.path.join(ROOT, "data")
+# 与 server.py 保持同一套数据目录规则：容器/自定义部署时用 WB_DATA_DIR。
+# 以前启动器写死 ROOT/data，于是 `WB_DATA_DIR=/data python launch.py --reset-password`
+# 清的是另一份 config（用户以为密码清掉了，实际没有）。
+DATA = os.environ.get("WB_DATA_DIR") or os.path.join(ROOT, "data")
 CONFIG = os.path.join(DATA, "config.json")
 sys.path.insert(0, os.path.join(ROOT, "core"))
 import ports as PORTX                                    # noqa: E402

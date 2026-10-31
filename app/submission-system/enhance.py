@@ -41,8 +41,12 @@ import urllib.error
 import courseware as CW
 
 ROOT = os.path.dirname(os.path.abspath(__file__))      # submission-system/
-# 同 submission-server：容器部署时由 WB_SUBMISSION_DATA_DIR 指到数据卷
-DATA = os.environ.get("WB_SUBMISSION_DATA_DIR") or os.path.join(ROOT, "data")
+# 同 submission-server：容器部署时由 WB_SUBMISSION_DATA_DIR 指到数据卷；
+# 只设了 WB_DATA_DIR 时跟着走，避免容器重建把上传和任务配置丢在镜像里。
+DATA = (os.environ.get("WB_SUBMISSION_DATA_DIR")
+        or (os.path.join(os.environ["WB_DATA_DIR"], "submissions")
+            if os.environ.get("WB_DATA_DIR") else "")
+        or os.path.join(ROOT, "data"))
 ENH_DIR = os.path.join(DATA, "enh")
 for _d in (ENH_DIR, os.path.join(ENH_DIR, "uploads"),
            os.path.join(ENH_DIR, "subs_files"), os.path.join(ENH_DIR, "materials")):
@@ -52,6 +56,9 @@ ROSTER_PATH = os.path.join(DATA, "roster.json")
 TASKS_PATH = os.path.join(ENH_DIR, "tasks.json")
 INDEX_PATH = os.path.join(ENH_DIR, "subs.index.json")
 TOKENS_PATH = os.path.join(ENH_DIR, "tokens.json")
+
+# 由主服务注入：() -> [{cls, sid, name}]（与学生表同源）
+ROSTER_PROVIDER = None
 
 _LOCK = threading.Lock()
 TOKEN_TTL = 60 * 60 * 12  # 身份 token 12 小时有效（覆盖一节课 + 课后补交）
@@ -175,6 +182,14 @@ def _read_jsonl(path):
 # 花名册
 # ---------------------------------------------------------------------------
 def roster_all():
+    """花名册：优先用主服务注入的实时投影（与学生表同源），否则读 roster.json。"""
+    if ROSTER_PROVIDER is not None:
+        try:
+            rows = ROSTER_PROVIDER() or []
+            if rows:
+                return rows
+        except Exception:
+            pass
     return _load(ROSTER_PATH, [])
 
 
@@ -253,8 +268,13 @@ def resolve_student_class(sid, want_cls="", mode=CLASS_MATCH_DEFAULT):
 # ---------------------------------------------------------------------------
 def _safe(name):
     name = str(name or "file").strip()
-    name = re.sub(r"[\/\\]", "_", name)
+    # 除了路径分隔符，Windows 还禁止 : * ? " < > | 和控制字符，
+    # 其中 ":" 会被当成 NTFS 数据流语法 → 打开就报“拒绝访问”。
+    # 学生从手机/平板上传的文件名里完全可能有这些字符，统一换成下划线。
+    name = re.sub(r'[\\/:*?"<>|\x00-\x1f]', "_", name)
     name = re.sub(r"^\.+", "", name)
+    # Windows 会悄悄吃掉文件名结尾的点和空格，"报告." 和 "报告" 会互相覆盖
+    name = name.rstrip(". ")
     return name[:120] or "file"
 
 
@@ -367,7 +387,7 @@ def ensure_task(key, api="", class_names=None):
             "updated_at": _now(),
         }
         tasks[key] = t
-        _save(TASKS_PATH, t and tasks)
+        _save(TASKS_PATH, tasks)
     # 老数据兼容：补齐后来新增的字段
     changed = False
     for k, v in (("policy", default_policy()), ("deadline", ""), ("status", "open")):
@@ -451,7 +471,7 @@ def portal_url(task, host=""):
     key = task.get("task_key", "")
     cls = (task.get("class_names") or [""])[0] if task.get("class_names") else ""
     cls_q = ("&class=" + urllib.parse.quote(cls)) if cls else ""
-    base = host or "http://127.0.0.1:8080"
+    base = (host or "").rstrip("/") or "http://127.0.0.1:20020"
     return "%s/s/?task=%s%s" % (base, urllib.parse.quote(key), cls_q)
 
 
@@ -489,18 +509,44 @@ def check_token(token, cls="", sid=""):
 # ---------------------------------------------------------------------------
 # 上传（临时）
 # ---------------------------------------------------------------------------
-def save_upload(task_key, sid, token, name, stream, length):
+# 临时上传文件的命名：<32 位 uid>__<原始文件名>
+#
+# 原来用 "::" 当分隔符。":" 在 Windows 上是非法文件名字符，open() 直接抛
+# [Errno 13] Permission denied —— 也就是说在 Windows 教师机上「学生上传作品」
+# 这一步百分之百失败，而且报的还是「写入失败」，看着像磁盘权限问题，很难查。
+# 分隔符改成两个下划线，uid 长度固定 32 位，解析时不会和文件名里的下划线混淆；
+# 老的 "::" 文件仍然能被认出来（兼容已经在 Linux/Mac 上交过的历史数据）。
+_UP_SEP = "__"
+
+
+def _up_name(uid, oname):
+    return uid + _UP_SEP + _safe(oname)
+
+
+def _up_parse(fn):
+    """从临时文件名里拆出 (uid, 原始文件名)；认不出返回 ("", "")。"""
+    for sep in (_UP_SEP, "::"):
+        if sep in fn:
+            a, b = fn.split(sep, 1)
+            if len(a) == 32:
+                return a, b
+    return "", ""
+
+
+def save_upload(task_key, sid, token, name, stream, length, auth=None):
     """把学生上传的文件先落到临时 uploads/，返回 upload_id。
 
-    文件名记为 <uid>::<safe_original_name>，务必保留学生原始文件名——
+    文件名记为 <uid>__<safe_original_name>，务必保留学生原始文件名——
     核对引擎的「文件名含学号」检查、以及归档后展示/下载，都用原始名，不能丢。
     """
     ident = check_token(token, "", sid)
-    if not ident:
-        return {"ok": False, "code": "E_TOKEN", "msg": "身份已过期，刷新页面重新输学号"}
+    if not (_may_act_as(auth, sid) or (ident and str(ident.get("sid", "")) == str(sid))):
+        return {"ok": False, "code": "E_TOKEN", "msg": "身份已过期，请重新登录后再上传"}
+    if length > MAX_FILE_TOTAL * 2:
+        return {"ok": False, "code": "E_TOOBIG", "msg": "文件太大（上限 300MB）"}
     uid = uuid.uuid4().hex
     up_dir = _ensure_dir(os.path.join(ENH_DIR, "uploads"))
-    dest = os.path.join(up_dir, uid + "::" + _safe(name))
+    dest = os.path.join(up_dir, _up_name(uid, name))
     try:
         n = 0
         with open(dest, "wb") as f:
@@ -539,12 +585,12 @@ def _claim_uploads(upload_ids):
             continue
         hit = None
         for fn in listing:
-            if fn.startswith(uid + "::"):
+            if _up_parse(fn)[0] == uid:
                 hit = fn
                 break
         if hit:
             p = os.path.join(updir, hit)
-            oname = hit.split("::", 1)[1]
+            oname = _up_parse(hit)[1]
             try:
                 sz = os.path.getsize(p)
             except Exception:
@@ -700,7 +746,7 @@ def _past_deadline(task):
     return False
 
 
-def commit_submission(task_key, sid, token, fields, uploads, tpl_version):
+def commit_submission(task_key, sid, token, fields, uploads, tpl_version, auth=None):
     task = ensure_task(task_key)
     ident = check_token(token, "", sid)
     if not ident:
@@ -747,7 +793,7 @@ def commit_submission(task_key, sid, token, fields, uploads, tpl_version):
         # 核对不通过：把临时文件还回 uploads（保留原始名），让学生可重试，不重复选
         for (oname, p, sz, _uid) in claimed:
             try:
-                os.rename(p, os.path.join(ENH_DIR, "uploads", _uid + "::" + oname))
+                os.rename(p, os.path.join(ENH_DIR, "uploads", _up_name(_uid, oname)))
             except Exception:
                 try:
                     os.remove(p)
@@ -844,16 +890,30 @@ def my_tasks(cls, sid):
 # ---------------------------------------------------------------------------
 # 附件 / 素材下载
 # ---------------------------------------------------------------------------
-def resolve_file(task_key, sid, name, token):
+def _may_act_as(auth, sid):
+    """当前请求能否以 sid 这个学生的身份操作。
+
+    · 老师：可以（批改/归档/代交）
+    · 学生：只能是自己（会话里的学号与 sid 必须一致）
+    以前这里只看 token，而 token 是「输入学号就发」的，等于谁都能领一张别人的身份证。
+    """
+    role = str((auth or {}).get("role") or "")
+    if role == "teacher":
+        return True
+    if role == "student":
+        return bool(sid) and str((auth or {}).get("sid") or "") == str(sid)
+    return False
+
+
+def resolve_file(task_key, sid, name, token, auth=None):
     """学生下载自己提交的作品（按 task+sid 限定目录，防止越权）。
 
     name 形如 v2/<upload_id>（即某版本的某个归档文件）。
     """
-    ident = check_token(token, "", sid)
-    if not ident:
-        return None
-    if str(ident.get("sid", "")) != str(sid):
-        return None
+    if not _may_act_as(auth, sid):
+        ident = check_token(token, "", sid)
+        if not ident or str(ident.get("sid", "")) != str(sid):
+            return None
     base = os.path.normpath(os.path.join(ENH_DIR, "subs_files", _safe(task_key), _safe(sid)))
     rel = str(name or "").replace("\\", "/")
     if not rel or rel.startswith("/") or ".." in rel.split("/"):
@@ -866,13 +926,22 @@ def resolve_file(task_key, sid, name, token):
     return cand
 
 
-def resolve_material(task_key, mid, token, sid):
-    """学生下载任务素材（任务级可见，校验学生属于该任务班级即可）。"""
+def resolve_material(task_key, mid, token, sid, auth=None):
+    """学生下载任务素材（任务级可见）。
+
+    素材允许「链接直接发群里」，但必须是登录用户：以前完全匿名，
+    只要猜到 task + mid（都是可枚举的短串）就能把老师电脑上的文件拉走。
+    """
     task = task_get(task_key)
     if not task:
         return None
-    ident = check_token(token, "", sid) if token else None
-    # 素材不强制登录（链接可能直接发群里），但限定任务内
+    role = str((auth or {}).get("role") or "")
+    ok = role in ("teacher", "student")
+    if not ok and token:
+        ident = check_token(token, "", sid)
+        ok = bool(ident) and str(ident.get("sid", "")) == str(sid or "")
+    if not ok:
+        return None
     for m in task.get("materials", []):
         if m.get("id") == mid and not m.get("hidden"):
             # ref：老师电脑原路径；copy：enhance 副本
@@ -907,9 +976,11 @@ def material_list(task_key, token, sid, admin=False):
             "available": available,
             "dead": not available,
             "visible": m.get("visible", True) is not False,
-            "dl": "/api/enh/dl?kind=material&task=%s&mid=%s&sid=%s&token=%s" % (
+            # 链接里不再拼 token：token 是身份凭证，拼进 URL 会进浏览器历史、
+            # 进截图、进 Referer；下载接口改成认会话（见 server.py 的 /api/enh/dl）
+            "dl": "/api/enh/dl?kind=material&task=%s&mid=%s&sid=%s" % (
                 urllib.parse.quote(task_key), urllib.parse.quote(m.get("id", "")),
-                urllib.parse.quote(sid or ""), urllib.parse.quote(token or "")),
+                urllib.parse.quote(sid or "")),
         }
         out.append(mm)
     return out
@@ -1077,7 +1148,14 @@ def material_add(data):
 
 
 def _resolve_material_source(it):
-    """把前端传来的素材条目解析成 (绝对路径, 文件名)。"""
+    """把前端传来的素材条目解析成 (绝对路径, 文件名)。
+
+    只认两种来源：课件库（course）与本地资料夹（mount）。
+    以前还有一个「兜底：直接给绝对路径」的分支，于是
+    `POST /api/enh/material/add {"items":[{"path":"C:/Windows/win.ini"}]}`
+    就能把服务器上任意文件登记成素材，再用 /api/enh/dl 下载走 —— 任意文件读取。
+    课件库/资料夹本身都有 commonpath 边界，不需要这个后门。
+    """
     frm = it.get("from")
     if frm == "mount":
         mid, rel = it.get("id"), it.get("rel") or ""
@@ -1091,10 +1169,6 @@ def _resolve_material_source(it):
         if not full:
             return None
         return full, it.get("name") or os.path.basename(full)
-    # 兜底：直接给绝对路径
-    p = it.get("path") or ""
-    if p and os.path.isfile(p):
-        return p, it.get("name") or os.path.basename(p)
     return None
 
 
@@ -1208,11 +1282,14 @@ def receipt_html(task_key, sid, version):
     rows = []
     for k, v in fields.items():
         if v:
-            rows.append("<tr><td>%s</td><td>%s</td></tr>" % (k, str(v)[:200]))
+            # 字段名和值都是学生自己填的，必须转义：
+            # 以前直接拼进 <td>，学生把答案写成 <img onerror=...> 就能在老师的回执页执行脚本
+            rows.append("<tr><td>%s</td><td>%s</td></tr>" % (esc_html(k), esc_html(str(v)[:200])))
     late = "（补交）" if ver.get("late") else ""
-    html = """<!doctype html><html lang="zh-CN"><meta charset="utf-8">
-<title>提交回执</title>
-<style>
+    # 样式表单独拼，不参与下面的 % 格式化：
+    # CSS 里有 width:100%; 这样的百分号，混在 % 模板里会被当成格式符，
+    # 结果是这一整页每次都抛 ValueError → 打印回执永远 500。
+    _css = """<style>
 body{font:14px/1.9 -apple-system,'PingFang SC','Microsoft YaHei',sans-serif;max-width:640px;margin:0 auto;padding:28px;color:#1F1B16;background:#FFFDFA}
 h1{font-size:19px;margin:0 0 4px}p.sub{color:#8A8178;margin:0 0 18px;font-size:12.5px}
 table{border-collapse:collapse;width:100%;margin:8px 0 14px}
@@ -1221,7 +1298,9 @@ td:first-child{background:#F7F3EC;width:120px;color:#6B6259}
 .box{border:1px solid #E7E1D6;border-radius:10px;padding:14px 16px;background:#fff}
 .ok{color:#2E7D32;font-weight:600}.warn{color:#B26A00;font-weight:600}
 @media print{body{background:#fff;padding:0}}
-</style>
+</style>"""
+    html = """<!doctype html><html lang="zh-CN"><meta charset="utf-8">
+<title>提交回执</title>""" + _css + """
 <h1>提交回执</h1>
 <p class="sub">%s · %s · %s%s</p>
 <div class="box">
@@ -1232,7 +1311,7 @@ td:first-child{background:#F7F3EC;width:120px;color:#6B6259}
 </div>
 <p class="sub" style="margin-top:16px">此回执由班级工作台自动生成，可直接打印交给老师。</p>
 </html>""" % (
-        esc_html(t.get("title", task_key)), esc_html(cls), esc_html(sid), late,
+        esc_html(t.get("title") or task_key), esc_html(cls), esc_html(sid), late,
         esc_html(str(fields.get("work_title") or "(未填)")),
         esc_html(str(ver.get("ts", ""))), esc_html(str(ver.get("v", ""))),
         esc_html(files or "(无文件)"),
@@ -1249,73 +1328,152 @@ def esc_html(s):
 # ---------------------------------------------------------------------------
 # 入口分发（被 server.py 调用）
 # ---------------------------------------------------------------------------
-def get_json(path, qs, host="", client_ip=""):
+def _deny(msg="需要先登录", code=401):
+    return {"ok": False, "msg": msg, "_code": code}
+
+
+def _role_of(auth):
+    return str((auth or {}).get("role") or "")
+
+
+def _teacher_only(auth, what="这个操作"):
+    if _role_of(auth) != "teacher":
+        return _deny("只有教师端可以%s" % what, 403)
+    return None
+
+
+def _self_only(auth, sid, action="查看"):
+    """学生只能看/改自己的；老师不受限。返回 None 表示放行。
+
+    action 是一句完整的话（如「查看别的同学的记录」），拼进提示里。
+    """
+    role = _role_of(auth)
+    if role == "teacher":
+        return None
+    if role == "student":
+        if sid and str((auth or {}).get("sid") or "") == str(sid):
+            return None
+        return _deny("不能%s" % action, 403)
+    return _deny("请先在 /s/ 登录", 401)
+
+
+def get_json(path, qs, host="", client_ip="", auth=None):
     """GET /api/enh/* 的分发。返回 dict；特殊键 __csv / __html 由 server 处理。"""
     arg = lambda k: (qs.get(k) or [""])[0]
+    role = _role_of(auth)
 
     if path == "/api/enh/meta":
         return {"ok": True, "version": 1, "name": "学生提交增强"}
 
     if path == "/api/enh/task":
         key = arg("key") or arg("task")
-        t = ensure_task(key, api=arg("api"), class_names=arg("class_names"))
+        t = task_get(key)
+        if not t:
+            # GET 不该有写副作用：以前这里会顺手建一个空任务，
+            # 任何人访问一次 /api/enh/task?task=xxx 就在磁盘上多出一个任务
+            if role != "teacher":
+                return _deny("任务不存在", 404)
+            t = ensure_task(key, api=arg("api"), class_names=arg("class_names"))
         pub = task_public(t)
         return {"ok": True, "task": pub, "portal": portal_url(t, host),
                 "class_match": normalize_class_match(t.get("policy")),
-                "class_options": roster_class_names()}
+                "class_options": roster_class_names() if role else []}
 
     if path == "/api/enh/history":
+        bad = _self_only(auth, arg("sid"), "查看别人的记录")
+        if bad:
+            return bad
         t = task_get(arg("task")) or {}
         rec = my_record(arg("task"), arg("sid")) or {}
         return {"ok": True, "record": rec, "qf_base": qf_base(t)}
 
     if path == "/api/enh/my":
+        bad = _self_only(auth, arg("sid"), "查看别人的记录")
+        if bad:
+            return bad
         return {"ok": True, "tasks": my_tasks(arg("cls"), arg("sid"))}
 
     if path == "/api/enh/materials":
+        if not role:
+            return _deny("请先在 /s/ 登录", 401)
         return {"ok": True, "materials": material_list(arg("task"), arg("token"), arg("sid"))}
 
     if path == "/api/enh/classes":
-        # 系统导入的班级列表（门户下拉框 / 老师端预览用）
+        # 班级名册属于内部信息，登录后才给（登录页下拉不需要它）
+        if not role:
+            return _deny("请先登录", 401)
         return {"ok": True, "classes": roster_class_names()}
 
     if path == "/api/enh/material/list":
         admin = arg("admin") == "1"
+        if admin:
+            bad = _teacher_only(auth, "查看素材清单")
+            if bad:
+                return bad
+        elif not role:
+            return _deny("请先登录", 401)
         return {"ok": True, "items": material_list(arg("task"), arg("token"), arg("sid"), admin=admin)}
 
     if path == "/api/enh/receipt":
+        bad = _self_only(auth, arg("sid"), "查看别人的记录")
+        if bad:
+            return bad
         return {"__html": receipt_html(arg("task"), arg("sid"), arg("v"))}
 
     if path == "/api/enh/export":
+        bad = _teacher_only(auth, "导出核对报告")
+        if bad:
+            return bad
         csv = export_csv(arg("task"), arg("cls"))
         return {"__csv": csv}
 
     return None
 
 
-def post_json(path, data, host="", client_ip="", ua=""):
+def post_json(path, data, host="", client_ip="", ua="", auth=None):
     """POST /api/enh/* 的分发。"""
+    role = _role_of(auth)
+
     if path == "/api/enh/task/save":
+        bad = _teacher_only(auth, "修改任务")
+        if bad:
+            return bad
         return task_save(data)
 
     if path == "/api/enh/form/save":
+        bad = _teacher_only(auth, "修改模板")
+        if bad:
+            return bad
         return form_save(data)
 
     if path == "/api/enh/material/add":
+        bad = _teacher_only(auth, "下发素材")
+        if bad:
+            return bad
         return material_add(data)
 
     if path == "/api/enh/material/update":
+        bad = _teacher_only(auth, "调整素材")
+        if bad:
+            return bad
         return material_update(data)
 
     if path == "/api/enh/material/check":
+        bad = _teacher_only(auth, "体检素材")
+        if bad:
+            return bad
         return material_check(data)
 
     if path == "/api/enh/student/verify":
-        cls = (data.get("cls") or "").strip()
         sid = str(data.get("sid") or "").strip()
         if not sid:
             return {"ok": False, "code": "E_SID", "msg": "请输入学号"}
+        # 身份不再「填学号就发」：必须已经以这个学号登录（或老师代操作）
+        bad = _self_only(auth, sid, "以别人的身份提交")
+        if bad:
+            return bad
 
+        cls = (data.get("cls") or "").strip()
         task_key = data.get("task_key") or data.get("task") or ""
         task = task_get(task_key) or {}
         mode = normalize_class_match(task.get("policy"))
@@ -1334,18 +1492,26 @@ def post_json(path, data, host="", client_ip="", ua=""):
         out = {"ok": True, "sid": sid, "name": name, "cls": final_cls, "token": tok,
                "class_match": mode, "class_matched": matched}
         if mode == "auto":
-            # 把系统里的班级列表一并给前端：auto 模式下学生可以照着选
             out["class_options"] = roster_class_names()
             if cmsg:
                 out["class_msg"] = cmsg
         return out
 
     if path == "/api/enh/submit":
+        sid = str(data.get("sid") or "").strip()
+        bad = _self_only(auth, sid, "替别人提交")
+        if bad:
+            return bad
         return commit_submission(
-            data.get("task"), data.get("sid"), data.get("token"),
-            data.get("fields", {}), data.get("uploads", []), data.get("tpl_version", 0))
+            data.get("task"), sid, data.get("token"),
+            data.get("fields", {}), data.get("uploads", []), data.get("tpl_version", 0),
+            auth=auth)
 
     if path == "/api/enh/withdraw":
-        return withdraw(data.get("task"), data.get("sid"), data.get("token"))
+        sid = str(data.get("sid") or "").strip()
+        bad = _self_only(auth, sid, "撤回别人的提交")
+        if bad:
+            return bad
+        return withdraw(data.get("task"), sid, data.get("token"))
 
     return None

@@ -34,7 +34,10 @@ import xml.etree.ElementTree as ET
 ROOT = os.path.dirname(os.path.abspath(__file__))          # submission-system/
 WB_ROOT = os.path.dirname(ROOT)                            # 工作台根
 # 同 submission-server：容器部署时由 WB_SUBMISSION_DATA_DIR 指到数据卷
-DATA = os.environ.get("WB_SUBMISSION_DATA_DIR") or os.path.join(ROOT, "data")
+DATA = (os.environ.get("WB_SUBMISSION_DATA_DIR")
+        or (os.path.join(os.environ["WB_DATA_DIR"], "submissions")
+            if os.environ.get("WB_DATA_DIR") else "")
+        or os.path.join(ROOT, "data"))
 CFG_PATH = os.path.join(DATA, "courseware.json")
 DEFAULT_ROOT = os.path.join(WB_ROOT, "courseware")         # 默认自动生成的位置
 MAX_UPLOAD = 300 * 1024 * 1024                             # 单文件上限 300MB
@@ -682,17 +685,26 @@ def archive_items(course, activity, base, items):
             continue
         blob = None
         # ① 本机文件系统直读（QuickForm 的 /static/... 就在隔壁，最快最稳）
+        #    必须做 commonpath 校验：url 是前端传来的，`/../../etc/passwd`、
+        #    `/../../data/config.json` 这种能顺着拼出程序目录外的任意文件，
+        #    读出来再落到课件库里就能被下载走（任意文件读取）。
         if url.startswith("/"):
-            cands = [os.path.join(WB_ROOT, "quickform-server", url.lstrip("/")),
-                     os.path.join(WB_ROOT, url.lstrip("/"))]
-            for c in cands:
-                if os.path.isfile(c):
+            rel = url.lstrip("/").replace("\\", "/")
+            if ".." not in rel.split("/"):
+                for base_dir in (os.path.join(WB_ROOT, "quickform-server"), WB_ROOT):
+                    c = os.path.normpath(os.path.join(base_dir, rel))
                     try:
-                        with open(c, "rb") as fh:
-                            blob = fh.read()
-                        break
-                    except Exception:
-                        blob = None
+                        if os.path.commonpath([os.path.normpath(base_dir), c]) != os.path.normpath(base_dir):
+                            continue
+                    except ValueError:
+                        continue
+                    if os.path.isfile(c):
+                        try:
+                            with open(c, "rb") as fh:
+                                blob = fh.read()
+                            break
+                        except Exception:
+                            blob = None
         # ② 退回 HTTP 拉取（QuickForm 目录不在默认位置、或换了端口）
         if blob is None and base:
             try:
@@ -857,9 +869,15 @@ def set_root(new_root, move):
                 moved += 1
         except Exception as e:
             return False, None, "迁移旧文件时出错：%s（配置未改动，可先手动拷贝再切换）" % e
-    cfg = {"version": 1, "root": p,
-           "auto": os.path.normpath(p) == os.path.normpath(DEFAULT_ROOT),
-           "updated_at": _now()}
+    # 保留同一份配置文件里的其它设置（mounts / allow_lan / version…）。
+    # 以前这里直接 `cfg = {"version":1,"root":p,…}` 整份覆盖：
+    # 老师只要改一次课件根目录，挂载的资料夹列表和「允许局域网访问」开关就全没了，
+    # 而且没有任何提示——下次打开发现资料夹"自己消失了"。
+    cfg = load_cfg()
+    cfg["version"] = cfg.get("version") or 1
+    cfg["root"] = p
+    cfg["auto"] = os.path.normpath(p) == os.path.normpath(DEFAULT_ROOT)
+    cfg["updated_at"] = _now()
     save_cfg(cfg)
     return True, cfg, ("已切换到 %s" % p) + ("，并迁移了 %d 项" % moved if moved else "") + ("（目录是新建的）" if created else "")
 

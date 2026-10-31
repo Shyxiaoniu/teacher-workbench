@@ -117,7 +117,7 @@ SETUP_BODY = """
   <form id="f">
     <label>账号</label>
     <input id="user" type="text" autocomplete="username" value="teacher" autofocus>
-    <label>密码（至少 4 位）</label>
+    <label>密码（至少 8 位，别用 123456 这类）</label>
     <input id="p1" type="password" autocomplete="new-password" placeholder="设置密码">
     <label>再输一遍</label>
     <input id="p2" type="password" autocomplete="new-password" placeholder="确认密码">
@@ -143,7 +143,7 @@ document.getElementById('f').onsubmit = async function(e){
   var q=document.getElementById('q').value.trim(), a=document.getElementById('a').value;
   var err=document.getElementById('err');
   if(user.length<2){err.textContent='账号至少 2 个字符';return;}
-  if(p1.length<4){err.textContent='密码至少 4 位';return;}
+  if(p1.length<8){err.textContent='密码至少 8 位';return;}
   if(p1!==p2){err.textContent='两次输入不一致';return;}
   if(!q||!a.trim()){err.textContent='请设置密保问题和答案（忘了密码时靠它找回）';return;}
   if(q.length<4){err.textContent='密保问题至少 4 个字';return;}
@@ -273,8 +273,13 @@ try{new QRCode(document.getElementById('qr'),{text:"__URL__",width:190,height:19
 
 
 def join_page(class_code, url, school=""):
-    body = JOIN_BODY.replace("__LOGO__", LOGO).replace("__SCHOOL__", school or "班级工作台") \
-        .replace("__URL__", url)
+    # 校名来自配置文件，URL 来自请求 Host —— 都要转义后再拼进 HTML。
+    # 以前直接 replace 进去：校名里写个 <img onerror=...> 就是一个存储型 XSS
+    # （而且是投屏到大屏上的页面，影响面更大）。
+    import html as _h
+    body = (JOIN_BODY.replace("__LOGO__", LOGO)
+            .replace("__SCHOOL__", _h.escape(school or "班级工作台"))
+            .replace("__URL__", _h.escape(url or "", quote=False)))
     return _page("扫码进入 · 班级工作台", body)
 
 
@@ -340,7 +345,7 @@ CONSOLE_HTML = r"""<!DOCTYPE html>
     </div>
     <div class="mini" id="modeHint"></div>
     <div class="inp-row">
-      <input id="initPwd" placeholder="初始密码（至少 4 位）">
+      <input id="initPwd" placeholder="初始密码（至少 6 位）">
       <button id="savePwd">保存</button>
     </div>
     <div class="switch" style="margin-top:12px">

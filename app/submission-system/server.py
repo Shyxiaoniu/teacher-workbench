@@ -34,7 +34,12 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 PUBLIC = os.path.join(ROOT, "public")
 # 提交系统数据目录：默认 submission-system/data/；容器里用 WB_SUBMISSION_DATA_DIR
 # 指到主数据卷下的 submissions/，避免容器重建丢名册与提交记录。
-DATA = os.environ.get("WB_SUBMISSION_DATA_DIR") or os.path.join(ROOT, "data")
+# 兜底：只设了 WB_DATA_DIR（比如自己手写 docker run）时，跟着它走 ——
+# 否则数据会落在镜像内的 submission-system/data，容器一重建就没了。
+DATA = (os.environ.get("WB_SUBMISSION_DATA_DIR")
+        or (os.path.join(os.environ["WB_DATA_DIR"], "submissions")
+            if os.environ.get("WB_DATA_DIR") else "")
+        or os.path.join(ROOT, "data"))
 DEFAULT_UPLOAD = os.path.join(DATA, "uploads")
 # 静态根目录：默认指向工作台根（class-workbench 目录），使本服务可同时托管
 # index.html 与 /submit/* 学生提交页；launch_workbench.py 会用 --static 传入工作台根。
@@ -51,36 +56,63 @@ UPLOAD_INDEX = os.path.join(DATA, "uploads_index.json")  # token -> 文件绝对
 _lock = threading.Lock()
 
 # ---------------------------------------------------------------------------
+# 与主服务（app/server.py）的对接点
+# ---------------------------------------------------------------------------
+# 本模块有两种运行形态：
+#   ① 被主服务 import 复用（同一进程、同一端口）—— 主服务会注入下面三个钩子，
+#      于是「谁是老师 / 谁是学生 / 花名册是什么」都以主服务的会话与数据库为准；
+#   ② 用 python server.py 单独起（旧用法，默认只绑 127.0.0.1）—— 没有会话体系，
+#      此时只有本机（loopback）请求被视为管理员，局域网请求一律按未登录处理。
+# 以前这里完全没有身份概念：同网任何人 POST /api/config 就能改页面、看名单、
+# 甚至把 save_dir 指到别的目录。钩子就是为了补上这一层。
+ROLE_FN = None           # handler -> ("teacher"|"student"|"", student_key)
+STUDENT_SID_FN = None    # handler -> 学号字符串（与花名册 sid 同一口径）
+ROSTER_PROVIDER = None   # () -> [{cls, sid, name}]，由主服务从学生表投影
+
+MAX_JSON_BODY = 8 * 1024 * 1024        # 普通 JSON 请求体上限
+MAX_UPLOAD_BODY = 320 * 1024 * 1024    # 上传接口上限（略大于单文件 300MB）
+
+# ---------------------------------------------------------------------------
 # 持久化层
 # ---------------------------------------------------------------------------
 def _now_iso():
     return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
-# 静态目录里「不该被局域网访问」的东西：服务端数据、源码、备份、内部配置。
-# 老师把链接发到教室 Wi-Fi，学生（或同网任何人）都能访问这个端口，
-# 以前 /submission-system/data/submissions.json 这类文件是能直接下载的。
-_FORBIDDEN_DIRS = ("submission-system/", "quickform-server/", "config/", "sql/",
-                   "__pycache__/", "._", "_bak/", "_dl/", "qa-audit/", "tools-verify/",
-                   "courseware/")   # 课件库只能走 /api/cw/*（可限制仅本机访问），不给静态直链
-_FORBIDDEN_EXT = (".py", ".pyc", ".pyo", ".db", ".db-wal", ".db-shm", ".sqlite",
-                  ".env", ".cwbackup", ".bak", ".log", ".ds_store")
-_ALLOW_ROOT_JSON = ("quickform.config.json", "manifest.json")
+# 静态资源白名单（2026-10-31 加固）
+# ---------------------------------------------------------------------------
+# 以前是「黑名单」：先允许一切，再把 data/、*.py、*.db 这些挡掉。
+# 黑名单永远会漏——新增一个目录、换一个扩展名，就又漏一次；
+# 而且静态根就是程序根，`/data/config.json`（教师口令哈希）、
+# `/data/submissions/uploads_index.json`（token→文件路径）都能匿名下载。
+# 现在改成白名单：只放行页面真正会引用的这几个顶层条目，其余一律 404。
+_ALLOW_ROOT_FILES = ("index.html", "manifest.json", "quickform.config.json",
+                     "submit-enh.js", "submit-enh.css", "sw.js")
+_ALLOW_DIRS = ("vendor/", "icons/", "submit/", "student/", "assets/", "images/")
 
 
 def _forbidden(name):
-    """是否禁止静态访问（相对路径，已去掉前导斜杠）"""
-    low = name.lower()
-    base = low.rsplit("/", 1)[-1]
-    if low in _ALLOW_ROOT_JSON:
-        return False
-    for d in _FORBIDDEN_DIRS:
-        if low.startswith(d) or ("/" + d) in ("/" + low):
-            return True
-    for ext in _FORBIDDEN_EXT:
-        if base.endswith(ext):
-            return True
+    """是否禁止静态访问（相对路径，已去掉前导斜杠）。
+
+    返回 True = 拒绝。规则是白名单：顶层必须是已知文件或已知目录之一，
+    且文件名不以 . 开头、扩展名在页面会用到的范围内。
+    """
+    low = name.lower().replace("\\", "/")
+    if not low or low.startswith(".") or ".." in low.split("/"):
+        return True
+    parts = low.split("/")
+    base = parts[-1]
     if base.startswith("."):
+        return True
+    if len(parts) == 1:
+        return low not in _ALLOW_ROOT_FILES
+    if parts[0] + "/" not in _ALLOW_DIRS:
+        return True
+    # 目录里仍然挡住可执行/数据类扩展名（白名单目录也可能被人塞文件进去）
+    # .json 不挡：vendor/quotes-d.json 是页面要用的语料库；
+    # 真正的数据文件都在 data/ 下，已经被上面的目录白名单挡住了。
+    if base.endswith((".py", ".pyc", ".pyo", ".db", ".db-wal", ".db-shm",
+                      ".sqlite", ".env", ".bak", ".log", ".key", ".pem")):
         return True
     return False
 
@@ -180,7 +212,20 @@ def default_config():
     }
 
 def get_roster():
-    return load_json(ROSTER_PATH, None) or DEFAULT_ROSTER
+    """花名册：优先取主服务注入的实时投影，取不到才读 roster.json。
+
+    以前这里只读 submission-system/data/roster.json，而主工作台的学生名单在
+    SQLite 里，两份名单互不同步——教师在「学生」页加了人，提交页却看不到，
+    于是「学生名单直接来自教师端」这个承诺一直没兑现。现在统一走 provider。
+    """
+    if ROSTER_PROVIDER is not None:
+        try:
+            rows = ROSTER_PROVIDER() or []
+            if rows:
+                return rows
+        except Exception:
+            pass
+    return load_json(ROSTER_PATH, None) or []
 
 def get_submissions():
     return load_json(SUB_PATH, [])
@@ -188,16 +233,12 @@ def get_submissions():
 def save_submissions(arr):
     save_json(SUB_PATH, arr)
 
-DEFAULT_ROSTER = [
-    {"cls": "七(3)班", "sid": "20250301", "name": "张明轩"},
-    {"cls": "七(3)班", "sid": "20250302", "name": "李思远"},
-    {"cls": "七(3)班", "sid": "20250303", "name": "王雨桐"},
-    {"cls": "七(3)班", "sid": "20250304", "name": "陈子豪"},
-    {"cls": "七(3)班", "sid": "20250305", "name": "刘欣怡"},
-    {"cls": "七(3)班", "sid": "20250306", "name": "赵梓涵"},
-    {"cls": "七(3)班", "sid": "20250307", "name": "孙浩然"},
-    {"cls": "七(3)班", "sid": "20250308", "name": "周可昕"},
-]
+# 默认花名册：故意为空。
+# 以前这里预置了 8 个虚构学生（张明轩 / 李思远 …），首次启动就写进 roster.json：
+# 老师一打开提交系统就以为「系统里有 8 个学生」，本班真名单反而要手工覆盖；
+# 这些名字还会出现在排行榜、导出 CSV 和「我的提交」里，属于无中生有的数据。
+# 现在没有名册就是空，页面会明确提示「还没有学生，请先在教师端建班」。
+DEFAULT_ROSTER = []
 
 DEFAULT_CUSTOM_HTML = """<!doctype html>
 <html lang="zh-CN">
@@ -262,6 +303,27 @@ def resolve_student(sid, provided_name=None):
             return {"cls": s.get("cls", ""), "name": name, "matched": True}
     return {"cls": "", "name": provided_name or "", "matched": False}
 
+def grade_quiz(fields):
+    """按配置里的标准答案在服务端算分。
+
+    以前分数是浏览器算好后跟着 payload 一起提交的（`score: 100`），
+    服务端原样收下——学生改一行 JS 就能拿满分；而且 /api/config 会把
+    `answer` 一起发给浏览器，题目本身就等于公开了。
+    现在答案只留在服务端，分数也只在这里算。
+    """
+    qs = ((get_config().get("quiz") or {}).get("questions")) or []
+    total = 0
+    for i, q in enumerate(qs, 1):
+        ans = str((fields or {}).get("Q%d" % i) or "").strip()
+        want = str(q.get("answer") or "").strip()
+        if ans and want and ans == want:
+            try:
+                total += int(q.get("score") or 0)
+            except Exception:
+                pass
+    return total
+
+
 def add_submission(payload):
     """统一提交入口：去重(同号仅留最新) + 落盘 + 关联名册。返回结果字典。"""
     sid = str(payload.get("sid", "")).strip()
@@ -269,6 +331,7 @@ def add_submission(payload):
         return {"ok": False, "msg": "缺少学号(sid)"}
     stype = payload.get("type", "file")
     provided_name = (payload.get("name") or "").strip() or None
+    fields = payload.get("fields") if isinstance(payload.get("fields"), dict) else {}
 
     # 1) 关联名册
     info = resolve_student(sid, provided_name)
@@ -289,8 +352,9 @@ def add_submission(payload):
         "type": stype,
         "title": (payload.get("title") or "").strip(),
         "intro": (payload.get("intro") or "").strip(),
-        "fields": payload.get("fields") or {},
-        "score": payload.get("score"),
+        "fields": fields,
+        # 题目类由服务端算分；其它类型保留调用方给的分（老师补录用）
+        "score": grade_quiz(fields) if stype == "quiz" else payload.get("score"),
         "files": file_urls,
         "submitted_at": (payload.get("submitted_at") or _now_iso()),
         "received_at": _now_iso(),
@@ -312,11 +376,16 @@ def compute_rank(arr, sid):
             return i
     return None
 
-def _register_upload(abs_path):
-    """登记上传文件，返回稳定且不带 ../ 的访问 token。"""
+def _register_upload(abs_path, sid=""):
+    """登记上传文件，返回稳定且不带 ../ 的访问 token。
+
+    同时记下归属学号：下载时据此判断「是不是你自己的」。
+    老索引里是纯字符串（只有路径），读取侧做了兼容。
+    """
     idx = load_json(UPLOAD_INDEX, {})
     token = uuid.uuid4().hex
-    idx[token] = os.path.abspath(abs_path)
+    idx[token] = {"path": os.path.abspath(abs_path), "sid": str(sid or ""),
+                  "at": _now_iso()}
     save_json(UPLOAD_INDEX, idx)
     return token
 
@@ -331,6 +400,9 @@ def save_upload(sid, f):
     raw = f.get("data")
     if not raw:
         return None
+    # base64 先估长度再解码：不然一个 2GB 的字符串会在 b64decode 里直接吃满内存
+    if len(raw) * 3 // 4 > MAX_UPLOAD_BODY:
+        return None
     try:
         blob = base64.b64decode(raw)
     except Exception:
@@ -342,7 +414,7 @@ def save_upload(sid, f):
     target = os.path.join(save_dir, f"{safe_sid}_{stamp}_{fname}")
     with open(target, "wb") as fh:
         fh.write(blob)
-    token = _register_upload(target)
+    token = _register_upload(target, sid)
     return "/api/files/" + token
 
 def build_board():
@@ -372,10 +444,87 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass  # 静默
 
+    # ------------------------------------------------------------------
+    # 同源 / 身份
+    # ------------------------------------------------------------------
+    def _same_origin(self):
+        """跨站请求判定。浏览器发跨站 POST 一定带 Origin（表单也一样），
+        所以「有 Origin 且不等于本机 Host」就拒绝。"""
+        origin = self.headers.get("Origin")
+        if not origin:
+            return True
+        host = self.headers.get("Host", "")
+        try:
+            return urllib.parse.urlparse(origin).netloc == host
+        except Exception:
+            return False
+
+    def _is_local(self):
+        try:
+            return (self.client_address or ("", 0))[0] in ("127.0.0.1", "::1")
+        except Exception:
+            return False
+
+    def _role(self):
+        """返回 (role, key)。role: "teacher" / "student" / "" """
+        if ROLE_FN is not None:
+            try:
+                r = ROLE_FN(self)
+                if r and r[0]:
+                    return r[0], r[1]
+            except Exception:
+                pass
+            return "", None
+        # 单独运行时没有会话：只有本机算管理员
+        return ("teacher", None) if self._is_local() else ("", None)
+
+    def _student_sid(self):
+        if STUDENT_SID_FN is None:
+            return ""
+        try:
+            return str(STUDENT_SID_FN(self) or "")
+        except Exception:
+            return ""
+
+    def _deny(self, msg="需要先登录", code=401):
+        self._send_json({"ok": False, "msg": msg, "need_login": code == 401}, code)
+        return True
+
+    def _need_teacher(self, write=True):
+        """老师专用接口。返回 True 表示已经拒绝（调用方直接 return）。"""
+        role, _ = self._role()
+        if role == "teacher":
+            return False
+        if write:
+            return self._deny("只有教师端可以执行这个操作", 403)
+        return self._deny("只有教师端可以查看这个内容", 403)
+
+    def _need_login(self):
+        """任意已登录角色。"""
+        role, _ = self._role()
+        return None if role else self._deny("请先登录")
+
+    # ------------------------------------------------------------------
+    # 响应
+    # ------------------------------------------------------------------
     def _cors(self):
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        """只对同源请求回显 CORS 头。
+
+        原来是无条件 `Access-Control-Allow-Origin: *`：任何网页都能
+        `fetch('http://教师机:20020/api/roster')` 把全班名单读走（含学号姓名），
+        也能读到 /api/config、/api/board。本应用所有页面都是同源加载，
+        根本不需要 CORS，这里只在确实是同源时回显，跨站一律不给。
+        """
+        origin = self.headers.get("Origin")
+        if not origin:
+            return
+        host = self.headers.get("Host", "")
+        try:
+            if urllib.parse.urlparse(origin).netloc == host:
+                self.send_header("Access-Control-Allow-Origin", origin)
+                self.send_header("Vary", "Origin")
+        except Exception:
+            pass
 
     def _send_json(self, obj, code=200):
         body = json.dumps(obj, ensure_ascii=False).encode("utf-8")
@@ -383,6 +532,8 @@ class Handler(BaseHTTPRequestHandler):
         self._cors()
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
         self.end_headers()
         self.wfile.write(body)
 
@@ -392,27 +543,59 @@ class Handler(BaseHTTPRequestHandler):
         self._cors()
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
+        self.send_header("X-Content-Type-Options", "nosniff")
         self.end_headers()
         self.wfile.write(body)
 
-    def _read_body(self):
-        length = int(self.headers.get("Content-Length", 0) or 0)
+    def _read_body(self, limit=MAX_JSON_BODY):
+        """读取请求体，带大小上限。
+
+        以前直接 `rfile.read(Content-Length)`：一个 `Content-Length: 4G`
+        的请求就能把进程内存吃光（无需任何登录）。现在超限直接拒绝，
+        并且按 max(0, ·) 处理，负数和非法值都当 0。
+        """
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except Exception:
+            length = 0
+        if length < 0:
+            length = 0
+        if length > limit:
+            raise ValueError("请求体过大（%d 字节，上限 %d）" % (length, limit))
         if length <= 0:
             return b""
         return self.rfile.read(length)
 
     def _read_json(self):
-        raw = self._read_body()
+        try:
+            raw = self._read_body(MAX_JSON_BODY)
+        except ValueError as e:
+            self._send_json({"ok": False, "msg": str(e)}, 413)
+            return None
         if not raw:
             return {}
         try:
-            return json.loads(raw.decode("utf-8"))
+            d = json.loads(raw.decode("utf-8"))
+            return d if isinstance(d, dict) else {}
         except Exception:
             return {}
 
+    def _json_content_type_ok(self):
+        """写接口必须是 application/json。
+
+        允许 text/plain 的 JSON 会造成 CSRF：恶意页面用
+        `fetch(url,{method:'POST',mode:'no-cors',body:'{"custom_html":"..."}'})`
+        不触发预检就把内容写进来（本服务用 json.loads 解析，不看 Content-Type）。
+        """
+        ct = (self.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+        return ct in ("application/json", "text/json", "")
+
     def do_OPTIONS(self):
+        # 不再无条件发 ACAO:*；同源请求本来就不需要预检
         self.send_response(204)
         self._cors()
+        self.send_header("Allow", "GET, POST, OPTIONS")
+        self.send_header("Content-Length", "0")
         self.end_headers()
 
     def do_GET(self):
@@ -455,23 +638,19 @@ class Handler(BaseHTTPRequestHandler):
                 "base": base,
             })
         if path == "/api/config":
-            return self._send_json(get_config())
+            return self._send_json(self._public_config())
         if path == "/api/quiz":
-            return self._send_json(get_config().get("quiz", {}))
+            return self._send_json(self._public_quiz())
         if path == "/api/board":
-            return self._send_json(build_board())
+            return self._board()
         if path == "/api/custom":
             task = (qs.get("task") or [""])[0]
-            cfg = get_config()
-            html = ""
-            if task and isinstance(cfg.get("custom_templates"), dict):
-                html = cfg["custom_templates"].get(task, "")
-            if not html:
-                html = cfg.get("custom_html", "")
-            return self._send_text(html, "text/html; charset=utf-8")
+            return self._send_text(self._custom_html(task), "text/html; charset=utf-8")
         if path == "/api/roster":
+            if self._need_login():
+                return
             cls = (qs.get("class") or [""])[0]
-            roster = load_json(ROSTER_PATH, [])
+            roster = get_roster()
             if cls:
                 roster = [r for r in roster if str(r.get("cls", "")) == str(cls)]
             return self._send_json({
@@ -498,13 +677,7 @@ class Handler(BaseHTTPRequestHandler):
         # ---- 学生提交页（自定义页由服务端按配置动态返回）----
         if path == "/submit/custom.html":
             task = (qs.get("task") or [""])[0]
-            cfg = get_config()
-            html = ""
-            if task and isinstance(cfg.get("custom_templates"), dict):
-                html = cfg["custom_templates"].get(task, "")
-            if not html:
-                html = cfg.get("custom_html", "")
-            return self._send_text(html, "text/html; charset=utf-8")
+            return self._send_text(self._custom_html(task), "text/html; charset=utf-8")
         if path.startswith("/submit/"):
             return self._serve_static_root(os.path.join("submit", path[len("/submit/"):]))
 
@@ -514,9 +687,21 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         u = urllib.parse.urlparse(self.path)
         path = u.path
+        # ---- 通用门槛：同源 + JSON ----
+        if not self._same_origin():
+            return self._send_json({"ok": False, "msg": "跨站请求被拒绝"}, 403)
+        if path.startswith("/api/enh/upload"):
+            pass                        # 流式上传，Content-Type 是 application/octet-stream
+        elif not self._json_content_type_ok():
+            return self._send_json({"ok": False, "msg": "请求格式必须是 JSON"}, 415)
+
         if path == "/api/config":
+            if self._need_teacher():
+                return
             with _lock:
                 data = self._read_json()
+                if data is None:
+                    return
                 cfg = get_config()
                 for k in ("title", "save_dir", "deadline", "allow_resubmit"):
                     if k in data:
@@ -541,7 +726,11 @@ class Handler(BaseHTTPRequestHandler):
                 save_json(CONFIG_PATH, cfg)
             return self._send_json({"ok": True, "config": cfg})
         if path == "/api/roster":
+            if self._need_teacher():
+                return
             data = self._read_json()
+            if data is None:
+                return
             # 支持按班级增量更新：{cls, students:[{sid,name}]}
             if isinstance(data, dict) and "cls" in data:
                 cls = str(data.get("cls", "")).strip()
@@ -577,12 +766,26 @@ class Handler(BaseHTTPRequestHandler):
             return self._send_json({"ok": True, "count": len(clean)})
         if path == "/api/submit":
             data = self._read_json()
+            if data is None:
+                return
+            # 身份：老师可代交（导入/纠错），学生只能交自己的那一条
+            role, _k = self._role()
+            if role not in ("teacher", "student"):
+                return self._deny("请先在 /s/ 登录后再提交", 401)
+            if role == "student":
+                mine = self._student_sid()
+                if not mine or str(data.get("sid", "")).strip() != mine:
+                    return self._send_json({"ok": False, "msg": "不能替别的同学提交"}, 403)
             with _lock:
                 res = add_submission(data)
             code = 200 if res.get("ok") else 400
             return self._send_json(res, code)
         if path == "/api/custom":
+            if self._need_teacher():
+                return
             data = self._read_json()
+            if data is None:
+                return
             if "html" in data:
                 cfg = get_config()
                 task = (data.get("task") or "").strip()
@@ -601,7 +804,10 @@ class Handler(BaseHTTPRequestHandler):
 
         # ---- 课件库（写操作）----
         if path.startswith("/api/cw/"):
-            return self._cw_post(path, u, self._read_json())
+            data = self._read_json()
+            if data is None:
+                return
+            return self._cw_post(path, u, data)
 
         return self._send_json({"ok": False, "msg": "未知接口"}, 404)
 
@@ -612,19 +818,105 @@ class Handler(BaseHTTPRequestHandler):
         h = self.headers.get("Host") or ("127.0.0.1:%d" % self.server.server_port)
         return "http://" + h
 
+    # ------------------------------------------------------------------
+    # 配置 / 题目 / 榜单：对外只给「页面需要的部分」
+    # ------------------------------------------------------------------
+    def _public_config(self):
+        """给提交页的配置视图。
+
+        原来 GET /api/config 直接把整份配置吐出来，里面有两类不该外泄的东西：
+          · save_dir —— 教师机上的绝对路径（泄露用户名、目录结构）；
+          · custom_html / custom_templates —— 教师自定义页，属于管理面数据；
+          · quiz.questions[].answer —— 标准答案！
+        学生打开 /api/config 就能拿到全部答案，随堂测直接失去意义。
+        现在只给标题、截止时间、是否允许重交、是否开启题目、班级匹配模式。
+        """
+        cfg = get_config()
+        quiz = cfg.get("quiz") or {}
+        qs = quiz.get("questions") or []
+        tpl_names = []
+        t = cfg.get("custom_templates")
+        if isinstance(t, dict):
+            tpl_names = sorted([k for k in t.keys() if k])
+        return {
+            "ok": True,
+            "title": cfg.get("title", ""),
+            "deadline": cfg.get("deadline", ""),
+            "allow_resubmit": bool(cfg.get("allow_resubmit", True)),
+            "quiz": {
+                "intro": quiz.get("intro", ""),
+                "count": len(qs),
+                "total_score": sum(int(q.get("score") or 0) for q in qs),
+            },
+            "custom_tasks": tpl_names,
+        }
+
+    def _public_quiz(self):
+        """题目（不含答案）。答案只在服务端算分时用。"""
+        quiz = get_config().get("quiz") or {}
+        out = []
+        for q in (quiz.get("questions") or []):
+            out.append({
+                "q": q.get("q", ""),
+                "options": q.get("options") or [],
+                "score": int(q.get("score") or 0),
+                # 故意不带 answer
+            })
+        return {"intro": quiz.get("intro", ""), "questions": out}
+
+    def _board(self):
+        """排行榜：老师看全部；学生只能看自己的名次与提交状态。
+
+        原来匿名 GET /api/board 就能拿到全班学号、姓名、提交文件名，
+        而每一条的 files 里还带着 /api/files/<token> 下载地址 ——
+        等于把所有人的作业公开了。现在按角色裁剪。
+        """
+        role, _ = self._role()
+        data = build_board()
+        if role == "teacher":
+            return self._send_json(data)
+        sid = self._student_sid() if role == "student" else ""
+        if not sid:
+            return self._deny("请先登录")
+        board = [b for b in data.get("board", []) if str(b.get("sid", "")) == sid]
+        for b in board:
+            b.pop("files", None)     # 学生不需要、也不该拿到自己的下载 token
+        return self._send_json({"board": board, "generated_at": data.get("generated_at", ""),
+                                "self_only": True})
+
+    def _custom_html(self, task=""):
+        """教师自定义提交页（公开可见，它本身就是给学生填的页面）。"""
+        cfg = get_config()
+        html = ""
+        if task and isinstance(cfg.get("custom_templates"), dict):
+            html = cfg["custom_templates"].get(task, "")
+        if not html:
+            html = cfg.get("custom_html", "")
+        return html or "<!doctype html><meta charset='utf-8'><p>老师还没有配置自定义提交页。</p>"
+
+    def _auth_ctx(self):
+        role, _k = self._role()
+        return {"role": role, "sid": self._student_sid(), "is_local": self._is_local()}
+
     def _enh_get(self, path, qs):
         arg = lambda k: (qs.get(k) or [""])[0]
+        auth = self._auth_ctx()
         # 下载：素材（kind=material + mid）或学生自己的作品（kind=file + name）
         if path in ("/api/enh/dl", "/api/enh/mat"):
+            if not auth["role"]:
+                return self._send_text("请先登录", code=401)
             kind = arg("kind")
             if kind == "material" or arg("mid"):
-                got = ENH.resolve_material(arg("task"), arg("mid"), arg("token"), arg("sid"))
+                got = ENH.resolve_material(arg("task"), arg("mid"), arg("token"), arg("sid"),
+                                           auth=auth)
             else:
-                got = ENH.resolve_file(arg("task"), arg("sid"), arg("name"), arg("token"))
+                got = ENH.resolve_file(arg("task"), arg("sid"), arg("name"), arg("token"),
+                                       auth=auth)
             if not got or not os.path.isfile(got):
                 return self._send_text("文件不存在或已失效", code=404)
             return self._serve_abs(got, download=(arg("dl") == "1"))
-        res = ENH.get_json(path, qs, self._host_base(), (self.client_address or [""])[0])
+        res = ENH.get_json(path, qs, self._host_base(), (self.client_address or [""])[0],
+                           auth=auth)
         if res is None:
             return self._send_json({"ok": False, "msg": "未知接口"}, 404)
         if "__csv" in res:
@@ -641,49 +933,86 @@ class Handler(BaseHTTPRequestHandler):
             return
         if "__html" in res:
             return self._send_text(res["__html"], "text/html; charset=utf-8")
-        return self._send_json(res)
+        code = 200
+        if not res.get("ok", True):
+            code = int(res.get("_code") or 403)
+        return self._send_json(res, code)
 
     def _enh_post(self, path, u):
+        auth = self._auth_ctx()
         if path == "/api/enh/upload":
+            if not auth["role"]:
+                return self._send_json({"ok": False, "code": "E_TOKEN",
+                                        "msg": "请先在 /s/ 登录后再上传"}, 401)
             qs = urllib.parse.parse_qs(u.query)
             arg = lambda k: (qs.get(k) or [""])[0]
             try:
                 length = int(self.headers.get("Content-Length") or 0)
             except Exception:
                 length = 0
+            if length < 0:
+                length = 0
+            if length > MAX_UPLOAD_BODY:
+                return self._send_json({"ok": False, "code": "E_TOOBIG",
+                                        "msg": "文件太大（上限 300MB）"}, 413)
             res = ENH.save_upload(arg("task"), arg("sid"), arg("token"),
-                                  urllib.parse.unquote(arg("name")), self.rfile, length)
+                                  urllib.parse.unquote(arg("name")), self.rfile, length,
+                                  auth=auth)
             return self._send_json(res, 200 if res.get("ok") else 400)
         data = self._read_json()
+        if data is None:
+            return
         res = ENH.post_json(path, data, self._host_base(),
-                            (self.client_address or [""])[0], self.headers.get("User-Agent", ""))
+                            (self.client_address or [""])[0], self.headers.get("User-Agent", ""),
+                            auth=auth)
         if res is None:
             return self._send_json({"ok": False, "msg": "未知接口"}, 404)
-        code = (200 if res.get("ok") else
-                400 if res.get("code") in ("E_CHECK", "E_SID", "E_CLS", "E_NOT_IN_ROSTER",
-                                           "E_NAME", "E_EMPTY", "E_TOOBIG", "E_UPLOAD",
-                                           "E_WRITE", "E_NOTHING", "E_NO_WITHDRAW") else
-                403 if res.get("code") in ("E_CLOSED", "E_NO_RESUBMIT", "E_TOKEN", "E_TPL_STALE") else
-                200)
+        if res.get("ok"):
+            code = 200
+        elif res.get("_code"):
+            code = int(res["_code"])
+        elif res.get("code") in ("E_CHECK", "E_SID", "E_CLS", "E_NOT_IN_ROSTER",
+                                 "E_NAME", "E_EMPTY", "E_TOOBIG", "E_UPLOAD",
+                                 "E_WRITE", "E_NOTHING", "E_NO_WITHDRAW"):
+            code = 400
+        elif res.get("code") in ("E_CLOSED", "E_NO_RESUBMIT", "E_TOKEN",
+                                 "E_TPL_STALE", "E_AUTH"):
+            code = 403
+        else:
+            code = 200
         return self._send_json(res, code)
 
     # ------------------------------------------------------------------
     # 课件库：GET
     # ------------------------------------------------------------------
     def _cw_allowed(self):
-        """课件是老师的资料：默认只允许本机访问，避免同 Wi-Fi 的学生随手翻到。
-        老师用局域网地址打开工作台时，界面上可以显式打开「允许局域网访问」。"""
+        """课件库是老师的资料，判定分两层：
+
+        ① 身份：必须是登录的教师会话（单独运行旧服务时只认本机）；
+        ② 网络：本机访问，或老师显式打开过「允许局域网访问」。
+
+        原来只有第 ② 层，而且第 ② 层可以被任何人自己打开——见 _cw_post 里
+        那段「唯一的例外」。等于给资料柜装了锁，却把钥匙挂在门上。
+        """
+        role, _ = self._role()
+        if role != "teacher":
+            return False, "课件库只对教师账号开放，请先在 /teacher/ 登录。"
         try:
             cfg = CW.load_cfg()
         except Exception:
             cfg = {}
-        if cfg.get("allow_lan"):
+        if cfg.get("allow_lan") or self._is_local():
             return True, ""
         ip = (self.client_address or ("", 0))[0]
-        if ip in ("127.0.0.1", "::1", "localhost"):
-            return True, ""
         return False, ("课件库默认只允许本机访问（保护老师资料）。当前是从 %s 打开的；"
                        "如果你确实要用这个地址管理课件，请在课件页把「允许局域网访问」打开。" % ip)
+
+    def _need_local(self):
+        """只能在本机执行的操作（弹目录选择框、调用资源管理器）。"""
+        if self._is_local():
+            return False
+        self._send_json({"ok": False, "msg": "这个操作会弹窗/打开文件管理器，只能在教师机上执行"}, 403)
+        return True
 
     def _cw_get(self, path, qs):
         ok, why = self._cw_allowed()
@@ -713,7 +1042,7 @@ class Handler(BaseHTTPRequestHandler):
                 "updated_at": cfg.get("updated_at", ""),
                 "config_file": CW.CFG_PATH,
                 "courses": courses or [], "total": total,
-                "is_local": (self.client_address or ("", 0))[0] in ("127.0.0.1", "::1"),
+                "is_local": self._is_local(),
             })
         if path == "/api/cw/courses":
             courses, err = CW.list_courses()
@@ -785,16 +1114,26 @@ class Handler(BaseHTTPRequestHandler):
     # 课件库：POST
     # ------------------------------------------------------------------
     def _cw_post(self, path, u, data):
+        # 只保留一个「自解锁」口子，但门槛从「任何人」改成「本机 + 教师」：
+        # 老师用局域网地址打开时也需要能一键允许，那由下面的正式分支处理。
+        if path == "/api/cw/config" and not data.get("root") and data.get("allow_lan") is not None:
+            role, _ = self._role()
+            if role != "teacher":
+                return self._deny("只有教师账号可以修改课件库访问权限", 403)
+            cfg = CW.load_cfg()
+            cfg["allow_lan"] = bool(data.get("allow_lan"))
+            cfg["updated_at"] = CW._now()
+            CW.save_cfg(cfg)
+            return self._send_json({"ok": True, "msg": "已更新课件库访问权限",
+                                    "allow_lan": cfg["allow_lan"]})
         ok, why = self._cw_allowed()
         if not ok:
-            # 唯一的例外：从这个地址把「允许局域网访问」打开（否则老师永远没法自己解锁）
-            if path == "/api/cw/config" and not data.get("root") and data.get("allow_lan") is not None:
-                cfg = CW.load_cfg()
-                cfg["allow_lan"] = bool(data.get("allow_lan"))
-                cfg["updated_at"] = CW._now()
-                CW.save_cfg(cfg)
-                return self._send_json({"ok": True, "msg": "已允许局域网访问课件库", "allow_lan": cfg["allow_lan"]})
             return self._send_json({"ok": False, "msg": why, "need_local": True}, 403)
+
+        # 会弹窗 / 打开资源管理器 / 动磁盘的，只能在本机执行
+        if path in ("/api/cw/pickdir", "/api/cw/open", "/api/cw/mount/open"):
+            if self._need_local():
+                return
 
         if path == "/api/cw/config":
             if data.get("allow_lan") is not None and not data.get("root"):
@@ -988,6 +1327,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send_text("禁止访问", code=403)
         except ValueError:
             return self._send_text("禁止访问", code=403)
+        # 目录补 index.html：/student/ 这种「文件夹当入口」的地址，
+        # 浏览器地址栏里少打一个文件名也能打开，而不是回一个 404 让人以为页面没了。
+        if os.path.isdir(full):
+            full = os.path.join(full, "index.html")
         if not os.path.isfile(full):
             return self._send_text("未找到资源: " + name, code=404)
         ctype = mimetypes.guess_type(full)[0] or "application/octet-stream"
@@ -1003,19 +1346,30 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def _serve_file(self, token):
-        # token 由 _register_upload 登记，映射为文件绝对路径（避免 ../ 穿越与丑陋路径）
+        """按 token 取学生上传的作品。
+
+        token 来自 uploads_index.json，以前是「谁拿到 token 谁就能下载」，
+        而 token 又出现在匿名可读的 /api/board 里 —— 等于全班作业公开。
+        现在要求已登录；新登记的条目还会校验归属（sid 对不上就不给）。
+        """
+        role, _k = self._role()
+        if not role:
+            return self._send_text("请先登录", code=401)
         idx = load_json(UPLOAD_INDEX, {})
-        full = idx.get(token)
+        rec = idx.get(token)
+        if isinstance(rec, dict):
+            full = rec.get("path") or ""
+            owner = str(rec.get("sid") or "")
+        else:
+            full = rec or ""
+            owner = ""
+        if role == "student":
+            mine = self._student_sid()
+            if not owner or owner != mine:
+                return self._send_text("这不是你的文件", code=403)
         if not full or not os.path.isfile(full):
             return self._send_text("文件不存在", code=404)
-        ctype = mimetypes.guess_type(full)[0] or "application/octet-stream"
-        with open(full, "rb") as f:
-            body = f.read()
-        self.send_response(200)
-        self.send_header("Content-Type", ctype)
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
+        return self._serve_abs(full, download=True)
 
 def main():
     global STATIC_ROOT
