@@ -439,11 +439,20 @@ class Handler(BaseHTTPRequestHandler):
             return self._send_json({"ok": True, "service": "student-submit", "time": _now_iso()})
         if path == "/api/net":
             # 给工作台用：学生链接要换成局域网地址（127.0.0.1 学生手机打不开）
+            # port 必须取「浏览器访问的那个端口」= 宿主机映射端口，不能用 server_port：
+            # Docker 里 compose 把宿主机端口改成 30000，容器内仍是 20020，
+            # 用容器端口拼出来学生还是会连错。
+            base = self._host_base()
+            try:
+                host_port = urllib.parse.urlparse(base).port or self.server.server_port
+            except Exception:
+                host_port = self.server.server_port
             return self._send_json({
                 "ok": True,
-                "port": self.server.server_port,
+                "port": host_port,
                 "bind": self.server.server_address[0],
                 "ips": lan_ips(),
+                "base": base,
             })
         if path == "/api/config":
             return self._send_json(get_config())

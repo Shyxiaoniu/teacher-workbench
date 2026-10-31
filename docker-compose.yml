@@ -18,7 +18,7 @@
 #
 # 推到阿里云 ACR（镜像名已参数化，无需改本文件）：
 #   IMAGE_REPO=registry.cn-hangzhou.aliyuncs.com/<命名空间>/teacher-workbench \
-#   IMAGE_TAG=2.0.0 docker compose build
+#   IMAGE_TAG=2.0.1 docker compose build
 #   docker compose push
 # ============================================================
 name: teacher-workbench
@@ -34,7 +34,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ${IMAGE_REPO:-teacher-workbench}:${IMAGE_TAG:-2.0.0}
+    image: ${IMAGE_REPO:-teacher-workbench}:${IMAGE_TAG:-2.0.1}
     container_name: teacher-workbench-init
     # root 才有权限改卷属主；只做这一件事，跑完立刻退出
     user: "0:0"
@@ -70,7 +70,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ${IMAGE_REPO:-teacher-workbench}:${IMAGE_TAG:-2.0.0}
+    image: ${IMAGE_REPO:-teacher-workbench}:${IMAGE_TAG:-2.0.1}
     container_name: teacher-workbench
     # 启动顺序：init 成功退出之后才启动本服务
     depends_on:
@@ -88,6 +88,13 @@ services:
       WB_DATA_DIR: /app/data
       WB_SUBMISSION_DATA_DIR: /app/data/submissions
       PYTHONUNBUFFERED: "1"
+      # 宿主机端口：只用于把启动日志里的访问地址打印对。
+      # 二维码 / 学生端地址不依赖它——那些由浏览器实际访问的地址自动推导。
+      WB_HOST_PORT: "${WORKBENCH_PORT:-20020}"
+      # 对外访问地址（可选，一般留空）：
+      #   留空 = 自动跟随浏览器访问的地址，改 WORKBENCH_PORT 后二维码自动跟着变；
+      #   只有当你在前面挂了反向代理、或必须固定外部域名时才需要填。
+      WB_PUBLIC_URL: "${WB_PUBLIC_URL:-}"
     volumes:
       # 单一数据卷：SQLite / 配置 / 上传 / 每日快照 / 提交系统数据全在里面
       - workbench-data:/app/data

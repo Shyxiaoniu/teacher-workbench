@@ -34,9 +34,15 @@ fi
 
 echo "[entrypoint] 主数据目录 : $DATA_DIR"
 echo "[entrypoint] 提交数据目录: $SUB_DATA_DIR"
-echo "[entrypoint] 监听地址   : ${BIND}:${PORT}"
-echo "[entrypoint] 首次使用请打开 http://<服务器IP>:${PORT}/teacher/ 设置教师密码"
-echo "[entrypoint] 学生端     http://<服务器IP>:${PORT}/s/"
+echo "[entrypoint] 监听地址   : ${BIND}:${PORT}（容器内）"
+# 宿主机端口由 compose 的 ports 映射决定，可以用 WORKBENCH_PORT 改；
+# 这里只是为了把日志里的地址打印对，不影响服务本身。
+HOST_PORT="${WB_HOST_PORT:-$PORT}"
+if [ "$HOST_PORT" != "$PORT" ]; then
+    echo "[entrypoint] 对外端口   : ${HOST_PORT}（宿主机映射，容器内仍是 ${PORT}）"
+fi
+echo "[entrypoint] 首次使用请打开 http://<服务器IP>:${HOST_PORT}/teacher/ 设置教师密码"
+echo "[entrypoint] 学生端     http://<服务器IP>:${HOST_PORT}/s/"
 
 # CMD 被替换成别的命令（比如 docker run -it image sh）时不要硬塞参数
 case "${1:-}" in

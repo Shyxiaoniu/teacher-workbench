@@ -59,7 +59,7 @@ CFG = A.load_config(CONFIG_PATH)
 SESS = A.Sessions()
 COND = threading.Condition()
 STARTED = time.time()
-VERSION = "2.0.0"
+VERSION = "2.0.1"
 ONLINE_WINDOW = 300      # 5 分钟内活跃算在线
 
 # 配置（模块开关 / 可见字段 / 账号密码）改动时自增：SSE 靠它把“设置变了”
@@ -83,6 +83,60 @@ def lan_ips():
 def best_ip():
     ips = lan_ips()
     return ips[0] if ips else "127.0.0.1"
+
+
+# --- 对外访问地址 -----------------------------------------------------------
+# 二维码 / 学生端地址要写进 HTML 和图片里，必须是「学生手机能打开的绝对地址」。
+# 以前用 best_ip() + 进程端口拼接，在 Docker 里会出错：
+#   · best_ip() 拿到的是容器网卡地址（172.x.x.x），学生根本连不上
+#   · 端口是容器内端口，compose 里改了宿主机端口后对不上
+# 现在改成按优先级推导，改端口/换部署方式都不用再手工维护：
+#   1. WB_PUBLIC_URL 环境变量（反向代理、固定域名、或用 localhost 打开但学生要走局域网）
+#   2. X-Forwarded-Host / X-Forwarded-Proto（nginx、Caddy 等反向代理）
+#   3. 本次请求的 Host 头 —— 老师用什么地址打开，学生就用什么地址，
+#      浏览器访问的本来就是「宿主机IP:宿主机端口」，天然跟着 compose 走
+#   4. 兜底：本机网卡 IP + 进程端口（本机双击启动的老行为）
+_LOOPBACK_HOSTS = ("127.0.0.1", "localhost", "0.0.0.0", "::1", "127.0.1.1")
+
+
+def _safe_host(raw):
+    """Host 头只允许域名/IP/端口字符，避免把奇怪内容写进二维码。"""
+    h = (raw or "").strip()
+    if not h or len(h) > 128:
+        return ""
+    for ch in h:
+        if not (ch.isascii() and (ch.isalnum() or ch in ".-:[]_")):
+            return ""
+    return h
+
+
+def _host_only(hostport):
+    """从 host[:port] 里取出主机名，兼容 [::1]:8080 这种 IPv6 写法。"""
+    h = hostport.strip()
+    if h.startswith("["):
+        return h.split("]")[0].lstrip("[").lower()
+    return h.rsplit(":", 1)[0].lower() if h.count(":") == 1 else h.lower()
+
+
+def public_base(headers=None):
+    """对外访问根地址，形如 http://192.168.x.x:20020（不带结尾斜杠）。"""
+    env = (os.environ.get("WB_PUBLIC_URL") or "").strip()
+    if env:
+        low = env.lower()
+        if not (low.startswith("http://") or low.startswith("https://")):
+            env = "http://" + env
+        return env.rstrip("/")
+
+    if headers is not None:
+        fwd = _safe_host((headers.get("X-Forwarded-Host") or "").split(",")[0])
+        if fwd:
+            proto = (headers.get("X-Forwarded-Proto") or "http").split(",")[0].strip().lower()
+            return "%s://%s" % ("https" if proto == "https" else "http", fwd)
+        host = _safe_host(headers.get("Host"))
+        if host and _host_only(host) not in _LOOPBACK_HOSTS:
+            return "http://" + host
+
+    return "http://%s:%d" % (best_ip(), _port())
 
 
 def now_str():
@@ -238,7 +292,7 @@ class Handler(LEG.Handler):
                 return self._html(P.console_page())
             if path == "/join":
                 return self._html(P.join_page(CFG.get("class_code", ""),
-                                              "http://%s:%d/s/" % (best_ip(), _port()),
+                                              public_base(self.headers) + "/s/",
                                               CFG.get("school_name", "")))
             if path == "/s":
                 return self._redirect("/s/")
@@ -563,11 +617,15 @@ class Handler(LEG.Handler):
         for h in STORE.table_rows("homeworks"):
             if str(h.get("due") or "9999") >= td:
                 open_hw += 1
-        port = _port()
+        base = public_base(self.headers)
+        try:
+            port = urllib.parse.urlparse(base).port or _port()
+        except Exception:
+            port = _port()
         return self._json({
             "ok": True, "rev": STORE.rev(), "class_code": CFG.get("class_code"),
             "school": CFG.get("school_name", ""),
-            "entry_url": "http://%s:%d/s/" % (best_ip(), port),
+            "entry_url": base + "/s/",
             "online": SESS.online("student", ONLINE_WINDOW),
             "students": stats.get("students", 0),
             "open_homework": open_hw,

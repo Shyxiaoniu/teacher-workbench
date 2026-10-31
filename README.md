@@ -68,7 +68,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ${IMAGE_REPO:-teacher-workbench}:${IMAGE_TAG:-2.0.0}
+    image: ${IMAGE_REPO:-teacher-workbench}:${IMAGE_TAG:-2.0.1}
     container_name: teacher-workbench-init
     # root 才有权限改卷属主；只做这一件事，跑完立刻退出
     user: "0:0"
@@ -104,7 +104,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ${IMAGE_REPO:-teacher-workbench}:${IMAGE_TAG:-2.0.0}
+    image: ${IMAGE_REPO:-teacher-workbench}:${IMAGE_TAG:-2.0.1}
     container_name: teacher-workbench
     # 启动顺序：init 成功退出之后才启动本服务
     depends_on:
@@ -122,6 +122,13 @@ services:
       WB_DATA_DIR: /app/data
       WB_SUBMISSION_DATA_DIR: /app/data/submissions
       PYTHONUNBUFFERED: "1"
+      # 宿主机端口：只用于把启动日志里的访问地址打印对。
+      # 二维码 / 学生端地址不依赖它——那些由浏览器实际访问的地址自动推导。
+      WB_HOST_PORT: "${WORKBENCH_PORT:-20020}"
+      # 对外访问地址（可选，一般留空）：
+      #   留空 = 自动跟随浏览器访问的地址，改 WORKBENCH_PORT 后二维码自动跟着变；
+      #   只有当你在前面挂了反向代理、或必须固定外部域名时才需要填。
+      WB_PUBLIC_URL: "${WB_PUBLIC_URL:-}"
     volumes:
       # 单一数据卷：SQLite / 配置 / 上传 / 每日快照 / 提交系统数据全在里面
       - workbench-data:/app/data
@@ -165,7 +172,7 @@ TZ=Asia/Shanghai
 WORKBENCH_VOLUME=teacher-workbench-data
 # 本地构建留空；推拉 ACR 时填完整仓库地址
 IMAGE_REPO=
-IMAGE_TAG=2.0.0
+IMAGE_TAG=2.0.1
 ```
 
 完整带注释的版本见仓库根目录的 `.env.example`（复制为 `.env` 即可）。
@@ -175,7 +182,7 @@ IMAGE_TAG=2.0.0
 
 ```bash
 IMAGE_REPO=crpi-2xt9f8f2tdrrpst5.cn-guangzhou.personal.cr.aliyuncs.com/niugebox/teacher-workbench \
-IMAGE_TAG=2.0.0 docker compose up -d --no-build
+IMAGE_TAG=2.0.1 docker compose up -d --no-build
 ```
 
 ### 1.2 主要配置项的含义与适用场景
@@ -212,7 +219,7 @@ IMAGE_TAG=2.0.0 docker compose up -d --no-build
 | 服务 | 用途 | 镜像 | 对外端口 | 生命周期 |
 |---|---|---|---|---|
 | `init` | 一次性初始化：把数据卷属主修正为 `10001`、补建 `files/`、`backup/`、`submissions/` 子目录 | 与主服务同一镜像，以 root 运行 | 无（`network_mode: none`，只碰卷） | 跑完即退出（`restart: "no"`） |
-| `workbench` | 主服务：教师端 `/teacher/`、学生端 `/s/`、同步接口 `/api/v2/*`、作业提交 `/api/submit` | `teacher-workbench:2.0.0` | `20020`（宿主机侧可改） | 常驻，`restart: unless-stopped` |
+| `workbench` | 主服务：教师端 `/teacher/`、学生端 `/s/`、同步接口 `/api/v2/*`、作业提交 `/api/submit` | `teacher-workbench:2.0.1` | `20020`（宿主机侧可改） | 常驻，`restart: unless-stopped` |
 
 启动顺序由 `depends_on` 显式约束：
 
@@ -236,7 +243,7 @@ init ──service_completed_successfully──▶ workbench ──healthcheck /
 ```bash
 docker compose build                     # 只构建
 docker compose build --no-cache          # 完全重建
-docker build -t teacher-workbench:2.0.0 .   # 不用 compose 时
+docker build -t teacher-workbench:2.0.1 .   # 不用 compose 时
 ```
 
 镜像名与标签已参数化，改 `IMAGE_REPO` / `IMAGE_TAG` 即可打成 ACR 地址（见 1.9）。
@@ -259,19 +266,40 @@ WORKBENCH_PORT=18080 docker compose up -d       # 临时换端口
 # 或 cp .env.example .env 后改 WORKBENCH_PORT=18080
 ```
 
+**改端口后不用改任何别的地方。** 服务里所有要写进页面/二维码的绝对地址（投屏二维码、
+学生端入口 `entry_url`、`/api/net` 返回的端口）都按「浏览器实际访问的地址」自动推导，
+不再使用容器内网 IP 和容器内端口：
+
+| 场景 | 推导结果 |
+|---|---|
+| 老师访问 `http://192.168.x.x:18080/teacher/` | 二维码内容 = `http://192.168.x.x:18080/s/` |
+| 改了 `.env` 的 `WORKBENCH_PORT` 并重启容器 | 同上，自动跟随，无需额外配置 |
+| 前面挂了 nginx / Caddy 且传了 `X-Forwarded-Host` | 用代理传来的域名与协议（`https://…`） |
+| 用 `127.0.0.1` 打开但学生要走局域网 | 自动换成本机网卡 IP（本机部署时有效；Docker 里请配 `WB_PUBLIC_URL`） |
+| 配了 `WB_PUBLIC_URL` | 一律以它为准，优先级最高 |
+
+也就是说：**只要老师是用学生能访问到的那个地址打开教师端的，二维码就一定是通的**；
+唯一需要手工指定的是「反向代理改写域名」和「Docker 里用 localhost 打开」这两种情况，
+填一行 `WB_PUBLIC_URL` 即可。
+
+> 端口仍然建议避开 NAS 已占用的号（80 / 443 / 5000 / 9000 等），否则 `up -d` 会报
+> `port is already allocated`——这与项目更新无关，换一个空闲端口就好。
+
 ### 1.6 环境变量
 
 | 变量 | 作用 | 默认 | 何时需要改 |
 |---|---|---|---|
 | `WORKBENCH_PORT` | 宿主机端口 | `20020` | 端口冲突时 |
 | `WORKBENCH_HOST_IP` | 宿主机绑定地址 | `0.0.0.0` | 仅本机 / 挂反向代理时 |
+| `WB_PUBLIC_URL` | 对外访问地址覆盖 | 空（自动推导） | 挂反向代理、或用 `localhost` 打开但学生要走局域网时 |
+| `WB_HOST_PORT` | 仅用于把启动日志里的地址打印对 | 等于 `WORKBENCH_PORT` | 不用改，改端口时自动带入 |
 | `TZ` | 时区 | `Asia/Shanghai` | 不要改 |
 | `PORT` | 容器内监听端口 | `20020` | 不建议改 |
 | `BIND` | 容器内绑定地址 | `0.0.0.0` | 不建议改 |
 | `WB_DATA_DIR` | 主数据目录 | `/app/data` | 只在改挂载点时 |
 | `WB_SUBMISSION_DATA_DIR` | 提交系统数据目录 | `/app/data/submissions` | 同上，必须位于同一数据卷内 |
 | `WORKBENCH_VOLUME` | 数据卷名 | `teacher-workbench-data` | 同机跑多实例时 |
-| `IMAGE_REPO` / `IMAGE_TAG` | 镜像仓库与标签 | 空 / `2.0.0` | 推拉 ACR 时 |
+| `IMAGE_REPO` / `IMAGE_TAG` | 镜像仓库与标签 | 空 / `2.0.1` | 推拉 ACR 时 |
 
 **没有任何密码、密钥或数据库连接串需要配置**：服务不连外部组件，教师密码在首次访问时
 由网页设置，只保存在数据卷里。`.env` 只放端口、时区、卷名这类非敏感参数。
@@ -328,7 +356,7 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:20020/s/   # 200 = 学
 **已发布镜像**（阿里云 ACR 个人版，广州，`linux/amd64`）：
 
 ```
-crpi-2xt9f8f2tdrrpst5.cn-guangzhou.personal.cr.aliyuncs.com/niugebox/teacher-workbench:2.0.0
+crpi-2xt9f8f2tdrrpst5.cn-guangzhou.personal.cr.aliyuncs.com/niugebox/teacher-workbench:2.0.1
 crpi-2xt9f8f2tdrrpst5.cn-guangzhou.personal.cr.aliyuncs.com/niugebox/teacher-workbench:latest
 ```
 
@@ -339,13 +367,13 @@ docker login crpi-2xt9f8f2tdrrpst5.cn-guangzhou.personal.cr.aliyuncs.com   # 账
 
 # 首次必须先修正命名卷属主：容器以 uid 10001 运行，新建的卷属主是 root，否则启动会报不可写
 docker run --rm -v teacher-workbench-data:/app/data --user 0:0 \
-  crpi-2xt9f8f2tdrrpst5.cn-guangzhou.personal.cr.aliyuncs.com/niugebox/teacher-workbench:2.0.0 \
+  crpi-2xt9f8f2tdrrpst5.cn-guangzhou.personal.cr.aliyuncs.com/niugebox/teacher-workbench:2.0.1 \
   sh -c 'mkdir -p /app/data/files /app/data/backup /app/data/submissions/enh /app/data/submissions/uploads && chown -R 10001:10001 /app/data'
 
 docker run -d --name teacher-workbench --restart unless-stopped \
   -p 20020:20020 -v teacher-workbench-data:/app/data \
   -e TZ=Asia/Shanghai \
-  crpi-2xt9f8f2tdrrpst5.cn-guangzhou.personal.cr.aliyuncs.com/niugebox/teacher-workbench:2.0.0
+  crpi-2xt9f8f2tdrrpst5.cn-guangzhou.personal.cr.aliyuncs.com/niugebox/teacher-workbench:2.0.1
 ```
 
 用 `docker compose up -d --no-build` 则不需要手动修正属主，编排里的 `init` 服务会做这件事。
@@ -362,7 +390,7 @@ docker login registry.cn-hangzhou.aliyuncs.com
 
 # 2) 构建并推送
 export IMAGE_REPO=registry.cn-hangzhou.aliyuncs.com/<命名空间>/teacher-workbench
-export IMAGE_TAG=2.0.0
+export IMAGE_TAG=2.0.1
 docker compose build
 docker compose push
 ```
@@ -370,7 +398,7 @@ docker compose push
 在目标机器上用（不需要源码，只要有 `docker-compose.yml` 与本项目的基础镜像可拉取）：
 
 ```bash
-IMAGE_REPO=$IMAGE_REPO IMAGE_TAG=2.0.0 docker compose up -d --no-build
+IMAGE_REPO=$IMAGE_REPO IMAGE_TAG=2.0.1 docker compose up -d --no-build
 
 # 没有 compose 文件时用单条 docker run
 docker run -d --name teacher-workbench --restart unless-stopped \
@@ -383,9 +411,9 @@ docker run -d --name teacher-workbench --restart unless-stopped \
 ### 1.10 不用 compose 的单容器方式
 
 ```bash
-docker build -t teacher-workbench:2.0.0 .
+docker build -t teacher-workbench:2.0.1 .
 docker run -d --name workbench --restart unless-stopped \
-  -p 20020:20020 -v teacher-workbench-data:/app/data teacher-workbench:2.0.0
+  -p 20020:20020 -v teacher-workbench-data:/app/data teacher-workbench:2.0.1
 ```
 
 这种方式**不会**自动跑 `init`，如果挂的是宿主机目录且属主不是 `10001`，
@@ -466,6 +494,13 @@ Windows 双击 `app/启动教师端.bat`，macOS 双击 `app/启动教师端.com
   只读文件系统上），按提示在宿主机手动改属主。
 - **端口被占用**：换宿主端口 `WORKBENCH_PORT=18080 docker compose up -d`；
   容器内端口固定 20020，不需要改。
+- **改了端口，二维码扫出来的地址还是旧的 / 学生打不开**：2.0.1 起不用管——二维码和
+  学生端入口按「老师当前访问的地址」自动生成，改 `WORKBENCH_PORT` 后重启容器即自动生效。
+  若仍不对，多半是这两种情况：① 前面挂了反向代理，需要 `WB_PUBLIC_URL=https://你的域名`；
+  ② 你是用 `http://127.0.0.1:端口` 打开的，学生手机访问不到这个地址，请改用
+  `http://服务器局域网IP:端口/teacher/` 打开，或直接配 `WB_PUBLIC_URL`。
+- **旧版本升级**：`docker compose pull && docker compose up -d`，端口、数据卷、环境变量
+  全部沿用，不需要重新配置；数据在命名卷里，升级不会丢。
 
 - **学生连不上**：手机与服务器要在同一局域网，用 `http://服务器IP:端口/s/`。
 - **忘记教师密码**：容器内删掉配置里的密码字段风险较高，推荐用「忘记密码 → 密保」；
