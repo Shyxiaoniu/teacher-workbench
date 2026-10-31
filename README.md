@@ -31,6 +31,13 @@ docker compose down             # 停止并删除容器（数据卷保留）
 docker compose down -v          # 连数据一起删（危险：清空所有班级数据）
 ```
 
+部署后自检（确认容器真的起来了、三个入口都能访问）：
+
+```bash
+sh docker/smoke-test.sh         # 默认 20020；换了端口就 sh docker/smoke-test.sh 18080
+# 或直接看容器健康状态：docker compose ps（STATUS 显示 healthy 即正常）
+```
+
 改端口（不动代码、不重建镜像）：
 
 ```bash
