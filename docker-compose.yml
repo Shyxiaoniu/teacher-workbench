@@ -39,17 +39,16 @@ services:
     # root 才有权限改卷属主；只做这一件事，跑完立刻退出
     user: "0:0"
     entrypoint: ["/bin/sh", "-c"]
+    # 注意：Compose 会把命令里的 $XXX 当变量插值，脚本内的 shell 变量必须写成 $$XXX，
+    # 这里干脆不用变量，避免踩坑。
     command:
       - |
         set -eu
-        need=0
-        [ "$(stat -c %u /app/data 2>/dev/null || echo 0)" = "10001" ] || need=1
-        [ -w /app/data ] || need=1
-        if [ "$need" = "1" ]; then
-          echo "[init] 修正数据卷属主 -> 10001:10001"
+        if [ ! -w /app/data ] || [ "$(stat -c %u /app/data 2>/dev/null || echo 0)" != "10001" ]; then
+          echo "[init] 数据卷属主异常，正在修正 -> 10001:10001"
           chown -R 10001:10001 /app/data
         else
-          echo "[init] 数据卷属主正常，无需修改"
+          echo "[init] 数据卷属主正常（10001），无需修改"
         fi
         mkdir -p /app/data/files /app/data/backup \
                  /app/data/submissions/enh /app/data/submissions/uploads
