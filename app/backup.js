@@ -123,6 +123,28 @@
       new TextEncoder().encode(salt || ''), env.iters, 32);
   }
 
+  /** 用「指定密钥」加密一段文本（全量备份用：备份密码独立于本机锁密码，
+      所以不能走 env.enc——那把锁绑定的是本机设备密钥）。
+      输出格式与 index.html 的 encStr 完全一致：v1:c:<iv>:<mac>:<ct>，
+      这样 env.dec(text, key) 能直接解开。 */
+  function encWithKey(plain, key, env) {
+    var iv = new Uint8Array(16);
+    if (root.crypto && root.crypto.getRandomValues) root.crypto.getRandomValues(iv);
+    else for (var i = 0; i < 16; i++) iv[i] = Math.floor(Math.random() * 256);
+    var ct = env.cipher.aesCbcEncrypt(key, iv, new TextEncoder().encode(plain));
+    var mac = env.cipher.hmacSha256(key, ct);
+    return env.encPrefix + ':c:' + env.cipher.bytesToB64(iv) + ':'
+      + env.cipher.bytesToB64(mac) + ':' + env.cipher.bytesToB64(ct);
+  }
+
+  /** 随机盐（base64 字符串，进备份外壳；换机解密靠它派生同一把密钥） */
+  function randomSalt(env) {
+    var b = new Uint8Array(12);
+    if (root.crypto && root.crypto.getRandomValues) root.crypto.getRandomValues(b);
+    else for (var i = 0; i < 12; i++) b[i] = Math.floor(Math.random() * 256);
+    return env.cipher.bytesToB64(b);
+  }
+
   /** 自定义密码输入弹窗（type=password 掩码；原生 prompt 不掩码会明文） */
   function askPassword(title, sub, placeholder) {
     var env = E();
@@ -381,6 +403,146 @@
   }
 
   /**
+   * 全量加密导出（v2.0.4 · 系统设置「数据与备份」唯一入口）
+   * 服务端整库（含教师账号与学生口令哈希）+ 本机浏览器数据，一个文件带走。
+   * 加密密钥由「备份密码」+ 随机盐派生（PBKDF2），与设备锁密码互相独立：
+   * 换新机器只要记得备份密码就能解开，不需要旧设备的任何状态。
+   */
+  async function exportFull() {
+    var env = E();
+    if (!env.keySet() && env.lockActive()) {
+      env.toast('请先解锁再导出备份（当前处于锁定状态，数据还是密文）');
+      return false;
+    }
+    /* ① 取服务端全量（教师账号 / 学生口令哈希在 ?full=1 里） */
+    var server = null;
+    try {
+      var r = await fetch('/api/v2/teacher/export?full=1',
+        { credentials: 'same-origin', cache: 'no-store' });
+      if (r.ok) {
+        var j = await r.json();
+        if (j && j.tables) server = j;
+      }
+    } catch (e) { server = null; }
+    if (!server) {
+      env.toast('拿不到服务端数据（登录已过期或服务未启动），本次不导出');
+      return false;
+    }
+    /* ② 备份密码（独立于设备锁，输两遍防手滑） */
+    var pwd = await askPassword('设置备份密码',
+      '整个备份用这个密码加密。换电脑恢复时必须输入它，请务必记牢。', '至少 6 位');
+    if (pwd === null) return false;
+    if (!pwd || pwd.length < 6) { env.toast('备份密码至少 6 位，已取消导出'); return false; }
+    var pwd2 = await askPassword('再输一遍备份密码', '', '重复输入');
+    if (pwd2 === null) return false;
+    if (pwd2 !== pwd) { env.toast('两次输入的密码不一致，已取消导出'); return false; }
+
+    /* ③ 打包：本机 localStorage + 服务端表 / 配置 / 学生口令哈希 */
+    var ls = collect();
+    var n = Object.keys(ls).length;
+    var tblN = Object.keys(server.tables || {})
+      .filter(function (t) { return Array.isArray(server.tables[t]) && server.tables[t].length; }).length;
+    var dump = {
+      app: APP, version: VER, kind: 'full',
+      at: new Date().toISOString().slice(0, 16).replace('T', ' '),
+      encrypted: true, count: n, sum: sumOf(ls, env),
+      term: env.termCfg(), appDate: env.appDate() || '',
+      ls: ls,
+      server: {
+        app_version: server.version, exported_at: server.exported_at,
+        tables: server.tables, config: server.config, creds: server.creds || [],
+        sub: server.sub || null          /* 提交系统：题目/花名册/提交记录 */
+      }
+    };
+    var salt = randomSalt(env);
+    var k = deriveKey(pwd, salt, env);
+    var shell = JSON.stringify({ app: ENV, v: VER, enc: true, kind: 'full',
+      salt: salt, count: n, payload: encWithKey(JSON.stringify(dump), k, env) });
+    download(shell, 'application/octet-stream',
+      '班级工作台全量备份-' + stamp(env) + '.cwbackup');
+    env.toast('已导出全量加密备份（服务端 ' + tblN + ' 张表 + 本机 ' + n + ' 项）');
+    return true;
+  }
+
+  /**
+   * 从全量备份一键恢复：选文件 → 输备份密码 → 确认 →
+   * ① 本机数据整体替换（apply）→ ② 服务端整库替换（tables+config+creds）→ 刷新。
+   * 旧版纯本机备份（没有 server 段）自动回落到普通导入流程。
+   */
+  function importFull() {
+    var env = E();
+    var f = document.createElement('input');
+    f.type = 'file';
+    f.accept = '.cwbackup,.json,application/json';
+    f.onchange = function () {
+      var file = f.files && f.files[0];
+      if (!file) return;
+      var r = new FileReader();
+      r.onerror = function () { env.toast('读不到这个文件，可能已被移动或没有权限'); };
+      r.onload = async function () {
+        var parsed;
+        try { parsed = await decode(String(r.result || '')); }
+        catch (e) { env.toast('导入失败：' + ((e && e.message) || e)); return; }
+        if (!parsed) { env.toast('已取消导入'); return; }
+        var dump = parsed.dump, key = parsed.key;
+        var n = Object.keys(dump.ls || {}).length;
+
+        if (dump.kind === 'full' && dump.server) {
+          var sv = dump.server;
+          var tblN = Object.keys(sv.tables || {})
+            .filter(function (t) { return Array.isArray(sv.tables[t]) && sv.tables[t].length; }).length;
+          var credsN = (sv.creds || []).length;
+          if (!confirm('全量恢复会整体替换两边的数据' +
+            (dump.at ? '（导出于 ' + dump.at + '）' : '') + '：\n\n'
+            + '· 服务端：' + tblN + ' 张表 + 配置' + (credsN ? ' + ' + credsN + ' 条学生密码' : '') + '\n'
+            + '· 本机：' + n + ' 项界面数据\n'
+            + '· 教师账号 / 学生密码 / 模块开关会回到备份时的状态\n'
+            + (env.lockActive() ? '· 本机解锁密码保持不变\n' : '')
+            + '\n确定继续吗？')) return;
+          var cnt;
+          try { cnt = apply(dump, key); }        /* 先落本机（失败不动服务端） */
+          catch (e) { env.toast('本机数据导入失败：' + ((e && e.message) || e)); return; }
+          var ok2 = false, msg2 = '';
+          try {
+            var resp = await fetch('/api/v2/admin/import', {
+              method: 'POST', credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ tables: sv.tables, config: sv.config || {},
+                                     creds: sv.creds || [], sub: sv.sub || {} })
+            });
+            var j = await resp.json().catch(function () { return {}; });
+            ok2 = !!j.ok;
+            if (!ok2) msg2 = (j && j.msg) || ('HTTP ' + resp.status);
+          } catch (e) { msg2 = (e && e.message) || e; }
+          if (!ok2) {
+            env.toast('本机数据已还原，但服务端恢复失败：' + msg2 + '。刷新后可重试服务端部分。');
+          } else {
+            env.toast('已恢复：服务端 ' + tblN + ' 张表 + 本机 ' + cnt + ' 项，正在重新载入…');
+          }
+          setTimeout(function () { env.reload(); }, 1200);
+          return;
+        }
+
+        /* 旧版纯本机备份：走原恢复流程 */
+        var when = dump.at ? ('（导出于 ' + dump.at + '）') : '';
+        var tbl = env.dbKeys.filter(function (k) { return dump.ls['wb-db-' + k]; }).length;
+        if (!confirm('即将用这份备份覆盖本机数据' + when + '。\n\n'
+          + '· 备份共 ' + n + ' 项，含 ' + tbl + ' 张数据表（纯本机备份，不含服务端数据）\n'
+          + '· 本机现有的班级 / 学生 / 成绩等会被替换\n'
+          + (env.lockActive() ? '· 本机密码保持不变（备份里的旧密码不会覆盖它）\n' : '')
+          + '\n确定继续吗？')) return;
+        var cnt2;
+        try { cnt2 = apply(dump, key); }
+        catch (e) { env.toast('导入失败：' + ((e && e.message) || e)); return; }
+        env.toast('已导入 ' + cnt2 + ' 项，正在重新载入…');
+        setTimeout(function () { env.reload(); }, 900);
+      };
+      r.readAsText(file);
+    };
+    f.click();
+  }
+
+  /**
    * 两个入口共用的面板：设置页与工具页都调它，避免再各自长出一套按钮/文案。
    * 面板里的按钮直接调本模块，所以不存在「两个实现」。
    */
@@ -432,7 +594,8 @@
     APP: APP, ENV: ENV, VER: VER, LOCAL_ONLY: LOCAL_ONLY,
     collect: collect, sumOf: function (ls) { return sumOf(ls, E()); },
     export: exportData, decode: decode, apply: apply,
-    importFile: importFile, askPassword: askPassword, openPanel: openPanel
+    importFile: importFile, askPassword: askPassword, openPanel: openPanel,
+    exportFull: exportFull, importFull: importFull
   };
   root.BackupIO = api;
 })(typeof window !== 'undefined' ? window : this);

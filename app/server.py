@@ -59,7 +59,7 @@ CFG = A.load_config(CONFIG_PATH)
 SESS = A.Sessions()
 COND = threading.Condition()
 STARTED = time.time()
-VERSION = "2.0.3"
+VERSION = "2.0.4"
 ONLINE_WINDOW = 300      # 5 分钟内活跃算在线
 
 # SSE 长连接上限（每个连接一个线程）
@@ -559,7 +559,7 @@ class Handler(LEG.Handler):
         if path == "/api/v2/teacher/console":
             return self._console()
         if path == "/api/v2/teacher/export":
-            return self._export()
+            return self._export(qs)
         return self._json({"ok": False, "msg": "未知接口"}, 404)
 
     def _sync_pull(self, qs):
@@ -798,17 +798,30 @@ class Handler(LEG.Handler):
             "audit": STORE.recent_audit(20),
         })
 
-    def _export(self):
+    def _export(self, qs=None):
         if not self._is_teacher():
             return self._json({"ok": False, "msg": "未登录"}, 401)
+        qs = qs or {}
+        # full=1：全量备份模式（系统设置「全量备份导出」用）。
+        # 以前只给数据表 + 脱敏配置，恢复到新机器后教师账号、学生口令全丢，
+        # 还得重新初始化账号逐个重设密码，谈不上「换机一键可用」。
+        # 全量模式带上教师账号（含口令哈希与密保哈希）和学生口令哈希表——
+        # 文件本身由前端用备份密码整体加密后落盘，明文不出教师机。
+        full = (qs.get("full") or [""])[0] in ("1", "true")
         data = {"version": VERSION, "exported_at": now_str(),
-                "tables": STORE.snapshot(), "config": {
-                    k: v for k, v in CFG.items() if k != "teacher"}}
+                "tables": STORE.snapshot(),
+                "config": {k: v for k, v in CFG.items() if k != "teacher"}}
+        if full:
+            data["mode"] = "full"
+            data["config"] = json.loads(json.dumps(CFG))     # 含 teacher（口令是哈希，不是明文）
+            data["creds"] = STORE.export_creds()
+            data["sub"] = _sub_snapshot()                    # 提交系统：题目/花名册/提交记录
         body = json.dumps(data, ensure_ascii=False).encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Content-Disposition",
-                         'attachment; filename="workbench-backup-%s.json"' % time.strftime("%Y%m%d-%H%M"))
+        if not full:
+            self.send_header("Content-Disposition",
+                             'attachment; filename="workbench-backup-%s.json"' % time.strftime("%Y%m%d-%H%M"))
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -1387,8 +1400,65 @@ class Handler(LEG.Handler):
         if not isinstance(tables, dict):
             return self._json({"ok": False, "msg": "格式不对"}, 400)
         counts = STORE.import_snapshot(tables, replace=True)
+        # 全量备份（v2.0.4）还带服务端配置与学生口令哈希：
+        # 换机导入后登录账号、初始密码、模块开关都跟原机一致，才叫「一键可用」。
+        # 端口 / 绑定地址是「这台机器」的属性，不跟着数据走。
+        cfg_in = body.get("config")
+        if isinstance(cfg_in, dict):
+            for k, v in cfg_in.items():
+                if k in ("port", "port_migrated", "bind"):
+                    continue
+                CFG[k] = v
+            cfg_save()
+            notify_cfg()
+        creds = body.get("creds")
+        if isinstance(creds, list):
+            counts["student_creds"] = STORE.import_creds(creds)
+        # 全量备份还带提交系统（随堂测 / 作品收集）的自有数据：
+        # 题目配置、花名册、提交记录都在 submissions/ 下的独立 JSON 里，
+        # 不随 STORE 表走——漏了它们，恢复完随堂测就变回默认题库。
+        sub = body.get("sub")
+        if isinstance(sub, dict) and sub:
+            counts["submission_data"] = _sub_restore(sub)
         notify()
         return self._json({"ok": True, "counts": counts, "rev": STORE.rev()})
+
+def _sub_snapshot():
+    """提交系统（随堂测 / 作品收集）自有数据：配置 / 花名册 / 提交记录。
+
+    这些数据在 <数据目录>/submissions/ 下的独立 JSON 里，不进 STORE，
+    全量备份必须单独带上，否则换机恢复后随堂测会退回默认题库。
+    读不到（旧版本部署、文件损坏）就跳过对应项，不阻塞导出。
+    """
+    out = {}
+    for key, path in (("config", getattr(LEG, "CONFIG_PATH", None)),
+                      ("roster", getattr(LEG, "ROSTER_PATH", None)),
+                      ("submissions", getattr(LEG, "SUB_PATH", None))):
+        try:
+            if path and os.path.exists(path):
+                with open(path, "r", encoding="utf-8") as f:
+                    out[key] = json.load(f)
+        except Exception:
+            pass
+    return out
+
+
+def _sub_restore(sub):
+    """把备份里的提交系统数据写回 submissions/ 下，返回写回的文件数。"""
+    n = 0
+    for key, path in (("config", getattr(LEG, "CONFIG_PATH", None)),
+                      ("roster", getattr(LEG, "ROSTER_PATH", None)),
+                      ("submissions", getattr(LEG, "SUB_PATH", None))):
+        if key in sub and path:
+            try:
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, "w", encoding="utf-8") as f:
+                    json.dump(sub[key], f, ensure_ascii=False)
+                n += 1
+            except Exception:
+                pass
+    return n
+
 
 def _port():
     return PORT

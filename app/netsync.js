@@ -21,7 +21,9 @@
     'duty_areas', 'duty_positions', 'course_progress', 'progress_cols',
     'seat_tpl', 'student_notes', 'quick_links', 'courseware_links', 'materials',
     // 学生提交的请假申请：老师端也要能读到、能改（控制台审批后本机跟着变）
-    'leave_requests'
+    'leave_requests',
+    // 导学单（2.0.4）：教师端发放 / 收回，学生端「今日」消费
+    'guides'
   ];
   // 这两张表在本地没有 id（课表、考试成绩），服务端用业务键合成
   var NO_ID = { lessons: 1, exam_scores: 1 };

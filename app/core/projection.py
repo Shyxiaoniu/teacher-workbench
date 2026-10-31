@@ -110,8 +110,13 @@ def _keep(tbl, row, cls, sid, my_seat_ids):
     if tbl == "seats":
         return _i(row.get("id")) in my_seat_ids
     if tbl in ("lessons", "homeworks", "course_progress", "dutys",
-               "duty_areas", "materials"):
-        return _i(row.get("class_id")) == cls
+               "duty_areas", "materials", "guides"):
+        if _i(row.get("class_id")) != cls:
+            return False
+        if tbl == "guides":
+            # 导学单只下发「已发放」的：草稿是老师还没备好的课，不该让学生看见
+            return str(row.get("status") or "published") == "published"
+        return True
     if tbl == "courseware_links":
         # 老数据/公共课件没有 class_id：放行；写了班级就严格按班过滤
         cid = row.get("class_id")

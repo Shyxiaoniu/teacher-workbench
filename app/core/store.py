@@ -37,6 +37,7 @@ TABLES = [
     "seat_tpl", "student_notes", "quick_links", "courseware_links",
     "leave_requests",   # 学生请假申请（教师端考勤页/控制台审批）
     "materials",        # 教师下发的学习资料（按班级），学生端「资料」页签只读
+    "guides",           # 导学单：教师按班/课程发放，学生端「今日」在导学单里完成资料查看与提交
 ]
 
 # 这些字段是前端临时态，不进指纹也不落库（否则同一行会无限“变脏”）
@@ -699,6 +700,29 @@ class Store(object):
                 for sid in student_ids:
                     self.conn.execute("DELETE FROM student_creds WHERE student_id=?", (str(sid),))
             self.conn.commit()
+
+    def export_creds(self):
+        """学生口令哈希表（全量备份用）。只含哈希，明文口令从不存在本系统里。"""
+        with self.lock:
+            rows = self.conn.execute(
+                "SELECT student_id, pwd_hash, must_change FROM student_creds").fetchall()
+        return [{"student_id": r["student_id"], "pwd_hash": r["pwd_hash"],
+                 "must_change": int(r["must_change"] or 0)} for r in rows]
+
+    def import_creds(self, creds):
+        """恢复学生口令哈希表（全量备份导入用）。返回写入条数。"""
+        n = 0
+        if not isinstance(creds, list):
+            return 0
+        for c in creds:
+            if not isinstance(c, dict):
+                continue
+            sid, ph = c.get("student_id"), c.get("pwd_hash")
+            if sid in (None, "") or not ph:
+                continue
+            self.set_cred(sid, str(ph), int(c.get("must_change") or 0))
+            n += 1
+        return n
 
     # ------------------------------------------------------------------
     # 运维

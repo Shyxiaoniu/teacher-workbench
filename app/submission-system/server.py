@@ -69,7 +69,7 @@ ROLE_FN = None           # handler -> ("teacher"|"student"|"", student_key)
 STUDENT_SID_FN = None    # handler -> 学号字符串（与花名册 sid 同一口径）
 ROSTER_PROVIDER = None   # () -> [{cls, sid, name}]，由主服务从学生表投影
 
-MAX_JSON_BODY = 8 * 1024 * 1024        # 普通 JSON 请求体上限
+MAX_JSON_BODY = 32 * 1024 * 1024       # JSON 请求体上限（全量备份导入要整库回传，8MB 不够）
 MAX_UPLOAD_BODY = 320 * 1024 * 1024    # 上传接口上限（略大于单文件 300MB）
 
 # ---------------------------------------------------------------------------
@@ -87,7 +87,10 @@ def _now_iso():
 # `/data/submissions/uploads_index.json`（token→文件路径）都能匿名下载。
 # 现在改成白名单：只放行页面真正会引用的这几个顶层条目，其余一律 404。
 _ALLOW_ROOT_FILES = ("index.html", "manifest.json", "quickform.config.json",
-                     "submit-enh.js", "submit-enh.css", "sw.js")
+                     "submit-enh.js", "submit-enh.css", "sw.js",
+                     # 2.0.4 修复：教师端页面引用的这两个顶层脚本此前不在白名单里，
+                     # 一直 403，导致服务端同步（netsync）与备份模块（backup.js）加载失败
+                     "netsync.js", "backup.js")
 _ALLOW_DIRS = ("vendor/", "icons/", "submit/", "student/", "assets/", "images/")
 
 

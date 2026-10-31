@@ -48,6 +48,16 @@
 let CFG = {quiz:{intro:'', questions:[]}};
 async function load(){
   try{ const r = await fetch('/api/config'); CFG = await r.json(); }catch(e){}
+  /* 题目从 /api/quiz 拉：安全加固后 /api/config 不再携带题目与答案 */
+  try{
+    const r2 = await fetch('/api/quiz');
+    const qz = await r2.json();
+    CFG.quiz = CFG.quiz || {};
+    if(qz && qz.questions && qz.questions.length){
+      CFG.quiz.intro = (qz.intro != null && qz.intro !== '') ? qz.intro : CFG.quiz.intro;
+      CFG.quiz.questions = qz.questions;
+    }
+  }catch(e){}
   document.getElementById('title').textContent = '测试题 · ' + (CFG.title||'在线问卷');
   document.getElementById('subTitle').textContent = CFG.title || '测试题提交';
   const intro = (CFG.quiz && CFG.quiz.intro) || '请完成下列题目。';
@@ -71,22 +81,23 @@ async function submitQuiz(){
   const sid = $('sid').value.trim();
   if(!sid){ setMsg('请填写学号','err'); return; }
   const qs = (CFG.quiz && CFG.quiz.questions) || [];
-  const fields = {}; let score = 0; let answered = 0;
+  const fields = {}; let answered = 0;
   qs.forEach((q,i)=>{
     const sel = document.querySelector('input[name="q'+i+'"]:checked');
     const ans = sel ? sel.value : '';
     fields['Q'+(i+1)] = ans;
     if(ans){ answered++; }
-    if(ans && ans === q.answer){ score += (Number(q.score)||0); }
   });
+  /* 服务端按标准答案算分（浏览器拿不到答案，也不再上传本地分数） */
   if(answered < qs.length){ setMsg('请完成全部题目后再提交','err'); return; }
   $('btn').disabled = true; setMsg('提交中…');
   try{
-    const payload = { sid, type:'quiz', fields, score };
+    const payload = { sid, type:'quiz', fields };
     const r = await fetch('/api/submit', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
     const j = await r.json();
     if(j.ok){
-      setMsg('✓ 提交成功（第 '+j.rank+' 名），本次得分 '+score+' 分','ok');
+      const sc = (j.record && j.record.score != null) ? j.record.score : null;
+      setMsg('✓ 提交成功（第 '+j.rank+' 名）'+(sc!=null ? '，本次得分 '+sc+' 分' : ''),'ok');
     } else setMsg('✗ '+(j.msg||'提交失败'),'err');
   }catch(e){ setMsg('✗ '+e.message,'err'); }
   finally{ $('btn').disabled = false; }

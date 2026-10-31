@@ -1,4 +1,12 @@
-/* 学生端 · 单页应用（无框架，约 500 行）
+/* 学生端 · 单页应用（v2.0.4 重构）
+   ------------------------------------------------------------
+   结构（2026-10-31）：只保留「今日」「我的」两个模块。
+   · 今日 = 签到 + 今日课程（每节课的导学单：资料查看 / 活动提交 / 测验作答）
+     + 待交作业 + 值日。所有「看资料、交东西」的操作都在导学单 / 今日页完成。
+   · 我的 = 个人信息 + 学习进度（作业、成绩概览、课堂评价）+ 已完成的活动。
+   独立的「课表 / 作业 / 资料 / 成绩」页签已并入上述两处；课表查看入口移除，
+   课程信息只在「今日」按当天展示。
+
    数据全部来自 /api/v2/sync?scope=student —— 服务端已经裁剪过，
    这里拿不到别人的手机号、别人的分数，也拿不到没发布的考试。 */
 (function () {
@@ -146,9 +154,42 @@
   function materials() {
     return T('materials').filter(function (m) {
       return Number(m.class_id) === S.me.class_id;
-    }).sort(function (a, b) {
-      return String(b.date || b.created_at || '').localeCompare(String(a.date || a.created_at || ''));
     });
+  }
+  function materialById(id) {
+    return materials().filter(function (m) { return String(m.id) === String(id); })[0] || null;
+  }
+
+  /* ---------------- 导学单 ---------------- */
+  /* 教师按「班级 + 课程 + 日期」发放；学生端只在今日课程里展示当天的 */
+  function guides() {
+    return T('guides').filter(function (g) {
+      return Number(g.class_id) === S.me.class_id;
+    });
+  }
+  function guideOf(courseId, dateStr) {
+    var hit = guides().filter(function (g) {
+      return String(g.course_id) === String(courseId) &&
+        String(g.date || '') === String(dateStr);
+    });
+    if (!hit.length) return null;
+    /* 同一课多份时取节次最接近当前节的那份，否则取最新一份 */
+    var seq = periodSeq();
+    hit.sort(function (a, b) {
+      var da = Math.abs((Number(a.period) || 0) - seq), db = Math.abs((Number(b.period) || 0) - seq);
+      return da - db;
+    });
+    return hit[0];
+  }
+  /* 导学单条目归类 */
+  function guideItems(g, type) {
+    var items = Array.isArray(g && g.items) ? g.items : [];
+    return items.filter(function (it) { return (it.type || 'link') === type; });
+  }
+  function itemLabel(it) {
+    var kind = { material: '资料', activity: '活动', quiz: '测验',
+                 link: '链接', text: '图文', homework: '作业' }[it.type] || '条目';
+    return kind;
   }
 
   /* ---------------- 课堂签到 ---------------- */
@@ -187,51 +228,6 @@
     return T('attendance').filter(function (a) { return a.date === d; });
   }
 
-  function vMaterials() {
-    var list = materials();
-    if (!S.flags.courseware) {
-      return '<div class="hero"><div class="nm">资料</div></div>' +
-        '<div class="card"><div class="empty">老师还没有开放学习资料</div></div>';
-    }
-    if (!list.length) {
-      return '<div class="hero"><div class="nm">资料</div><div class="hi">' +
-        esc(myClass().name || '') + '</div></div>' +
-        '<div class="card"><div class="empty">老师还没有下发学习资料</div></div>';
-    }
-    return '<div class="hero"><div class="nm">资料</div><div class="hi">共 ' +
-      list.length + ' 份 · 点开查看</div></div>' +
-      '<div class="card">' + list.map(function (m) {
-        var kind = m.kind === 'file' ? '文件' : m.kind === 'text' ? '文字' : '链接';
-        return '<div class="hw" data-mat="' + esc(m.id) + '">' +
-          '<div class="dot done"></div>' +
-          '<div class="m"><b>' + esc(m.title || '学习资料') + '</b>' +
-          '<span>' + esc(kind) + (m.subject ? ' · ' + esc(m.subject) : '') +
-          (m.date ? ' · ' + esc(m.date) : '') + '</span></div>' +
-          '<div class="tag">查看</div></div>';
-      }).join('') + '</div>' +
-      '<div class="note">资料由老师下发，只能在课堂上看，不能修改。</div>';
-  }
-
-  function openMaterial(id) {
-    var m = materials().filter(function (x) { return String(x.id) === String(id); })[0];
-    if (!m) return;
-    var body = '';
-    if (m.note) body += '<div style="font-size:13.6px;color:var(--ink2);margin:10px 0">' + esc(m.note) + '</div>';
-    if (m.kind === 'text') {
-      body += '<div class="card" style="margin:10px 0;box-shadow:none;white-space:pre-wrap">' +
-        esc(m.content || '') + '</div>';
-    } else if (m.url) {
-      body += '<div style="height:12px"></div><a class="btn" style="display:block;text-align:center;' +
-        'text-decoration:none;line-height:42px" href="' + esc(m.url) + '" target="_blank" rel="noopener">打开资料</a>';
-    } else {
-      body += '<div class="empty">这份资料没有可打开的地址</div>';
-    }
-    showSheet('<div class="sh"><b>' + esc(m.title || '学习资料') + '</b>' +
-      '<button class="x" id="shClose">×</button></div>' +
-      '<div class="note">' + esc(m.subject || '') + (m.date ? ' · ' + esc(m.date) : '') + '</div>' + body);
-    var c = $('#shClose'); if (c) c.onclick = hideSheet;
-  }
-
   function myDutyToday() {
     var seat = mySeat();
     if (!seat) return [];
@@ -242,7 +238,20 @@
     });
   }
 
-  /* ---------------- 视图 ---------------- */
+  /* ---------------- 视图：今日 ---------------- */
+  function hwState(h) {
+    var rec = recordOf(h);
+    var done = rec && ['submitted', 'checked', 'done', 'practice'].indexOf(rec.status) >= 0;
+    var late = !done && h.due && String(h.due) < todayStr();
+    return { rec: rec, done: done, late: late };
+  }
+  function todoHomeworks() {
+    return homeworks().filter(function (h) {
+      var st = hwState(h);
+      return !st.done && (!h.due || String(h.due) >= todayStr());
+    });
+  }
+
   function vToday() {
     var d = new Date();
     var pm = periodMap(), cm = courseMap();
@@ -250,22 +259,24 @@
     var now = d.getHours() * 60 + d.getMinutes();
     var seat = mySeat();
     var duty = myDutyToday();
-    var hwTodo = homeworks().filter(function (h) {
-      var due = String(h.due || '');
-      var rec = recordOf(h);
-      var done = rec && (rec.status === 'submitted' || rec.status === 'checked' || rec.status === 'done');
-      return !done && (!due || due >= todayStr());
-    });
+    var hwTodo = todoHomeworks();
 
     var lessonHtml = ls.length ? ls.map(function (l) {
       var p = pm[l.period_id] || {}, c = cm[l.course_id] || {};
       var st = p.start_time || '', et = p.end_time || '';
-      var toMin = function (t) { var a = String(t).split(':'); return (+a[0]) * 60 + (+a[1] || 0); };
       var isNow = st && et && now >= toMin(st) && now <= toMin(et);
-      return '<div class="lesson' + (isNow ? ' now' : '') + '">' +
+      var g = guideOf(l.course_id, todayStr());
+      var gTag = g
+        ? '<div class="tag" data-guide="' + esc(g.id) + '">打开导学单</div>'
+        : '<div class="tag mut">未发放</div>';
+      return '<div class="lesson' + (isNow ? ' now' : '') + '" ' +
+        (g ? 'data-guide="' + esc(g.id) + '"' : '') + '>' +
         '<div class="t"><b>' + esc(p.label || ('第' + (p.seq || '') + '节')) + '</b>' + esc(st) + '</div>' +
         '<div class="m"><b>' + esc(c.name || l.course_name || '课程') + '</b>' +
-        '<span>' + esc(l.room_override || c.location || '') + '</span></div></div>';
+        '<span>' + (g
+          ? ('导学单 · ' + (g.items || []).length + ' 项任务' + (g.title && g.title !== (c.name || '') ? ' · ' + esc(g.title) : ''))
+          : esc(l.room_override || c.location || '')) + '</span></div>' +
+        gTag + '</div>';
     }).join('') : '<div class="empty">今天没有课，好好休息</div>';
 
     var hwHtml = hwTodo.length ? hwTodo.slice(0, 4).map(function (h) {
@@ -298,7 +309,7 @@
       '</div></div>' +
       ckHtml +
       '<div class="offline" id="off"></div>' +
-      '<div class="card"><h3>今日课表</h3>' + lessonHtml + '</div>' +
+      '<div class="card"><h3>今日课程 · 导学单<span class="more">点课打开</span></h3>' + lessonHtml + '</div>' +
       (S.flags.homework ? '<div class="card"><h3>待交作业<span class="more">' + hwTodo.length + ' 项</span></h3>' + hwHtml + '</div>' : '') +
       (duty.length ? '<div class="card"><h3>今天我值日</h3>' + duty.map(function (x) {
         return '<div class="hw"><div class="dot done"></div><div class="m"><b>' + esc(x.area || '值日') + '</b>' +
@@ -306,62 +317,88 @@
       }).join('') + '</div>' : '');
   }
 
-  function vHomework() {
-    var list = homeworks();
-    if (!list.length) return '<div class="hero"><div class="nm">作业</div></div><div class="card"><div class="empty">老师还没有布置作业</div></div>';
-    return '<div class="hero"><div class="nm">作业</div><div class="hi">共 ' + list.length + ' 项 · 点开可提交</div></div>' +
-      '<div class="card">' + list.map(function (h) {
-        var rec = recordOf(h);
-        var done = rec && ['submitted', 'checked', 'done'].indexOf(rec.status) >= 0;
-        var late = !done && h.due && String(h.due) < todayStr();
-        return '<div class="hw" data-hw="' + esc(h.id) + '">' +
-          '<div class="dot' + (done ? ' done' : '') + '"></div>' +
-          '<div class="m"><b>' + esc(h.title || h.subject || '作业') + '</b>' +
-          '<span>' + esc(h.subject || '') + (h.due ? ' · 截止 ' + esc(h.due) : '') +
-          (rec && rec.note ? ' · 已提交' : '') + '</span></div>' +
-          '<div class="tag' + (done ? ' done' : (late ? ' late' : '')) + '">' +
-          (done ? '已交' : (late ? '已逾期' : '待交')) + '</div></div>';
-      }).join('') + '</div>';
+  /* ---------------- 视图：我的 ---------------- */
+  function doneRecords() {
+    return T('homework_records').filter(function (r) {
+      return r.student_id === S.me.id &&
+        ['submitted', 'checked', 'done', 'practice'].indexOf(r.status) >= 0;
+    });
   }
-
-  function vScores() {
-    var list = scores();
-    if (!S.flags.scores) return '<div class="hero"><div class="nm">成绩</div></div><div class="card"><div class="empty">老师还没有开放成绩查看</div></div>';
-    if (!list.length) return '<div class="hero"><div class="nm">成绩</div></div><div class="card"><div class="empty">还没有发布的成绩</div></div>';
-    return '<div class="hero"><div class="nm">成绩</div><div class="hi">只显示你自己的分数</div></div>' +
-      '<div class="card">' + list.map(function (s) {
-        var full = s.full_score || 100;
-        return '<div class="score"><div class="m"><b>' + esc(s.title || '考试') + '</b>' +
-          '<span>' + esc(s.date || '') +
-          (s._avg != null ? ' · 班均 ' + s._avg : '') +
-          (S.vis.rank && s._rank ? ' · 第 ' + s._rank + ' 名' : '') + '</span></div>' +
-          '<div class="v">' + esc(fmtNum(s.score)) + '<small>/' + esc(full) + '</small></div></div>';
-      }).join('') + '</div>' +
-      '<div class="note">分数由老师录入并发布。如果和你知道的不一样，直接问老师，别在这里猜。</div>';
+  function moralityMine() {
+    return T('morality_records').filter(function (r) { return r.student_id === S.me.id; })
+      .sort(function (a, b) { return String(b.date || '').localeCompare(String(a.date || '')); });
   }
-
-  function vTimetable() {
-    var pm = periodMap(), cm = courseMap();
-    var out = '<div class="hero"><div class="nm">课表</div><div class="hi">' + esc(myClass().name || '') + '</div></div>';
-    for (var d = 0; d < 7; d++) {
-      var ls = lessonsOf(d);
-      if (!ls.length && d > 4) continue;
-      out += '<div class="card day"><div class="dh"><b>' + WD[d] + '</b>' +
-        (d === todayIdx() ? '<span class="tdy">今天</span>' : '') + '</div>' +
-        (ls.length ? ls.map(function (l) {
-          var p = pm[l.period_id] || {}, c = cm[l.course_id] || {};
-          return '<span class="chip"><i>' + esc(p.label || '') + '</i>' + esc(c.name || '课程') +
-            (p.start_time ? ' ' + esc(p.start_time) : '') + '</span>';
-        }).join('') : '<div class="empty" style="padding:6px 0;text-align:left">没有课</div>') +
-        '</div>';
-    }
-    return out;
-  }
+  var REC_TEXT = { submitted: '已提交', checked: '已批改', done: '已完成', practice: '已练习' };
 
   function vMe() {
     var seat = mySeat();
-    return '<div class="hero"><div class="nm">我的</div></div>' +
-      '<div class="card"><h3>身份</h3>' +
+    var list = homeworks();
+    var doneN = 0, lateN = 0;
+    list.forEach(function (h) {
+      var st = hwState(h);
+      if (st.done) doneN++;
+      else if (st.late) lateN++;
+    });
+    var sc = scores();
+    var vis = S.vis || {};
+    var moral = moralityMine();
+    var moralSum = 0;
+    moral.forEach(function (r) { moralSum += Number(r.score) || 0; });
+    var done = doneRecords();
+
+    var html = '<div class="hero"><div class="nm">我的</div>' +
+      '<div class="meta"><span class="pill">学习进度一目了然</span></div></div>';
+
+    /* 学习进度 */
+    html += '<div class="card"><h3>学习进度</h3>';
+    if (S.flags.homework !== false) {
+      html += '<div class="hw stat"><div class="dot' + (doneN ? ' done' : '') + '"></div>' +
+        '<div class="m"><b>作业</b><span>共 ' + list.length + ' 项 · 已交 ' + doneN +
+        (lateN ? ' · 逾期 ' + lateN : '') + '</span></div>' +
+        '<div class="tag' + (lateN ? ' late' : (doneN ? ' done' : '')) + '">' +
+        (list.length ? Math.round(doneN / list.length * 100) + '%' : '—') + '</div></div>';
+    }
+    if (S.flags.scores !== false) {
+      html += sc.length
+        ? sc.slice(0, 3).map(function (s) {
+            var full = s.full_score || 100;
+            return '<div class="score"><div class="m"><b>' + esc(s.title || '考试') + '</b><span>' +
+              esc(s.date || '') + (s._avg != null ? ' · 班均 ' + s._avg : '') +
+              (vis.rank && s._rank ? ' · 第 ' + s._rank + ' 名' : '') + '</span></div>' +
+              '<div class="v">' + esc(fmtNum(s.score)) + '<small>/' + esc(full) + '</small></div></div>';
+          }).join('')
+        : '<div class="empty" style="padding:6px 0;text-align:left">还没有发布的成绩</div>';
+      if (sc.length > 3) html += '<div class="note">只显示最近 3 次成绩</div>';
+    }
+    if (S.flags.morality !== false) {
+      html += '<div style="height:6px"></div><div class="hw stat"><div class="dot' + (moralSum >= 0 ? ' done' : '') + '"></div>' +
+        '<div class="m"><b>课堂评价</b><span>累计 ' + (moralSum > 0 ? '+' : '') + moralSum + ' 分 · ' +
+        moral.length + ' 条记录</span></div>' +
+        '<div class="tag ' + (moralSum >= 0 ? 'done' : 'late') + '">' + (moralSum > 0 ? '+' : '') + moralSum + '</div></div>' +
+        moral.slice(0, 3).map(function (r) {
+          var v = Number(r.score) || 0;
+          return '<div class="hw"><div class="dot' + (v >= 0 ? ' done' : '') + '"></div>' +
+            '<div class="m"><b>' + esc(r.item_name || r.reason || '课堂评价') + '</b>' +
+            '<span>' + esc(r.date || '') + '</span></div>' +
+            '<div class="tag ' + (v >= 0 ? 'done' : 'late') + '">' + (v > 0 ? '+' : '') + v + '</div></div>';
+        }).join('');
+    }
+    html += '</div>';
+
+    /* 已完成的活动 */
+    html += '<div class="card"><h3>已完成的活动<span class="more">' + done.length + ' 项</span></h3>';
+    html += done.length ? done.slice(0, 6).map(function (r) {
+      var h = homeworks().filter(function (x) { return String(x.id) === String(r.homework_id); })[0] || {};
+      return '<div class="hw" data-rec="' + esc(r.homework_id) + '"><div class="dot done"></div>' +
+        '<div class="m"><b>' + esc(h.title || h.subject || '活动') + '</b>' +
+        '<span>' + esc(h.subject || '') + (r.updated_at ? ' · ' + esc(String(r.updated_at).slice(0, 16)) : '') +
+        (r.note ? ' · ' + esc(r.note) : '') + '</span></div>' +
+        '<div class="tag done">' + esc(REC_TEXT[r.status] || '已完成') + '</div></div>';
+    }).join('') : '<div class="empty">还没有完成的活动，去「今日」的导学单里看看</div>';
+    html += '</div>';
+
+    /* 个人信息 + 服务 */
+    html += '<div class="card"><h3>身份</h3>' +
       row('姓名', S.me.name) + row('学号', S.me.student_no || '—') +
       row('班级', myClass().name || '—') +
       row('座位', seat ? (seat.row + ' 排 ' + seat.col + ' 座') : '未排座') +
@@ -371,6 +408,7 @@
       '<div style="height:12px"></div><button class="btn line" id="chpwd">修改密码</button>' +
       '<div style="height:8px"></div><button class="btn line" id="logout">退出登录</button></div>' +
       '<div class="empty" style="font-size:12px;padding:8px 0 24px">班级工作台 2.0 · 数据存在老师电脑上</div>';
+    return html;
   }
 
   function row(k, v) {
@@ -389,13 +427,62 @@
     return h < 6 ? '凌晨好' : h < 11 ? '早上好' : h < 14 ? '中午好' : h < 18 ? '下午好' : '晚上好';
   }
 
+  /* ---------------- 导学单详情 ---------------- */
+  function openGuide(gid) {
+    var g = guides().filter(function (x) { return String(x.id) === String(gid); })[0];
+    if (!g) return;
+    var cm = courseMap();
+    var c = cm[g.course_id] || {};
+    var body = '';
+    var kinds = [
+      ['material', '课堂资料'],
+      ['activity', '课堂活动'],
+      ['quiz', '课堂测验'],
+      ['link', '拓展链接'],
+      ['text', '图文说明'],
+      ['homework', '课后作业']
+    ];
+    var any = false;
+    kinds.forEach(function (kd) {
+      var items = guideItems(g, kd[0]);
+      if (!items.length) return;
+      any = true;
+      body += '<div class="g-sec"><b>' + kd[1] + '</b></div>';
+      body += items.map(function (it, i) {
+        var url = String(it.url || '');
+        var m = it.material_id ? materialById(it.material_id) : null;
+        if (m && !url) url = m.url || '';
+        var note = it.note || (m && m.note) || '';
+        if (kd[0] === 'text' && it.content) {
+          return '<div class="g-item"><b>' + esc(it.title || ('说明 ' + (i + 1))) + '</b>' +
+            '<div class="g-txt">' + esc(it.content) + '</div>' +
+            (note ? '<span class="g-sub">' + esc(note) + '</span>' : '') + '</div>';
+        }
+        var act = '';
+        if (kd[0] === 'material' && m && m.kind === 'text') {
+          act = '<div class="g-txt">' + esc(m.content || '') + '</div>';
+        }
+        if (url) {
+          act += '<a class="btn g-go" href="' + esc(url) + '" target="_blank" rel="noopener">' +
+            (kd[0] === 'activity' ? '进入活动' : kd[0] === 'quiz' ? '开始测验' : '打开查看') + '</a>';
+        }
+        if (!act) act = '<div class="g-sub">这项内容老师还没有附上地址</div>';
+        return '<div class="g-item"><b>' + esc(it.title || m && m.title || (kd[1] + ' ' + (i + 1))) + '</b>' +
+          (note ? '<span class="g-sub">' + esc(note) + '</span>' : '') + act + '</div>';
+      }).join('');
+    });
+    if (!any) body = '<div class="empty">导学单还是空的，等老师补充内容</div>';
+    if (g.note) body += '<div class="note">' + esc(g.note) + '</div>';
+    showSheet('<div class="sh"><b>' + esc(g.title || (c.name || '导学单')) + '</b>' +
+      '<button class="x" id="shClose">×</button></div>' +
+      '<div class="note">' + esc(c.name || '') + (g.date ? ' · ' + esc(g.date) : '') +
+      (g.period ? ' · 第' + esc(g.period) + '节' : '') + '</div>' + body);
+    var cl = $('#shClose'); if (cl) cl.onclick = hideSheet;
+  }
+
   /* ---------------- 壳与路由 ---------------- */
   var TABS = [
     { id: 'today', name: '今日', ic: '☀' },
-    { id: 'homework', name: '作业', ic: '✎', flag: 'homework' },
-    { id: 'materials', name: '资料', ic: '📚', flag: 'courseware' },
-    { id: 'scores', name: '成绩', ic: '◎', flag: 'scores' },
-    { id: 'timetable', name: '课表', ic: '▦' },
     { id: 'me', name: '我的', ic: '☺' }
   ];
 
@@ -414,19 +501,25 @@
         '<div class="skel"></div><div class="skel"></div><div class="skel"></div></div>';
       return;
     }
-    var map = { today: vToday, homework: vHomework, materials: vMaterials,
-                scores: vScores, timetable: vTimetable, me: vMe };
-    var fn = map[S.view] || vToday;
-    app.innerHTML = '<div class="wrap">' + fn() + '</div>';
+    if (['today', 'me'].indexOf(S.view) < 0) S.view = 'today';
+    var map = { today: vToday, me: vMe };
+    app.innerHTML = '<div class="wrap">' + map[S.view]() + '</div>';
     bind();
     paintTabs();
     // 今日页里待交作业可直接点开
     document.querySelectorAll('[data-hw]').forEach(function (el) {
       el.onclick = function () { openHw(el.getAttribute('data-hw')); };
     });
-    // 资料页里点开资料详情
-    document.querySelectorAll('[data-mat]').forEach(function (el) {
-      el.onclick = function () { openMaterial(el.getAttribute('data-mat')); };
+    // 导学单入口（课程行或标签上都可点）
+    document.querySelectorAll('[data-guide]').forEach(function (el) {
+      el.onclick = function (ev) {
+        ev.stopPropagation();
+        openGuide(el.getAttribute('data-guide'));
+      };
+    });
+    // 「我的」里已完成的活动可回看详情
+    document.querySelectorAll('[data-rec]').forEach(function (el) {
+      el.onclick = function () { openHw(el.getAttribute('data-rec')); };
     });
   }
 
@@ -448,14 +541,16 @@
     var h = homeworks().filter(function (x) { return String(x.id) === String(id); })[0];
     if (!h) return;
     var rec = recordOf(h);
-    var done = rec && ['submitted', 'checked', 'done'].indexOf(rec.status) >= 0;
+    var done = rec && ['submitted', 'checked', 'done', 'practice'].indexOf(rec.status) >= 0;
     var html = '<div class="sh"><b>' + esc(h.title || h.subject || '作业') + '</b>' +
       '<button class="x" id="shClose">×</button></div>' +
       '<div class="note">' + esc(h.subject || '') + (h.due ? ' · 截止 ' + esc(h.due) : '') + '</div>' +
       (h.note ? '<div style="font-size:13.6px;color:var(--ink2);margin:10px 0">' + esc(h.note) + '</div>' : '') +
-      (done ? '<div class="card" style="margin:12px 0;box-shadow:none"><b style="color:var(--brand)">已提交</b>' +
+      (done ? '<div class="card" style="margin:12px 0;box-shadow:none"><b style="color:var(--brand)">' +
+        esc(REC_TEXT[rec.status] || '已提交') + '</b>' +
         '<div style="font-size:13px;color:var(--ink3);margin-top:4px">' +
-        esc(rec.note || '老师已收到你的作业') + '</div></div>'
+        esc(rec.note || '老师已收到你的作业') +
+        (rec.updated_at ? '<br>提交时间：' + esc(String(rec.updated_at).slice(0, 16)) : '') + '</div></div>'
         : '<label>给老师留言（选填）</label><textarea id="hwNote" rows="3" placeholder="例如：写在作业本第 12 页"></textarea>' +
           '<div style="height:12px"></div><button class="btn" id="hwSend">确认提交</button>');
     showSheet(html);
@@ -670,7 +765,7 @@
           '<div id="app"></div><div id="mask" class="sheet-mask"></div>' +
           '<div id="sheet" class="sheet"></div><div id="tabbar" class="tabbar"></div>';
         var h = (location.hash || '').replace('#', '');
-        S.view = ['today', 'homework', 'materials', 'scores', 'timetable', 'me'].indexOf(h) >= 0 ? h : 'today';
+        S.view = ['today', 'me'].indexOf(h) >= 0 ? h : 'today';
         S.loading = false;
         render();
         watch();

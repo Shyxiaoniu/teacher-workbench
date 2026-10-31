@@ -24,7 +24,7 @@ DEFAULT_CONFIG = {
     # 学生端定位为「课堂使用」：不开放请假入口（病假/事假由教师在教师端登记），
     # 学习资料默认开放，方便课堂下发。
     "modules": {"homework": True, "scores": True, "courseware": True,
-                "morality": False, "duty": True},
+                "morality": True, "duty": True},
     "visibility": {"rank": False, "morality_reason": False, "contact": False,
                    "leave_reason": False},
     "sync": {"poll_seconds": 5, "tombstone_days": 90, "page_size": 800},
@@ -59,6 +59,13 @@ def load_config(path):
         save_config(path, cfg)
     # 学生自助请假已移除（2026-10-31）：旧配置里的遗留开关一并清掉
     cfg.get("modules", {}).pop("leave", None)
+    # 一次性迁移（2026-10-31 v2.0.4）：学生端重构为「今日 / 我的」两个模块后，
+    # 「我的」要展示课堂评价（德育）。旧的 False 是默认值不是老师主动关的，
+    # 与上面 courseware 的迁移同理，翻成开放一次。
+    if not cfg.get("_flags_migrated_v3"):
+        cfg.setdefault("modules", {})["morality"] = True
+        cfg["_flags_migrated_v3"] = True
+        save_config(path, cfg)
     if not cfg.get("class_code"):
         cfg["class_code"] = new_class_code()
         save_config(path, cfg)

@@ -2743,6 +2743,13 @@ body.seat-rsz-dragging .seat:hover { transform:none; box-shadow:none; }
 .tl-grid {
   display:grid; gap:11px; grid-template-columns:repeat(auto-fill,minmax(168px,1fr));
 }
+/* ---------- 导学单页小件 ---------- */
+.gk-chip {
+  font-size:11.5px; padding:2px 9px; border-radius:8px;
+  border:1px solid var(--border); color:var(--text-secondary); background:var(--bg-surface);
+}
+.gk-st { font-weight:600; }
+
 .tl-card {
   position:relative; border:1px solid var(--border); border-radius:var(--radius);
   background:var(--bg-surface); overflow:hidden; transition:.16s;
@@ -6040,6 +6047,7 @@ const ICONS = {
   box:    '<path d="M3 8.5 12 4l9 4.5v7L12 20l-9-4.5v-7Z"/><path d="M3 8.5 12 13M12 13l9-4.5M12 13v7"/>',
   grid:   '<rect x="3" y="3" width="7.5" height="7.5" rx="1.4"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.4"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.4"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.4"/>',
   book:   '<path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v17H6.5A2.5 2.5 0 0 0 4 21.5v-17Z"/><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>',
+  guide:  '<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5v-15Z"/><path d="M8 7.5h8M8 11h5"/><path d="M4 20.5A2.5 2.5 0 0 1 6.5 18H20"/>',
   chart2: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/>',
   down:   '<path d="M12 3v12M7 11l5 5 5-5"/><path d="M4 20h16"/>',
   up:     '<path d="M12 21V9M7 13l5-5 5 5"/><path d="M4 4h16"/>',
@@ -6079,6 +6087,7 @@ const ICON_C = {
   grid:      ['#F0EFE9','#5F6E68','#4A5751','#FFFFFF'],
   box:       ['#FFF0E6','#B85C1E','#B85C1E','#FFFFFF'],
   book:      ['#E4F7E9','#1D7A4C','#1D7A4C','#FFFFFF'],
+  guide:     ['#E1F5EE','#12805E','#12805E','#FFFFFF'],
   chart2:    ['#EEEDFE','#534AB7','#534AB7','#FFFFFF'],
   down:      ['#E1F5EE','#0F6E56','#0F6E56','#FFFFFF'],
   up:        ['#E1F5EE','#0F6E56','#0F6E56','#FFFFFF'],
@@ -6258,7 +6267,7 @@ const DARK_BASE  = { forest:'#0B1210', mist:'#0F0D17', sky:'#090F17', deep:'#0A0
 /* 导航按用途分组，避免 13 项全堆在一起 */
 const NAV_GROUPS = [
   { name:'常用', items:['home','seats','timetable','attendance'] },
-  { name:'教学', items:['courseware','homework','scores','morality','groups','progress','activity'] },
+  { name:'教学', items:['guide','courseware','homework','scores','morality','groups','progress','activity'] },
   { name:'班务', items:['duty','students','classes'] },
   { name:'其他', items:['todos','tools'] }      // 设置只保留顶栏右上角入口
 ];
@@ -6269,6 +6278,7 @@ const NAV = [
   { id:'seats',  name:'座位', icon:'seats' },
   { id:'timetable', name:'课表', icon:'calendar' },
   { id:'attendance', name:'考勤', icon:'check' },
+  { id:'guide',  name:'导学单', icon:'guide' },
   { id:'courseware', name:'课件', icon:'book' },
   { id:'homework', name:'作业', icon:'pen' },
   { id:'scores', name:'成绩', icon:'chart' },
@@ -7116,408 +7126,20 @@ async function authGate() {
    ============================================================ */
 const DEMO = { on: false };
 
-/* 演示数据：班级、姓名、学号、家长手机号、微信号全部为虚构内容。
-   手机号统一使用「000」开头的 11 位号码——该号段在中国大陆不存在，
-   不会对应任何真实用户，也不可拨打。请勿把真实名册填进这里。 */
+/* 演示数据已移除（2026-10-31）：
+   界面上不再硬编码任何虚构的班级 / 学生 / 家长 / 成绩 / 待办 / 快捷链接等
+   文字数据 —— 预览模式与「未建班」状态一样走空态提示，需要的数据全部由
+   老师自己录入。保留空的 DEMO_DATA 结构，让 dbT() 预览分支照常工作。 */
 const DEMO_DATA = {
-  classes: [
-    { id: 1, name: '七(3)班', room: '教学楼 A-302', student_count: 45, color:'#0F6E56' },
-    { id: 2, name: '七(4)班', room: '教学楼 A-304', student_count: 44, color:'#378ADD' },
-    { id: 3, name: '七(5)班', room: '信息机房 2', student_count: 42, color:'#EF9F27' }
-  ],
-  students: [
-    { id:101,class_id:1,name:'张明轩',gender:'male',student_no:'20250301',seat_no:'013',
-     parent_name:'张建国',phone1:'00000000001',phone2:'',wechat:'zhangjg',
-     parent_committee_role:'pc_head',parent_committee_note:'负责校服征订',contacted:true,note:'' },
-    { id:102,class_id:1,name:'李思远',gender:'male',student_no:'20250302',seat_no:'014',
-     parent_name:'李伟',phone1:'00000000002',phone2:'00000000012',wechat:'liwei88',
-     parent_committee_role:'pc_pr',parent_committee_note:'',contacted:false,note:'' },
-    { id:103,class_id:1,name:'王雨桐',gender:'female',student_no:'20250303',seat_no:'015',
-     parent_name:'王芳',phone1:'00000000003',phone2:'',wechat:'wangfang66',
-     parent_committee_role:'pc_vice',parent_committee_note:'',contacted:true,note:'数学课代表' },
-    { id:104,class_id:1,name:'陈子豪',gender:'male',student_no:'20250304',seat_no:'021',
-     parent_name:'陈明',phone1:'00000000004',phone2:'',wechat:'',
-     parent_committee_role:'pc_none',parent_committee_note:'',contacted:false,note:'' },
-    { id:105,class_id:1,name:'刘欣怡',gender:'female',student_no:'20250305',seat_no:'022',
-     parent_name:'刘伟民',phone1:'00000000005',phone2:'',wechat:'liuwm',
-     parent_committee_role:'pc_logistics',parent_committee_note:'负责班费收缴',contacted:true,note:'' },
-    { id:106,class_id:1,name:'赵梓萱',gender:'female',student_no:'20250306',seat_no:'023',
-     parent_name:'赵磊',phone1:'00000000006',phone2:'',wechat:'',
-     parent_committee_role:'pc_none',parent_committee_note:'',contacted:false,note:'' },
-    { id:107,class_id:2,name:'孙浩然',gender:'male',student_no:'20250401',seat_no:'011',
-     parent_name:'孙涛',phone1:'00000000007',phone2:'',wechat:'suntao',
-     parent_committee_role:'pc_head',parent_committee_note:'',contacted:true,note:'' },
-    { id:108,class_id:2,name:'周雅雯',gender:'female',student_no:'20250402',seat_no:'012',
-     parent_name:'周涛',phone1:'00000000008',phone2:'',wechat:'',
-     parent_committee_role:'pc_none',parent_committee_note:'',contacted:false,note:'' },
-    { id:109,class_id:3,name:'吴俊杰',gender:'male',student_no:'20250501',seat_no:'A-01',
-     parent_name:'吴刚',phone1:'00000000009',phone2:'',wechat:'wugang',
-     parent_committee_role:'pc_other',parent_committee_note:'科任老师联络人',contacted:false,note:'' },
-    { id:110,class_id:3,name:'郑一鸣',gender:'male',student_no:'20250502',seat_no:'A-02',
-     parent_name:'郑强',phone1:'00000000010',phone2:'',wechat:'',
-     parent_committee_role:'pc_none',parent_committee_note:'',contacted:false,note:'' }
-  ],
-  seats: null,        // 见下方 buildDemoDerived()
-  periods: [
-    { id:1,day_of_week:0,seq:1,label:'第1节',start_time:'08:00',end_time:'08:45',kind:'class' },
-    { id:2,day_of_week:0,seq:2,label:'第2节',start_time:'08:55',end_time:'09:40',kind:'class' },
-    { id:3,day_of_week:0,seq:3,label:'第3节',start_time:'10:00',end_time:'10:45',kind:'class' },
-    { id:4,day_of_week:0,seq:4,label:'第4节',start_time:'10:55',end_time:'11:40',kind:'class' },
-    { id:5,day_of_week:0,seq:5,label:'第5节',start_time:'14:00',end_time:'14:45',kind:'class' },
-    { id:6,day_of_week:0,seq:6,label:'第6节',start_time:'14:55',end_time:'15:40',kind:'class' },
-    { id:7,day_of_week:0,seq:7,label:'大课间',start_time:'09:40',end_time:'10:00',kind:'long_break' }
-  ],
-  courses: [
-    { id:1,name:'信息科技',teacher:'牛老师',location:'信息机房2',color:'#1D9E75',active:true },
-    { id:2,name:'数学',teacher:'周老师',location:'A-302',color:'#378ADD',active:true },
-    { id:3,name:'语文',teacher:'陈老师',location:'A-302',color:'#EF9F27',active:true },
-    { id:4,name:'英语',teacher:'刘老师',location:'A-304',color:'#D4537E',active:true },
-    { id:5,name:'体育',teacher:'赵老师',location:'操场',color:'#7F77DD',active:true }
-  ],
-  lessons: [
-    { id:1,day_of_week:0,period_id:1,class_id:3,course_id:1,week_pattern:'all' },
-    { id:2,day_of_week:0,period_id:2,class_id:3,course_id:1,week_pattern:'all' },
-    { id:3,day_of_week:0,period_id:1,class_id:1,course_id:2,week_pattern:'all' },
-    { id:4,day_of_week:0,period_id:3,class_id:1,course_id:3,week_pattern:'all' },
-    { id:5,day_of_week:0,period_id:2,class_id:2,course_id:4,week_pattern:'all' },
-    { id:6,day_of_week:1,period_id:1,class_id:3,course_id:1,week_pattern:'all' },
-    { id:7,day_of_week:2,period_id:1,class_id:1,course_id:2,week_pattern:'odd' },
-    { id:8,day_of_week:3,period_id:5,class_id:2,course_id:5,week_pattern:'all' },
-    { id:9,day_of_week:4,period_id:1,class_id:3,course_id:1,week_pattern:'all' }
-  ],
-  attendance: null,   // 见下方 buildDemoDerived()
-  homework_records: null,   // 见下方 buildDemoDerived()
-  morality_items: [
-    { id:1,name:'主动帮助同学',score:2,category:'bonus',enabled:true,color:'#1D9E75',sort_order:1 },
-    { id:2,name:'课堂积极发言',score:1,category:'bonus',enabled:true,color:'#5DCAA5',sort_order:2 },
-    { id:3,name:'卫生评比优秀',score:3,category:'bonus',enabled:true,color:'#2F9E44',sort_order:3 },
-    { id:4,name:'课堂讲话',score:-1,category:'penalty',enabled:true,color:'#EF9F27',sort_order:4 },
-    { id:5,name:'未交作业',score:-2,category:'penalty',enabled:true,color:'#E24B4A',sort_order:5 }
-  ],
-  morality_records: null,   // 见下方 buildDemoDerived()（全班近 5 周流水）
-  /* 学生备注 / 特殊关注（scope: score=成绩备注, moral=德育备注；flag=需特别关注） */
-  student_notes: [
-    { id:1, student_id:101, scope:'score', text:'信息思维好，建议推去参加区编程赛', flag:false, date:'2026-10-10' },
-    { id:2, student_id:104, scope:'score', text:'数学偏弱，已安排同桌帮扶，关注月考变化', flag:true,  date:'2026-09-30' },
-    { id:3, student_id:102, scope:'moral', text:'开学两周讲话频繁，已谈话并联系家长', flag:true,  date:'2026-09-28' },
-    { id:4, student_id:105, scope:'moral', text:'劳动积极，提名卫生委员候选人', flag:false, date:'2026-10-08' }
-  ],
-  scores: null,        // 见下方 buildDemoDerived()
-  groups: null,   // 见 buildDemoDerived()，6 组覆盖全部 48 座
-  duty_areas: [
-    { id:1,class_id:1,name:'包干区1：教室前门地面',sort_order:1,enabled:true },
-    { id:2,class_id:1,name:'包干区2：黑板与讲台',sort_order:2,enabled:true },
-    { id:3,class_id:1,name:'包干区3：走廊与门窗',sort_order:3,enabled:true },
-    { id:4,class_id:1,name:'包干区4：垃圾清运',sort_order:4,enabled:true }
-  ],
-  duty_positions: [
-    { id:1,name:'班长',sort_order:1,enabled:true,builtin:true },
-    { id:2,name:'学习委员',sort_order:2,enabled:true,builtin:true },
-    { id:3,name:'纪律委员',sort_order:3,enabled:true,builtin:true },
-    { id:4,name:'劳动委员',sort_order:4,enabled:true,builtin:true },
-    { id:5,name:'体育委员',sort_order:5,enabled:true,builtin:true },
-    { id:6,name:'宣传委员',sort_order:6,enabled:true,builtin:true },
-    { id:7,name:'生活委员',sort_order:7,enabled:true,builtin:true },
-    { id:8,name:'科任老师联络人',sort_order:8,enabled:true,builtin:true }
-  ],
-  todos: [
-    { id:1,title:'批改七(3)班信息作业',date:today(),priority:'high',
-      category:'teach',done:false,note:'' },
-    { id:2,title:'准备月考复习范围',date:today(),priority:'high',
-      category:'exam',done:false,note:'第 1-5 章' },
-    { id:3,title:'更新机房机位表',date:today(),priority:'mid',
-      category:'prepare',done:false,note:'' },
-    { id:4,title:'给七(4)班布置值日',date:today(),priority:'mid',
-      category:'class_affairs',done:false,note:'' },
-    { id:6,title:'期中成绩录入系统',date:'2026-10-08',priority:'high',
-      category:'exam',done:false,note:'' },
-    { id:7,title:'联系张明轩家长',date:today(),priority:'mid',
-      category:'class_affairs',done:true,note:'已沟通，家长配合' },
-    { id:8,title:'教研组会议材料',date:'2026-10-09',priority:'high',
-      category:'research',done:false,note:'周四下午',
-      subtasks:[{t:'汇总本组教学进度',done:true},{t:'打印 3 份交组长',done:false},
-                {t:'准备机房设备使用情况',done:false}] },
-    { id:9,title:'整理期中考试考场安排',date:'2026-10-17',priority:'mid',
-      category:'exam',done:false,note:'按 30 人一场排',subtasks:[] },
-    { id:10,title:'给七(5)班补一次机房纪律强调',date:'2026-10-20',priority:'low',
-      category:'teach',done:false,note:'',subtasks:[] },
-    { id:11,title:'更新家长通讯录',date:'2026-10-25',priority:'low',
-      category:'class_affairs',done:false,note:'换号的两个家长',subtasks:[] }
-  ],
-  quick_links: [
-    { id:1,name:'教务系统',url:'https://example.com/jw',category:'教学',
-      icon:'📘',sort_order:1,builtin:true,show_in_sidebar:true },
-    { id:2,name:'成绩录入',url:'https://example.com/score',category:'教学',
-      icon:'📊',sort_order:2,builtin:true,show_in_sidebar:false },
-    { id:3,name:'腾讯文档',url:'https://docs.qq.com',category:'办公',
-      icon:'📄',sort_order:3,builtin:true,show_in_sidebar:true },
-    { id:4,name:'资料库',url:'https://www.workbuddy.cn',category:'办公',
-      icon:'🗂',sort_order:4,builtin:true,show_in_sidebar:false },
-    { id:5,name:'七(3)班群',url:'https://example.com/g1',category:'班级',
-      icon:'💬',sort_order:5,builtin:true,show_in_sidebar:true },
-    { id:6,name:'七(4)班群',url:'https://example.com/g2',category:'班级',
-      icon:'💬',sort_order:6,builtin:true,show_in_sidebar:false },
-    { id:7,name:'教务处通知',url:'https://example.com/notice',category:'教学',
-      icon:'🔔',sort_order:7,builtin:true,show_in_sidebar:false },
-    { id:8,name:'天气',url:'https://weather.com',category:'其他',
-      icon:'🌤️',sort_order:8,builtin:true,show_in_sidebar:false }
-  ]
+  classes: [], students: [], seats: [], periods: [], courses: [], lessons: [],
+  attendance: [], homeworks: [], homework_records: [], morality_items: [],
+  morality_records: [], student_notes: [], scores: [], exams: [], exam_scores: [],
+  groups: [], dutys: [], duty_areas: [], duty_positions: [], todos: [],
+  quick_links: [], courseware_links: [], materials: [], guides: []
 };
 
-/* 派生数据必须在 DEMO_DATA 定义完成后再构建。
-   如果写成 attendance: (() => {...})() 放进对象字面量，
-   那个 IIFE 会在对象求值时立刻执行，而此时 DEMO_DATA 还是 TDZ 状态，
-   直接抛 ReferenceError，页面全白。 */
-function buildDemoDerived() {
-  // 演示用：先把班级学生扩编到 48 人，后续考勤/作业/成绩/座位都基于完整名单
-  const XING = '王李张刘陈杨黄赵吴周徐孙马朱胡林郭何高罗郑梁谢宋唐许韩冯邓曹彭曾'.split('');
-  const MING = '明轩思远雨桐子豪欣怡梓萱浩然雅雯俊杰一鸣诗涵宇轩佳怡文博雨萱天佑'.split('');
-  for (let i = DEMO_DATA.students.length; i < 48; i++) {
-    DEMO_DATA.students.push({
-      id: 200 + i, class_id: 1,
-      name: XING[i % XING.length] + MING[i % MING.length],
-      gender: i % 2 ? 'female' : 'male',
-      student_no: '2026' + String(1000 + i),
-      seat_no: '',
-      parent_name: '', phone1: '000' + String(10000000 + i * 137).slice(0, 8),
-      phone2: '', wechat: '',
-      parent_committee_role: 'pc_none',
-      parent_committee_note: '', contacted: false, note: ''
-    });
-  }
-
-  const st = ['present','present','late','present','present','personal',
-              'present','present','absent','present'];
-
-  const att = [];
-  for (let d = 1; d <= 30; d++) {
-    DEMO_DATA.students.slice(0,6).forEach((s, i) => {
-      att.push({ id: d*100+i, class_id: s.class_id,
-                 date: `2026-09-${String(d).padStart(2,'0')}`,
-                 period: 1, student_id: s.id,
-                 status: st[(i+d)%10], reason: '', seated_flag: true });
-    });
-  }
-  DEMO_DATA.attendance = att;
-
-  /* 作业：按课程发布，含逐生提交情况（先定义，供收作业记录循环使用）
-     数据按真实班级情况铺：近 6 周每周 1-2 条已截止作业（提交率 88%~98%），
-     本周 4 条进行中（陆续在收）。人数由班级实际学生数决定，不写死。 */
-  const HOMEWORKS = [
-    /* —— 已截止（按周分布，供趋势图聚合） —— */
-    { id:1, class_id:1, course_id:1, subject:'信息科技', type:'practice',
-      title:'Scratch 初体验：角色与舞台', published:'2026-09-07', due:'2026-09-13',
-      miss:2, late:1, corr:0, exempt:1 },
-    { id:2, class_id:1, course_id:1, subject:'信息科技', type:'practice',
-      title:'键盘指法练习打卡（一）', published:'2026-09-14', due:'2026-09-20',
-      miss:1, late:1, corr:0, exempt:1 },
-    { id:3, class_id:1, course_id:3, subject:'语文', type:'written',
-      title:'第一单元字词默写', published:'2026-09-16', due:'2026-09-22',
-      miss:3, late:1, corr:1, exempt:1 },
-    { id:4, class_id:1, course_id:1, subject:'信息科技', type:'practice',
-      title:'WPS 文字：我的自我介绍', published:'2026-09-21', due:'2026-09-27',
-      miss:2, late:1, corr:1, exempt:1 },
-    { id:5, class_id:1, course_id:2, subject:'数学', type:'written',
-      title:'有理数混合运算 50 题', published:'2026-09-23', due:'2026-09-29',
-      miss:4, late:2, corr:2, exempt:1 },
-    { id:6, class_id:1, course_id:1, subject:'信息科技', type:'practice',
-      title:'Scratch 进阶：小猫走迷宫', published:'2026-09-28', due:'2026-10-04',
-      miss:3, late:1, corr:1, exempt:1 },
-    { id:7, class_id:1, course_id:1, subject:'信息科技', type:'practice',
-      title:'网络搜索小达人：资料查找', published:'2026-10-05', due:'2026-10-11',
-      miss:1, late:1, corr:0, exempt:1 },
-    { id:8, class_id:1, course_id:5, subject:'英语', type:'written',
-      title:'Unit 1 单词抄写', published:'2026-10-06', due:'2026-10-09',
-      miss:2, late:1, corr:1, exempt:1 },
-    { id:9, class_id:1, course_id:3, subject:'语文', type:'written',
-      title:'第二单元练习卷', published:'2026-10-08', due:'2026-10-12',
-      miss:4, late:2, corr:2, exempt:1 },
-    { id:10, class_id:1, course_id:1, subject:'信息科技', type:'oral',
-      title:'算法小课堂：流程图初识', published:'2026-10-09', due:'2026-10-13',
-      miss:2, late:1, corr:1, exempt:1 },
-    /* —— 进行中（还在收） —— */
-    { id:11, class_id:1, course_id:1, subject:'信息科技', type:'practice',
-      title:'Scratch 作品：打地鼠小游戏', published:'2026-10-12', due:'2026-10-16',
-      miss:9, late:0, corr:0, exempt:1 },
-    { id:12, class_id:1, course_id:2, subject:'数学', type:'written',
-      title:'整式加减练习', published:'2026-10-13', due:'2026-10-17',
-      miss:7, late:0, corr:0, exempt:1 },
-    { id:13, class_id:1, course_id:1, subject:'信息科技', type:'oral',
-      title:'小组汇报：我的电脑我做主', published:'2026-10-14', due:'2026-10-19',
-      miss:6, late:0, corr:0, exempt:1 },
-    { id:14, class_id:1, course_id:5, subject:'英语', type:'written',
-      title:'Unit 2 单词抄写与朗读', published:'2026-10-15', due:'2026-10-20',
-      miss:5, late:0, corr:0, exempt:1 }
-  ];
-  DEMO_DATA.homeworks = HOMEWORKS;
-
-  /* 逐生收交记录：人数取自班级实际学生数；未交名单按确定性散列分配，
-     保证每次打开都一样、且分散在不同学生身上（不是前 N 个）。 */
-  const hwHash = (a, b) => {
-    const x = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453;
-    return x - Math.floor(x);
-  };
-  const hwrec = [];
-  HOMEWORKS.forEach(h => {
-    const stus = DEMO_DATA.students.filter(s => s.class_id === h.class_id);
-    const order = stus.map((s, i) => ({ s, k: hwHash(h.id, i) }))
-      .sort((a, b) => a.k - b.k).map(o => o.s);
-    let seq = 0;
-    const put = (s, status) => hwrec.push({
-      id: h.id * 1000 + (seq++), homework_id: h.id, student_id: s.id,
-      status, type: h.type
-    });
-    const take = (status, n) => {
-      for (let i = 0; i < (n || 0) && order.length; i++) put(order.shift(), status);
-    };
-    take('missing', h.miss);          // 未交
-    take('late_submit', h.late);      // 迟交
-    take('correcting', h.corr);       // 订正中
-    take('exempt', h.exempt);         // 免交
-    order.forEach(s => put(s, 'submitted'));
-  });
-  DEMO_DATA.homework_records = hwrec;
-
-  /* 德育流水：全班近 5 周，确定性散列生成（每次打开一致、分散在不同学生身上）。
-     基调：多数学生加分居多，约 1/6 学生扣分偏多（需要关注的对象）；
-     日期一直到今天，座位表默认考勤日(2026-09-30)也有数据可标。 */
-  const morHash = (a, b) => {
-    const x = Math.sin(a * 91.7 + b * 47.3) * 43758.5453;
-    return x - Math.floor(x);
-  };
-  const morItems = DEMO_DATA.morality_items.filter(it => it.enabled !== false);
-  const bonusPool = morItems.filter(it => it.category === 'bonus');
-  const penaltyPool = morItems.filter(it => it.category === 'penalty');
-  const ymd = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0')
-                + '-' + String(d.getDate()).padStart(2,'0');
-  const endD = new Date(today() + 'T00:00:00');
-  const days = [];
-  for (let i = 33; i >= 0; i--) {
-    const d = new Date(endD); d.setDate(d.getDate() - i);
-    days.push(ymd(d));
-  }
-  const mrec = [];
-  let mrid = 1;
-  DEMO_DATA.students.filter(s => s.class_id === 1).forEach(s => {
-    const penaltyBias = morHash(s.id, 5) < 0.17;   // 约 17% 学生扣分偏多
-    days.forEach((d, di) => {
-      const roll = morHash(s.id * 13 + di, 3);
-      if (roll > 0.45) return;                     // 约 55% 的日子有记录
-      const n = roll > 0.30 ? 1 : 2;
-      for (let k = 0; k < n; k++) {
-        const rk = morHash(s.id * 7 + di * 5 + k, 11);
-        const usePenalty = penaltyBias ? rk < 0.5 : rk < 0.24;
-        const pool = usePenalty ? penaltyPool : bonusPool;
-        const it = pool[Math.floor(morHash(s.id + di * 3 + k, 23) * pool.length)];
-        if (!it) return;
-        mrec.push({ id: mrid++, class_id: 1, date: d, student_id: s.id,
-                    item_id: it.id, score: it.score, reason: it.name,
-                    batch_id: null, source: 'seed' });
-      }
-    });
-  });
-  DEMO_DATA.morality_records = mrec;
-
-  /* 班级人数以实际学生数为准（座位表/考勤/作业共用） */
-  DEMO_DATA.classes.forEach(c => {
-    c.student_count = DEMO_DATA.students.filter(s => s.class_id === c.id).length;
-  });
-
-  /* 成绩：月考 + 摸底。按学生能力基准（散列）生成，分布真实不重样；
-     期中(11-05)尚未考试，不造分。 */
-  const ability = {};
-  DEMO_DATA.students.filter(s => s.class_id === 1).forEach(s => {
-    ability[s.id] = 56 + morHash(s.id, 3) * 38;    // 56~94 能力基准
-  });
-  const sc = [];
-  [['开学摸底','2026-09-10',-7],['第一次月考','2026-09-25',0]]
-    .forEach(([title, date, off], ei) => {
-    DEMO_DATA.students.filter(s => s.class_id === 1).forEach((s, si) => {
-      const noise = (morHash(s.id, 17 + ei) - 0.5) * 9;
-      sc.push({ id: ei*100 + si + 1, class_id: 1, date, title, full_score: 100,
-                student_id: s.id,
-                score: Math.max(35, Math.min(100,
-                  Math.round(ability[s.id] + off + noise))) });
-    });
-  });
-  DEMO_DATA.scores = sc;
-
-  const seats = [];
-  // 座位表是七(3)班（class_id 1）的：只绑本班学生。
-  // 以前直接取 students[i]，会把列表里七(4)/七(5)班的头几个学生串到本班座位。
-  const cls1Stus = DEMO_DATA.students.filter(s => s.class_id === 1);
-  for (let i = 0; i < 48; i++) {
-    const r = Math.floor(i/8)+1, c = (i%8)+1;
-    const st = cls1Stus[i];
-    if (st) st.seat_no = `${r}-${c}`;
-    seats.push({ id: 1000+i, class_id: 1, seat_no: `${r}-${c}`,
-                 row: r, col: c,
-                 student_id: st ? st.id : null, is_computer: false });
-  }
-  DEMO_DATA.seats = seats;
-
-  // 6 个小组，每组 8 座，覆盖全部 48 个座位
-  const gc = [];
-  for (let gi = 0; gi < 6; gi++) {
-    const ids = [];
-    const roles = {};
-    for (let k = 0; k < 8; k++) {
-      const sid = 1000 + gi*8 + k;
-      ids.push(sid);
-      // 每组第一个是组长，其余按顺序编为组员 01 02 03...
-      roles[sid] = (k === 0) ? 'leader' : 'member' + k;
-    }
-    gc.push({
-      id: gi+1, class_id: 1, name: `第${gi+1}组`,
-      mode: 'teacher_classroom',
-      seat_ids: ids,
-      roles: roles,
-      locked: gi === 0
-    });
-  }
-  DEMO_DATA.groups = gc;
-
-  /* 作业数据已在函数开头定义并赋值给 DEMO_DATA.homeworks */
-
-  /* 值日：一周安排 */
-  DEMO_DATA.dutys = [
-    { id:1, class_id:1, day:1, area:'教室卫生', seat_ids:[1000,1001,1002,1003,1004],
-      done:true },
-    { id:2, class_id:1, day:1, area:'擦黑板', seat_ids:[1005], done:true },
-    { id:3, class_id:1, day:2, area:'教室卫生', seat_ids:[1006,1007,1008,1009,1010],
-      done:true },
-    { id:4, class_id:1, day:2, area:'擦黑板', seat_ids:[1011], done:true },
-    { id:5, class_id:1, day:3, area:'教室卫生', seat_ids:[1012,1013,1014,1015,1016],
-      done:false },
-    { id:6, class_id:1, day:3, area:'擦黑板', seat_ids:[1017], done:false },
-    { id:7, class_id:1, day:4, area:'教室卫生', seat_ids:[1018,1019,1020,1021,1022],
-      done:false },
-    { id:8, class_id:1, day:4, area:'擦黑板', seat_ids:[1023], done:false },
-    { id:9, class_id:1, day:5, area:'教室卫生', seat_ids:[1024,1025,1026,1027,1028],
-      done:false },
-    { id:10, class_id:1, day:5, area:'擦黑板', seat_ids:[1029], done:false }
-  ];
-
-  /* 成绩：一次期中考试，按课程 */
-  DEMO_DATA.exams = [
-    { id:1, name:'2026 学年第一学期期中', date:'2026-11-05',
-      courses:[1,2,3,5], published:false },
-    { id:2, name:'第三单元测验', date:'2026-10-09',
-      courses:[2,3], published:true }
-  ];
-
-  /* 第三单元测验（数学+语文）逐科分数：按学生能力 + 学科波动生成 */
-  const es = [];
-  DEMO_DATA.students.filter(s => s.class_id === 1).forEach(s => {
-    [2, 3].forEach((cid, ci) => {
-      const noise = (morHash(s.id, 41 + cid) - 0.5) * 11;
-      es.push({ exam_id: 2, student_id: s.id, course_id: cid,
-                score: Math.max(35, Math.min(100,
-                  Math.round(ability[s.id] + (ci ? 2 : -1) + noise))) });
-    });
-  });
-  DEMO_DATA.exam_scores = es;
-}
+/* 派生数据构建器：演示数据移除后无需再派生，保留空实现兼容旧调用点。 */
+function buildDemoDerived() {}
 buildDemoDerived();
 
 /* ============================================================
@@ -7833,7 +7455,7 @@ const DB_KEYS = ['classes', 'students', 'seats', 'periods', 'courses', 'lessons'
   'attendance', 'homeworks', 'homework_records', 'morality_items',
   'morality_records', 'scores', 'exams', 'exam_scores', 'groups', 'dutys',
   'duty_areas', 'duty_positions', 'student_notes', 'quick_links', 'course_progress',
-  'progress_cols', 'seat_tpl', 'courseware_links', 'materials'];
+  'progress_cols', 'seat_tpl', 'courseware_links', 'materials', 'guides'];
 window.DB_KEYS = DB_KEYS;
 
 let dbPersistTimer = null;
@@ -7925,23 +7547,11 @@ function dbSeeded() { return LS.get(DB_SEEDED, '') === '1'; }
 window.dbSeeded = dbSeeded;
 
 /**
- * 真实模式第一次进来：本机和云端都空 → 铺一份示例数据，界面不至于是白板。
- * 示例数据默认不上云，老师在设置页点「把当前数据同步到云端」才放开。
+ * （v2.0.4）演示数据已整体移除：不再给新设备铺任何示例内容，
+ * 保留空函数兼容旧调用点。老师登录后看到的直接是空工作台 + 建班引导。
  */
 function dbSeedDemo() {
   if (DEMO.on) return;
-  try {
-    DB_KEYS.forEach(k => {
-      if (Array.isArray(DEMO_DATA[k])) DB[k] = JSON.parse(JSON.stringify(DEMO_DATA[k]));
-    });
-    state.todos = JSON.parse(JSON.stringify(dbT('todos') || []));
-    LS.set(DB_SEEDED, '1');
-    dbPersist();
-    try { todoPersist(); } catch (e) {}
-  } catch (e) {
-    console.warn('[db] seed demo failed',
-      JSON.stringify({ message: e instanceof Error ? e.message : 'unknown' }));
-  }
 }
 window.dbSeedDemo = dbSeedDemo;
 
@@ -8301,6 +7911,8 @@ const SYNC_TABLES = {
           'show_in_sidebar'] },
   materials: { key:'materials', cn:'学习资料',
     cols:['class_id','title','kind','url','content','subject','note','date'] },
+  guides: { key:'guides', cn:'导学单',
+    cols:['class_id','course_id','date','period','title','note','status','items'] },
 };
 function syncHasTable(t) { return !!SYNC_TABLES[t]; }
 function syncCfg(t) { return SYNC_TABLES[t] || { key:t, cn:t, cols:[] }; }
@@ -9959,7 +9571,7 @@ function gsScopeName() {
 /** 「全部班级」时，按单个班显示的页面（座位/考勤/德育/分组/值日）顶部说明条。
     以前这些页在「全部班级」下静默显示 1 班的数据，老师以为在看全校，很容易记错人。 */
 const CLS_SCOPED_ROUTES = { seats: 1, attendance: 1, homework: 1, scores: 1,
-                            morality: 1, groups: 1, duty: 1 };
+                            morality: 1, groups: 1, duty: 1, guide: 1 };
 function clsScopeBar() {
   const classes = (classList() || []);
   if (!classes.length) return '';
@@ -10199,6 +9811,7 @@ function renderContent(opts = {}) {
    ============================================================ */
 const FOLD_TITLE = {
   home: '首页说明', seats: '座位表说明', timetable: '课表说明', attendance: '考勤说明',
+  guide: '导学单说明',
   courseware: '课件使用说明', homework: '作业说明', scores: '成绩说明', morality: '德育说明',
   groups: '分组说明', progress: '进度说明', duty: '值日说明', students: '学生说明',
   classes: '班级说明', todos: '待办说明', tools: '工具说明', activity: '活动说明',
@@ -12434,8 +12047,11 @@ if (window.BackupIO) {
   BackupIO.init(__backupEnv);
   window.exportAllData = function () { return BackupIO.export(); };
   window.importAllData = function () { return BackupIO.importFile(); };
+  /* v2.0.4：系统设置「数据与备份」统一走全量加密导出 / 一键恢复
+     （工具页入口已移除，导入导出只保留这一处） */
+  window.exportFullData = function () { return BackupIO.exportFull(); };
+  window.importFullData = function () { return BackupIO.importFull(); };
   window.askPassword = function (t, s, ph) { return BackupIO.askPassword(t, s, ph); };
-  /* 工具页的备份卡片直接开统一面板（导出 + 恢复同一处，不再只有导出） */
   window.openBackupPanel = function (o) { return BackupIO.openPanel(o); };
 } else {
   console.error('[backup] backup.js 未加载，备份功能不可用');
@@ -13873,6 +13489,418 @@ function delStudent(id) {
 }
 window.delStudent = delStudent;
 
+/* ============================================================
+   导学单（2026-10-31 新增 · 学生端「今日」的核心载体）
+   ------------------------------------------------------------
+   教师按「班级 + 课程 + 日期」备好一节课的任务（资料 / 活动 / 测验 /
+   链接 / 图文），点「发放」后学生端今日课程的对应课里出现
+   「打开导学单」，资料查看与提交操作都在导学单里完成。
+   收回 / 删除后学生端立即不可见（SSE 实时推送）。
+   数据走 guides 表：与其它业务表同一条同步链路，多端一致。
+   ============================================================ */
+const GUIDE_KINDS = [
+  ['material', '资料'], ['activity', '活动'], ['quiz', '测验'],
+  ['link', '链接'], ['text', '图文']
+];
+function guideKindLabel(t) { const k = GUIDE_KINDS.find(x => x[0] === t); return k ? k[1] : '条目'; }
+
+/** 当前班的导学单（按日期倒序） */
+function guideList() {
+  const cls = curSeatClass();
+  return (dbT('guides') || [])
+    .filter(g => Number(g.class_id) === Number(cls))
+    .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+}
+/** 导学单条目里的活动链接：发放时用局域网地址拼好，学生手机直接能开 */
+function guideBuildActivityLink(task) {
+  if (!task) return '';
+  const api = qfLanApi(task.api || '');
+  const base = qfStudentBase();
+  const title = task.title || task.task_id || '课堂活动';
+  const desc = '请上传你的作品文件到《' + title + '》活动。同一学号重复提交将覆盖为最新版本。';
+  return base + '/submit/file.html?api=' + encodeURIComponent(api)
+    + '&title=' + encodeURIComponent(title) + '&desc=' + encodeURIComponent(desc);
+}
+function renderGuidePage() {
+  const cls = curSeatClass();
+  const courses = dbT('courses') || [];
+  const courseName = id => (courses.find(c => Number(c.id) === Number(id)) || {}).name || '';
+  const list = guideList();
+  const pub = list.filter(g => String(g.status || 'published') === 'published');
+  const t = today();
+
+  const cards = list.map(g => {
+    const items = Array.isArray(g.items) ? g.items : [];
+    const counts = GUIDE_KINDS.map(([k, label]) => {
+      const n = items.filter(it => (it.type || 'link') === k).length;
+      return n ? `<span class="gk-chip">${label} ${n}</span>` : '';
+    }).join('');
+    const on = String(g.status || 'published') === 'published';
+    return `<div class="card" style="padding:14px 16px">
+      <div style="display:flex;gap:10px;align-items:center">
+        <span style="width:9px;height:9px;border-radius:50%;flex:none;
+          background:${on ? 'var(--ok,#1D9E75)' : '#B9C4C0'}"></span>
+        <b style="font-size:14.5px">${esc(g.title || courseName(g.course_id) + ' 导学单')}</b>
+        <span style="font-size:12px;color:var(--text-secondary)">${esc(g.date || '')}${g.period ? ' · 第' + esc(g.period) + '节' : ''}</span>
+        <span style="flex:1"></span>
+        <span class="gk-st" style="font-size:12px;color:${on ? 'var(--ok,#1D9E75)' : 'var(--text-secondary)'}">${on ? '已发放' : '草稿'}</span>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 4px">
+        <span class="gk-chip" style="border:0;background:rgba(15,110,86,.08);color:#0F6E56">${esc(courseName(g.course_id) || '课程')}</span>
+        ${counts || '<span style="font-size:12px;color:var(--text-secondary)">还没有条目</span>'}
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+        <button class="btn btn-ghost btn-sm" style="width:auto" onclick="openGuideView(${g.id})">查看</button>
+        <button class="btn btn-ghost btn-sm" style="width:auto" onclick="openGuideEditor(${g.id})">编辑</button>
+        <button class="btn ${on ? 'btn-ghost' : 'btn-primary'} btn-sm" style="width:auto"
+          onclick="guideToggle(${g.id})">${on ? '收回' : '发放'}</button>
+        <button class="btn btn-ghost btn-sm btn-danger" style="width:auto" onclick="guideDelete(${g.id})">删除</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  return `
+  <div class="page-title">导学单</div>
+  <div class="notice">
+    备课一节课的资料、活动与测验，点「发放」推送到学生端——学生打开「今日」，
+    在对应课程里进入导学单完成资料查看与提交。发放 / 收回实时生效。
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+    <button class="btn btn-primary" type="button" style="width:auto;padding:8px 16px;font-size:13px"
+      onclick="openGuideEditor()">＋ 新建导学单</button>
+    <button class="btn btn-ghost" type="button" style="width:auto"
+      onclick="guideQuickToday()">一键备今日课程</button>
+    <span style="flex:1"></span>
+    <span style="font-size:12.5px;color:var(--text-secondary);align-self:center">
+      ${cls ? '当前班共 ' + list.length + ' 份 · 已发放 ' + pub.length + ' 份' : ''}</span>
+  </div>
+  ${cards || `<div class="empty" style="padding:30px 12px">
+    <div class="empty-title">这个班还没有导学单</div>
+    <div class="empty-desc">点「新建导学单」选课程加内容，或者「一键备今日课程」按课表生成</div>
+  </div>`}`;
+}
+window.renderGuidePage = renderGuidePage;
+
+/** 按今日课表批量生成草稿导学单（已存在的课程跳过） */
+function guideQuickToday() {
+  const cls = curSeatClass();
+  if (!cls) { toast('先建一个班级'); return; }
+  const d = todayIdx();
+  const courses = dbT('courses') || [];
+  const lessons = (dbT('lessons') || [])
+    .filter(l => Number(l.day_of_week) === Number(d) && Number(l.class_id) === Number(cls));
+  if (!lessons.length) { toast('今天这个班没有课，先去课表排课'); return; }
+  const exist = guideList().filter(g => String(g.date || '') === today()).map(g => String(g.course_id));
+  let n = 0;
+  lessons.forEach(l => {
+    if (exist.indexOf(String(l.course_id)) >= 0) return;
+    const c = courses.find(x => Number(x.id) === Number(l.course_id)) || {};
+    const row = {
+      id: guideNextId(), class_id: cls, course_id: l.course_id, date: t(),
+      period: (dbT('periods') || []).find(p => Number(p.id) === Number(l.period_id)),
+      title: (c.name || '课程') + ' · 导学单', note: '',
+      status: 'draft', items: [], updated_at: new Date().toISOString().slice(0, 16).replace('T', ' ')
+    };
+    if (row.period) row.period = Number(row.period.seq || row.period.id || 0) || 0;
+    else row.period = 0;
+    (dbT('guides') || []).push(row);
+    syncMark('guides', row);
+    n++;
+  });
+  renderContent();
+  toast(n ? '已生成 ' + n + ' 份草稿，逐份补内容后发放' : '今天的每节课都已经有导学单了');
+}
+window.guideQuickToday = guideQuickToday;
+
+function guideNextId() {
+  const arr = dbT('guides') || [];
+  return Math.max(0, ...arr.map(x => Number(x.id) || 0)) + 1;
+}
+
+/* ---------- 导学单编辑器（页内浮窗） ---------- */
+let guideDraft = null;    // {id?, class_id, course_id, date, period, title, note, status, items[]}
+let guideDraftIsNew = false;
+
+function guideItemRow(it, i) {
+  const sub = it.type === 'text' ? String(it.content || '').slice(0, 40)
+    : String(it.url || '').replace(/^https?:\/\//, '').slice(0, 46);
+  return `<div style="display:flex;gap:8px;align-items:center;padding:7px 9px;
+      border:1px solid var(--border);border-radius:9px;margin-bottom:6px;background:#FBFDFC">
+    <span style="font-size:11.5px;padding:2px 7px;border-radius:6px;flex:none;
+      background:rgba(15,110,86,.08);color:#0F6E56">${esc(guideKindLabel(it.type))}</span>
+    <span style="flex:1;min-width:0;font-size:13px">
+      <b style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(it.title || '（未命名）')}</b>
+      ${sub ? `<span style="font-size:11.5px;color:var(--text-secondary);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(sub)}</span>` : ''}
+    </span>
+    <button type="button" class="btn btn-ghost btn-sm btn-danger" style="width:auto;padding:3px 9px;font-size:11.5px"
+      onclick="guideDraftRemove(${i})">移除</button>
+  </div>`;
+}
+
+function guideEditorBody() {
+  const d = guideDraft || {};
+  const courses = (dbT('courses') || []).filter(c => c.active !== false);
+  const periods = (dbT('periods') || []).slice().sort((a, b) => (a.seq || 0) - (b.seq || 0));
+  const mats = (dbT('materials') || []).filter(m => Number(m.class_id) === Number(d.class_id));
+  const tasks = (qfTaskList || []);
+  const items = Array.isArray(d.items) ? d.items : [];
+
+  return `
+  <div class="set-line"><span class="set-k">课程</span>
+    <select id="gCourse" class="sel" style="flex:1;min-width:0">
+      ${courses.map(c => `<option value="${c.id}"${Number(c.id) === Number(d.course_id) ? ' selected' : ''}>${esc(c.name)}</option>`).join('')}
+    </select>
+    <select id="gPeriod" class="sel" style="width:auto">
+      <option value="0">不限节次</option>
+      ${periods.map(p => `<option value="${Number(p.seq || p.id) || 0}"${Number(p.seq || p.id) === Number(d.period) ? ' selected' : ''}>${esc(p.label || ('第' + (p.seq || '') + '节'))}</option>`).join('')}
+    </select>
+  </div>
+  <div class="set-line"><span class="set-k">日期</span>
+    <input id="gDate" type="date" class="fl-inp" style="width:auto" value="${esc(d.date || today())}">
+    <input id="gTitle" class="fl-inp" style="flex:1;min-width:0" maxlength="40"
+      placeholder="标题（默认「课程名 · 导学单」）" value="${esc(d.title || '')}">
+  </div>
+  <div class="set-line" style="align-items:flex-start"><span class="set-k" style="padding-top:8px">说明</span>
+    <textarea id="gNote" class="fl-inp" rows="2" style="flex:1;min-width:0"
+      placeholder="给学生的提示（选填）">${esc(d.note || '')}</textarea>
+  </div>
+
+  <div style="font-size:13.5px;font-weight:600;margin:12px 0 6px">任务条目（${items.length}）</div>
+  <div id="gItems">${items.map(guideItemRow).join('') || '<div class="term-hint" style="margin:0">还没有条目：从下面三行里挑内容加进来。</div>'}</div>
+
+  <div style="font-size:13.5px;font-weight:600;margin:12px 0 6px">添加内容</div>
+  <div class="set-line"><span class="set-k">从资料</span>
+    <select id="gSrcMat" class="sel" style="flex:1;min-width:0">
+      <option value="">（选一份已下发的学习资料）</option>
+      ${mats.map(m => `<option value="${esc(m.id)}">${esc(m.title || '学习资料')}${m.subject ? ' · ' + esc(m.subject) : ''}</option>`).join('')}
+    </select>
+    <button class="btn btn-sm" type="button" style="width:auto;flex:none"
+      onclick="guideAddMaterial()">加入</button>
+  </div>
+  <div class="set-line"><span class="set-k">选活动</span>
+    <select id="gSrcTask" class="sel" style="flex:1;min-width:0">
+      <option value="">${tasks.length ? '（选一个活动任务）' : '（暂无活动任务，去「活动」页选择/连接服务）'}</option>
+      ${tasks.map(x => `<option value="${esc(x.task_id)}">${esc(x.title || x.task_id)}</option>`).join('')}
+    </select>
+    <button class="btn btn-sm" type="button" style="width:auto;flex:none"
+      onclick="guideAddActivity()">加入</button>
+  </div>
+  <div class="set-line"><span class="set-k">自定义</span>
+    <select id="gSrcKind" class="sel" style="width:auto">
+      ${GUIDE_KINDS.map(([k, label]) => `<option value="${k}">${label}</option>`).join('')}
+    </select>
+    <input id="gSrcTitle" class="fl-inp" style="width:120px" placeholder="标题" maxlength="30">
+    <input id="gSrcUrl" class="fl-inp" style="flex:1;min-width:0" placeholder="链接或文字内容">
+    <button class="btn btn-sm" type="button" style="width:auto;flex:none"
+      onclick="guideAddCustom()">加入</button>
+  </div>`;
+}
+
+function openGuideEditor(id) {
+  if (id != null && id !== '') {
+    const g = (dbT('guides') || []).find(x => String(x.id) === String(id));
+    if (!g) { toast('这份导学单不存在'); return; }
+    guideDraft = JSON.parse(JSON.stringify(g));
+    guideDraftIsNew = false;
+  } else {
+    const cls = curSeatClass();
+    if (!cls) { toast('先建一个班级'); return; }
+    guideDraft = { id: guideNextId(), class_id: cls, course_id: null, date: today(),
+      period: 0, title: '', note: '', status: 'draft', items: [] };
+    guideDraftIsNew = true;
+  }
+  showFloat(guideDraftIsNew ? '新建导学单' : '编辑导学单', `
+    <div id="gEditorRoot">${guideEditorBody()}</div>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button class="btn btn-ghost" type="button" style="width:auto"
+        onclick="guideSaveDraft()">存为草稿</button>
+      <button class="btn btn-primary" type="button" style="width:auto"
+        onclick="guideSavePublish()">保存并发放</button>
+    </div>
+    <div class="term-hint">「发放」后学生端今日课程里立刻出现「打开导学单」；收回或存草稿学生端不可见。</div>
+  `);
+  /* 活动任务列表通常在「活动」页才加载；导学单编辑器自己兜底拉一次，
+     拉到后只刷新活动下拉（不动老师已选的课程 / 日期）。 */
+  guideEnsureTasks().then(guidePaintTaskOptions);
+}
+window.openGuideEditor = openGuideEditor;
+
+/** 拉取活动任务列表（已加载过就直接用） */
+async function guideEnsureTasks() {
+  if ((qfTaskList || []).length) return qfTaskList;
+  try {
+    const r = await fetch(qfApiBase() + '/api/tasks', { mode: 'cors' });
+    if (r.ok) { const j = await r.json(); qfTaskList = (j && j.tasks) || []; }
+  } catch (e) { /* 服务没开：下拉里给出提示文案即可 */ }
+  return qfTaskList;
+}
+window.guideEnsureTasks = guideEnsureTasks;
+
+/** 只刷新编辑器里的活动下拉（保留其它已填内容） */
+function guidePaintTaskOptions() {
+  const sel = document.getElementById('gSrcTask');
+  if (!sel) return;
+  const tasks = qfTaskList || [];
+  sel.innerHTML = '<option value="">' + (tasks.length
+    ? '（选一个活动任务）' : '（暂无活动任务，去「活动」页选择/连接服务）') + '</option>'
+    + tasks.map(x => '<option value="' + esc(x.task_id) + '">'
+      + esc(x.title || x.task_id) + '</option>').join('');
+}
+window.guidePaintTaskOptions = guidePaintTaskOptions;
+
+/** 浮窗里的下拉/输入框变化直接写回草稿（保存时统一取值） */
+function guideCollectEditor() {
+  const d = guideDraft;
+  if (!d) return null;
+  const g = id => document.getElementById(id);
+  if (g('gCourse')) d.course_id = Number(g('gCourse').value) || null;
+  if (g('gPeriod')) d.period = Number(g('gPeriod').value) || 0;
+  if (g('gDate')) d.date = g('gDate').value || today();
+  if (g('gTitle') && g('gTitle').value.trim()) d.title = g('gTitle').value.trim();
+  else d.title = ((dbT('courses') || []).find(c => Number(c.id) === Number(d.course_id)) || {}).name
+    ? ((dbT('courses') || []).find(c => Number(c.id) === Number(d.course_id)).name + ' · 导学单') : '导学单';
+  if (g('gNote')) d.note = g('gNote').value.trim();
+  return d;
+}
+function guideRefreshEditor() {
+  const root = document.getElementById('gEditorRoot');
+  if (root) root.innerHTML = guideEditorBody();
+}
+function guideDraftRemove(i) {
+  guideCollectEditor();
+  if (!guideDraft) return;
+  (guideDraft.items || []).splice(Number(i), 1);
+  guideRefreshEditor();
+}
+window.guideDraftRemove = guideDraftRemove;
+
+function guideAddMaterial() {
+  guideCollectEditor();
+  const sel = document.getElementById('gSrcMat');
+  const id = sel && sel.value;
+  if (!id) { toast('先选一份学习资料'); return; }
+  const m = (dbT('materials') || []).find(x => String(x.id) === String(id));
+  if (!m) return;
+  guideDraft.items.push({ type: 'material', title: m.title || '学习资料',
+    url: m.url || '', material_id: m.id, note: m.subject || '' });
+  guideRefreshEditor();
+  toast('已加入：' + (m.title || '学习资料'));
+}
+window.guideAddMaterial = guideAddMaterial;
+
+function guideAddActivity() {
+  guideCollectEditor();
+  const sel = document.getElementById('gSrcTask');
+  const tid = sel && sel.value;
+  if (!tid) { toast('先在「活动」页选择服务与任务，再来这里加入'); return; }
+  const t = (qfTaskList || []).find(x => String(x.task_id) === String(tid));
+  if (!t) return;
+  guideDraft.items.push({ type: 'activity', title: t.title || t.task_id,
+    url: guideBuildActivityLink(t), note: '' });
+  guideRefreshEditor();
+  toast('已加入活动：' + (t.title || t.task_id));
+}
+window.guideAddActivity = guideAddActivity;
+
+function guideAddCustom() {
+  guideCollectEditor();
+  const kind = (document.getElementById('gSrcKind') || {}).value || 'link';
+  const title = (document.getElementById('gSrcTitle') || {}).value || '';
+  const val = (document.getElementById('gSrcUrl') || {}).value || '';
+  if (!title.trim()) { toast('先填条目标题'); return; }
+  if (kind === 'text') {
+    if (!val.trim()) { toast('图文条目要填文字内容'); return; }
+    guideDraft.items.push({ type: 'text', title: title.trim(), content: val.trim() });
+  } else {
+    let url = val.trim();
+    if (kind === 'quiz' && url && !/^https?:\/\//i.test(url) && url.startsWith('/')) {
+      url = qfStudentBase() + url;      // 相对链接补全成学生可打开的地址
+    }
+    if (!url) { toast('这个条目类型要填链接'); return; }
+    guideDraft.items.push({ type: kind, title: title.trim(), url });
+  }
+  guideRefreshEditor();
+  toast('已加入：' + title.trim());
+}
+window.guideAddCustom = guideAddCustom;
+
+function guideSaveRow(status) {
+  const d = guideCollectEditor();
+  if (!d) return null;
+  if (!d.course_id) { toast('请选择课程'); return null; }
+  d.status = status;
+  d.updated_at = new Date().toISOString().slice(0, 16).replace('T', ' ');
+  const arr = dbT('guides') || [];
+  const i = arr.findIndex(x => String(x.id) === String(d.id));
+  if (i >= 0) arr[i] = d; else arr.push(d);
+  syncMark('guides', d);
+  return d;
+}
+function guideSaveDraft() {
+  if (!guideSaveRow('draft')) return;
+  closeFloat(); renderContent(); toast('已存为草稿（学生端不可见）');
+}
+function guideSavePublish() {
+  const d = guideSaveRow('published');
+  if (!d) return;
+  closeFloat(); renderContent();
+  toast('已发放：学生端「今日」的对应课程里可打开');
+}
+window.guideSaveDraft = guideSaveDraft;
+window.guideSavePublish = guideSavePublish;
+
+function guideToggle(id) {
+  const g = (dbT('guides') || []).find(x => String(x.id) === String(id));
+  if (!g) return;
+  g.status = String(g.status || 'published') === 'published' ? 'draft' : 'published';
+  g.updated_at = new Date().toISOString().slice(0, 16).replace('T', ' ');
+  syncMark('guides', g);
+  renderContent();
+  toast(g.status === 'published' ? '已发放，学生端实时可见' : '已收回，学生端实时不可见');
+}
+window.guideToggle = guideToggle;
+
+function guideDelete(id) {
+  const arr = dbT('guides') || [];
+  const g = arr.find(x => String(x.id) === String(id));
+  if (!g) return;
+  if (!window.confirm('删除导学单「' + (g.title || g.id) + '」？学生端会同步移除。')) return;
+  const i = arr.findIndex(x => String(x.id) === String(id));
+  if (i >= 0) {
+    const tomb = Object.assign({}, arr[i], { deleted: 1 });
+    arr.splice(i, 1);
+    syncMark('guides', tomb);
+  }
+  renderContent();
+  toast('已删除');
+}
+window.guideDelete = guideDelete;
+
+function openGuideView(id) {
+  const g = (dbT('guides') || []).find(x => String(x.id) === String(id));
+  if (!g) return;
+  const courses = dbT('courses') || [];
+  const c = courses.find(x => Number(x.id) === Number(g.course_id)) || {};
+  const items = Array.isArray(g.items) ? g.items : [];
+  const rows = items.map((it, i) => `
+    <div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:13.5px">
+      <span style="font-size:11.5px;padding:2px 7px;border-radius:6px;margin-right:8px;
+        background:rgba(15,110,86,.08);color:#0F6E56">${esc(guideKindLabel(it.type))}</span>
+      <b>${esc(it.title || ('条目 ' + (i + 1)))}</b>
+      ${it.url ? `<span style="display:block;font-size:12px;color:var(--text-secondary);margin-top:2px;word-break:break-all">${esc(String(it.url).slice(0, 90))}</span>` : ''}
+      ${it.content ? `<div style="font-size:12.5px;color:var(--text-secondary);margin-top:2px;white-space:pre-wrap">${esc(String(it.content).slice(0, 200))}</div>` : ''}
+    </div>`).join('');
+  showFloat('导学单预览（学生视角）', `
+    <div class="term-hint" style="margin:0 0 8px">${esc(c.name || '')}${g.date ? ' · ' + esc(g.date) : ''}${g.period ? ' · 第' + esc(g.period) + '节' : ''} · 状态：${String(g.status || 'published') === 'published' ? '已发放' : '草稿（学生看不到）'}</div>
+    <div style="font-size:15px;font-weight:650;margin-bottom:6px">${esc(g.title || '导学单')}</div>
+    ${g.note ? `<div class="term-hint" style="margin:0 0 6px">${esc(g.note)}</div>` : ''}
+    ${rows || '<div class="empty">这份导学单还没有条目，点「编辑」添加。</div>'}
+    <div style="margin-top:12px"><button class="btn btn-ghost" type="button" style="width:auto"
+      onclick="closeFloat();openGuideEditor(${g.id})">去编辑</button></div>
+  `);
+}
+window.openGuideView = openGuideView;
+
 function emptyClass() {
   return `
   <div class="empty">
@@ -14845,6 +14873,8 @@ function qfDedupAsc(rows) {
   return kept;
 }
 function qfAttachments(s) { const a = s && s.attachment; if (!a) return []; if (typeof a === 'string') return [a]; if (Array.isArray(a)) return a; return []; }
+/* 附件地址补全：QuickForm 官方返回相对路径才需要拼服务地址，绝对 URL 原样使用 */
+function qfAttUrl(a) { a = String(a || ''); return /^https?:\/\//i.test(a) ? a : (qfApiBase() + a); }
 
 async function qfRenderDash() {
   // 大屏会整块重建 innerHTML（连"加载中"占位也会先写一次），这里在函数入口就记住
@@ -15073,7 +15103,7 @@ function qfTableHtml(subs, limit) {
         <td>${esc(s['学号'] || s['student_no'] || s['sid'] || '—')}</td>
         <td>${esc(s['作品标题'] || s['title'] || '—')}</td>
         <td>${esc(String(s['作品简介'] || s['desc'] || '').slice(0, 30))}</td>
-        <td>${atts.length ? atts.map(a => `<a href="${qfApiBase() + a}" target="_blank">📎</a>`).join(' ') : '—'}</td>
+        <td>${atts.length ? atts.map(a => `<a href="${qfAttUrl(a)}" target="_blank">📎</a>`).join(' ') : '—'}</td>
         <td class="qf-muted">${esc((s.submitted_at || '').slice(5))}</td>
       </tr>`;
     }).join('')
@@ -15086,7 +15116,7 @@ function qfGalleryHtml(subs) {
   if (!items.length) return '<span class="qf-muted">还没有上传的作品文件。</span>';
   return items.slice(0, 30).map(a => {
     const ext = (a.split('.').pop() || '').toLowerCase();
-    const url = qfApiBase() + a;
+    const url = qfAttUrl(a);
     const isImg = ['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext);
     return isImg
       ? `<a href="${url}" target="_blank"><img class="qf-thumb" src="${url}" alt="作品"></a>`
@@ -27258,19 +27288,22 @@ const DEMO_RENDER = {
       <div style="font-size:14px;font-weight:500;margin-bottom:10px">数据与备份（换设备 / 重装用）</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-primary" style="width:auto;padding:8px 16px;font-size:13px"
-          onclick="exportAllData()">导出备份</button>
+          onclick="exportFullData()">全量加密导出</button>
         <button class="btn" style="width:auto;padding:8px 16px;font-size:13px"
-          onclick="importAllData()">从备份恢复</button>
+          onclick="importFullData()">从备份一键恢复</button>
         <button class="btn btn-sm" type="button" style="width:auto"
           onclick="dbClearLocalAsk()">清空本机数据</button>
       </div>
       <div class="term-hint">
-        · <b>导出备份</b>：把本机全部数据（班级、学生、考勤、作业、成绩、座位、设置…）打包成一个文件。
-        设了密码 → 导出 <b>.cwbackup 加密文件</b>（还原时要输导出时的密码）；没设密码 → 导出 <b>.json 明文</b>。
-        <b>换电脑 / 重装系统 / 换浏览器前务必导出一份</b>。<br>
-        · <b>从备份恢复</b>：在另一台设备上打开本工具，点这里选刚才那个文件，数据就整体搬过来了——这就是「数据迁移」。
-        导入<b>只替换数据、不替换本机密码</b>，导完这台电脑还是用你现在的密码。备份文件里带着<u>条目数与校验和</u>，文件不完整会直接中止并保持原状，不会出现「导入一半」。<br>
-        · 数据只存在你这台设备的浏览器里，<b>不会上传任何服务器</b>；所以换设备必须靠这个备份文件，没有「云端自动同步」。<br>
+        · <b>全量加密导出</b>：一个文件带走<b>服务端 + 本机</b>的全部数据 —— 服务端的班级、学生、
+        考勤、作业、成绩、导学单、教师账号与学生登录密码，加上本机浏览器里的界面设置与待办。
+        导出时设置一个<b>备份密码</b>，整包 AES 加密（密钥由密码派生，明文不出教师机）。<br>
+        · <b>换机一键恢复</b>：在新机器上装好工作台、登录后点「从备份一键恢复」，输入备份密码——
+        服务端数据整库替换、教师账号 / 学生密码 / 模块开关原样回来，本机设置一并还原，
+        导完刷新即用，不用重新建班、不用重发学生密码（端口等本机属性不搬运）。<br>
+        · 备份文件带条目数与校验和，不完整 / 被改过会直接中止，原数据不动。旧版纯本机备份
+        （.json / 旧 .cwbackup）仍可从这里导入。<br>
+        · 数据只存在教师机本地，<b>不上传任何服务器</b>；换设备必须靠这个备份文件。<br>
         · 清空本机数据不可撤销，建议先导出留底。
       </div>
     </div>
@@ -27659,6 +27692,8 @@ const DEMO_RENDER = {
   },
 
   // ---- 外部工具 ----
+  guide() { return renderGuidePage(); },
+
   tools() {
     const arr = toolArr().slice().sort((a, b) => (a.sort || 0) - (b.sort || 0));
     const links = arr.filter(t => t.type !== 'qr');
@@ -27674,8 +27709,6 @@ const DEMO_RENDER = {
         act: 'openTimer()' },
       { key: 'pomo', icon: '🍅', name: '番茄工作法', desc: '专注 25 + 休息 5，今日完成几个番茄一眼可见',
         act: 'openPomodoro()', extra: `今日 ${pomoTodayCount()} 个` },
-      { key: 'backup', icon: '💾', name: '数据备份与迁移', desc: '导出 / 恢复共用系统设置里的同一套实现，换电脑前先导出一份',
-        act: 'openBackupPanel()' },
     ];
     const card = t => `
       <div class="tl-card${t.type === 'qr' ? ' qr' : ''}">
@@ -27701,8 +27734,7 @@ const DEMO_RENDER = {
     <div class="notice">
       <strong>课堂三件套</strong> · 随机点名、计时器、番茄钟都在本地运行，不联网也能用。
       下面的<b>我的工具</b>可以放常用网站和二维码（比如作业提交链接），点「＋ 添加工具」就行。<br>
-      <b>数据备份</b>在「💾 数据备份与迁移」卡片里，点开就是「导出备份 / 从备份恢复」——
-      和顶栏 ⚙ 系统设置 → 数据与备份是<b>同一个面板、同一套实现</b>，在哪边点都一样。
+      <b>数据备份与迁移</b>已统一收进 ⚙ 系统设置 → 数据与备份（全量加密导出 / 一键恢复）。
     </div>
 
     <div class="tl-sec">
@@ -28577,10 +28609,10 @@ function renderLock(setup) {
       <button class="btn btn-primary" id="lockBtn" style="width:100%;margin-top:4px">${setup ? '设置并进入' : '解锁'}</button>
       ${setup ? `
       <button class="btn" id="lockDemo" type="button" style="width:100%;margin-top:8px">
-        先看看示例（不设密码）</button>
+        先逛逛界面（不设密码）</button>
       <div style="margin-top:8px;font-size:12px;line-height:1.6;color:var(--text-secondary);text-align:center">
-        打开一份演示班级，随便点、随便试，<b>不会保存任何内容</b>；<br>
-        看完点右上「退出预览」就能回来设密码。
+        打开空的工作台预览，随便点、随便试，<b>不会保存任何内容</b>；<br>
+        看完点右上「退出预览」就能回来设密码、录入自己的班级。
       </div>` : ''}
       ${setup ? '' : `<div style="margin-top:12px;font-size:12px;text-align:center">${hint ? `提示：${esc(hint)}<br>` : ''}<a href="javascript:void 0" id="lockForget" style="color:var(--text-secondary);text-decoration:underline">${hasQA ? '忘记密码？通过密保问题重置' : '忘记密码？'}</a></div>`}
       <div class="login-foot">${setup ? '密码只存在这台电脑上；忘记密码可答密保问题重设，或清空本机数据。' : '本地密码锁 · 数据不离开本机'}</div>
@@ -30923,7 +30955,7 @@ async function cwArchiveDataCsv(course, activity, rows) {
   const body = rows.map((s, i) => [
     i + 1, qfRosterNo(s), qfRosterName(s), qfRosterTs(s),
     s['作品标题'] || s.title || '', s['作品简介'] || s.desc || '',
-    qfAttachments(s).length, qfAttachments(s).map(a => qfApiBase() + a).join(' | ')
+    qfAttachments(s).length, qfAttachments(s).map(a => qfAttUrl(a)).join(' | ')
   ].map(cell).join(','));
   const csv = '\ufeff' + [head.map(cell).join(',')].concat(body).join('\r\n');
   try {
