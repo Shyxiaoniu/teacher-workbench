@@ -18,3 +18,7 @@ Thumbs.db
 
 # 本地环境变量（端口等），不应入库
 .env
+
+# 工作台数据快照（含学生真实姓名 / 学号，禁止入库；公开仓库尤其不能有）
+workbench.json
+workbench-*.json
