@@ -7711,8 +7711,31 @@ function deriveDataKey(pwd, saltStr) {
   const sB = new TextEncoder().encode(saltStr || '');
   DATA_KEY = JS_CIPHER.pbkdf2(pwB, sB, ENC_ITERS, 32);
   DATA_KEY_SET = true;
+  saveKeyToSession();          // 会话内记住解锁状态：刷新/跳转不再重复输锁
 }
-function clearDataKey() { DATA_KEY = null; DATA_KEY_SET = false; }
+/* ---- 会话级解锁记忆 ----
+   解锁后的数据密钥放进 sessionStorage：只在当前标签页有效，关闭标签/浏览器即清除，
+   不落盘、不跨标签。效果：上课中途刷新页面不用再输一遍锁；换标签页或重开浏览器仍要解锁。 */
+const LOCK_SESS_KEY = 'wb-lock-dk';
+function saveKeyToSession() {
+  try {
+    if (DATA_KEY) sessionStorage.setItem(LOCK_SESS_KEY, JS_CIPHER.bytesToB64(DATA_KEY));
+  } catch (e) {}
+}
+function restoreKeyFromSession() {
+  try {
+    const b = sessionStorage.getItem(LOCK_SESS_KEY);
+    if (!b) return false;
+    const k = JS_CIPHER.b64ToBytes(b);
+    if (!k || k.length !== 32) { clearKeyFromSession(); return false; }
+    DATA_KEY = k; DATA_KEY_SET = true;
+    return true;
+  } catch (e) { return false; }
+}
+function clearKeyFromSession() {
+  try { sessionStorage.removeItem(LOCK_SESS_KEY); } catch (e) {}
+}
+function clearDataKey() { DATA_KEY = null; DATA_KEY_SET = false; clearKeyFromSession(); }
 function _rand16() {
   if (window.crypto && crypto.getRandomValues) return crypto.getRandomValues(new Uint8Array(16));
   const iv = new Uint8Array(16); for (let i = 0; i < 16; i++) iv[i] = (i * 37 + 101) & 0xff; return iv;
@@ -9438,6 +9461,7 @@ window.exitDemo = exitDemo;
 async function goToApp(returnTo) {
   // 鉴权门：进应用前必须确认有会话
   if (!await authGate()) return;
+  state.__booting = true;        // 启动期间 renderPage 只记路由不渲染（防解锁后空白一闪）
 
   // 首次登录写入种子配置
   // 种子和配置加载都不能阻断进应用：失败就降级，不让用户卡在加载中
@@ -9589,6 +9613,7 @@ async function goToApp(returnTo) {
   $('#classSel').onchange = e => {
     seatCfgSave();                 // 旧班的排座配置先存住
     state.currentClass = e.target.value;
+    state.stuPage = 1;             // 换班后学生页回到第 1 页
     try { LS.set('wb-current-class', String(state.currentClass)); } catch (_) {}
     seatCfgLoad();                 // 换到新班 → 读这个班自己的配置
     gsSyncPlaceholder();           // 搜索框提示语跟着变（本班 / 全部班级）
@@ -9628,12 +9653,19 @@ async function goToApp(returnTo) {
 
   // 数据加载失败也要把界面画出来，不能停在空内容区。
   // try/catch 保证 renderPage 一定会执行。
+  /* 数据装载期间主区先给个占位提示（1100 行解密要几秒，别让老师以为白屏了） */
+  const _main = document.querySelector('.main');
+  if (_main && !_main.innerHTML.trim()) {
+    _main.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;'
+      + 'height:55vh;color:var(--text-secondary);font-size:14px">正在解锁并加载数据…</div>';
+  }
   try {
     await loadClasses();
   } catch (e) {
     console.error('[app] loadClasses failed',
       JSON.stringify({ message: e instanceof Error ? e.message : 'unknown' }));
   }
+  state.__booting = false;
   renderPage();
   quoteInit();   // 好句：按来源/频率拉取并挂定时器
 
@@ -9980,6 +10012,7 @@ function gsSearch(k) {
 function gsShow(raw) {
   const k = (raw || '').trim().toLowerCase();
   state.keyword = k;
+  state.stuPage = 1;   // 搜索条件变了回到学生页第 1 页
   renderContent();   // 首页 / 学生页的关键词过滤继续生效
   const drop = document.getElementById('gsDrop');
   if (!drop) return;
@@ -10081,6 +10114,10 @@ function renderPage() {
     const ico = el.querySelector('.side-ico');
     if (ico) ico.style.background = on ? (el.dataset.iact || '#0F6E56') : (el.dataset.ibg || '#F0EFE9');
   });
+  /* 启动中（解锁后 loadClasses 还没回来）：只记下目标页，不渲染——
+     这时数据还没装载，抢跑渲染会得到一闪而过的空白页（2026-10-31 实测复现）。
+     goToApp 结尾会统一 renderPage() 补上。 */
+  if (state.__booting) return;
   renderContent({ animate: true });
 }
 
@@ -10248,8 +10285,9 @@ function renderHome() {
     ${renderClassPanel(list, isFiltered)}
 
     <div class="home-stats">
-      <div class="home-kpi"><span class="home-kpi-label">班级</span><span class="home-kpi-value">${list.length}</span></div>
-      <div class="home-kpi"><span class="home-kpi-label">学生</span><span class="home-kpi-value">${totalStudents}</span></div>
+      ${/* 口径标注：顶栏筛选了某个班时，数字是「这个班」的，不再叫「班级/学生」全量 */''}
+      <div class="home-kpi"><span class="home-kpi-label">${state.currentClass !== 'all' ? '当前班' : '班级'}</span><span class="home-kpi-value">${list.length}</span></div>
+      <div class="home-kpi"><span class="home-kpi-label">${state.currentClass !== 'all' ? '本班学生' : '学生'}</span><span class="home-kpi-value">${totalStudents}</span></div>
       <div class="home-kpi"><span class="home-kpi-label">本周德育加分</span><span class="home-kpi-value up">+${wkBonus}</span></div>
       <div class="home-kpi"><span class="home-kpi-label">本周德育扣分</span><span class="home-kpi-value${wkPenalty?' alert':''}">-${wkPenalty}</span></div>
     </div>
@@ -13692,6 +13730,17 @@ function setStuView(v) {
 }
 window.setStuView = setStuView;
 
+/** 学生页翻页：切班级/分组筛选时也回到第 1 页 */
+function stuGoPage(n) {
+  n = Number(n);
+  if (!Number.isFinite(n)) return;
+  state.stuPage = n;
+  renderContent();
+  const el = document.querySelector('.stu-list, .stu-tb-wrap');
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+window.stuGoPage = stuGoPage;
+
 /** 班级人数跟着学生表重算（列表和下拉都显示它对不对得上） */
 function syncClassCount() {
   const stus = dbT('students') || [];
@@ -14446,7 +14495,7 @@ function qfBuildCustomPage(html, opts) {
 
   const R = [];
   R.push('// ===== 注入运行时：登录 + 每题提交 + 外链跳转 + 提交到活动数据服务 =====');
-  R.push('var QF_API=new URLSearchParams(location.search).get("api")||"http://127.0.0.1:5055/api/class-activity";');
+  R.push('var QF_API=new URLSearchParams(location.search).get("api")||"";');   // 提交地址由链接携带；缺了就在提交时明确报错，不猜一个写死的地址
   R.push('var QF_CLASS=new URLSearchParams(location.search).get("class")||"";');
   R.push('var QF_TASK=new URLSearchParams(location.search).get("task")||"";');
   R.push('var QF_ROSTER=null,QF_MAP={},QF_USER=null;');
@@ -14455,7 +14504,7 @@ function qfBuildCustomPage(html, opts) {
   R.push('function qfShowLogin(){var no=(document.getElementById("qfSid")||{}).value;var h=document.getElementById("qfLoginHint");if(!no){if(h)h.textContent="";return}if(!QF_ROSTER){if(h)h.textContent="（未取到花名册，将以你填写的为准）";return}var nm=QF_MAP[no.trim()];if(nm){if(h){h.style.color="#1D9E75";h.textContent="匹配到："+nm}}else{if(h){h.style.color="#E24B4A";h.textContent="学号不在本班名单"}}}');
   R.push('function qfDoLogin(){var no=(document.getElementById("qfSid")||{}).value;no=(no||"").trim();if(!no){var h=document.getElementById("qfLoginHint");if(h){h.style.color="#E24B4A";h.textContent="请填写学号"}return}var nm="",cls="";if(QF_ROSTER){nm=QF_MAP[no]||"";cls=QF_ROSTER.c||"";if(!nm){var m=document.getElementById("qfLoginMsg");if(m)m.textContent="该学号不在本班名单，请核对。";var h=document.getElementById("qfLoginHint");if(h){h.style.color="#E24B4A";h.textContent="学号不在本班名单"}return}}QF_USER={sid:no,name:nm,cls:cls};var lg=document.getElementById("qfLogin");if(lg)lg.style.display="none";document.querySelectorAll("[data-qf-needlogin]").forEach(function(b){b.disabled=false})}');
   R.push('function qfGather(c){var fd=new FormData();var els=c.querySelectorAll("input[name],textarea[name],select[name],input[data-f],textarea[data-f],select[data-f]");els.forEach(function(e){var k=e.getAttribute("name")||e.getAttribute("data-f");if(!k)return;if(e.type==="file"){for(var i=0;i<e.files.length;i++)fd.append(k,e.files[i],e.files[i].name)}else if(e.type==="radio"||e.type==="checkbox"){if(e.checked)fd.append(k,e.value)}else{fd.append(k,e.value)}});return fd}');
-  R.push('function qfSubmitBlock(btn,container,label){if(!QF_USER){alert("请先登录");return}var fd=qfGather(container);fd.append("学号",QF_USER.sid);fd.append("姓名",QF_USER.name);fd.append("班级",QF_USER.cls);fd.append("按钮",label);var st=container.querySelector("[data-qf-status]");if(st){st.textContent="提交中…";st.className="qf-st"}btn.disabled=true;fetch(QF_API,{method:"POST",body:fd,mode:"cors"}).then(function(r){return r.json().catch(function(){return{}}).then(function(j){return {ok:r.ok,j:j}})}).then(function(o){var ok=o.ok||(o.j&&(o.j.ok||o.j.success));if(st){st.textContent=ok?"提交成功":"提交失败";st.className="qf-st "+(ok?"ok":"err")}btn.disabled=false}).catch(function(e){if(st){st.textContent="网络错误";st.className="qf-st err"}btn.disabled=false})}');
+  R.push('function qfSubmitBlock(btn,container,label){if(!QF_USER){alert("请先登录");return}if(!QF_API){var s0=container.querySelector("[data-qf-status]");if(s0){s0.textContent="链接缺少提交地址（api 参数），请用老师下发的完整链接打开";s0.className="qf-st err"}return}var fd=qfGather(container);fd.append("学号",QF_USER.sid);fd.append("姓名",QF_USER.name);fd.append("班级",QF_USER.cls);fd.append("按钮",label);var st=container.querySelector("[data-qf-status]");if(st){st.textContent="提交中…";st.className="qf-st"}btn.disabled=true;fetch(QF_API,{method:"POST",body:fd,mode:"cors"}).then(function(r){return r.json().catch(function(){return{}}).then(function(j){return {ok:r.ok,j:j}})}).then(function(o){var ok=o.ok||(o.j&&(o.j.ok||o.j.success));if(st){st.textContent=ok?"提交成功":"提交失败";st.className="qf-st "+(ok?"ok":"err")}btn.disabled=false}).catch(function(e){if(st){st.textContent="网络错误：连不上提交服务，请确认与老师在同一局域网";st.className="qf-st err"}btn.disabled=false})}');
   R.push('function qfInitCustom(){');
   R.push('qfRoster().then(function(){');
   R.push('var need=document.querySelectorAll("[data-qf-needlogin]");need.forEach(function(b){b.disabled=true});');
@@ -15200,6 +15249,7 @@ function emptyArt() {
 /** 点击小组卡片：只看该组成员 */
 function pickGroup(id) {
   state.activeGroup = (state.activeGroup === id) ? null : Number(id);
+  state.stuPage = 1;             // 分组筛选变了学生页回到第 1 页
   renderContent();
 }
 window.pickGroup = pickGroup;
@@ -23111,15 +23161,23 @@ function clsPasteApply() {
     if (!nm || /^\d+$/.test(nm)) { skipped++; return; }
     const rest = cells.slice(no ? 2 : 1);
     const sex = rest.find(x => SEX.test(x)) || '';
-    const phone = rest.find(x => /^1\d{10}$/.test(x)) || '';
+    /* 电话：任意 6~15 位数字（含 000 测试号段、固话），不再只认 1 开头的 11 位。
+       以前 000 号段/座机会被静默丢弃，与文件导入行为不一致。 */
+    const phone = (rest.find(x => /^\+?\d[\d-]{5,17}$/.test(x) && /\d/.test(x)) || '')
+      .replace(/-/g, '');
+    /* 家长姓名：剩下的第一个「非性别、非电话、长度 ≥2 的中文/字母词」。
+       以前家长列整个被忽略，老师粘完名单家长栏全是"未填写"。 */
+    const parent = (rest.filter(x => x !== sex && x !== phone && !SEX.test(x)
+                                   && !/^\+?\d[\d-]*$/.test(x))
+                      .find(x => x.length >= 2)) || '';
     if (no && seen.has(no)) { skipped++; return; }
     /* 空学号的行：按双键判重（姓名+家长姓名），避免同名的两个同学被合并 */
-    const mkey = clsMatchKey(no, nm, '');
+    const mkey = clsMatchKey(no, nm, parent);
     if (!no && seenKey.has(mkey)) { skipped++; return; }
     if (no) seen.add(no);
     seenKey.add(mkey);
     d.parsed.push({ no, nm, newNo: no, newNm: nm, dup: false,
-                    hit: no ? byNo.get(no) : (byKey.get(mkey) || null), sex, parent: '', phone });
+                    hit: no ? byNo.get(no) : (byKey.get(mkey) || null), sex, parent, phone });
     added++;
   });
   if (!added) { toast('没解析出姓名，检查每行是不是「学号 姓名」格式'); return; }
@@ -27289,6 +27347,14 @@ const DEMO_RENDER = {
       const g = grpOf(s.id); return g && g.id === state.activeGroup;
     });
 
+    /* 分页：1100 人的学校一页全渲会卡（实测 1100 卡片渲染 629ms、HTML 1.18MB），
+       每页 60 人 + 页码条。搜索/筛选变了回到第 1 页。 */
+    const STU_PAGE_SIZE = 60;
+    const totalPages = Math.max(1, Math.ceil(list.length / STU_PAGE_SIZE));
+    const page = Math.min(Math.max(1, state.stuPage || 1), totalPages);
+    state.stuPage = page;
+    const pageList = list.slice((page - 1) * STU_PAGE_SIZE, page * STU_PAGE_SIZE);
+
     if (list.length === 0) {
       const hasCls = (dbT('classes') || []).length > 0;
       return `
@@ -27330,7 +27396,8 @@ const DEMO_RENDER = {
         ${showAll ? '隐藏号码' : '显示全部号码'}</button>
       <button class="btn" style="width:auto;padding:7px 14px;font-size:12px"
         onclick="copyAllParents()">复制家长联系表</button>
-      <span class="stu-count">共 ${list.length} 名学生</span>
+      <span class="stu-count">共 ${list.length} 名学生${
+        totalPages > 1 ? ` · 第 ${page}/${totalPages} 页` : ''}</span>
       <div class="exp-wrap">
         <button class="btn btn-primary" style="width:auto;padding:7px 14px;font-size:12px"
           onclick="document.getElementById('expMenu').classList.toggle('open')">
@@ -27359,10 +27426,10 @@ const DEMO_RENDER = {
 
     ${groupFilterBar()}
 
-    ${view === 'list' ? `<div class="stu-tb-wrap">${stuTableHTML(list, showAll, grpOf)}</div>` : ''}
+    ${view === 'list' ? `<div class="stu-tb-wrap">${stuTableHTML(pageList, showAll, grpOf)}</div>` : ''}
 
     <div class="stu-list"${view === 'list' ? ' style="display:none"' : ''}>
-      ${list.map(s => {
+      ${pageList.map(s => {
         const c = dbT('classes').find(x => x.id === s.class_id);
         const role = s.parent_committee_role && s.parent_committee_role !== 'pc_none'
           ? labelOf('parent_committee_role', s.parent_committee_role) : '';
@@ -27413,7 +27480,21 @@ const DEMO_RENDER = {
           </div>
         </div>`;
       }).join('')}
-    </div>`;
+    </div>
+
+    ${totalPages > 1 ? `
+    <div class="stu-pager" style="display:flex;gap:8px;align-items:center;justify-content:center;
+      padding:14px 0 4px;flex-wrap:wrap">
+      <button class="btn" style="width:auto;padding:6px 12px;font-size:12px"
+        onclick="stuGoPage(${page - 1})" ${page <= 1 ? 'disabled' : ''}>‹ 上一页</button>
+      <span style="font-size:12px;color:var(--text-dim)">第 ${page} / ${totalPages} 页 · 每页 ${STU_PAGE_SIZE} 人</span>
+      <button class="btn" style="width:auto;padding:6px 12px;font-size:12px"
+        onclick="stuGoPage(${page + 1})" ${page >= totalPages ? 'disabled' : ''}>下一页 ›</button>
+      <input type="number" min="1" max="${totalPages}" value="${page}"
+        style="width:64px;padding:5px 8px;font-size:12px;border:1px solid var(--border);
+               border-radius:8px" id="stuPageInput" title="输入页码回车跳转"
+        onkeydown="if(event.key==='Enter')stuGoPage(Number(this.value))">
+    </div>` : ''}`;
   },
 
   // ---- 个人待办 ----
@@ -28272,7 +28353,7 @@ window.acctQaAnswer = acctQaAnswer;
 function acctPwdByQaStep2(ticket) {
   showFloat('修改密码 · 第 2 步：设置新密码', `
     <div style="width:340px;max-width:84vw">
-      <div class="note" style="margin:0 0 10px">✓ 密保验证通过。设一个新密码（至少 4 位）。</div>
+      <div class="note" style="margin:0 0 10px">✓ 密保验证通过。设一个新密码（至少 8 位）。</div>
       <div class="field" style="margin-bottom:10px"><label>新密码</label>
         <input type="password" id="acn1" class="fl-inp" autocomplete="new-password" placeholder="新密码"></div>
       <div class="field" style="margin-bottom:4px"><label>再输一遍</label>
@@ -28291,7 +28372,7 @@ async function acctQaReset(ticket) {
   const p1 = (($('#acn1') || {}).value || '');
   const p2 = (($('#acn2') || {}).value || '');
   const err = $('#acnErr');
-  if (p1.length < 4) { if (err) err.textContent = '新密码至少 4 位'; return; }
+  if (p1.length < 8) { if (err) err.textContent = '新密码至少 8 位'; return; }
   if (p1 !== p2) { if (err) err.textContent = '两次输入不一致'; return; }
   let j = {};
   try {
@@ -28318,7 +28399,7 @@ function acctPwdByOldUI() {
     <div style="width:330px;max-width:84vw">
       <div class="field" style="margin-bottom:10px"><label>当前密码</label>
         <input type="password" id="aco0" class="fl-inp" autocomplete="current-password" placeholder="现在用的密码"></div>
-      <div class="field" style="margin-bottom:10px"><label>新密码（至少 4 位）</label>
+      <div class="field" style="margin-bottom:10px"><label>新密码（至少 8 位）</label>
         <input type="password" id="aco1" class="fl-inp" autocomplete="new-password" placeholder="新密码"></div>
       <div class="field" style="margin-bottom:4px"><label>再输一遍</label>
         <input type="password" id="aco2" class="fl-inp" autocomplete="new-password" placeholder="重复新密码"></div>
@@ -28339,7 +28420,7 @@ async function acctPwdByOldDo() {
   const p2 = (($('#aco2') || {}).value || '');
   const err = $('#acoErr');
   if (!oldP) { if (err) err.textContent = '请输入当前密码'; return; }
-  if (p1.length < 4) { if (err) err.textContent = '新密码至少 4 位'; return; }
+  if (p1.length < 8) { if (err) err.textContent = '新密码至少 8 位'; return; }
   if (p1 !== p2) { if (err) err.textContent = '两次输入不一致'; return; }
   let j = {};
   try {
@@ -28482,7 +28563,7 @@ function renderLock(setup) {
       <div class="login-sub">${setup
         ? '设置一个本地密码：以后打开本工具都要输它才能浏览。仅本机、不联网、不保存明文。'
         : '请输入本地密码解锁（数据只存在本机浏览器）'}</div>
-      ${setup ? `<input id="lockPwd1" class="fl-inp" type="password" placeholder="设置密码（至少 4 位）" style="margin-bottom:10px">` : ''}
+      ${setup ? `<input id="lockPwd1" class="fl-inp" type="password" placeholder="设置密码（至少 8 位）" style="margin-bottom:10px">` : ''}
       <input id="lockPwd" class="fl-inp" type="password" placeholder="${setup ? '再输一遍密码' : '本地密码'}">
       ${setup ? `
       <div style="display:flex;gap:8px;align-items:center;margin-top:14px;font-size:12px;color:var(--text-secondary)">
@@ -28509,7 +28590,7 @@ function renderLock(setup) {
     if (setup) {
       const p1 = document.getElementById('lockPwd1').value;
       const p2 = document.getElementById('lockPwd').value;
-      if (p1.length < 4) { err.textContent = '密码至少 4 位'; return; }
+      if (p1.length < 8) { err.textContent = '密码至少 8 位'; return; }
       if (p1 !== p2) { err.textContent = '两次输入不一致'; return; }
       const q = (document.getElementById('lockQ').value || '').trim();
       const a = (document.getElementById('lockA').value || '').trim();
@@ -28548,7 +28629,7 @@ function lockChangeUI() {
       <div class="field" style="margin-bottom:10px"><label>当前密码</label>
         <input type="password" id="lcOld" class="fl-inp" placeholder="当前密码"></div>
       <div class="field" style="margin-bottom:10px"><label>新密码</label>
-        <input type="password" id="lcNew1" class="fl-inp" placeholder="至少 4 位"></div>
+        <input type="password" id="lcNew1" class="fl-inp" placeholder="至少 8 位"></div>
       <div class="field" style="margin-bottom:4px"><label>再输一遍</label>
         <input type="password" id="lcNew2" class="fl-inp" placeholder="重复新密码"></div>
       <div id="lcErr" style="color:#E5484D;font-size:13px;min-height:16px;margin-top:6px"></div>
@@ -28564,7 +28645,7 @@ async function lockChangeDo() {
   const n1 = document.getElementById('lcNew1').value;
   const n2 = document.getElementById('lcNew2').value;
   if (!await lockCheck(oldP)) { err.textContent = '当前密码不对'; return; }
-  if (n1.length < 4) { err.textContent = '新密码至少 4 位'; return; }
+  if (n1.length < 8) { err.textContent = '新密码至少 8 位'; return; }
   if (n1 !== n2) { err.textContent = '两次输入不一致'; return; }
   await lockSet(n1, LS.get(LOCK_HINT, ''));
   deriveDataKey(n1, lockSalt());   // 用新密码重派密钥
@@ -28622,7 +28703,7 @@ function renderRecoverSet() {
     <div class="login-wrap">${brandBadge()}<div class="login-card" style="max-width:400px">
       <div class="login-title">重设本地密码</div>
       <div class="login-sub">密保验证通过，设置一个新本地密码。</div>
-      <input id="rsPwd1" class="fl-inp" type="password" placeholder="设置新密码（至少 4 位）" style="margin-bottom:10px">
+      <input id="rsPwd1" class="fl-inp" type="password" placeholder="设置新密码（至少 8 位）" style="margin-bottom:10px">
       <input id="rsPwd" class="fl-inp" type="password" placeholder="再输一遍新密码">
       <div id="rsErr" style="color:#E5484D;min-height:18px;font-size:13px;margin-top:8px"></div>
       <button class="btn btn-primary" id="rsBtn" style="width:100%;margin-top:4px">保存并进入</button>
@@ -28632,7 +28713,7 @@ function renderRecoverSet() {
     const err = document.getElementById('rsErr');
     const p1 = document.getElementById('rsPwd1').value;
     const p2 = document.getElementById('rsPwd').value;
-    if (p1.length < 4) { err.textContent = '密码至少 4 位'; return; }
+    if (p1.length < 8) { err.textContent = '密码至少 8 位'; return; }
     if (p1 !== p2) { err.textContent = '两次输入不一致'; return; }
     lockSet(p1, LS.get(LOCK_HINT, '')).then(() => { deriveDataKey(p1, lockSalt()); goToApp(); });
   };
@@ -28697,7 +28778,11 @@ async function boot() {
   applyGreetFont();
   DEMO.on = false;
   // 纯本地：先过密码锁，再进应用（避免任何人都能直接浏览数据）
-  if (lockActive()) { renderLock(false); return; }
+  if (lockActive()) {
+    // 同一标签页内刚解锁过（sessionStorage 里还有密钥）→ 直接进应用，不再要密码
+    if (restoreKeyFromSession()) { goToApp(); return; }
+    renderLock(false); return;
+  }
   renderLock(true);   // 首次运行：引导设置本地密码
 }
 

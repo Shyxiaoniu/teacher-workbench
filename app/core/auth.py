@@ -24,7 +24,7 @@ DEFAULT_CONFIG = {
     # 学生端定位为「课堂使用」：不开放请假入口（病假/事假由教师在教师端登记），
     # 学习资料默认开放，方便课堂下发。
     "modules": {"homework": True, "scores": True, "courseware": True,
-                "morality": False, "duty": True, "leave": False},
+                "morality": False, "duty": True},
     "visibility": {"rank": False, "morality_reason": False, "contact": False,
                    "leave_reason": False},
     "sync": {"poll_seconds": 5, "tombstone_days": 90, "page_size": 800},
@@ -52,14 +52,13 @@ def load_config(path):
     except Exception:
         pass
     # 一次性迁移（2026-10-31）：学生端重定位为「课堂使用」——
-    # 学习资料默认开放（新功能，旧配置里的 False 只是旧默认值，不是老师主动关的）；
-    # 请假默认关闭（病假 / 事假改由教师在教师端登记）。
+    # 学习资料默认开放（新功能，旧配置里的 False 只是旧默认值，不是老师主动关的）。
     if not cfg.get("_flags_migrated_v2"):
-        m = cfg.setdefault("modules", {})
-        m["courseware"] = True
-        m["leave"] = False
+        cfg.setdefault("modules", {})["courseware"] = True
         cfg["_flags_migrated_v2"] = True
         save_config(path, cfg)
+    # 学生自助请假已移除（2026-10-31）：旧配置里的遗留开关一并清掉
+    cfg.get("modules", {}).pop("leave", None)
     if not cfg.get("class_code"):
         cfg["class_code"] = new_class_code()
         save_config(path, cfg)

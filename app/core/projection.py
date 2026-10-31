@@ -44,7 +44,8 @@ MODULE_TABLES = {
 }
 
 # 各模块对应的写接口（关掉模块 → 写也会被拒）
-MODULE_SCOPES = ("homework", "scores", "courseware", "morality", "duty", "leave")
+MODULE_SCOPES = ("homework", "scores", "courseware", "morality", "duty")
+# 「leave」已随学生自助请假接口一并移除（2026-10-31）：请假由教师在考勤页登记。
 
 
 def _i(v, d=0):

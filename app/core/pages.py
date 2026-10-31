@@ -59,7 +59,8 @@ td{padding:9px 10px;border-bottom:1px solid rgba(15,110,86,.08);color:#55655F}
 .note{background:#F4FAF7;border-left:3px solid #1D9E75;border-radius:0 10px 10px 0;padding:10px 14px;
   font-size:13px;color:#4A6A60;margin:14px 0}
 code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.6px;background:#F0F5F3;
-  padding:1px 5px;border-radius:5px}
+  padding:1px 5px;border-radius:5px;font-variant-ligatures:none}
+/* 禁用连字：部分等宽字体把 -- 连成 — ，命令行参数会被新手照抄错 */
 @media(max-width:760px){.grid{grid-template-columns:1fr}}
 """
 

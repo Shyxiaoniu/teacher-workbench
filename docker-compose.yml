@@ -18,7 +18,7 @@
 #
 # 推到阿里云 ACR（镜像名已参数化，无需改本文件）：
 #   IMAGE_REPO=registry.cn-hangzhou.aliyuncs.com/<命名空间>/teacher-workbench \
-#   IMAGE_TAG=2.0.2 docker compose build
+#   IMAGE_TAG=2.0.3 docker compose build
 #   docker compose push
 # ============================================================
 name: teacher-workbench
@@ -34,7 +34,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ${IMAGE_REPO:-teacher-workbench}:${IMAGE_TAG:-2.0.2}
+    image: ${IMAGE_REPO:-teacher-workbench}:${IMAGE_TAG:-2.0.3}
     container_name: teacher-workbench-init
     # root 才有权限改卷属主；只做这一件事，跑完立刻退出
     user: "0:0"
@@ -70,7 +70,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ${IMAGE_REPO:-teacher-workbench}:${IMAGE_TAG:-2.0.2}
+    image: ${IMAGE_REPO:-teacher-workbench}:${IMAGE_TAG:-2.0.3}
     container_name: teacher-workbench
     # 启动顺序：init 成功退出之后才启动本服务
     depends_on:

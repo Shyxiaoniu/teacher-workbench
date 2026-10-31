@@ -65,7 +65,9 @@
 <script>
 // 从活动页生成的链接读取参数：api=活动提交地址, title=活动标题, desc=说明, class=班级名
 const params = new URLSearchParams(location.search);
-let API = params.get('api') || 'http://127.0.0.1:5055/api/class-activity';
+// 提交地址必须由老师下发的链接携带（?api=…）。没有就不再猜一个写死的地址——
+// 以前兜底写死本机端口，直开页面点提交只会得到一句英文 Failed to fetch。
+const API = params.get('api') || '';
 const ACT_TITLE = params.get('title') || '文件提交';
 const ACT_DESC  = params.get('desc') || '请上传你的作品文件。同一学号重复提交将覆盖为最新版本。';
 const CLASS_PARAM = params.get('class') || '';   // 班级名（仅此短参数，花名册由服务端按班级下发）
@@ -143,7 +145,15 @@ function load(){
   document.getElementById('title').textContent = ACT_TITLE;
   document.title = ACT_TITLE + ' · 文件提交';
   document.getElementById('subTitle').textContent = ACT_DESC;
-  document.getElementById('apiInfo').textContent = '提交至：' + API;
+  document.getElementById('apiInfo').textContent = API
+    ? ('提交至：' + API)
+    : '链接不完整：缺少提交地址（api 参数）';
+  if (!API) {
+    const b = document.getElementById('btn');
+    b.disabled = true;
+    b.title = '请使用老师下发的完整链接打开本页';
+    setMsg('✗ 打开方式不对：请使用老师下发的完整链接（含 api 参数）打开本页，不要直接输入网址。', 'err');
+  }
 }
 
 async function submitFile(){
@@ -172,7 +182,10 @@ async function submitFile(){
     const j = await r.json().catch(()=>({}));
     if (r.ok) setMsg('✓ 提交成功，'+ (finalName?('「'+finalName+'」'):'') +'已存入活动「' + ACT_TITLE + '」','ok');
     else setMsg('✗ ' + (j.error || j.message || ('提交失败（'+r.status+'）')),'err');
-  }catch(e){ setMsg('✗ '+e.message,'err'); }
+  }catch(e){
+    /* 网络层失败统一说人话，不再直接展示英文 TypeError 原文 */
+    setMsg('✗ 提交失败：连不上提交服务。请确认网络与老师是否在同一个局域网，或把本页链接发给老师检查。','err');
+  }
   finally{ $('btn').disabled = false; }
 }
 

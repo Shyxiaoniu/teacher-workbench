@@ -59,7 +59,7 @@ CFG = A.load_config(CONFIG_PATH)
 SESS = A.Sessions()
 COND = threading.Condition()
 STARTED = time.time()
-VERSION = "2.0.2"
+VERSION = "2.0.3"
 ONLINE_WINDOW = 300      # 5 分钟内活跃算在线
 
 # SSE 长连接上限（每个连接一个线程）
@@ -1054,8 +1054,9 @@ class Handler(LEG.Handler):
             return self._student_submission(body)
         if path == "/api/v2/student/checkin":
             return self._student_checkin(body)
-        if path == "/api/v2/student/leave":
-            return self._student_leave(body)
+        # 学生自助请假接口已移除（2026-10-31）：学生端定位「课堂使用」，
+        # 病假/事假由教师在考勤页登记。以前留着这个接口但哪儿都没有入口，
+        # 二次开发时极易误以为"差个界面就能用"。
         if path == "/api/v2/student/password":
             s0 = self._session()
             if not s0 or s0["role"] != "student":
@@ -1241,6 +1242,31 @@ class Handler(LEG.Handler):
                 and mins(r.get("start_time")) <= cur]
         return past[-1] if past else rows[0]
 
+    def _period_time_ok(self, r):
+        """签到时间窗校验：允许「开始前 15 分钟」到「结束后 30 分钟」（课间补签）。
+
+        返回 (ok, msg)。作息表里没填时间的节次不拦（老师没排作息就不约束）。
+        以前不校验时间：周六晚上也能把当天所有节挨个签到一遍。
+        """
+        if not r:
+            return True, ""
+        def mins(v):
+            try:
+                a = str(v or "").split(":")
+                return int(a[0]) * 60 + int(a[1] or 0)
+            except Exception:
+                return -1
+        s, e = mins(r.get("start_time")), mins(r.get("end_time"))
+        if s < 0 or e <= s:
+            return True, ""
+        cur = time.localtime().tm_hour * 60 + time.localtime().tm_min
+        label = r.get("label") or ("第 %s 节" % (r.get("seq") or r.get("id") or "?"))
+        if cur < s - 15:
+            return False, "还没到%s（%s 开始），先不用签" % (label, r.get("start_time"))
+        if cur > e + 30:
+            return False, "%s 已结束（%s 下课），如需补签请让老师在考勤页登记" % (label, r.get("end_time"))
+        return True, ""
+
     def _student_checkin(self, body):
         s = self._session()
         if not s or s["role"] != "student":
@@ -1274,8 +1300,26 @@ class Handler(LEG.Handler):
                 return self._json({"ok": False, "msg": "没有这一节课"}, 400)
             if not (1 <= period <= 20):
                 return self._json({"ok": False, "msg": "节次超出范围"}, 400)
+            # 时间窗校验：还没开始 / 已结束（含课间补签窗口）都明确拒绝
+            prow = None
+            for r in STORE.table_rows("periods"):
+                for k in ("seq", "id"):
+                    try:
+                        if int(float(r.get(k))) == period:
+                            prow = r
+                            break
+                    except Exception:
+                        pass
+                if prow:
+                    break
+            ok, msg = self._period_time_ok(prow)
+            if not ok:
+                return self._json({"ok": False, "msg": msg}, 400)
         else:
             period = (int(float(p.get("seq") or p.get("id") or 1)) if p else 1)
+            ok, msg = self._period_time_ok(p)
+            if not ok:
+                return self._json({"ok": False, "msg": msg}, 400)
         d = today_str()
         rid = "ck%s-%s-%s" % (sid, d, period)
         old = STORE.get_row("attendance", rid) or {}
@@ -1299,24 +1343,6 @@ class Handler(LEG.Handler):
                            "period_label": (p or {}).get("label") or ("第 %s 节" % period),
                            "checked_at": row["checked_at"],
                            "already": bool(first)})
-
-    def _student_leave(self, body):
-        s = self._session()
-        if not s or s["role"] != "student":
-            return self._json({"ok": False, "msg": "未登录"}, 401)
-        if not PJ.module_flags(CFG).get("leave", True):
-            return self._json({"ok": False, "msg": "老师未开放请假功能"}, 403)
-        d = str(body.get("date") or today_str())
-        reason = str(body.get("reason") or "").strip()
-        if not reason:
-            return self._json({"ok": False, "msg": "请填写请假事由"}, 400)
-        sid = s.get("student_id")
-        row = {"id": "lv%s-%s" % (sid, d), "student_id": sid, "date": d,
-               "reason": reason[:200], "status": "pending", "updated_at": now_str()}
-        STORE.upsert("leave_requests", row, "student")
-        STORE.audit("student:%s" % sid, "leave-request", d)
-        notify()
-        return self._json({"ok": True})
 
     def _teacher_toggle(self, kind, body):
         if not self._is_teacher():
