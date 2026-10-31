@@ -8,9 +8,15 @@
 - **学生端** `/s/`：一键签到、查看学习资料、完成并提交作业（只读投影 + 白名单写入）
 - **技术栈**：Python 3 标准库单进程 HTTP 服务 + SQLite（WAL）+ 原生 JS 单页应用，**零第三方依赖**
 
-**仓库**：<https://gitee.com/shyxiaoniu/teacher-workbench>（公开）
+**仓库**（GitHub 与 Gitee 双平台同步，内容一致，均为公开）：
+
+- GitHub：<https://github.com/Shyxiaoniu/teacher-workbench>
+- Gitee：<https://gitee.com/shyxiaoniu/teacher-workbench>
 
 ```bash
+# 两个地址任选其一，代码与提交历史完全一致
+git clone https://github.com/Shyxiaoniu/teacher-workbench.git
+# 或（国内网络更快）
 git clone https://gitee.com/shyxiaoniu/teacher-workbench.git
 cd teacher-workbench
 ```
