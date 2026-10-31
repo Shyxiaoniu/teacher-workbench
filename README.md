@@ -161,7 +161,35 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:20020/s/   # 200 = 学
 
 ### 1.7 推送到阿里云 ACR / 从 ACR 部署
 
-compose 里的镜像名已参数化，构建时直接打成 ACR 地址，不需要改文件：
+**已发布镜像**（阿里云 ACR 个人版，广州，`linux/amd64`）：
+
+```
+crpi-2xt9f8f2tdrrpst5.cn-guangzhou.personal.cr.aliyuncs.com/niugebox/teacher-workbench:2.0.0
+crpi-2xt9f8f2tdrrpst5.cn-guangzhou.personal.cr.aliyuncs.com/niugebox/teacher-workbench:latest
+```
+
+直接拉取运行（不需要源码）：
+
+```bash
+docker login crpi-2xt9f8f2tdrrpst5.cn-guangzhou.personal.cr.aliyuncs.com   # 账号全名 + ACR「固定密码」
+
+# 首次必须先修正命名卷属主：容器以 uid 10001 运行，新建的卷属主是 root，否则启动会报不可写
+docker run --rm -v teacher-workbench-data:/app/data --user 0:0 \
+  crpi-2xt9f8f2tdrrpst5.cn-guangzhou.personal.cr.aliyuncs.com/niugebox/teacher-workbench:2.0.0 \
+  sh -c 'mkdir -p /app/data/files /app/data/backup /app/data/submissions/enh /app/data/submissions/uploads && chown -R 10001:10001 /app/data'
+
+docker run -d --name teacher-workbench --restart unless-stopped \
+  -p 20020:20020 -v teacher-workbench-data:/app/data \
+  -e TZ=Asia/Shanghai \
+  crpi-2xt9f8f2tdrrpst5.cn-guangzhou.personal.cr.aliyuncs.com/niugebox/teacher-workbench:2.0.0
+```
+
+用 `docker compose up -d --no-build` 则不需要手动修正属主，编排里的 `init` 服务会做这件事。
+
+ARM 设备（如树莓派、部分极空间/绿联型号）需要自己 `docker buildx build --platform linux/arm64` 重新构建，
+上面这份清单只有 `amd64`。
+
+自己重新构建并推送，compose 里的镜像名已参数化，不用改文件：
 
 ```bash
 # 1) 登录（用户名一般是阿里云账号全名，密码取 ACR 控制台的「固定密码」）
