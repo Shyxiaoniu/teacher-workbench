@@ -53,8 +53,9 @@ docker compose down -v          # 连数据一起删（危险：清空所有班�
 部署后自检（确认容器真的起来了、三个入口都能访问）：
 
 ```bash
-sh docker/smoke-test.sh         # 默认 20020；换了端口就 sh docker/smoke-test.sh 18080
-# 或直接看容器健康状态：docker compose ps（STATUS 显示 healthy 即正常）
+docker compose ps                                        # STATUS 显示 healthy 即正常
+curl -s http://127.0.0.1:20020/api/v2/ping               # 返回 workbench 字样即服务就绪
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:20020/s/   # 200 = 学生端可访问
 ```
 
 改端口（不动代码、不重建镜像）：
@@ -120,7 +121,6 @@ Windows 双击 `app/启动教师端.bat`，macOS 双击 `app/启动教师端.com
     ├── student/               # 学生端页面
     ├── core/                  # store / auth / projection / pages / ports
     ├── submission-system/     # 作业提交与课件服务（旧版复用）
-    ├── tools/seed_demo.py     # 演示数据生成（可选）
     └── 使用说明.md            # 详细使用说明
 ```
 

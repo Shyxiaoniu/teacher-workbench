@@ -6109,11 +6109,14 @@ function icon(name, size = 17) {
 }
 window.icon = icon;
 
+/* 云同步配置：本仓库发布的是**纯本地版**——数据只存本机 SQLite 与浏览器本地，
+   不连接任何云端服务，因此这里不包含任何实例地址与密钥。
+   如需自行接入 cloud-sdk 云同步，请填入你自己的 endpoint 与 publishable key；
+   切记不要把私有项目的密钥提交进公开仓库。 */
 const PUBLIC_CONFIG = {
-
   endpoint: '',
   publishableKey: '',
-  oauthRelayBaseUrl: 'https://www.workbuddy.cn/v2/as/genie-baas/oauth'
+  oauthRelayBaseUrl: ''
 };
 
 /* SDK 加载失败检测。
@@ -7113,6 +7116,9 @@ async function authGate() {
    ============================================================ */
 const DEMO = { on: false };
 
+/* 演示数据：班级、姓名、学号、家长手机号、微信号全部为虚构内容。
+   手机号统一使用「000」开头的 11 位号码——该号段在中国大陆不存在，
+   不会对应任何真实用户，也不可拨打。请勿把真实名册填进这里。 */
 const DEMO_DATA = {
   classes: [
     { id: 1, name: '七(3)班', room: '教学楼 A-302', student_count: 45, color:'#0F6E56' },
@@ -7121,34 +7127,34 @@ const DEMO_DATA = {
   ],
   students: [
     { id:101,class_id:1,name:'张明轩',gender:'male',student_no:'20250301',seat_no:'013',
-     parent_name:'张建国',phone1:'00000000000',phone2:'',wechat:'zhangjg',
+     parent_name:'张建国',phone1:'00000000001',phone2:'',wechat:'zhangjg',
      parent_committee_role:'pc_head',parent_committee_note:'负责校服征订',contacted:true,note:'' },
     { id:102,class_id:1,name:'李思远',gender:'male',student_no:'20250302',seat_no:'014',
-     parent_name:'李伟',phone1:'00000000000',phone2:'00000000000',wechat:'liwei88',
+     parent_name:'李伟',phone1:'00000000002',phone2:'00000000012',wechat:'liwei88',
      parent_committee_role:'pc_pr',parent_committee_note:'',contacted:false,note:'' },
     { id:103,class_id:1,name:'王雨桐',gender:'female',student_no:'20250303',seat_no:'015',
-     parent_name:'王芳',phone1:'00000000000',phone2:'',wechat:'wangfang66',
+     parent_name:'王芳',phone1:'00000000003',phone2:'',wechat:'wangfang66',
      parent_committee_role:'pc_vice',parent_committee_note:'',contacted:true,note:'数学课代表' },
     { id:104,class_id:1,name:'陈子豪',gender:'male',student_no:'20250304',seat_no:'021',
-     parent_name:'陈明',phone1:'00000000000',phone2:'',wechat:'',
+     parent_name:'陈明',phone1:'00000000004',phone2:'',wechat:'',
      parent_committee_role:'pc_none',parent_committee_note:'',contacted:false,note:'' },
     { id:105,class_id:1,name:'刘欣怡',gender:'female',student_no:'20250305',seat_no:'022',
-     parent_name:'刘伟民',phone1:'00000000000',phone2:'',wechat:'liuwm',
+     parent_name:'刘伟民',phone1:'00000000005',phone2:'',wechat:'liuwm',
      parent_committee_role:'pc_logistics',parent_committee_note:'负责班费收缴',contacted:true,note:'' },
     { id:106,class_id:1,name:'赵梓萱',gender:'female',student_no:'20250306',seat_no:'023',
-     parent_name:'赵磊',phone1:'00000000000',phone2:'',wechat:'',
+     parent_name:'赵磊',phone1:'00000000006',phone2:'',wechat:'',
      parent_committee_role:'pc_none',parent_committee_note:'',contacted:false,note:'' },
     { id:107,class_id:2,name:'孙浩然',gender:'male',student_no:'20250401',seat_no:'011',
-     parent_name:'孙涛',phone1:'00000000000',phone2:'',wechat:'suntao',
+     parent_name:'孙涛',phone1:'00000000007',phone2:'',wechat:'suntao',
      parent_committee_role:'pc_head',parent_committee_note:'',contacted:true,note:'' },
     { id:108,class_id:2,name:'周雅雯',gender:'female',student_no:'20250402',seat_no:'012',
-     parent_name:'周涛',phone1:'00000000000',phone2:'',wechat:'',
+     parent_name:'周涛',phone1:'00000000008',phone2:'',wechat:'',
      parent_committee_role:'pc_none',parent_committee_note:'',contacted:false,note:'' },
     { id:109,class_id:3,name:'吴俊杰',gender:'male',student_no:'20250501',seat_no:'A-01',
-     parent_name:'吴刚',phone1:'00000000000',phone2:'',wechat:'wugang',
+     parent_name:'吴刚',phone1:'00000000009',phone2:'',wechat:'wugang',
      parent_committee_role:'pc_other',parent_committee_note:'科任老师联络人',contacted:false,note:'' },
     { id:110,class_id:3,name:'郑一鸣',gender:'male',student_no:'20250502',seat_no:'A-02',
-     parent_name:'郑强',phone1:'00000000000',phone2:'',wechat:'',
+     parent_name:'郑强',phone1:'00000000010',phone2:'',wechat:'',
      parent_committee_role:'pc_none',parent_committee_note:'',contacted:false,note:'' }
   ],
   seats: null,        // 见下方 buildDemoDerived()

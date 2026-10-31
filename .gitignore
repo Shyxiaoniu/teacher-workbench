@@ -1,6 +1,16 @@
 # 运行期数据：含教师密码哈希、班级 / 学生 / 家长信息、上传文件、每日快照
 app/data/
 
+# 提交系统的运行期数据：名册含真实学号与姓名、提交记录、上传的作品文件
+# （只保留目录说明文件，其余一律不入库）
+app/submission-system/data/*
+!app/submission-system/data/README.txt
+
+# 本地测试 / 演示辅助脚本：仅供开发调试，不随公开仓库分发
+# （如需使用，见仓库外本地备份 _analysis/removed-from-public/）
+app/tools/seed_demo.py
+docker/smoke-test.sh
+
 # 打包产物（单个 zip 超过 Gitee 100MB 限制，且可从源码重新构建）
 *.zip
 
