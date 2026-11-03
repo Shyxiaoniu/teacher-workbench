@@ -15344,15 +15344,14 @@ function renderPlaceholder(nav) {
 
 /* ============================================================
    活动菜单 · 活动数据服务 集成
-   功能：① 绑定活动任务表单 ② 采集学生数据/作品产物
-        ③ 数据大屏（参考官方样式 + 支持上传自定义大屏部署）
+   功能：① 绑定活动任务表单 ② 采集学生数据/作品产物 ③ 数据大屏
+   （2026-11-03：API 链接展示、学生链接展示、上传自定义大屏均已下线）
    活动接口 公开（已开启 CORS *）：
      GET  <api>/<taskId>/all      取全部提交
      POST <api>/<taskId>          提交数据（表单/JSON/文件）
    ============================================================ */
 let actActiveId = null;
-let actCustomIframeTask = null;   // 当前已构建自定义大屏 iframe 对应的活动任务（用于跨渲染保留状态）
-let actCustomIframeHash = null;   // 当前自定义大屏 HTML 的内容指纹（上传/删除后变化需重建）
+/* 2026-11-03：自定义大屏（上传 HTML 覆盖默认大屏）功能已下线，相关状态变量一并移除 */
 /* 大屏「提交名单」的搜索/排序状态（轮询重渲染时保持） */
 let actRosterKw = '';
 let actRosterSort = 'time-asc';
@@ -15409,8 +15408,6 @@ function actLanApi(apiUrl) {
 }
 function actActs() { return actLsGet('wb-act-acts', []); }
 function actSaveActs(a) { actLsSet('wb-act-acts', a); }
-function actDashHtml(id) { return actLsGet('wb-act-dash-' + id, ''); }
-function actSaveDash(id, html) { actLsSet('wb-act-dash-' + id, html); }
 
 /* （renderActivityBlock 已随 2026-11-02 上课页改版移除：页面直接渲染 renderActivity） */
 
@@ -15441,9 +15438,6 @@ function renderActivity() {
   .act-two-col{display:grid;grid-template-columns:400px 1fr;gap:14px;align-items:start}
   @media(max-width:960px){.act-two-col{grid-template-columns:1fr}}
   .act-col{min-width:0}
-  .act-link-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
-  .act-link-row>span.lab{width:84px;font-weight:600;color:var(--text-primary);flex:0 0 auto}
-  .act-link-row code{flex:1;min-width:200px;background:var(--brand-soft);color:var(--brand-primary);padding:6px 10px;border-radius:8px;word-break:break-all;font-size:12px}
   .act-roster-hint{font-size:12px;color:var(--text-secondary);margin-top:10px;line-height:1.6;padding:8px 12px;background:var(--brand-soft);border:1px solid var(--border);border-radius:9px}
   .act-roster-hint b{color:var(--brand-primary)}
   .act-sel{flex:1;min-width:220px;padding:9px 12px;border:1px solid var(--border);border-radius:9px;background:var(--bg-surface);color:var(--text-primary);font-family:inherit;font-size:14px}
@@ -15475,32 +15469,13 @@ function renderActivity() {
   /* ① 选择活动：下拉框在左、API 链接在右（需求一） */
   .act-task-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
   .act-task-row .act-sel{flex:0 1 auto;min-width:220px}
-  .act-task-row .act-api{margin-left:auto;color:var(--text-secondary);font-size:13px;text-align:right}
-  .act-task-row .act-api code{background:var(--brand-soft);color:var(--brand-primary);padding:3px 8px;border-radius:6px;font-size:12px;word-break:break-all}
-  /* ① 选择活动：提交作品 API / 数据大屏 API 双行展示 + 一键复制（官方格式） */
-  .act-api-box{margin-top:12px;display:flex;flex-direction:column;gap:8px}
-  .act-api-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--brand-soft);border:1px solid var(--border);border-radius:9px;padding:8px 10px}
-  .act-api-tag{font-size:12px;font-weight:700;color:var(--brand-primary);white-space:nowrap;flex:0 0 auto}
-  .act-api-code{flex:1;min-width:200px;background:var(--bg-surface);color:var(--text-primary);padding:5px 9px;border-radius:7px;font-size:12px;word-break:break-all;border:1px solid var(--border)}
-  .act-api-copy{flex:0 0 auto}
-  .act-api-note{font-size:12px;color:var(--text-secondary);line-height:1.5}
-  /* 自定义大屏工具栏（上传/查看/删除常驻，避免重建外壳时丢失） */
-  .act-cust-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px}
+  /* 2026-11-03：API 链接展示与自定义大屏下线，相关样式移除 */
   /* 学生提交 / 数据大屏 切换标签页（需求三） */
   .act-tabs{display:flex;gap:6px;margin:14px 0 10px;flex-wrap:wrap}
   .act-tab{padding:9px 20px;border:1px solid var(--border);background:var(--bg-surface);color:var(--text-secondary);border-radius:10px;cursor:pointer;font-size:14px;font-weight:600;transition:.15s}
   .act-tab:hover{border-color:var(--brand-primary)}
   .act-tab.active{color:var(--brand-primary);background:var(--brand-soft);border-color:var(--brand-primary)}
   .act-pane{display:block}
-
-  /* 技术信息折叠块：接口地址默认收起，老师不用看 */
-  .act-tech{margin-top:10px;border-top:1px dashed var(--border);padding-top:8px}
-  .act-tech>summary{cursor:pointer;font-size:12px;color:var(--text-secondary);list-style:none}
-  .act-tech>summary::-webkit-details-marker{display:none}
-  .act-tech>summary::before{content:'▸ ';color:var(--brand-primary)}
-  .act-tech[open]>summary::before{content:'▾ '}
-  .act-tech-row{font-size:12px;color:var(--text-secondary);margin-bottom:8px}
-  .act-tech-row code{background:var(--brand-soft);color:var(--brand-primary);padding:2px 7px;border-radius:5px;word-break:break-all}
 
   /* 学生提交入口：链接可用性提示 */
   .act-link-warn{background:#FFF6E9;border:1px solid #F0C36D;color:#8A5A10;
@@ -15666,17 +15641,11 @@ function renderActivity() {
       <div class="act-card-h">① 选择活动（列表来自「活动管理」）</div>
       <div class="act-task-row">
         <select id="actTaskSel" class="act-sel" onchange="actSelectTask()" style="max-width:480px"><option value="">加载中…</option></select>
-        <span class="act-api" id="actTaskApi"></span>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px">
         <span class="act-muted" style="font-size:12px">选好活动即自动发放给当前班级；也可在下方自己写交互式学习单页面</span>
       </div>
       <div id="actPubHint" class="act-roster-hint" style="display:none"></div>
-      <details class="act-tech">
-        <summary>技术信息（接口地址，一般不用看）</summary>
-        <div class="act-tech-row">活动数据服务：<code id="actApiText"></code></div>
-        <div class="act-api-box" id="actApiBox"></div>
-      </details>
     </div>
 
     <div class="act-card">
@@ -15698,14 +15667,6 @@ function renderActivity() {
         <button class="btn btn-ghost btn-sm" id="actCustClear" onclick="actCustomClear()">清空</button>
         <button class="btn btn-primary btn-sm" id="actPubOpenBtn" onclick="actOpenPublishDialog()" title="选择班级并下发到学生端「今日」（可一次发多个班）">📤 下发</button>
         <span id="actCustStatus" class="act-muted"></span>
-      </div>
-      <div id="actCustLinkBox" style="display:none;margin-top:12px">
-        <div class="act-link-row">
-          <span class="lab">🔗 学生链接</span>
-          <code id="actCustLink">—</code>
-          <button class="btn btn-ghost btn-sm" id="actCustCopy" onclick="actCopyCustomLink()">复制</button>
-        </div>
-        <div class="act-roster-hint" id="actCustHint"></div>
       </div>
     </div>
 
@@ -15807,28 +15768,7 @@ function actSelectTask(silent) {
   const sel = document.getElementById('actTaskSel');
   if (!sel) return;
   const id = sel.value;
-  const t = actTaskList.find(x => x.task_id === id);
   actActiveId = id || null;
-  const apiEl = document.getElementById('actTaskApi');
-  if (apiEl) apiEl.innerHTML = '';   // 接口地址统一收在「技术信息」里，不再重复显示
-  // 展示「提交作品 API」与「数据大屏 API」（官方格式）并支持一键复制
-  const box = document.getElementById('actApiBox');
-  if (box) {
-    if (!t || !t.api) { box.innerHTML = ''; }
-    else {
-      const submitApi = t.api;
-      const dataApi = t.api.replace(/\/+$/, '') + '/all';
-      const safe = u => String(u).replace(/'/g, "\\'");
-      const row = (tag, method, url) =>
-        '<div class="act-api-row"><span class="act-api-tag">' + esc(tag) + ' · ' + method + '</span>'
-        + '<code class="act-api-code">' + esc(url) + '</code>'
-        + '<button class="btn btn-ghost btn-sm act-api-copy" onclick="copyText(\'' + safe(url) + '\',\'' + esc(tag) + ' 已复制\')">复制</button></div>';
-      box.innerHTML = row('提交作品 API', 'POST', submitApi)
-        + row('数据大屏 API', 'GET', dataApi)
-        + '<div class="act-api-note">提交作品用 POST 写入，数据大屏用 GET 读取全部提交。</div>';
-    }
-  }
-  actUpdateCustomLink();
   actRenderDash();
   if (silent) actPubRepaint();
   else actPublishCurrent();   // 选好活动即发放：写入 activity_pushes，学生端今日可见
@@ -16515,7 +16455,6 @@ async function actCustomSaveLib() {
 window.actCustomSaveLib = actCustomSaveLib;
 
 /* ===================== ④ 自定义上传：教师自制网页 → 注入登录/提交/大屏 ===================== */
-let actCustLinkVal = '';   // 完整学生链接（含 task/class/api），仅用于复制
 
 // 默认模板：自带「每题提交按钮」示例 + 外链跳转（被「用默认模板」使用）
 function actCustomDefaultTpl() {
@@ -16546,7 +16485,7 @@ function actCustomLoadFile(e) {
 }
 function actCustomUseDefault() { const el = document.getElementById('actCustHtml'); if (el) el.value = actCustomDefaultTpl(); actCustStatus('已载入默认模板（含每题提交按钮）；下方「文件题设置」可配置是否允许空文件提交'); actRenderFileCfg(); }
 function actCustStatus(t, cls) { const el = document.getElementById('actCustStatus'); if (el) { el.textContent = t || ''; el.className = 'act-muted' + (cls ? (' ' + cls) : ''); } }
-function actCustomClear() { const el = document.getElementById('actCustHtml'); if (el) el.value = ''; actCustStatus('已清空'); actUpdateCustomLink(true); actRenderFileCfg(); }
+function actCustomClear() { const el = document.getElementById('actCustHtml'); if (el) el.value = ''; actCustStatus('已清空'); actRenderFileCfg(); }
 
 /* ===== 文件题设置：只在含 <input type="file"> 的题目块（.act-q）上显示「允许空文件提交」 =====
    存储：勾选后在该题目块的起始标签写入 data-allow-empty="1"，取消则移除。
@@ -16767,34 +16706,8 @@ function actBuildCustomPage(html, opts) {
   return doc;
 }
 
-// 刷新「④ 自定义上传」的学生链接（活动/班级变化或生成后调用）
-async function actUpdateCustomLink(cleared) {
-  const box = document.getElementById('actCustLinkBox');
-  const code = document.getElementById('actCustLink');
-  const hint = document.getElementById('actCustHint');
-  const btn = document.getElementById('actCustCopy');
-  if (!box) return;
-  const t = actTaskList.find(x => x.task_id === actActiveId);
-  const cls = actCurClass();
-  if (!t || cls == null) { box.style.display = 'none'; actCustLinkVal = ''; return; }
-  const api = actLanApi(t.api);
-  const base = actStudentBase();
-  const clsObj = (dbT('classes') || []).find(c => Number(c.id) === Number(cls));
-  const clsName = clsObj ? clsObj.name : '';
-  const link = base + '/submit/custom.html?api=' + encodeURIComponent(api)
-    + '&class=' + encodeURIComponent(clsName) + '&task=' + encodeURIComponent(actActiveId);
-  actCustLinkVal = link;
-  if (code) { code.textContent = base + '/submit/custom.html?api=' + api; code._link = link; }
-  if (btn) btn.disabled = false;
-  box.style.display = '';
-  if (hint) hint.innerHTML = '✓ 自定义页已绑定活动 <b>' + esc(t.title || actActiveId) + '</b> 与班级 <b>' + esc(clsName) + '</b>。学生打开后先登录学号，按题目提交，每题数据会实时出现在数据大屏。';
-}
-function actCopyCustomLink() {
-  const code = document.getElementById('actCustLink');
-  const link = (code && code._link) || actCustLinkVal;
-  if (!link) { toast('请先生成页面'); return; }
-  copyText(link, '学生链接已复制');
-}
+/* 2026-11-03：学生链接 / 复制按钮的显示已下线（发放统一走「下发」→ 学生端「今日」），
+   actUpdateCustomLink / actCopyCustomLink 随之移除；actLanApi 暂无调用方，保留备用。 */
 
 // 生成页面（仅生成并暂存，不部署；部署由「查看」「下发」负责）
 var actGeneratedPage = null;
@@ -16830,7 +16743,6 @@ async function actCustomView() {
     const j = await r.json().catch(() => ({}));
     if (!r.ok || !j.ok) { actCustStatus('部署失败：' + (j.msg || r.status), 'err'); return; }
     actCustStatus('✓ 已部署预览页，正在打开（含「🧪 模拟测试提交」按钮）…', 'ok');
-    actUpdateCustomLink();
     const clsObj = (dbT('classes') || []).find(c => Number(c.id) === Number(actCurClass()));
     const clsName = clsObj ? clsObj.name : '';
     const link = actStudentBase() + '/submit/custom.html?task=' + encodeURIComponent(actActiveId)
@@ -16892,7 +16804,6 @@ function actSwitchTab(which) {
 window.actSwitchTab = actSwitchTab;
 
 async function actInit() {
-  const ap = document.getElementById('actApiText'); if (ap) ap.textContent = actAbsBase();
   actPing();
   actLoadNet(true);          // 顺手探一次局域网地址，供学生链接使用
   renderActClassInfo();
@@ -16984,18 +16895,14 @@ async function actRenderDash() {
   if (cls == null) { box.removeAttribute('data-act-shell-task'); box.innerHTML = '<div class="act-muted">请先在上方选择班级，再查看数据大屏。</div>'; actLastCount = -1; actStartPoll(); return; }
   const clsStus = actClassStudents(cls);
   if (!clsStus.length) { box.removeAttribute('data-act-shell-task'); box.innerHTML = '<div class="act-muted">该班级暂无学生，无法统计。请先在「班级」中添加学生。</div>'; actLastCount = -1; actStartPoll(); return; }
-  // 仅当「活动任务」发生变化时重建外壳；否则只刷新默认大屏，保留自定义大屏 iframe（避免切页/轮询丢失状态）
+  // 仅当「活动任务」发生变化时重建外壳；否则只刷新默认大屏内容（避免切页/轮询丢状态）
   if (box.getAttribute('data-act-shell-task') !== String(actActiveId)) {
     box.innerHTML = '<div id="actCourseBar"></div>'
-      + '<div id="actDefaultDash"></div>'
-      + '<div class="act-cust-bar" id="actCustomToolbar"></div>'
-      + '<div id="actCustomDash" style="display:none;margin-top:12px"></div>';
+      + '<div id="actDefaultDash"></div>';
     box.setAttribute('data-act-shell-task', String(actActiveId));
-    actCustomIframeTask = null;   // 任务变了，自定义大屏需按新任务重建
   }
   const dd = box.querySelector('#actDefaultDash'); if (!dd) return;
   dd.innerHTML = '<div class="act-muted">加载数据大屏中…</div>';
-  actRenderCustomToolbar();
   let j;
   try {
     const r = await fetch('/api/v2/act-data?task=' + encodeURIComponent(actActiveId), { cache: 'no-store' });
@@ -17309,84 +17216,7 @@ function actDrawBars(canvasId, items) {
     ctx.fillText(it.label, x + bw / 2, H - padB + 6);
   });
 }
-async function actUploadDash(e) {
-  const f = e.target.files && e.target.files[0]; if (!f) return;
-  const txt = await f.text();
-  actSaveDash(actActiveId, txt);
-  toast('自定义大屏已部署');
-  actCustomIframeTask = null;   // 内容已变，下次查看需重建 iframe
-  await actRenderDash();        // 重建外壳（含工具栏的查看/删除按钮）
-  actToggleCustomDash(true);    // 立即展示新上传的大屏
-}
-window.actUploadDash = actUploadDash;
-
-/* 自定义大屏工具栏：上传按钮常驻；有自定义大屏时显示查看/删除 */
-function actCustomToolbarHtml(custom) {
-  return '<label class="btn btn-ghost btn-sm" style="cursor:pointer">上传自定义大屏<input type="file" accept=".html,.htm" style="display:none" onchange="actUploadDash(event)"></label>'
-    + (custom ? '<button class="btn btn-primary btn-sm" onclick="actToggleCustomDash()">查看自定义大屏</button><button class="btn btn-ghost btn-sm" onclick="actDelDash()">删除自定义大屏</button>' : '');
-}
-function actRenderCustomToolbar() {
-  const el = document.getElementById('actCustomToolbar'); if (!el) return;
-  el.innerHTML = actCustomToolbarHtml(!!actDashHtml(actActiveId));
-}
-window.actRenderCustomToolbar = actRenderCustomToolbar;
-
-/* 真正构建自定义大屏 iframe（仅当为当前任务尚未构建时才执行，否则保留旧 iframe 状态） */
-async function actBuildCustomIframe() {
-  const cd = document.getElementById('actCustomDash'); if (!cd) return false;
-  const html = actDashHtml(actActiveId); if (!html) { toast('还没有上传自定义大屏'); return false; }
-  const apiBase = actAbsBase();
-  const dataApi = apiBase + '/api/' + encodeURIComponent(actActiveId) + '/all';
-  const submitApi = apiBase + '/api/' + encodeURIComponent(actActiveId);
-  /* 预拉取数据并注入为 window.ACT_DATA，作为「直接可用数据」兜底：
-     自定义大屏优先用 ACT_DATA（无需自己再 fetch，规避 CORS / 脚本时序问题）；
-     仍保留 ACT_API_* 供需要实时刷新或写回的场景使用。 */
-  let dataJson = 'null';
-  try {
-    const r = await fetch(dataApi, { mode: 'cors' });
-    if (r.ok) dataJson = JSON.stringify(await r.json()).replace(/</g, '\\u003c');
-  } catch (e) { dataJson = 'null'; }
-  /* 注入运行环境，便于自定义大屏直接调用活动接口（标准格式） */
-  const inject = `<script>window.ACT_API_BASE=${JSON.stringify(apiBase)};window.ACT_TASK_ID=${JSON.stringify(actActiveId)};window.ACT_API_DATA=${JSON.stringify(dataApi)};window.ACT_API_SUBMIT=${JSON.stringify(submitApi)};window.ACT_DATA=${dataJson};<\/script>`;
-  /* 注入运行环境：优先放到 <head> 之后（兼容带属性的 <head lang="zh">）；
-     若没有 <head> 则放到 <body> 之后；最兜底放到文档最开头，确保自定义脚本执行前变量已就绪。 */
-  let finalHtml = html;
-  if (/<head[^>]*>/i.test(finalHtml)) finalHtml = finalHtml.replace(/<head[^>]*>/i, m => m + inject);
-  else if (/<body[^>]*>/i.test(finalHtml)) finalHtml = finalHtml.replace(/<body[^>]*>/i, m => m + inject);
-  else finalHtml = inject + finalHtml;
-  finalHtml = finalHtml.replace(/<\/body>/i, inject + '</body>');
-  const blob = new Blob([finalHtml], { type: 'text/html' }); const url = URL.createObjectURL(blob);
-  cd.innerHTML = '<div style="display:flex;justify-content:flex-end;margin-bottom:6px"><button class="btn btn-ghost btn-sm" onclick="actToggleCustomDash(false)">返回默认大屏</button></div>'
-    + '<iframe src="' + url + '" style="width:100%;height:520px;border:1px solid var(--border);border-radius:10px"></iframe>';
-  actCustomIframeTask = actActiveId;
-  return true;
-}
-
-async function actToggleCustomDash(force) {
-  const cd = document.getElementById('actCustomDash'); const dd = document.getElementById('actDefaultDash');
-  if (!cd) return;
-  const show = (typeof force === 'boolean') ? force : (cd.style.display === 'none');
-  if (show) {
-    /* 仅在未为当前任务构建时才重建 iframe，否则只切换显示 → 保留已填写的 API 与已拉取的数据 */
-    if (actCustomIframeTask !== actActiveId) {
-      const ok = await actBuildCustomIframe();
-      if (!ok) return;
-    }
-    cd.style.display = ''; if (dd) dd.style.display = 'none';
-  } else {
-    cd.style.display = 'none'; if (dd) dd.style.display = '';
-  }
-}
-window.actToggleCustomDash = actToggleCustomDash;
-
-function actDelDash() {
-  actSaveDash(actActiveId, '');
-  actCustomIframeTask = null;
-  toast('已删除自定义大屏');
-  actRenderDash();
-  actToggleCustomDash(false);
-}
-window.actDelDash = actDelDash;
+/* 2026-11-03 需求：自定义大屏功能整体下线（上传/查看/删除），数据大屏只保留默认样式 */
 
 /* ============================================================
    提交系统（学生作品收集 + 排行榜，集成进工作台）
