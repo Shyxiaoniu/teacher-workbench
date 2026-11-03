@@ -62,7 +62,7 @@ _lock = threading.Lock()
 #   ① 被主服务 import 复用（同一进程、同一端口）—— 主服务会注入下面三个钩子，
 #      于是「谁是老师 / 谁是学生 / 花名册是什么」都以主服务的会话与数据库为准；
 #   ② 用 python server.py 单独起（旧用法，默认只绑 127.0.0.1）—— 没有会话体系，
-#      此时只有本机（loopback）请求被视为管理员，局域网请求一律按未登录处理。
+#      此时只有回环直连的请求被视为管理员，其它一律按未登录处理。
 # 以前这里完全没有身份概念：同网任何人 POST /api/config 就能改页面、看名单、
 # 甚至把 save_dir 指到别的目录。钩子就是为了补上这一层。
 ROLE_FN = None           # handler -> ("teacher"|"student"|"", student_key)
@@ -120,7 +120,7 @@ def _forbidden(name):
     return False
 
 def lan_ips():
-    """本机的局域网 IPv4 列表（学生手机要用的那个地址）。
+    """本进程所在主机的局域网 IPv4 列表（学生手机要用的那个地址）。
     只做探测，不发包：UDP connect 不会真的连出去，但能让系统选好出口网卡。
     2026-10-28：活动页链接原来固定用 127.0.0.1，学生手机必然打不开。"""
     ips = []
@@ -452,7 +452,7 @@ class Handler(BaseHTTPRequestHandler):
     # ------------------------------------------------------------------
     def _same_origin(self):
         """跨站请求判定。浏览器发跨站 POST 一定带 Origin（表单也一样），
-        所以「有 Origin 且不等于本机 Host」就拒绝。"""
+        所以「有 Origin 且不等于本站 Host」就拒绝。"""
         origin = self.headers.get("Origin")
         if not origin:
             return True
@@ -463,6 +463,12 @@ class Handler(BaseHTTPRequestHandler):
             return False
 
     def _is_local(self):
+        """是否回环直连（不经反向代理 / 端口映射）。
+
+        注意：容器部署下所有请求都来自网关的内网地址，这里恒为 False，
+        所以任何「按 IP 判身份」的逻辑都不能作为访问闸门——一律用 _role()。
+        只用于「需要桌面环境」的原生操作（弹目录框、打开资源管理器）。
+        """
         try:
             return (self.client_address or ("", 0))[0] in ("127.0.0.1", "::1")
         except Exception:
@@ -478,7 +484,7 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 pass
             return "", None
-        # 单独运行时没有会话：只有本机算管理员
+        # 单独运行旧服务时没有会话体系：只把回环直连当作管理员
         return ("teacher", None) if self._is_local() else ("", None)
 
     def _student_sid(self):
@@ -514,7 +520,7 @@ class Handler(BaseHTTPRequestHandler):
         """只对同源请求回显 CORS 头。
 
         原来是无条件 `Access-Control-Allow-Origin: *`：任何网页都能
-        `fetch('http://教师机:20020/api/roster')` 把全班名单读走（含学号姓名），
+        `fetch('http://服务端:20020/api/roster')` 把全班名单读走（含学号姓名），
         也能读到 /api/config、/api/board。本应用所有页面都是同源加载，
         根本不需要 CORS，这里只在确实是同源时回显，跨站一律不给。
         """
@@ -828,7 +834,7 @@ class Handler(BaseHTTPRequestHandler):
         """给提交页的配置视图。
 
         原来 GET /api/config 直接把整份配置吐出来，里面有两类不该外泄的东西：
-          · save_dir —— 教师机上的绝对路径（泄露用户名、目录结构）；
+          · save_dir —— 服务器上的绝对路径（泄露用户名、目录结构）；
           · custom_html / custom_templates —— 教师自定义页，属于管理面数据；
           · quiz.questions[].answer —— 标准答案！
         学生打开 /api/config 就能拿到全部答案，随堂测直接失去意义。
@@ -989,47 +995,44 @@ class Handler(BaseHTTPRequestHandler):
     # 课件库：GET
     # ------------------------------------------------------------------
     def _cw_allowed(self):
-        """课件库是老师的资料，判定分两层：
+        """课件库是老师的资料，唯一的闸门是「教师会话」。
 
-        ① 身份：必须是登录的教师会话（单独运行旧服务时只认本机）；
-        ② 网络：本机访问，或老师显式打开过「允许局域网访问」。
-
-        原来只有第 ② 层，而且第 ② 层可以被任何人自己打开——见 _cw_post 里
-        那段「唯一的例外」。等于给资料柜装了锁，却把钥匙挂在门上。
+        以前是「本机 IP 或 allow_lan」：那套逻辑假设服务端跑在老师自己的电脑上。
+        改成容器部署后，所有请求都来自网关的内网地址，按 IP 判永远为假，
+        老师在自己的工作台里反而看不到课件。现在按身份判：
+          · 已登录的教师会话 → 放行（谁能登录教师端，谁就是老师）；
+          · 学生会话 / 未登录 → 拒绝，连列表都不给。
+        网络层不再参与判定，也就不存在「任何人自己把 allow_lan 打开」的漏洞。
         """
         role, _ = self._role()
         if role != "teacher":
             return False, "课件库只对教师账号开放，请先在 /teacher/ 登录。"
-        try:
-            cfg = CW.load_cfg()
-        except Exception:
-            cfg = {}
-        if cfg.get("allow_lan") or self._is_local():
-            return True, ""
-        ip = (self.client_address or ("", 0))[0]
-        return False, ("课件库默认只允许本机访问（保护老师资料）。当前是从 %s 打开的；"
-                       "如果你确实要用这个地址管理课件，请在课件页把「允许局域网访问」打开。" % ip)
+        return True, ""
 
     def _need_local(self):
-        """只能在本机执行的操作（弹目录选择框、调用资源管理器）。"""
+        """需要桌面环境才能做的操作（弹目录选择框、调用资源管理器）。
+
+        容器里没有桌面，这类接口只能直接拒绝并说明替代做法，
+        否则会调用到不存在的 DISPLAY / explorer.exe 然后莫名超时。
+        """
         if self._is_local():
             return False
-        self._send_json({"ok": False, "msg": "这个操作会弹窗/打开文件管理器，只能在教师机上执行"}, 403)
+        self._send_json({"ok": False, "msg": "这个操作需要在服务器桌面上执行，容器部署下不可用。"
+                                            "请在服务器上把文件放到课件目录，或用页面上的「上传」按钮。"}, 403)
         return True
 
     def _cw_get(self, path, qs):
         ok, why = self._cw_allowed()
         if not ok:
-            # 只读元信息放行：老师用局域网地址打开时，界面要能显示「为什么被拦 + 怎么开」，
-            # 否则就是一个没有任何提示的死路。这里不返回任何课程/文件内容。
+            # 只读元信息放行：界面要能显示「为什么被拦」，否则就是一个没有任何提示的死路。
+            # 这里不返回任何课程/文件内容。
             if path == "/api/cw/config":
-                cfg = CW.load_cfg()
                 return self._send_json({
                     "ok": True, "blocked": True, "msg": why,
-                    "allow_lan": bool(cfg.get("allow_lan")), "is_local": False,
+                    "allow_lan": True, "is_local": True,
                     "root": "", "courses": [], "total": 0, "writable": False, "auto": False,
                 })
-            return self._send_json({"ok": False, "msg": why, "need_local": True}, 403)
+            return self._send_json({"ok": False, "msg": why, "need_login": True}, 403)
         arg = lambda k, d="": (qs.get(k) or [d])[0]
 
         if path == "/api/cw/config":
@@ -1040,12 +1043,12 @@ class Handler(BaseHTTPRequestHandler):
             total = sum(c.get("count", 0) for c in (courses or []))
             return self._send_json({
                 "ok": True, "root": root, "default_root": CW.DEFAULT_ROOT,
-                "auto": bool(cfg.get("auto")), "allow_lan": bool(cfg.get("allow_lan")),
+                "auto": bool(cfg.get("auto")), "allow_lan": True,
                 "writable": okw, "error": ("" if okw else wmsg) or (cerr or ""),
                 "updated_at": cfg.get("updated_at", ""),
                 "config_file": CW.CFG_PATH,
                 "courses": courses or [], "total": total,
-                "is_local": self._is_local(),
+                "is_local": True,
             })
         if path == "/api/cw/courses":
             courses, err = CW.list_courses()
@@ -1072,31 +1075,7 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as e:
                 page = "<p>预览失败：%s</p>" % str(e)
             return self._send_text(page, "text/html; charset=utf-8")
-        # ---- 资料夹（本地文件夹，只读加载）----
-        if path == "/api/cw/mounts":
-            return self._send_json({"ok": True, "mounts": CW.mounts_list(),
-                                    "max": CW.MAX_MOUNTS, "scan_limit": CW.SCAN_LIMIT,
-                                    "depth": CW.SCAN_DEPTH})
-        if path == "/api/cw/mount/scan":
-            res = CW.mount_scan(arg("id"))
-            return self._send_json(res, 200 if res.get("ok") else 400)
-        if path == "/api/cw/mount/file":
-            full = CW.mount_abs(arg("id"), arg("rel"))
-            if not full:
-                return self._send_text("文件不存在或不在这个资料夹里", code=404)
-            return self._serve_abs(full, download=(arg("dl") == "1"))
-        if path == "/api/cw/mount/preview":
-            full = CW.mount_abs(arg("id"), arg("rel"))
-            if not full:
-                return self._send_text("文件不存在或不在这个资料夹里", code=404)
-            kind = CW.kind_of(full)
-            if kind in ("image", "video", "audio", "pdf"):
-                return self._serve_abs(full)
-            try:
-                page = CW.preview_html(full, os.path.basename(full), dark=(arg("dark") == "1"))
-            except Exception as e:
-                page = "<p>预览失败：%s</p>" % str(e)
-            return self._send_text(page, "text/html; charset=utf-8")
+        # ---- 本地资料夹（mounts）已于 2026-11-01 下线：资料统一上传到服务器课件库 ----
         if path == "/api/cw/remote":
             # 学生提交的作品在 QuickForm 里，浏览器没法直接渲染 docx/xlsx/pptx，
             # 这里取回来现场解析成 HTML（图片/音视频/PDF 前端直接连原地址，不绕这一道）
@@ -1117,34 +1096,24 @@ class Handler(BaseHTTPRequestHandler):
     # 课件库：POST
     # ------------------------------------------------------------------
     def _cw_post(self, path, u, data):
-        # 只保留一个「自解锁」口子，但门槛从「任何人」改成「本机 + 教师」：
-        # 老师用局域网地址打开时也需要能一键允许，那由下面的正式分支处理。
+        # 兼容旧前端的 allow_lan 开关：容器部署下访问权限只按教师会话判定，
+        # 这里直接回成功但不再改任何配置（避免落到下面 set_root 的兜底分支）。
         if path == "/api/cw/config" and not data.get("root") and data.get("allow_lan") is not None:
             role, _ = self._role()
             if role != "teacher":
-                return self._deny("只有教师账号可以修改课件库访问权限", 403)
-            cfg = CW.load_cfg()
-            cfg["allow_lan"] = bool(data.get("allow_lan"))
-            cfg["updated_at"] = CW._now()
-            CW.save_cfg(cfg)
-            return self._send_json({"ok": True, "msg": "已更新课件库访问权限",
-                                    "allow_lan": cfg["allow_lan"]})
+                return self._deny("只有教师账号可以管理课件库", 403)
+            return self._send_json({"ok": True, "allow_lan": True,
+                                    "msg": "课件库按教师账号判定访问权限，无需额外开关"})
         ok, why = self._cw_allowed()
         if not ok:
-            return self._send_json({"ok": False, "msg": why, "need_local": True}, 403)
+            return self._send_json({"ok": False, "msg": why, "need_login": True}, 403)
 
-        # 会弹窗 / 打开资源管理器 / 动磁盘的，只能在本机执行
-        if path in ("/api/cw/pickdir", "/api/cw/open", "/api/cw/mount/open"):
+        # 会弹窗 / 打开资源管理器 / 动磁盘的，需要桌面环境
+        if path == "/api/cw/open":
             if self._need_local():
                 return
 
         if path == "/api/cw/config":
-            if data.get("allow_lan") is not None and not data.get("root"):
-                cfg = CW.load_cfg()
-                cfg["allow_lan"] = bool(data.get("allow_lan"))
-                cfg["updated_at"] = CW._now()
-                CW.save_cfg(cfg)
-                return self._send_json({"ok": True, "msg": "已更新访问权限", "allow_lan": cfg["allow_lan"]})
             ok2, cfg, msg = CW.set_root(data.get("root"), bool(data.get("move")))
             return self._send_json({"ok": ok2, "msg": msg, "root": (cfg or {}).get("root", "")},
                                    200 if ok2 else 400)
@@ -1155,7 +1124,8 @@ class Handler(BaseHTTPRequestHandler):
             res = CW.delete_file(data.get("id"))
             return self._send_json(res, 200 if res.get("ok") else 400)
         if path == "/api/cw/move":
-            res = CW.rename_or_move(data.get("id"), data.get("course"))
+            res = CW.rename_or_move(data.get("id"), data.get("course"),
+                                    new_name=data.get("name"))
             return self._send_json(res, 200 if res.get("ok") else 400)
         if path == "/api/cw/archive":
             res = CW.archive_items(data.get("course"), data.get("activity"),
@@ -1165,62 +1135,7 @@ class Handler(BaseHTTPRequestHandler):
             res = CW.save_text(data.get("course"), data.get("subdir"),
                                data.get("name"), data.get("text") or "")
             return self._send_json(res, 200 if res.get("ok") else 400)
-        # ---- 资料夹（本地文件夹，只读加载）----
-        if path == "/api/cw/pickdir":
-            okp, val = CW.pick_dir()
-            if okp:
-                return self._send_json({"ok": True, "path": val, "msg": "已选择：" + val})
-            return self._send_json({"ok": False, "msg": val, "cancelled": ("取消" in val)}, 400)
-        if path == "/api/cw/mount/add":
-            res = CW.mount_add(data.get("path"), data.get("name"))
-            return self._send_json(res, 200 if res.get("ok") else 400)
-        if path == "/api/cw/mount/update":
-            res = CW.mount_update(data.get("id"), data.get("name"), data.get("path"))
-            return self._send_json(res, 200 if res.get("ok") else 400)
-        if path == "/api/cw/mount/remove":
-            res = CW.mount_remove(data.get("id"))
-            return self._send_json(res, 200 if res.get("ok") else 400)
-        if path == "/api/cw/mount/alias":
-            res = CW.mount_set_alias(data.get("id"), data.get("rel"), data.get("alias"))
-            return self._send_json(res, 200 if res.get("ok") else 400)
-        if path == "/api/cw/mount/hide":
-            res = CW.mount_set_hidden(data.get("id"), data.get("rels") or [],
-                                      bool(data.get("hidden", True)))
-            return self._send_json(res, 200 if res.get("ok") else 400)
-        if path == "/api/cw/mount/to_library":
-            res = CW.mount_copy_to_library(data.get("id"), data.get("rels") or [],
-                                           data.get("course") or "", bool(data.get("move")))
-            return self._send_json(res, 200 if res.get("ok") else 400)
-        if path == "/api/cw/mount/open":
-            # 支持三种传参：rel（单个）/ rels（多选）/ 都不传（打开资料夹根目录）
-            target = ""
-            rels = [str(x) for x in (data.get("rels") or []) if str(x).strip()]
-            rel = str(data.get("rel") or "").strip()
-            if rel:
-                rels.append(rel)
-            dirs = set()
-            resolved = 0
-            for r in rels:
-                full = CW.mount_abs(data.get("id"), r)
-                if full:
-                    resolved += 1
-                    dirs.add(os.path.dirname(full))
-            if rels and not resolved:
-                return self._send_json({"ok": False, "msg": "这些文件已不在原位置（可能被移动或删除），无法定位。点「重新加载」刷新列表后再试"}, 404)
-            if len(dirs) == 1:
-                target = dirs.pop()
-            if not target:
-                m = CW.mount_find(data.get("id"))
-                target = CW.mount_root(m)
-            if not target or not os.path.isdir(target):
-                return self._send_json({"ok": False, "msg": "文件夹不存在或已断开"}, 400)
-            opener = open_folder_cmd(target)
-            if not opener:
-                return self._send_json({"ok": False, "msg": "这个系统不支持自动打开文件夹，请手动打开：" + target}, 400)
-            import subprocess
-            subprocess.Popen(opener, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            msg = ("所选文件分散在多个子文件夹，已打开资料夹根目录：" if len(dirs) > 1 else "已在文件管理器中打开：") + target
-            return self._send_json({"ok": True, "path": target, "msg": msg})
+        # ---- 本地资料夹（mounts）/ pickdir 已下线（2026-11-01）：资料统一上传到服务器课件库 ----
         if path == "/api/cw/open":
             target = CW.root_dir()
             course = str(data.get("course") or "").strip()

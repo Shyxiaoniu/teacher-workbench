@@ -13,13 +13,18 @@
 启动：python server.py --port 8080
 """
 import os
+import re
 import sys
 import json
 import time
+import shutil
+import zipfile
 import threading
 import urllib.parse
 import urllib.request
+import urllib.error
 import importlib.util
+import html as _html
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -32,9 +37,11 @@ import pages as P                      # noqa: E402
 import projection as PJ                # noqa: E402
 import ports as PORTX                  # noqa: E402
 from store import Store, TABLES        # noqa: E402
+from typing_store import TypingStore   # noqa: E402
+import ooxml_preview as OOX            # noqa: E402  课件在线预览（纯 Python 解析 OOXML）
 
-# 数据目录：默认与程序同级的 data/（本机直接用不受影响）；
-# 容器部署时用 WB_DATA_DIR 指到挂载卷，不设该变量则行为与以前完全一致。
+# 数据目录：默认与程序同级的 data/（不设环境变量时）；
+# 容器部署时用 WB_DATA_DIR 指到挂载卷，两者行为一致。
 DATA_DIR = os.environ.get("WB_DATA_DIR") or os.path.join(ROOT, "data")
 DB_PATH = os.path.join(DATA_DIR, "workbench.db")
 CONFIG_PATH = os.path.join(DATA_DIR, "config.json")
@@ -57,9 +64,16 @@ PORT = PORTX.DEFAULT_PORT
 STORE = Store(DB_PATH)
 CFG = A.load_config(CONFIG_PATH)
 SESS = A.Sessions()
+# 打字冒险岛：独立成绩存储 + 配置缺省（教师开放开关 / 年级词库范围）
+TYPING = TypingStore(os.path.join(DATA_DIR, "typing.json"))
+if not isinstance(CFG.get("typing"), dict):
+    CFG["typing"] = {}
+CFG["typing"].setdefault("enabled", False)
+CFG["typing"].setdefault("grades", [])
+PET_IDS = ["cat", "dog", "rabbit", "penguin", "panda", "dino", "unicorn", "dragon"]
 COND = threading.Condition()
 STARTED = time.time()
-VERSION = "2.0.4"
+VERSION = "2.0"
 ONLINE_WINDOW = 300      # 5 分钟内活跃算在线
 
 # SSE 长连接上限（每个连接一个线程）
@@ -113,7 +127,7 @@ def best_ip():
 #   2. X-Forwarded-Host / X-Forwarded-Proto（nginx、Caddy 等反向代理）
 #   3. 本次请求的 Host 头 —— 老师用什么地址打开，学生就用什么地址，
 #      浏览器访问的本来就是「宿主机IP:宿主机端口」，天然跟着 compose 走
-#   4. 兜底：本机网卡 IP + 进程端口（本机双击启动的老行为）
+#   4. 兜底：主机网卡 IP + 进程端口（不经网关、直接访问容器时用）
 _LOOPBACK_HOSTS = ("127.0.0.1", "localhost", "0.0.0.0", "::1", "127.0.1.1")
 
 
@@ -202,6 +216,26 @@ def student_row(sid):
     return None
 
 
+def _tip_page(title, msg):
+    """导学单闸门遇到异常时给学生看的一页（不抛裸 JSON，学生看不懂）"""
+    esc = lambda t: (str(t or "").replace("&", "&amp;").replace("<", "&lt;")
+                     .replace(">", "&gt;").replace('"', "&quot;"))
+    return ("<!doctype html><html lang=\"zh-CN\"><head><meta charset=\"utf-8\">"
+            "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
+            "<title>" + esc(title) + "</title><style>"
+            "body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;"
+            "background:#F5F7F4;font-family:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;"
+            "color:#22312A;padding:24px;box-sizing:border-box}"
+            ".c{max-width:420px;background:#fff;border-radius:16px;padding:28px 26px;"
+            "box-shadow:0 10px 34px rgba(24,52,42,.10);text-align:center}"
+            "h1{font-size:19px;margin:0 0 10px;color:#0F6E56}"
+            "p{font-size:14px;line-height:1.8;color:#5B6A60;margin:0 0 18px}"
+            "a{display:inline-block;background:#0F6E56;color:#fff;text-decoration:none;"
+            "padding:10px 22px;border-radius:10px;font-size:14px}"
+            "</style></head><body><div class=\"c\"><h1>" + esc(title) + "</h1><p>" + esc(msg)
+            + "</p><a href=\"/s/\">返回学生端</a></div></body></html>")
+
+
 def security_of():
     """教师密保：{question, answer_hash}。老配置里没有这个键，按“未设置”处理。"""
     sec = (CFG.get("teacher") or {}).get("security")
@@ -233,6 +267,193 @@ def take_ticket(tok):
     if not v or v["exp"] < time.time():
         return False
     return True
+
+
+# ---------------------------------------------------------------------------
+# 导学单「闸门票据」
+# ---------------------------------------------------------------------------
+# 学生端点开导学单条目时，由本服务签发一张票：票里记住（学生、导学单、条目、
+# 任务号）。交给页面的是票，不是身份本身 —— 页面就算被人改 URL 也换不了别人。
+# 票据放内存：重启即失效，有效期默认 12 小时（够一堂课 + 课后补交）。
+GTICKETS = {}
+GT_LOCK = threading.Lock()
+
+
+def _gt_ttl():
+    try:
+        return int(float((CFG.get("activity") or {}).get("submit_hours", 12)) * 3600)
+    except Exception:
+        return 12 * 3600
+
+
+def new_gticket(payload):
+    """签一张导学单票据，返回 token"""
+    import secrets as _s
+    tok = _s.token_urlsafe(20)
+    now = time.time()
+    with GT_LOCK:
+        # 顺手清过期的，避免常开的机器越积越多
+        for k in [k for k, v in GTICKETS.items() if v["exp"] < now]:
+            GTICKETS.pop(k, None)
+        GTICKETS[tok] = dict(payload, exp=now + _gt_ttl())
+    return tok
+
+
+def get_gticket(tok):
+    """验票：过期/不存在都返回 None"""
+    with GT_LOCK:
+        v = GTICKETS.get(str(tok or ""))
+    if not v or v["exp"] < time.time():
+        return None
+    return v
+
+
+def activity_base():
+    """课堂活动数据服务地址（教师端配置，去掉末尾斜杠）"""
+    v = str((CFG.get("activity") or {}).get("api_base") or "").strip()
+    return v.rstrip("/")
+
+
+def _mp_append(raw, ctype, fields):
+    """往 multipart 请求体末尾追加几个文本字段，保留原有文件与全部内容。
+
+    不解析重组：文件段是二进制，重组容易把编码弄坏。这里找到结束边界
+    （`--boundary--` 只会出现在最后），在它前面插几段 part 就行。
+    返回 (新 body, 原 content-type) 或 None（看不懂就交给调用方报错）。
+    """
+    import re as _re
+    m = _re.search(r'boundary=([^;]+)', ctype or "", _re.I)
+    if not m:
+        return None
+    b = m.group(1).strip().strip('"')
+    if not b:
+        return None
+    tail = ("--" + b + "--").encode("latin-1", "ignore")
+    idx = raw.rfind(tail)
+    if idx < 0:
+        return None
+    extra = b""
+    for k, v in (fields or {}).items():
+        extra += ("--" + b + "\r\n"
+                  "Content-Disposition: form-data; name=\"" + str(k) + "\"\r\n\r\n").encode("utf-8")
+        extra += str(v if v is not None else "").encode("utf-8") + b"\r\n"
+    return raw[:idx] + extra + raw[idx:], ctype
+
+
+# ---------------------------------------------------------------------------
+# 课件在线预览：Office 文档（PPT/Word/Excel）在服务端渲染成 HTML 后内联
+# ---------------------------------------------------------------------------
+# 机房学生机无外网，浏览器又读不了 Office 二进制格式，所以由服务端把文档内容
+# 直接渲染成 HTML 给学生看：.pptx/.docx/.xlsx 走 core/ooxml_preview.py 纯 Python
+# 解析 OOXML，不依赖任何外部程序、不需要联网。渲染结果按「文件名+大小+修改时间」
+# 缓存成 .html，第二次打开是秒开。
+# 为什么不用「WPS 转 PDF」：本机 WPS 未注册 COM 自动化组件（没有
+# KWPP.Application 等 ProgID），clitool\\wpscli.exe 也只是启动器、不含
+# ppt2pdf 之类子命令，pywin32 与 LibreOffice 都不在，外部转换这条路走不通（2026-11-02 实测）。
+# 老式 .doc/.ppt/.xls 是二进制格式，纯 Python 解析不了，给出「另存为新格式」提示。
+_OOXML_EXTS = ("pptx", "docx", "xlsx")
+_LEGACY_EXTS = ("doc", "ppt", "xls")
+_OFFICE_EXTS = _OOXML_EXTS + _LEGACY_EXTS
+_OFFICE_LOCK = threading.Lock()  # 同一份文档只让一个线程渲染（有缓存，之后都是秒回）
+
+
+def _ext_of(name):
+    return os.path.splitext(str(name or ""))[1].lstrip(".").lower()
+
+
+def _safe_name(name):
+    s = str(name or "").replace("\\", "/").split("/")[-1]
+    s = re.sub(r'[\x00-\x1f<>:"|?*]', "", s).strip().strip(".")
+    return s or "未命名"
+
+
+def _preview_cache_dir():
+    """预览缓存目录（按需创建），返回 (dir, err)。"""
+    d = os.path.join(DATA_DIR, "preview_cache")
+    try:
+        os.makedirs(d, exist_ok=True)
+    except Exception:
+        return None, "缓存目录不可写"
+    return d, None
+
+
+def _office_to_html(src):
+    """把 Office 文档渲染成 HTML，返回 (html_str, error_str)。
+
+    渲染失败时 error_str 非空，调用方据此回退到「下载原文件」提示，
+    绝不让学生端看到 500。"""
+    ext = _ext_of(src)
+    if ext in _LEGACY_EXTS:
+        return None, ("老式 .%s 是二进制格式，服务端没法在线渲染。"
+                      "用 WPS 打开后「另存为」.%sx 再上传，就能在线预览了。" % (ext, ext))
+    cache, err = _preview_cache_dir()
+    if not cache:
+        return None, err
+    try:
+        st = os.stat(src)
+        # 缓存键带「大小+修改时间」：老师换文件会自动重新渲染
+        key = "%s_%d_%d" % (_safe_name(os.path.basename(src)), st.st_size, int(st.st_mtime))
+    except Exception:
+        return None, "源文件不可读"
+    out_html = os.path.join(cache, key + ".html")
+
+    def _read():
+        try:
+            with open(out_html, "r", encoding="utf-8") as f:
+                return f.read()
+        except Exception:
+            return None
+
+    def _fresh():
+        return os.path.isfile(out_html) and os.path.getmtime(out_html) >= st.st_mtime
+
+    if _fresh():
+        cached = _read()
+        if cached:
+            return cached, None
+    with _OFFICE_LOCK:
+        if _fresh():
+            cached = _read()
+            if cached:
+                return cached, None
+        try:
+            html = OOX.render(src)
+        except Exception as e:
+            msg = str(e)[:80] or "格式异常"
+            return None, "解析这份文档时出错（%s）" % msg
+        if not html:
+            return None, "这份文档里没有可提取的内容"
+        try:
+            tmp = out_html + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                f.write(html)
+            os.replace(tmp, out_html)
+        except Exception:
+            pass
+        return html, None
+
+
+def _preview_fallback_html(title, fid, reason):
+    """Office 文档渲染不出来时的回退页（iframe 内显示）。"""
+    href = "/cw/" + urllib.parse.quote(fid)
+    return ("<!doctype html><html lang=\"zh-CN\"><head><meta charset=\"utf-8\">"
+            "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
+            "<title>暂不支持在线预览</title><style>"
+            "body{font-family:system-ui,\"Microsoft YaHei\",sans-serif;background:#fff;color:#223;"
+            "display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}"
+            ".b{max-width:440px;text-align:center;padding:28px;line-height:1.7}"
+            ".b .ic{font-size:40px;margin-bottom:6px}"
+            ".b h2{font-size:18px;margin:6px 0 10px;color:#1a2}"
+            ".b p{color:#667;font-size:14px;margin:6px 0}"
+            ".b code{background:#f1f5f3;padding:1px 6px;border-radius:6px;font-size:13px}"
+            ".b a{display:inline-block;margin-top:16px;background:#0F6E56;color:#fff;"
+            "padding:10px 20px;border-radius:10px;text-decoration:none;font-size:14px}"
+            "</style></head><body><div class=\"b\"><div class=\"ic\">📄</div>"
+            "<h2>这个文件暂时无法在线预览</h2>"
+            "<p>「" + _html.escape(title or "文件", quote=True) + "」暂时没法在线预览，可以下载到本机用 WPS 打开。</p>"
+            "<p>" + _html.escape(reason or "这个格式暂时还不支持在线预览。", quote=True) + "</p>"
+            "<a href=\"" + _html.escape(href, quote=True) + "\" target=\"_blank\" rel=\"noopener\">下载原文件</a>"
+            "</div></body></html>")
 
 
 class Handler(LEG.Handler):
@@ -343,16 +564,137 @@ class Handler(LEG.Handler):
             return True, ""
         if time.time() - STARTED > 24 * 3600:
             return False, ("首次设置窗口已过（服务启动超过 24 小时）。"
-                           "请重启一次服务，或在教师机上打开页面完成设置。")
+                           "请重启一次服务（docker compose restart workbench），再打开页面完成设置。")
         ip = A.client_ip(self)
         if _is_private_ip(ip):
             return True, ""
-        return False, ("首次设置只允许在局域网/本机完成。"
-                       "请在教师机（或同一内网的电脑）上打开页面创建账号。")
+        return False, ("首次设置只允许在局域网内完成。"
+                       "请用同一内网的电脑或手机打开页面创建账号。")
 
     # ------------------------------------------------------------------
     # GET
     # ------------------------------------------------------------------
+    def _qf_proxy(self, path, query="", body=None):
+        """把 /qf/* 反向代理给 QuickForm 服务（2026-11-01 深夜新增）。
+
+        为什么：Docker 部署时 /qf 由 nginx 网关转发；但老师直连工作台端口
+        （127.0.0.1:20020，排障/单机跑）时没有网关，/qf/dashboard 会掉进
+        旧静态服务返回「禁止访问」。这里在工作台进程内补一条同款转发：
+        直连、容器两种场景都可用（容器里 WB_QUICKFORM_URL 指向 quickform 容器）。
+        """
+        base = (os.environ.get("WB_QUICKFORM_URL") or "http://127.0.0.1:5055").rstrip("/")
+        # 不跟随重定向：urlopen 默认会在代理内部私吞 302 并按上游地址拼接
+        # Location，而适配层生成的 Location 带 /qf 前缀，拼到上游就成了
+        # /qf/profile 这种 404 路径。必须把 302 原样交回浏览器（2026-11-02）。
+        global _QF_OPENER
+        try:
+            opener = _QF_OPENER
+        except NameError:
+            class _NoRedirect(urllib.request.HTTPRedirectHandler):
+                def redirect_request(self, req, fp, code, msg, headers, newurl):
+                    return None
+            _QF_OPENER = opener = urllib.request.build_opener(_NoRedirect)
+        sub = path[len("/qf"):] or "/"
+        url = base + sub + (("?" + query) if query else "")
+        req = urllib.request.Request(url, data=body,
+                                     method="POST" if body is not None else "GET")
+        for h in ("Cookie", "Content-Type", "Accept", "Accept-Language", "User-Agent"):
+            v = self.headers.get(h)
+            if v:
+                req.add_header(h, v)
+        req.add_header("X-Forwarded-Prefix", "/qf")     # QuickForm 适配层靠它补前缀
+        req.add_header("X-Forwarded-Proto", "http")
+        try:
+            ip = A.client_ip(self)
+        except Exception:
+            ip = ""
+        if ip:
+            req.add_header("X-Forwarded-For", ip)
+        try:
+            with opener.open(req, timeout=30) as r:
+                data, status = r.read(), r.status
+                ctype = r.headers.get("Content-Type", "text/html; charset=utf-8")
+                loc = r.headers.get("Location")
+                setc = r.headers.get("Set-Cookie")
+        except urllib.error.HTTPError as e:
+            data, status = e.read(), e.code
+            ctype = e.headers.get("Content-Type", "text/html; charset=utf-8")
+            loc = e.headers.get("Location")
+            setc = e.headers.get("Set-Cookie")
+        except Exception:
+            msg = ("QuickForm 服务未启动或不可达（%s）。"
+                   "可在服务器上单独启动 QuickForm 后刷新，"
+                   "或改用统一入口（nginx 网关）访问。" % base)
+            body = msg.encode("utf-8")
+            self.send_response(502)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            try:
+                self.wfile.write(body)
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+            return
+        # 上游 302 → /dashboard 之类，补回 /qf 前缀再交给浏览器。
+        # 注意：QuickForm 适配层（serve.py 的 ProxyFix）可能已生成带前缀的
+        # Location（如 /qf/profile），此时不能再补，否则浏览器拿到 /qf/qf/…
+        # 双前缀，剥回上游变成 /qf/profile 直接 404（2026-11-02 登录踩坑）。
+        if loc and status in (301, 302, 303, 307, 308) and loc.startswith("/") \
+                and not loc.startswith("//") and not loc.startswith("/qf/"):
+            loc = "/qf" + loc
+            self.send_response(status)
+            self.send_header("Location", loc)
+            if setc:
+                self.send_header("Set-Cookie", setc)
+            self.send_header("Content-Length", "0")
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            return
+        self.send_response(status)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "no-store")
+        if setc:
+            self.send_header("Set-Cookie", setc)
+        self.end_headers()
+        try:
+            self.wfile.write(data)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+
+    def _qf_internal_call(self, sub_path, method="POST"):
+        """工作台 → QuickForm 的内部可信调用（需求 5：读数据 / 清空 / 删除）。
+
+        QuickForm 自带的删除/清空接口挂在 @login_required + 所有者校验后面，
+        但教师端不登录 QuickForm。适配层 serve.py 新增了 /_wb_internal/* 端点：
+        同机回环直接放行，跨容器则校验 X-WB-Internal 共享密钥。这里负责调用它。
+        """
+        base = (os.environ.get("WB_QUICKFORM_URL") or "http://127.0.0.1:5055").rstrip("/")
+        url = base + sub_path
+        req = urllib.request.Request(
+            url, data=(b"" if method == "POST" else None), method=method)
+        secret = os.environ.get("WB_INTERNAL_SECRET") or ""
+        if secret:
+            req.add_header("X-WB-Internal", secret)
+        try:
+            with urllib.request.urlopen(req, timeout=30) as r:
+                txt, code = r.read().decode("utf-8", "ignore"), r.status
+        except urllib.error.HTTPError as e:
+            txt, code = e.read().decode("utf-8", "ignore"), e.code
+        except Exception as e:
+            sys.stderr.write("[qf-internal] %s -> %r\n" % (url, e))
+            return {"ok": False, "msg": "QuickForm 内部调用失败：%s" % e}, 502
+        try:
+            out = json.loads(txt) if txt.strip() else {}
+        except Exception:
+            out = {"raw": txt[:200]}
+        if not isinstance(out, dict):
+            out = {"raw": txt[:200]}
+        ok = out.get("success") if "success" in out else (200 <= code < 300)
+        out["ok"] = bool(ok)
+        return out, (200 if 200 <= code < 300 else code)
+
     def do_GET(self):
         self._sec_sent = False
         u = urllib.parse.urlparse(self.path)
@@ -376,16 +718,53 @@ class Handler(LEG.Handler):
                 if not self._is_teacher():
                     return self._redirect("/teacher/login")
                 return self._html(P.console_page())
+            # 「/join 扫码进入班级」整页已删除（2026-11-01 牛哥：不要扫码功能）。
+            # 旧二维码/收藏还指着它 → 302 到学生端首页，别让人看到 404。
             if path == "/join":
-                return self._html(P.join_page(CFG.get("class_code", ""),
-                                              public_base(self.headers) + "/s/",
-                                              CFG.get("school_name", "")))
+                return self._redirect("/s/")
+            if path == "/g" or path.startswith("/g/"):
+                return self._guide_gate(path)
+            # 课件下发闸门：学生在导学单「课件库」里打开老师下发的课件（2026-11-01）
+            if path == "/cw" or path.startswith("/cw/"):
+                return self._courseware_gate(path)
+            # 课件在线预览闸门：图片/音视频/PDF 原样内联，Office 经 WPS 转 PDF 内联（2026-11-02）
+            if path == "/cwpv" or path.startswith("/cwpv/"):
+                return self._courseware_preview_gate(path)
             if path == "/s":
                 return self._redirect("/s/")
             if path.startswith("/s/"):
                 return self._student_static(path[3:])
+            # 打字冒险岛：静态页面（页面内容无敏感信息，公开可开；
+            # 成绩与配置一律走 /api/v2/typing/* 鉴权接口）
+            if path == "/typing":
+                return self._redirect("/typing/")
+            if path.startswith("/typing/"):
+                return self._typing_static(path[len("/typing/"):])
+            if path == "/qf":
+                return self._redirect("/qf/")
+            if path.startswith("/qf/"):
+                return self._qf_proxy(path, u.query)
             if path.startswith("/teacher/"):
                 return self._teacher_static(path[len("/teacher/"):])
+            # 学习单开关：活动被「关闭」后，非教师直接打开学生页会被拦下；
+            # 学生端仍能看到条目（projection 会下发 closed 行），只是点开时打不开。
+            if path == "/submit/custom.html" and not self._is_teacher():
+                q2 = urllib.parse.parse_qs(u.query)
+                _task = (q2.get("task") or [""])[0]
+                _cname = (q2.get("class") or [""])[0]
+                if _task and _cname:
+                    _cls = next((c for c in STORE.table_rows("classes")
+                                 if not c.get("deleted")
+                                 and str(c.get("name") or "") == _cname), None)
+                    if _cls:
+                        _hit = next((p for p in STORE.table_rows("activity_pushes")
+                                     if not p.get("deleted")
+                                     and str(p.get("task_id")) == _task
+                                     and str(p.get("class_id")) == str(_cls.get("id"))), None)
+                        if _hit and str(_hit.get("status") or "published") == "closed":
+                            return self._html(_tip_page(
+                                "这份学习单已关闭",
+                                "老师暂时关闭了这份学习单，等老师重新开启后再打开。"), 403)
             # 其余交给旧服务（/vendor /icons /submit /api/enh /api/cw ...）
             return super().do_GET()
         except (BrokenPipeError, ConnectionResetError):
@@ -397,7 +776,7 @@ class Handler(LEG.Handler):
             eid = "%08x" % (int(time.time() * 1000) & 0xFFFFFFFF)
             sys.stderr.write("[get] %s -> [%s] %r\n" % (path, eid, e))
             try:
-                self._json({"ok": False, "msg": "服务端出错了（错误号 %s），请看教师机控制台日志" % eid}, 500)
+                self._json({"ok": False, "msg": "服务端出错了（错误号 %s），请查看服务端日志（docker compose logs workbench）" % eid}, 500)
             except Exception:
                 pass
 
@@ -490,18 +869,326 @@ class Handler(LEG.Handler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _typing_static(self, rel):
+        """打字冒险岛静态资源：/typing/ → 学生端，/typing/teacher.html → 教师管理页。
+        静态文件本身无敏感信息，未登录也可打开（页面进"演示模式"）；
+        数据读写全部走鉴权 API，这里只管把文件送出去。"""
+        rel = (rel or "").replace("\\", "/").lstrip("/")
+        if not rel:
+            rel = "student.html"
+        if ".." in rel.split("/"):
+            return self._json({"ok": False, "msg": "forbidden"}, 403)
+        base = os.path.normpath(os.path.join(ROOT, "typing"))
+        full = os.path.normpath(os.path.join(base, rel))
+        try:
+            if os.path.commonpath([base, full]) != base:
+                return self._json({"ok": False, "msg": "forbidden"}, 403)
+        except ValueError:
+            return self._json({"ok": False, "msg": "forbidden"}, 403)
+        if not os.path.isfile(full):
+            return self._html("<h1>页面不存在</h1>", 404)
+        if not full.lower().endswith((".html", ".js", ".css", ".png", ".svg", ".ico", ".json")):
+            return self._html("<h1>页面不存在</h1>", 404)
+        import mimetypes
+        ctype = mimetypes.guess_type(full)[0] or "application/octet-stream"
+        if ctype.startswith("text/") or ctype in ("application/javascript", "application/json"):
+            ctype += "; charset=utf-8"
+        with open(full, "rb") as f:
+            body = f.read()
+        self.send_response(200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-cache")
+        self.end_headers()
+        self.wfile.write(body)
+
+    # ------------------------------------------------------------------
+    # 导学单入口：/g/<导学单id>/<条目序号>
+    # ------------------------------------------------------------------
+    # 设计要点（2026-11-01）：学生在工作台里已经登录过，导学单页面就不该再让他
+    # 填任何地址/学号。这里由服务端验会话、查出条目、签一张票，再跳过去；
+    # 票只代表「这个学生 + 这一条」，页面改 URL 也换不成别人。
+    # ------------------------------------------------------------------
+    # 课件下发闸门：/cw/<课件库文件id>
+    # ------------------------------------------------------------------
+    # 课件库接口（/api/cw/*）只对教师开放，学生直接访问会被 403。
+    # 老师在课件页点「下发」后，materials 里会多一条 from='courseware'、
+    # src_id=文件id 的记录；这里凭学生会话 + 这条记录放行单个文件——
+    # 没下发的课件、别的班的课件，仍然一个字节都拿不到。
+    def _courseware_resolve(self, fid):
+        """共用：校验「学生会话 + 本班 + 已下发」并解析出课件绝对路径。
+
+        返回 (full_path, None) 表示放行；返回 (None, response) 表示拦截
+        （response 已是可直接返回的 HTTP 响应）。"""
+        s = self._session()
+        if not s or s["role"] != "student":
+            return None, self._redirect("/s/")
+        r = student_row(s.get("student_id"))
+        if not r:
+            return None, self._html(_tip_page("登录状态已失效",
+                                        "请回到学生端重新登录后再打开课件。"), 403)
+        if not fid:
+            return None, self._html(_tip_page("找不到这份课件", "请回到导学单重新点一次。"), 404)
+
+        allowed = False
+        for row in STORE.table_rows("materials"):
+            if row.get("deleted"):
+                continue
+            if str(row.get("from") or "") != "courseware":
+                continue
+            if str(row.get("src_id") or "") != fid:
+                continue
+            if str(row.get("class_id") or "") == str(r.get("class_id")):
+                allowed = True
+                break
+        if not allowed:
+            return None, self._html(_tip_page("这份课件不对你开放",
+                "它可能已被老师收回，或者不属于你所在的班级。"), 403)
+
+        try:
+            full = LEG.CW.abs_of(fid, must_exist=True)
+        except Exception:
+            full = None
+        if not full or not os.path.isfile(full):
+            return None, self._html(_tip_page("课件文件不存在",
+                "老师可能已经移动或删除了这个文件。"), 404)
+        return full, None
+
+    def _courseware_gate(self, path):
+        # do_GET 入口已对整个 path 做过一次 unquote，课件 id 里的「课程/文件名」
+        # 斜杠已被还原 —— 不能再 split/unquote，否则 id 会被从斜杠处切断。
+        fid = path[len("/cw/"):].strip("/") if path.startswith("/cw/") else ""
+        full, err = self._courseware_resolve(fid)
+        if err:
+            return err
+        return self._serve_abs(full)
+
+    def _courseware_preview_gate(self, path):
+        """课件在线预览闸门（2026-11-02）：与 /cw/ 同权限，但会按类型选择
+        浏览器能直接看的形式返回 —— 图片/音视频/PDF/文本原样内联；.pptx/.docx/
+        .xlsx 由服务端渲染成 HTML 内联（纯 Python 解析，不依赖外部程序）；
+        渲染不出来时回退「下载原文件」提示页。"""
+        fid = path[len("/cwpv/"):].strip("/") if path.startswith("/cwpv/") else ""
+        full, err = self._courseware_resolve(fid)
+        if err:
+            return err
+        ext = _ext_of(full)
+        if ext in _OFFICE_EXTS:
+            page, e = _office_to_html(full)
+            if page:
+                return self._html(page, 200)
+            return self._html(_preview_fallback_html(os.path.basename(full), fid, e), 200)
+        # 其余类型（图片/音视频/PDF/HTML/纯文本等）原样输出，交给浏览器原生渲染
+        return self._serve_abs(full)
+
+    def _guide_gate(self, path):
+        s = self._session()
+        if not s or s["role"] != "student":
+            # 未登录：回学生端；登录后从「今日」再点一次即可
+            return self._redirect("/s/")
+        r = student_row(s.get("student_id"))
+        if not r:
+            return self._html(_tip_page("登录状态已失效",
+                                        "请回到学生端重新登录后再打开这个环节。"), 403)
+
+        parts = [p for p in path.split("/") if p]
+        gid = urllib.parse.unquote(parts[1]) if len(parts) > 1 else ""
+        try:
+            idx = int(parts[2]) if len(parts) > 2 else 0
+        except Exception:
+            idx = 0
+
+        g = None
+        for row in STORE.table_rows("guides"):
+            if str(row.get("id")) == str(gid):
+                g = row
+                break
+        if not g or str(g.get("class_id")) != str(r.get("class_id")):
+            return self._html(_tip_page("找不到这份导学单",
+                                        "它可能已被老师收回，或者不属于你所在的班级。"), 404)
+        if str(g.get("status") or "published") != "published":
+            return self._html(_tip_page("这份导学单还没有发放",
+                                        "老师还在这份导学单的草稿状态，稍后再点一次。"), 403)
+
+        items = g.get("items") or []
+        if isinstance(items, str):
+            try:
+                items = json.loads(items)
+            except Exception:
+                items = []
+        if not isinstance(items, list) or idx < 0 or idx >= len(items):
+            return self._html(_tip_page("这个环节还没有内容", "换一个环节试试。"), 404)
+        it = items[idx] if isinstance(items[idx], dict) else {}
+
+        url = str(it.get("url") or "").strip()
+        if not url:
+            return self._html(_tip_page(
+                "这个环节还没有可打开的页面",
+                "老师在这个条目里没有填页面地址（或只写了文字内容）。"
+                "如果它是一段资料，回到学生端「今日 · 导学单」里就能直接读到。"), 404)
+        if url.startswith("/"):
+            url = public_base(self.headers) + url
+
+        # 任务号：条目里显式写了就用，否则从页面地址的查询串里认
+        task = str(it.get("task") or "").strip()
+        if not task:
+            try:
+                q = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+                task = str((q.get("task") or [""])[0] or "").strip()
+            except Exception:
+                task = ""
+
+        cls_name = self._class_name(r.get("class_id"))
+        tok = new_gticket({
+            "sid": str(r.get("id") or ""),
+            "no": str(r.get("student_no") or ""),
+            "name": str(r.get("name") or ""),
+            "cls": cls_name,
+            "gid": str(gid),
+            "idx": idx,
+            "task": task,
+        })
+
+        # 票 + 身份一起挂在 URL 上：页面自己能显示"你是某某"，提交时只认票
+        sep = "&" if "?" in url else "?"
+        qs = urllib.parse.urlencode({
+            "wbT": tok,
+            "wbSid": str(r.get("student_no") or ""),
+            "wbName": str(r.get("name") or ""),
+            "wbCls": cls_name,
+            "wbTask": task,
+            "wbBase": public_base(self.headers),
+            "wbGid": str(gid),
+        })
+        return self._redirect(url + sep + qs)
+
+    # ------------------------------------------------------------------
+    # 学生答题提交中转：POST /api/v2/student/submit?t=<票>
+    # ------------------------------------------------------------------
+    # 为什么不让页面直接 POST 到活动数据服务：
+    #   ① 页面大多在另一个端口（5055），直连要它开 CORS、还得把地址写进页面；
+    #   ② 地址一旦写进页面，老师换机器就要全班改一遍；
+    #   ③ 身份字段如果由页面自己填，学生改个数字就能冒充别人。
+    # 走这里：学生只带一张票，身份由服务端补，活动服务只需要在内网可达。
+    def _student_submit(self, qs):
+        tok = (qs.get("t") or [""])[0] or self.headers.get("X-WB-Ticket") or ""
+        gt = get_gticket(tok)
+        if not gt:
+            return self._json_cors({"ok": False, "msg": "提交凭证已失效，请回到学生端重新打开这一环节"}, 401)
+        base = activity_base()
+        if not base:
+            return self._json_cors({"ok": False,
+                                    "msg": "老师还没有在教师端配置「活动数据服务」地址"}, 503)
+        task = str(gt.get("task") or "").strip()
+        if not task:
+            return self._json_cors({"ok": False,
+                                    "msg": "这个环节没有绑定活动任务，无法提交到数据大屏"}, 400)
+        # 只允许转发到配置里那一个服务的 /api/<task>，不做通用代理（避免被当成跳板）
+        if "/" in task or ".." in task:
+            return self._json_cors({"ok": False, "msg": "任务号不合法"}, 400)
+
+        ctype = self.headers.get("Content-Type") or ""
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except Exception:
+            length = 0
+        if length > 40 * 1024 * 1024:
+            return self._json_cors({"ok": False, "msg": "文件太大（上限 40MB）"}, 413)
+        raw = self.rfile.read(length) if length > 0 else b""
+
+        who = {"学号": gt.get("no") or "", "姓名": gt.get("name") or "",
+               "班级": gt.get("cls") or ""}
+
+        if ctype.lower().startswith("multipart/form-data"):
+            out = _mp_append(raw, ctype, who)
+            if out is None:
+                return self._json_cors({"ok": False, "msg": "提交内容格式无法解析"}, 400)
+            body, ctype = out
+        else:
+            # 非表单（JSON）：身份字段直接覆盖进去
+            try:
+                obj = json.loads(raw.decode("utf-8") or "{}")
+                if not isinstance(obj, dict):
+                    obj = {"答案": raw.decode("utf-8", "ignore")[:5000]}
+            except Exception:
+                obj = {"答案": raw.decode("utf-8", "ignore")[:5000]}
+            obj.update(who)
+            body = json.dumps(obj, ensure_ascii=False).encode("utf-8")
+            ctype = "application/json"
+
+        url = base + "/api/" + urllib.parse.quote(task)
+        req = urllib.request.Request(url, data=body, method="POST")
+        req.add_header("Content-Type", ctype)
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                txt = resp.read().decode("utf-8", "ignore")
+                code = resp.status
+        except Exception as e:
+            sys.stderr.write("[submit] %s -> %r\n" % (url, e))
+            return self._json_cors({"ok": False,
+                                    "msg": "连不上活动数据服务（%s），请让老师在教师端检查地址" % base}, 502)
+        try:
+            out = json.loads(txt) if txt.strip() else {"ok": True}
+        except Exception:
+            out = {"ok": True, "raw": txt[:200]}
+        if isinstance(out, dict) and "ok" not in out:
+            out["ok"] = 200 <= code < 300
+        return self._json_cors(out, 200 if 200 <= code < 300 else code)
+
+    def _json_cors(self, obj, code=200):
+        """给跨端提交用的 JSON：页面可能来自 5055 那个域，要显式放开。
+
+        安全性不靠 Origin：这里认的是「票」，票是服务端签给某个学生的，
+        伪造一张票比伪造一个 Origin 难得多。
+        """
+        self._sec_sent = False
+        body = json.dumps(obj, ensure_ascii=False).encode("utf-8")
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-WB-Ticket")
+        self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
+        self.end_headers()
+        self.wfile.write(body)
+
     # ------------------------------------------------------------------
     # POST
     # ------------------------------------------------------------------
+    def do_OPTIONS(self):
+        """跨端提交的预检：只给提交接口放开，别的一律不响应"""
+        u = urllib.parse.urlparse(self.path)
+        if urllib.parse.unquote(u.path) != "/api/v2/student/submit":
+            self.send_response(404)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        self.send_response(204)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-WB-Ticket")
+        self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
+        self.send_header("Access-Control-Max-Age", "600")
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
     def do_POST(self):
         self._sec_sent = False
         u = urllib.parse.urlparse(self.path)
         path = urllib.parse.unquote(u.path)
+        qs = urllib.parse.parse_qs(u.query)
         try:
+            # 学生答题提交：走票鉴权，不能用 _same_origin 挡（页面在别的端口）
+            if path == "/api/v2/student/submit":
+                return self._student_submit(qs)
             if path.startswith("/api/v2/"):
                 if not self._same_origin():
                     return self._json({"ok": False, "msg": "跨站请求被拒绝"}, 403)
                 return self._v2_post(path)
+            if path == "/qf" or path.startswith("/qf/"):
+                n = int(self.headers.get("Content-Length") or 0)
+                body = self.rfile.read(n) if n > 0 else b""
+                return self._qf_proxy(path, u.query, body=body)
             return super().do_POST()
         except (BrokenPipeError, ConnectionResetError):
             pass
@@ -509,7 +1196,7 @@ class Handler(LEG.Handler):
             eid = "%08x" % (int(time.time() * 1000) & 0xFFFFFFFF)
             sys.stderr.write("[post] %s -> [%s] %r\n" % (path, eid, e))
             try:
-                self._json({"ok": False, "msg": "服务端出错了（错误号 %s），请看教师机控制台日志" % eid}, 500)
+                self._json({"ok": False, "msg": "服务端出错了（错误号 %s），请查看服务端日志（docker compose logs workbench）" % eid}, 500)
             except Exception:
                 pass
 
@@ -520,6 +1207,13 @@ class Handler(LEG.Handler):
         if path == "/api/v2/ping":
             return self._json({"ok": True, "service": "workbench", "version": VERSION,
                                "rev": STORE.rev(), "uptime": int(time.time() - STARTED)})
+        if path == "/api/v2/time":
+            # 服务端时间是考勤判定的唯一时间源（三端校时用，公开无敏感信息）
+            lt = time.localtime()
+            return self._json({"ok": True, "ts": time.time(),
+                               "date": today_str(),
+                               "time": time.strftime("%H:%M:%S", lt),
+                               "dow": lt.tm_wday})
         if path == "/api/v2/state":
             st = STORE.stats()
             return self._json({"ok": True, "empty": STORE.is_empty(),
@@ -533,6 +1227,8 @@ class Handler(LEG.Handler):
                 return self._json({"ok": False, "role": None}, 401)
             out = {"ok": True, "role": s["role"], "rev": STORE.rev(),
                    "modules": PJ.module_flags(CFG)}
+            # 打字冒险岛开关：学生端靠它决定要不要显示"打字"入口
+            out["typing"] = {"enabled": bool((CFG.get("typing") or {}).get("enabled"))}
             if s["role"] == "teacher":
                 out["username"] = CFG["teacher"].get("username", "teacher")
             if s["role"] == "student":
@@ -548,18 +1244,156 @@ class Handler(LEG.Handler):
             return self._public_classes(qs)
         if path == "/api/v2/public/students":
             return self._public_students(qs)
+        if path == "/api/v2/qf-api":
+            # 学生交互式学习单页在「页面加载时」自动拉取 QuickForm 提交地址，
+            # 这样老师分享的裸链接（只带 task、不带 api）也能直接提交。
+            # 地址走工作台的 /qf 前缀（网关与直连部署都由 workbench 代理到 QuickForm，
+            # 浏览器永远同源可达），不暴露后端容器地址。
+            task = (qs.get("task") or [""])[0].strip()
+            if not task:
+                return self._json({"ok": False, "msg": "缺少 task"}, 400)
+            api = "/qf/api/" + urllib.parse.quote(task, safe="")
+            return self._json({"ok": True, "task": task, "api": api})
+        if path == "/api/v2/qf-data":
+            # 数据大屏读取提交（带 _submission_id，供「删除」定位单条记录）。
+            # QuickForm 官方 /api/<task>/all 不带主键，这里走内部端点补齐，只有教师能读。
+            if not self._is_teacher():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            task = (qs.get("task") or [""])[0].strip()
+            if not task:
+                return self._json({"ok": False, "msg": "缺少 task"}, 400)
+            out, code = self._qf_internal_call(
+                "/_wb_internal/list/" + urllib.parse.quote(task, safe=""), method="GET")
+            return self._json(out, code)
         if path == "/api/v2/sync":
             return self._sync_pull(qs)
         if path == "/api/v2/events":
             return self._sse(qs)
         if path == "/api/v2/student/me":
             return self._student_me()
+        if path == "/api/v2/student/guide-ctx":
+            return self._guide_ctx(qs)
+        if path == "/api/v2/teacher/entry":
+            # 首页「学生入口」卡：给出学生机该打开的局域网地址。
+            # 只给教师：地址本身不算秘密，但班级码是（防爬名单），
+            # 所以整块都挂在教师会话后面，学生拿不到。
+            if not self._is_teacher():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            # 地址跟着「老师当前打开工作台用的地址」走：反向代理（NAS 上的
+            # 统一入口）会把 Host / X-Forwarded-* 带过来，学生端链接自然是
+            # http://<NAS>:<入口端口>/s/，不再写死容器内的 20020。
+            port = _port()
+            base = public_base(self.headers)
+            urls = [base + "/s/"]
+            return self._json({"ok": True, "urls": urls, "port": port,
+                               "class_code": CFG.get("class_code") or "",
+                               "school": CFG.get("school_name") or ""})
+        if path == "/api/v2/teacher/activity":
+            if not self._is_teacher():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            return self._json({"ok": True, "api_base": activity_base(),
+                               "submit_hours": (CFG.get("activity") or {}).get("submit_hours", 12)})
         if path == "/api/v2/teacher/security":
             return self._security_status()
         if path == "/api/v2/teacher/console":
             return self._console()
         if path == "/api/v2/teacher/export":
             return self._export(qs)
+        if path == "/api/v2/teacher/export-files":
+            return self._export_files()
+        if path == "/api/v2/typing/config":
+            # 开放状态与年级词库范围：登录与否都可读（学生端入口 / 演示模式都要用）
+            t = CFG.get("typing") or {}
+            return self._json({"ok": True, "enabled": bool(t.get("enabled")),
+                               "grades": t.get("grades") or []})
+        if path == "/api/v2/typing/me":
+            s = self._session()
+            if not s:
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            if s["role"] != "student":
+                return self._json({"ok": False, "msg": "只有学生有练习档案"}, 403)
+            r = student_row(s.get("student_id"))
+            if not r:
+                return self._json({"ok": False, "msg": "学生档案不存在"}, 404)
+            p = TYPING.progress(str(r.get("id")))
+            return self._json({"ok": True,
+                               "me": {"id": str(r.get("id")), "name": r.get("name", ""),
+                                      "class_id": str(r.get("class_id")),
+                                      "class_name": self._class_name(r.get("class_id"))},
+                               "config": {"enabled": bool((CFG.get("typing") or {}).get("enabled")),
+                                          "grades": (CFG.get("typing") or {}).get("grades") or []},
+                               "progress": p,
+                               "pets": PET_IDS})
+        if path == "/api/v2/typing/leaderboard":
+            s = self._session()
+            if not s:
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            scope = (qs.get("scope") or ["week"])[0]
+            if scope not in ("week", "total", "speed"):
+                scope = "week"
+            me_id = None
+            if s["role"] == "teacher":
+                class_id = (qs.get("class_id") or [None])[0]
+            else:
+                r = student_row(s.get("student_id"))
+                if not r:
+                    return self._json({"ok": False, "msg": "学生档案不存在"}, 404)
+                class_id = str(r.get("class_id"))
+                me_id = str(r.get("id"))
+            if class_id in (None, "", "None"):
+                return self._json({"ok": True, "rows": [], "scope": scope})
+            data = TYPING.leaderboard_data(scope)
+            rows = []
+            for st in STORE.table_rows("students"):
+                if st.get("deleted"):
+                    continue
+                if str(st.get("class_id")) != str(class_id):
+                    continue
+                uid = str(st.get("id"))
+                d = data.get(uid)
+                if not d:
+                    continue
+                if scope == "week" and d["value"] <= 0:
+                    continue
+                rows.append({"student_id": uid, "name": st.get("name", ""),
+                             "student_no": st.get("student_no", ""),
+                             "value": d["value"], "stars": d["stars"],
+                             "pet": d["pet"], "decos": d["decos"]})
+            rows.sort(key=lambda x: -x["value"])
+            rows = rows[:50]
+            if me_id:
+                for i, row in enumerate(rows):
+                    if row["student_id"] == me_id:
+                        row["me"] = True
+                        row["rank"] = i + 1
+            return self._json({"ok": True, "scope": scope,
+                               "class_name": self._class_name(class_id), "rows": rows})
+        if path == "/api/v2/typing/overview":
+            # 教师端：各班参与统计（班级下拉 + 数据卡）
+            if not self._is_teacher():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            data = TYPING.overview()
+            classes = []
+            for c in STORE.table_rows("classes"):
+                if c.get("deleted"):
+                    continue
+                n = {"id": str(c.get("id")), "name": c.get("name", ""),
+                     "students": 0, "joined": 0, "levels": 0, "stars": 0, "best_wpm": 0}
+                for st in STORE.table_rows("students"):
+                    if st.get("deleted") or str(st.get("class_id")) != str(c.get("id")):
+                        continue
+                    n["students"] += 1
+                    d = data.get(str(st.get("id")))
+                    if d and d["levels"] > 0:
+                        n["joined"] += 1
+                        n["levels"] += d["levels"]
+                        n["stars"] += d["stars"]
+                        n["best_wpm"] = max(n["best_wpm"], d["best_wpm"])
+                classes.append(n)
+            t = CFG.get("typing") or {}
+            return self._json({"ok": True, "classes": classes,
+                               "enabled": bool(t.get("enabled")),
+                               "grades": t.get("grades") or []})
         return self._json({"ok": False, "msg": "未知接口"}, 404)
 
     def _sync_pull(self, qs):
@@ -594,11 +1428,18 @@ class Handler(LEG.Handler):
                 return self._json({"ok": False, "msg": "学生档案不存在，请联系老师"}, 403)
             ctx = PJ.student_context(r)
         stat_rows = None
+        group_src = None
         if scope == "student" and "scores" in tables:
             # 班均/位次按“全班这一刻的完整成绩”算。增量同步只带 1 行，
             # 拿它算出来的“班均”其实就是这一个人的分数（甚至为空）。
             stat_rows = STORE.table_rows("scores")
-        tables = PJ.project(scope, ctx, tables, CFG, stats_scores=stat_rows)
+        if scope == "student" and "groups" in tables:
+            # 小组成员名单同理：组员 id → 姓名要全量 students/seats 才能映射
+            # （增量同步的 tables 里往往没有这两张表），由服务端注入后计算。
+            group_src = {"students": STORE.table_rows("students"),
+                         "seats": STORE.table_rows("seats")}
+        tables = PJ.project(scope, ctx, tables, CFG, stats_scores=stat_rows,
+                            group_src=group_src)
         SESS.touch(A.parse_cookie(self.headers.get("Cookie")))
         return self._json({
             "ok": True, "rev": rev, "since": since, "has_more": has_more,
@@ -685,6 +1526,58 @@ class Handler(LEG.Handler):
             if str(c.get("id")) == str(cid):
                 return c.get("name", "")
         return ""
+
+    def _guide_ctx(self, qs):
+        """同源页面问"我是谁、这一条交到哪"。
+
+        /g/<gid>/<idx> 那种跳转已经把票和身份挂在 URL 上了，一般用不上这里。
+        这个接口是给「页面自己不知道被哪条导学单打开」的情况兜底，比如老师把
+        页面地址直接写进导学单条目、学生从学生端同源打开。
+        """
+        s = self._session()
+        if not s or s["role"] != "student":
+            return self._json({"ok": False, "msg": "未登录"}, 401)
+        r = student_row(s.get("student_id"))
+        if not r:
+            return self._json({"ok": False, "msg": "学生档案不存在"}, 404)
+        gid = str((qs.get("gid") or [""])[0] or "")
+        try:
+            idx = int((qs.get("idx") or ["0"])[0] or 0)
+        except Exception:
+            idx = 0
+
+        task = ""
+        it = {}
+        for row in STORE.table_rows("guides"):
+            if str(row.get("id")) != gid:
+                continue
+            if str(row.get("class_id")) != str(r.get("class_id")):
+                break
+            items = row.get("items") or []
+            if isinstance(items, str):
+                try:
+                    items = json.loads(items)
+                except Exception:
+                    items = []
+            if isinstance(items, list) and 0 <= idx < len(items) and isinstance(items[idx], dict):
+                it = items[idx]
+                task = str(it.get("task") or "").strip()
+            break
+
+        cls_name = self._class_name(r.get("class_id"))
+        tok = new_gticket({
+            "sid": str(r.get("id") or ""), "no": str(r.get("student_no") or ""),
+            "name": str(r.get("name") or ""), "cls": cls_name,
+            "gid": gid, "idx": idx, "task": task,
+        })
+        return self._json({
+            "ok": True,
+            "sid": str(r.get("student_no") or ""), "name": str(r.get("name") or ""),
+            "cls": cls_name, "gid": gid, "idx": idx,
+            "task": task, "ticket": tok,
+            "submit": "/api/v2/student/submit?t=" + tok,
+            "api_base": activity_base(),
+        })
 
     def _security_status(self):
         """教师端「账号与密码」卡片用：当前账号 + 密保是否已设置"""
@@ -794,6 +1687,7 @@ class Handler(LEG.Handler):
                 "initial_password": (CFG.get("student") or {}).get("initial_password", "123456"),
                 "force_change": bool((CFG.get("student") or {}).get("force_change")),
                 "custom_count": STORE.cred_count(),
+                "custom_ids": STORE.cred_ids(),
             },
             "audit": STORE.recent_audit(20),
         })
@@ -806,7 +1700,7 @@ class Handler(LEG.Handler):
         # 以前只给数据表 + 脱敏配置，恢复到新机器后教师账号、学生口令全丢，
         # 还得重新初始化账号逐个重设密码，谈不上「换机一键可用」。
         # 全量模式带上教师账号（含口令哈希与密保哈希）和学生口令哈希表——
-        # 文件本身由前端用备份密码整体加密后落盘，明文不出教师机。
+        # 文件本身由前端用备份密码整体加密后落盘，明文不出服务端。
         full = (qs.get("full") or [""])[0] in ("1", "true")
         data = {"version": VERSION, "exported_at": now_str(),
                 "tables": STORE.snapshot(),
@@ -825,6 +1719,131 @@ class Handler(LEG.Handler):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    # ------------------------------------------------------------------
+    # 课程资料包：课件库文件的整包导出 / 恢复
+    # ------------------------------------------------------------------
+    # 为什么数据备份之外还要一个文件包：
+    #   全量备份是 JSON（表 + 配置 + 口令哈希），塞不下几百 MB 的课件二进制；
+    #   而课件目录在容器里是数据卷 —— 只恢复 JSON 的话，materials 里有记录、
+    #   文件却不见了。所以两者配对使用：数据备份 + 课程资料包。
+    def _cw_root(self):
+        try:
+            return os.path.normpath(LEG.CW.root_dir())
+        except Exception:
+            return ""
+
+    def _export_files(self):
+        """把课件库整棵树打成 zip 下载（保留课程子目录结构）。"""
+        if not self._is_teacher():
+            return self._json({"ok": False, "msg": "未登录"}, 401)
+        root = self._cw_root()
+        if not root or not os.path.isdir(root):
+            return self._json({"ok": False,
+                               "msg": "课件库目录不存在（还没有上传过资料）"}, 404)
+        bdir = os.path.join(DATA_DIR, "backup")
+        os.makedirs(bdir, exist_ok=True)
+        stamp = time.strftime("%Y%m%d-%H%M")
+        out = os.path.join(bdir, "courseware-%s.zip" % stamp)
+        n = 0
+        try:
+            with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+                for dirpath, dirnames, filenames in os.walk(root):
+                    dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+                    for fn in filenames:
+                        if fn.startswith("."):
+                            continue
+                        full = os.path.join(dirpath, fn)
+                        rel = os.path.relpath(full, root).replace(os.sep, "/")
+                        try:
+                            z.write(full, rel)
+                            n += 1
+                        except Exception:
+                            pass
+        except Exception as e:
+            return self._json({"ok": False, "msg": "打包失败：%s" % e}, 500)
+        if not n:
+            try:
+                os.remove(out)
+            except Exception:
+                pass
+            return self._json({"ok": False, "msg": "课件库是空的，没有可导出的文件"}, 404)
+        # 只留最近 3 个包，别把数据卷撑满
+        try:
+            olds = sorted([os.path.join(bdir, f) for f in os.listdir(bdir)
+                           if f.startswith("courseware-") and f.endswith(".zip")])
+            for p in olds[:-3]:
+                os.remove(p)
+        except Exception:
+            pass
+        self._serve_abs(out, download=True,
+                        ctype="application/zip",
+                        name="课程资料包-%s.zip" % stamp)
+        return None
+
+    def _import_files(self):
+        """接收课程资料包（zip），解压回课件库目录。"""
+        if not self._is_teacher():
+            return self._json({"ok": False, "msg": "只有教师端可以导入"}, 403)
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except Exception:
+            length = 0
+        if length <= 0:
+            return self._json({"ok": False, "msg": "没有收到文件内容"}, 400)
+        if length > 2 * 1024 * 1024 * 1024:
+            return self._json({"ok": False, "msg": "资料包太大（上限 2GB）"}, 413)
+        root = self._cw_root()
+        if not root:
+            return self._json({"ok": False, "msg": "课件库目录不可用"}, 500)
+        os.makedirs(root, exist_ok=True)
+        tmp = os.path.join(DATA_DIR, "backup", "_import-files.zip")
+        os.makedirs(os.path.dirname(tmp), exist_ok=True)
+        remain = length
+        try:
+            with open(tmp, "wb") as f:
+                while remain > 0:
+                    chunk = self.rfile.read(min(1 << 20, remain))
+                    if not chunk:
+                        break
+                    f.write(chunk)
+                    remain -= len(chunk)
+        except Exception as e:
+            return self._json({"ok": False, "msg": "接收文件失败：%s" % e}, 500)
+        n = skipped = 0
+        try:
+            with zipfile.ZipFile(tmp) as z:
+                for info in z.infolist():
+                    name = info.filename.replace("\\", "/")
+                    if info.is_dir() or name.startswith("__MACOSX") or "/." in name:
+                        continue
+                    # 目录穿越防护：只允许相对路径，且不能逃出课件库根目录
+                    parts = [p for p in name.split("/") if p not in ("", ".", "..")]
+                    if not parts or name.startswith("/"):
+                        skipped += 1
+                        continue
+                    dest = os.path.join(root, *parts)
+                    if not os.path.abspath(dest).startswith(os.path.abspath(root) + os.sep):
+                        skipped += 1
+                        continue
+                    os.makedirs(os.path.dirname(dest), exist_ok=True)
+                    with z.open(info) as src, open(dest, "wb") as dst:
+                        shutil.copyfileobj(src, dst)
+                    n += 1
+        except Exception as e:
+            return self._json({"ok": False, "msg": "解压失败：%s" % e}, 400)
+        finally:
+            try:
+                os.remove(tmp)
+            except Exception:
+                pass
+        try:
+            LEG.CW.ensure_root(root)
+        except Exception:
+            pass
+        STORE.audit("teacher", "import-courseware", "%d 个文件 -> %s" % (n, root))
+        notify()
+        return self._json({"ok": True, "files": n, "skipped": skipped, "root": root})
 
     # ------------------------------------------------------------------
     # 学生口令校验
@@ -852,9 +1871,31 @@ class Handler(LEG.Handler):
     # /api/v2 POST
     # ------------------------------------------------------------------
     def _v2_post(self, path):
+        # 课程资料包是 zip 二进制，必须在这里截住：下面 _read_json 会把它当 JSON 读坏
+        if path == "/api/v2/admin/import-files":
+            return self._import_files()
         body = self._read_json()
         if body is None:
             return          # 请求体过大，_read_json 已经回过 413 了
+        # 数据大屏：清空本活动全部提交 / 删除单条提交（需求 5，2026-11-02）
+        # 参数走查询串（前端 fetch 只带 URL），body 为空时用 body 兜底。
+        # 必须教师登录：学生页与教师页同源，只靠同源校验拦不住学生乱调。
+        if path in ("/api/v2/qf-clear", "/api/v2/qf-del-sub"):
+            if not self._is_teacher():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            q2 = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            task = str((q2.get("task") or [body.get("task") or ""])[0] or "").strip()
+            if path == "/api/v2/qf-clear":
+                if not task:
+                    return self._json({"ok": False, "msg": "缺少 task"}, 400)
+                out, code = self._qf_internal_call(
+                    "/_wb_internal/clear/" + urllib.parse.quote(task, safe=""))
+                return self._json(out, code)
+            sub = str((q2.get("sub") or [body.get("sub") or ""])[0] or "").strip()
+            if not sub.isdigit():
+                return self._json({"ok": False, "msg": "缺少或非法的 sub"}, 400)
+            out, code = self._qf_internal_call("/_wb_internal/delete/%s" % sub)
+            return self._json(out, code)
         if path == "/api/v2/auth/setup":
             if CFG["teacher"].get("password_hash"):
                 return self._json({"ok": False, "msg": "账号已设置"}, 400)
@@ -945,8 +1986,18 @@ class Handler(LEG.Handler):
             tok = SESS.create("student", CFG["student"].get("session_hours", 8),
                               student_id=hit.get("id"))
             STORE.audit("student:%s" % hit.get("name"), "login", ip)
+            # v2 考勤：登录成功即自动签到（迟到 / 出勤由服务端按课表时间判定）。
+            # 失败不影响登录本身——签到还可以在学生端手动补。
+            auto_ck = None
+            try:
+                _ok, _info = self._auto_checkin(hit.get("id"))
+                if _ok:
+                    auto_ck = _info
+            except Exception:
+                pass
             return self._set_session_headers(tok, extra={
-                "must_change": bool(must), "name": hit.get("name")},
+                "must_change": bool(must), "name": hit.get("name"),
+                "checkin": auto_ck or None},
                 hours=CFG["student"].get("session_hours", 8))
         if path == "/api/v2/auth/logout":
             tok = A.parse_cookie(self.headers.get("Cookie"))
@@ -967,7 +2018,7 @@ class Handler(LEG.Handler):
             return self._json({
                 "ok": True, "has_qa": ok_qa, "username": want_user,
                 "question": sec["question"] if ok_qa else "",
-                "msg": "" if ok_qa else "这个账号还没设置密保问题，只能请管理员在教师机上重置",
+                "msg": "" if ok_qa else "这个账号还没设置密保问题，只能请管理员在服务器上重置",
             })
         if path == "/api/v2/auth/qa/verify":
             ip = A.client_ip(self)
@@ -1053,6 +2104,87 @@ class Handler(LEG.Handler):
             STORE.audit("teacher", "change-password", ip)
             return self._json({"ok": True})
 
+        # ---------------- 打字冒险岛 ----------------
+        if path == "/api/v2/typing/config":
+            # 教师开放开关 + 年级词库选择（关掉后学生端入口实时消失）
+            if not self._is_teacher():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            t = CFG.setdefault("typing", {})
+            if "enabled" in body:
+                t["enabled"] = bool(body["enabled"])
+            if "grades" in body:
+                gs = []
+                for g in (body.get("grades") or []):
+                    try:
+                        gi = int(g)
+                    except Exception:
+                        continue
+                    if 1 <= gi <= 9 and gi not in gs:
+                        gs.append(gi)
+                t["grades"] = sorted(gs)
+            cfg_save()
+            notify_cfg()
+            STORE.audit("teacher", "typing-config",
+                        json.dumps(t, ensure_ascii=False))
+            return self._json({"ok": True, "enabled": t["enabled"], "grades": t["grades"]})
+        if path == "/api/v2/typing/record":
+            s = self._session()
+            if not s or s["role"] != "student":
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            if not (CFG.get("typing") or {}).get("enabled"):
+                return self._json({"ok": False, "msg": "老师还没有开放打字练习"}, 403)
+            r = student_row(s.get("student_id"))
+            if not r:
+                return self._json({"ok": False, "msg": "学生档案不存在"}, 404)
+            res = TYPING.record(str(r.get("id")), body)
+            if res.get("ok") and res.get("new_best"):
+                STORE.audit("student:%s" % r.get("name"), "typing-record",
+                            "s%sc%sl%s %s星" % (body.get("stage"), body.get("chapter"),
+                                               body.get("level"), res.get("stars")))
+            return self._json(res)
+        if path == "/api/v2/typing/claim":
+            s = self._session()
+            if not s or s["role"] != "student":
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            return self._json(TYPING.claim_egg(str(s.get("student_id")), PET_IDS))
+        if path == "/api/v2/typing/equip":
+            s = self._session()
+            if not s or s["role"] != "student":
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            return self._json(TYPING.equip(str(s.get("student_id")),
+                                           str(body.get("pet") or ""),
+                                           body.get("decos") or []))
+        if path == "/api/v2/typing/buy":
+            # 金币商店：kind = deco（装扮）/ item（道具）
+            s = self._session()
+            if not s or s["role"] != "student":
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            if not (CFG.get("typing") or {}).get("enabled"):
+                return self._json({"ok": False, "msg": "老师还没有开放打字练习"}, 403)
+            uid = str(s.get("student_id"))
+            kind = str(body.get("kind") or "")
+            oid = str(body.get("id") or "")
+            if kind == "deco":
+                res = TYPING.buy_deco(uid, oid)
+            elif kind == "item":
+                res = TYPING.buy_item(uid, oid)
+            else:
+                res = {"ok": False, "msg": "未知的商品类型"}
+            if res.get("ok"):
+                STORE.audit("student", "typing-buy", "%s:%s" % (kind, oid))
+            return self._json(res)
+        if path == "/api/v2/typing/use-item":
+            s = self._session()
+            if not s or s["role"] != "student":
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            return self._json(TYPING.use_item(str(s.get("student_id")),
+                                              str(body.get("id") or "")))
+        if path == "/api/v2/typing/reset-week":
+            if not self._is_teacher():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            TYPING.reset_week()
+            STORE.audit("teacher", "typing-reset-week", "")
+            return self._json({"ok": True})
         if path == "/api/v2/sync":
             if not self._is_teacher():
                 return self._json({"ok": False, "msg": "只有教师端可以写入"}, 403)
@@ -1140,6 +2272,24 @@ class Handler(LEG.Handler):
             return self._json({"ok": True, "username": CFG["teacher"].get("username")})
         if path == "/api/v2/teacher/modules":
             return self._teacher_toggle("modules", body)
+        if path == "/api/v2/teacher/activity":
+            if not self._is_teacher():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            base = str(body.get("api_base") or "").strip().rstrip("/")
+            if base and not (base.startswith("http://") or base.startswith("https://")):
+                return self._json({"ok": False, "msg": "地址要以 http:// 或 https:// 开头"}, 400)
+            act = CFG.setdefault("activity", {})
+            act["api_base"] = base
+            try:
+                h = float(body.get("submit_hours") or 12)
+            except Exception:
+                h = 12
+            act["submit_hours"] = max(1, min(h, 72))
+            cfg_save()
+            notify_cfg()
+            STORE.audit("teacher", "activity-cfg", base or "(清空)")
+            return self._json({"ok": True, "api_base": activity_base(),
+                               "submit_hours": act["submit_hours"]})
         if path == "/api/v2/teacher/visibility":
             return self._teacher_toggle("visibility", body)
         if path == "/api/v2/teacher/code":
@@ -1334,28 +2484,78 @@ class Handler(LEG.Handler):
             if not ok:
                 return self._json({"ok": False, "msg": msg}, 400)
         d = today_str()
+        ok2, info = self._write_checkin(sid, st, p, period, d, "student")
+        if not ok2:
+            return self._json({"ok": False, "msg": info or "签到失败"}, 400)
+        return self._json(dict({"ok": True, "rev": STORE.rev()}, **info))
+
+    def _write_checkin(self, sid, st, p, period, d, source):
+        """登录自动签到 / 学生手动签到共用的落库核心。
+
+        v2 考勤判定规则（服务端时间为唯一时间源）：
+        · 课表开始 5 分钟内签到 → 出勤（checked）；超过 5 分钟 → 迟到（late）
+        · 教师已登记病假 / 事假 → 保留请假状态，不被签到覆盖（请假优先级最高）
+        · 已被自动记缺勤的学生到堂 → 改判迟到，reason 留痕「缺勤后到堂」
+        · 首次签到时间留住：反复签到不会把迟到「刷」成准时
+        """
         rid = "ck%s-%s-%s" % (sid, d, period)
         old = STORE.get_row("attendance", rid) or {}
         first = str(old.get("checked_at") or "")
+        old_status = str(old.get("status") or "")
+
+        now_min = time.localtime().tm_hour * 60 + time.localtime().tm_min
+        def _mins(v):
+            a = str(v or "").split(":")
+            try:
+                return int(a[0]) * 60 + int(a[1] or 0)
+            except Exception:
+                return -1
+        start_min = _mins((p or {}).get("start_time"))
+        late = start_min >= 0 and now_min - start_min > 5
+
+        if old_status in ("sick", "personal"):
+            status = old_status                       # 请假优先级最高
+        elif old_status == "absent":
+            status = "late"                           # 缺勤线后到堂 → 改判迟到
+        else:
+            status = "late" if late else "checked"
+
+        reason = str(old.get("reason") or "")
+        if old_status == "absent" and status == "late" and "缺勤后到堂" not in reason:
+            reason = (reason + "；" if reason else "") + "缺勤后到堂"
         row = dict(old)
         row.pop("_rev", None)
         row.update({
             "id": rid, "student_id": sid, "class_id": st.get("class_id"),
-            "date": d, "period": period, "status": "checked",
-            "reason": old.get("reason") or "",
-            "source": "student",
-            # 第一次签到的时间要留住：学生反复点不会把迟到“刷”成准时
+            "date": d, "period": period, "status": status,
+            "reason": reason,
+            "source": source,
             "checked_at": first or time.strftime("%H:%M"),
             "updated_at": now_str(),
         })
-        STORE.upsert("attendance", row, "student")
-        STORE.audit("student:%s" % sid, "checkin", "%s p%s" % (d, period))
+        STORE.upsert("attendance", row, source)
+        STORE.audit("%s:%s" % (source, sid), "checkin", "%s p%s %s" % (d, period, status))
         notify()
-        return self._json({"ok": True, "rev": STORE.rev(), "date": d,
-                           "period": period,
-                           "period_label": (p or {}).get("label") or ("第 %s 节" % period),
-                           "checked_at": row["checked_at"],
-                           "already": bool(first)})
+        return True, {"date": d, "period": period, "status": status,
+                      "period_label": (p or {}).get("label") or ("第 %s 节" % period),
+                      "checked_at": row["checked_at"],
+                      "already": bool(first)}
+
+    def _auto_checkin(self, sid):
+        """学生登录成功即自动签到（按当前节次，窗口外静默跳过）。"""
+        st = student_row(sid)
+        if not st:
+            return False, "学生档案不存在"
+        if not A.rate_ok("ck:%s" % sid, 20, 60):
+            return False, "签到太频繁了，稍等一下"
+        p = self._current_period()
+        if not p:
+            return False, ""                          # 课间/放学后不产生考勤
+        ok, msg = self._period_time_ok(p)
+        if not ok:
+            return False, msg
+        period = int(float(p.get("seq") or p.get("id") or 1))
+        return self._write_checkin(sid, st, p, period, today_str(), "login")
 
     def _teacher_toggle(self, kind, body):
         if not self._is_teacher():
@@ -1469,7 +2669,7 @@ def _port():
 # ---------------------------------------------------------------------------
 # 旧模块（/api/enh、/api/cw、/api/config…）原本完全没有身份概念，默认
 # 「同一个 Wi-Fi 里都是自己人」。现在它们被复用在同一进程里，就统一按主服务的
-# 会话判断角色；单独运行旧服务时钩子为空，那边会退化成「只认本机」。
+# 会话判断角色；单独运行旧服务时钩子为空，那边会退化成「只认回环地址」。
 def _leg_role(handler):
     s = handler._session()
     if not s:
@@ -1506,6 +2706,91 @@ try:
     LEG.ENH.ROSTER_PROVIDER = _leg_roster
 except Exception:
     pass
+
+
+# ----------------------------------------------------------------------
+# v2 考勤：缺勤自动扫描（服务端线程，每 30 秒一次）
+# 上课开始 15 分钟仍未登录、且没有任何考勤记录（含教师登记的请假）
+# → 自动记缺勤；之后到堂的，登录签到时自动改判迟到（见 _write_checkin）。
+# ----------------------------------------------------------------------
+def _mins_of(v):
+    a = str(v or "").split(":")
+    try:
+        return int(a[0]) * 60 + int(a[1] or 0)
+    except Exception:
+        return -1
+
+
+def absent_sweep_once():
+    rows = [r for r in STORE.table_rows("periods") if not r.get("deleted")]
+    if not rows:
+        return 0
+    lt = time.localtime()
+    cur = lt.tm_hour * 60 + lt.tm_min
+    dow = lt.tm_wday                      # 0=周一，与 lessons.day_of_week 同口径
+    curp = None
+    for r in rows:
+        s, e = _mins_of(r.get("start_time")), _mins_of(r.get("end_time"))
+        if s >= 0 and e > s and s <= cur <= e:
+            curp = r
+            break
+    if not curp:
+        return 0                          # 课间 / 放学后不判定
+    s = _mins_of(curp.get("start_time"))
+    e = _mins_of(curp.get("end_time"))
+    if not (s + 15 <= cur <= e + 30):
+        return 0                          # 15 分钟线之前 / 下课 30 分钟后不扫
+    try:
+        period = int(float(curp.get("seq") or curp.get("id") or 1))
+    except Exception:
+        return 0
+    d = today_str()
+    # 今天有排课的班级（按课表判定；课表为空则退化为「本节已有人签到」的班级）
+    lesson_cls = set()
+    for l in STORE.table_rows("lessons"):
+        if l.get("deleted"):
+            continue
+        try:
+            if int(float(l.get("day_of_week"))) == dow and \
+               l.get("class_id") not in (None, ""):
+                lesson_cls.add(str(l.get("class_id")))
+        except Exception:
+            pass
+    if not lesson_cls:
+        for a in STORE.table_rows("attendance"):
+            if str(a.get("date")) == d and \
+               int(float(a.get("period") or 1)) == period and \
+               a.get("class_id") not in (None, ""):
+                lesson_cls.add(str(a.get("class_id")))
+    n = 0
+    for cls in lesson_cls:
+        stus = [r for r in STORE.table_rows("students")
+                if not r.get("deleted") and str(r.get("class_id")) == cls]
+        for st in stus:
+            sid = st.get("id")
+            rid = "ck%s-%s-%s" % (sid, d, period)
+            if STORE.get_row("attendance", rid):
+                continue                  # 已有记录（出勤/迟到/请假）不动
+            STORE.upsert("attendance", {
+                "id": rid, "student_id": sid, "class_id": cls,
+                "date": d, "period": period, "status": "absent",
+                "reason": "上课15分钟未登录", "source": "auto",
+                "updated_at": now_str(),
+            }, "auto")
+            n += 1
+    if n:
+        STORE.audit("auto", "absent-sweep", "%s p%d n=%d" % (d, period, n))
+        notify()
+    return n
+
+
+def absent_sweeper():
+    while True:
+        time.sleep(30)
+        try:
+            absent_sweep_once()
+        except Exception:
+            pass                          # 扫描失败不影响主服务
 
 
 def main():
@@ -1576,6 +2861,10 @@ def main():
         print("[workbench] 端口 %d 绑定失败：%s" % (port, e))
         print("            可以手动指定端口：python server.py --port 20200")
         sys.exit(2)
+
+    # v2 考勤：缺勤自动扫描线程（上课 15 分钟未登录 → 缺勤）
+    threading.Thread(target=absent_sweeper, daemon=True,
+                     name="absent-sweeper").start()
     httpd.daemon_threads = True
 
     # 会话/限速表的定期清理：长时间运行（教室整学期不关机）时防止内存缓慢增长
@@ -1595,7 +2884,7 @@ def main():
     def _quiet_error(request, client_address):
         pass
     httpd.handle_error = _quiet_error
-    print("[workbench] 教师端 http://127.0.0.1:%d/teacher/" % port)
+    print("[workbench] 服务已启动 · 教师端 http://127.0.0.1:%d/teacher/（容器内地址）" % port)
     for ip in lan_ips()[:3]:
         print("[workbench] 学生端 http://%s:%d/s/" % (ip, port))
     try:

@@ -78,7 +78,7 @@ def _page(title, body, extra_head=""):
 LOGIN_BODY = """
 <div class="card" style="max-width:420px;margin:8vh auto 0">
   <div class="brand">__LOGO__<div><div style="font-weight:750;font-size:15px">班级工作台</div>
-  <div style="font-size:12px;color:#849690">教师端 · 本机即服务端</div></div></div>
+  <div style="font-size:12px;color:#849690">教师端 · 服务端部署</div></div></div>
   <h1>教师登录</h1>
   <p class="sub">用你设置的管理员账号进入工作台。</p>
   <form id="f">
@@ -93,7 +93,7 @@ LOGIN_BODY = """
     <a href="/teacher/forgot" style="color:#0F6E56;text-decoration:none">忘记密码？用密保问题重设 →</a>
   </div>
   <div class="tip">学生请访问 <code>/s/</code>，选择班级和学号，用老师给的密码登录。<br>
-  没设密保问题又忘了密码：在教师机上运行 <code>python launch.py --reset-password</code>。</div>
+  没设密保问题又忘了密码：在服务器上执行 <code>docker compose exec workbench python launch.py --reset-password</code>。</div>
 </div>
 <script>
 document.getElementById('f').onsubmit = async function(e){
@@ -114,7 +114,7 @@ SETUP_BODY = """
   <div class="brand">__LOGO__<div><div style="font-weight:750;font-size:15px">班级工作台</div>
   <div style="font-size:12px;color:#849690">首次启动 · 只需设置一次</div></div></div>
   <h1>创建管理员账号</h1>
-  <p class="sub">这个账号保护教师端和全部学生数据，只保存在本机，不上传、不联网。</p>
+  <p class="sub">这个账号保护教师端和全部学生数据，只保存在服务端，不上传第三方、不联外网。</p>
   <form id="f">
     <label>账号</label>
     <input id="user" type="text" autocomplete="username" value="teacher" autofocus>
@@ -195,8 +195,9 @@ FORGOT_BODY = """
   </div>
 
   <div class="tip" id="fallback" style="display:none">
-    这个账号还没设置密保问题，无法自助找回。请在教师机上运行
-    <code>python launch.py --reset-password</code> 清除口令后重新设置（数据不会丢）。
+    这个账号还没设置密保问题，无法自助找回。请在服务器上执行
+    <code>docker compose exec workbench python launch.py --reset-password</code>
+    清除口令后重新设置（数据不会丢）。
   </div>
   <div style="margin-top:16px;font-size:13px;text-align:center">
     <a href="/teacher/login" style="color:#5F6E68">← 返回登录</a>
@@ -253,35 +254,9 @@ def forgot_page():
     return _page("找回密码 · 班级工作台", FORGOT_BODY.replace("__LOGO__", LOGO))
 
 
-JOIN_BODY = """
-<div class="card" style="max-width:520px;margin:6vh auto 0;text-align:center">
-  <div class="brand" style="justify-content:center">__LOGO__<div style="font-weight:750;font-size:15px">__SCHOOL__</div></div>
-  <h1>扫码进入班级</h1>
-  <p class="sub">同一个局域网，手机相机扫码即可，不用装 App。</p>
-  <div id="qr"></div>
-  <div class="url" style="margin-top:8px">__URL__</div>
-  <div style="margin-top:16px;font-size:13.4px;color:#55655F;line-height:2">
-    进入后：<b>选班级 → 选学号（姓名自动带出）→ 输入密码</b><br>
-    初始密码由老师设定（默认 123456），进去后可以自己改。
-  </div>
-  <div class="tip">打不开？确认手机连的是同一个 Wi-Fi，且教师机没有休眠。</div>
-</div>
-<script src="/vendor/qrcode.min.js"></script>
-<script>
-try{new QRCode(document.getElementById('qr'),{text:"__URL__",width:190,height:190,
-  correctLevel:QRCode.CorrectLevel.M});}catch(e){}
-</script>"""
-
-
-def join_page(class_code, url, school=""):
-    # 校名来自配置文件，URL 来自请求 Host —— 都要转义后再拼进 HTML。
-    # 以前直接 replace 进去：校名里写个 <img onerror=...> 就是一个存储型 XSS
-    # （而且是投屏到大屏上的页面，影响面更大）。
-    import html as _h
-    body = (JOIN_BODY.replace("__LOGO__", LOGO)
-            .replace("__SCHOOL__", _h.escape(school or "班级工作台"))
-            .replace("__URL__", _h.escape(url or "", quote=False)))
-    return _page("扫码进入 · 班级工作台", body)
+# 「/join 扫码进入班级」整页已删除（2026-11-01 牛哥：不要扫码功能）。
+# JOIN_BODY / join_page / 二维码脚本一并移除；旧地址 /join 在 server.py
+# 里 302 到 /s/，旧的二维码和收藏不会落到 404。
 
 
 CONSOLE_HTML = r"""<!DOCTYPE html>
@@ -305,6 +280,7 @@ CONSOLE_HTML = r"""<!DOCTYPE html>
 .inp-row{display:flex;gap:8px;margin-top:8px}
 .inp-row input{flex:1}
 .inp-row button{flex:none;padding:10px 14px;font-size:13.5px}
+@keyframes cIn{from{opacity:0;transform:translateY(10px) scale(.97)}to{opacity:1;transform:none}}
 </style></head>
 <body><div class="wrap">
   <div class="top">
@@ -313,7 +289,6 @@ CONSOLE_HTML = r"""<!DOCTYPE html>
       <div class="mini" id="sub">加载中…</div></div></div>
     <div class="links">
       <a href="/teacher/">返回工作台</a>
-      <a href="/join" target="_blank">投屏二维码</a>
       <a href="javascript:void 0" id="logout">退出</a>
     </div>
   </div>
@@ -321,9 +296,18 @@ CONSOLE_HTML = r"""<!DOCTYPE html>
   <div class="grid">
     <div class="card">
       <h2><span class="dot"></span>学生入口</h2>
-      <div id="qr"></div>
       <div class="url" id="entryUrl">—</div>
-      <div class="tip">学生扫码后：选班级 → 选学号 → 输密码。姓名会自动带出来，不用手打。</div>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:10px;padding:9px 11px;
+        background:#F4FAF7;border:1px solid rgba(15,110,86,.14);border-radius:10px">
+        <span style="font-size:12.2px;color:#5F6E68;flex:none">班级码</span>
+        <b id="clsCode" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:19px;
+          font-weight:750;letter-spacing:.12em;color:#0F6E56">—</b>
+        <button id="copyCode" type="button" style="margin-left:auto;flex:none;padding:5px 10px;
+          font-size:12px;font-weight:600;border-radius:7px;background:#fff;color:#0F6E56;
+          border:1px solid rgba(15,110,86,.24);cursor:pointer">复制</button>
+      </div>
+      <div class="tip">学生在浏览器输入上面的网址进入：选班级 → 选学号 → 输密码，
+        姓名会自动带出来，不用手打。校内网不用填班级码，从外网访问才需要。</div>
     </div>
 
     <div class="card">
@@ -385,8 +369,8 @@ CONSOLE_HTML = r"""<!DOCTYPE html>
       <input id="tNew" type="password" placeholder="新密码（至少 4 位）">
       <button id="saveTpwd">改密码</button>
     </div>
-    <div class="tip">改完立即生效，已经登录的其它设备会被退出（当前这台保持登录）。忘了密码就在教师机上运行
-      <code>python launch.py --reset-password</code>。</div>
+    <div class="tip">改完立即生效，已经登录的其它设备会被退出（当前这台保持登录）。忘了密码就在服务器上执行
+      <code>docker compose exec workbench python launch.py --reset-password</code>。</div>
 
     <div style="height:1px;background:rgba(15,110,86,.1);margin:16px 0 4px"></div>
     <h2 style="font-size:14px"><span class="dot"></span>密保问题 <span class="badge" id="qaBadge">未设置</span></h2>
@@ -411,7 +395,6 @@ CONSOLE_HTML = r"""<!DOCTYPE html>
     <div id="audit"><div class="mini">暂无记录</div></div>
   </div>
 </div>
-<script src="/vendor/qrcode.min.js"></script>
 <script>
 const MOD_META = {
   homework:['作业','布置、提交、批改'],
@@ -437,6 +420,37 @@ async function api(url, opt){
 
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 
+/* 统一弹窗：替代原生 alert/confirm —— 原生弹窗顶着浏览器标题缩在角落，
+   和控制台风格脱节。返回 Promise；msg 可含 \n，容器 pre-wrap。 */
+function uiDialog(o){
+  o = o || {};
+  return new Promise(res=>{
+    const ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;z-index:900;background:rgba(20,30,26,.34);display:flex;align-items:center;justify-content:center;padding:20px';
+    ov.innerHTML = '<div style="background:#fff;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.22);max-width:380px;width:100%;overflow:hidden;animation:cIn .16s ease">'
+      + '<div style="padding:15px 18px 0;font-weight:600;font-size:14.5px;color:#16231F">' + esc(o.title||'提示') + '</div>'
+      + '<div style="padding:10px 18px 4px;font-size:13px;line-height:1.8;white-space:pre-wrap;word-break:break-word;color:#2C3A35">' + (o.html||'') + '</div>'
+      + '<div style="display:flex;gap:8px;justify-content:flex-end;padding:12px 18px 15px">'
+      + (o.cancelText ? '<button class="ghost ui-c" style="padding:8px 16px;font-size:13px">' + esc(o.cancelText) + '</button>' : '')
+      + '<button class="' + (o.danger?'danger':'') + ' ui-o" style="padding:8px 16px;font-size:13px">' + esc(o.okText||'确定') + '</button>'
+      + '</div></div>';
+    document.body.appendChild(ov);
+    const close = v => { ov.remove(); document.removeEventListener('keydown', onKey, true); res(v); };
+    ov.querySelector('.ui-o').onclick = () => close(true);
+    const c = ov.querySelector('.ui-c');
+    if (c) c.onclick = () => close(false);
+    ov.addEventListener('pointerdown', e => { if (e.target === ov) close(false); });
+    function onKey(e){
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(false); }
+      else if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); close(true); }
+    }
+    document.addEventListener('keydown', onKey, true);
+    ov.querySelector('.ui-o').focus();
+  });
+}
+function uiConfirm(msg, o){ return uiDialog(Object.assign({ html:msg, cancelText:'取消', danger:true }, o||{})); }
+function uiAlert(msg, o){ return uiDialog(Object.assign({ html:msg, okText:'知道了' }, o||{})); }
+
 function toggleRow(name, desc, on, key, kind){
   return '<div class="switch"><div><div class="nm">'+esc(name)+'</div>' +
     '<div class="ds">'+esc(desc)+'</div></div>' +
@@ -448,15 +462,12 @@ function paint(){
   document.getElementById('sub').textContent =
     (S.school||'班级工作台') + ' · 服务运行中 · 数据版本 ' + S.rev;
   document.getElementById('entryUrl').textContent = S.entry_url;
+  document.getElementById('clsCode').textContent = (S.class_code || '—');
   document.getElementById('kOnline').textContent = S.online;
   document.getElementById('kStudents').textContent = S.students;
   document.getElementById('kHw').textContent = S.open_homework;
   document.getElementById('kLeave').textContent = S.pending_leaves;
   document.getElementById('leaveBadge').textContent = S.pending_leaves + ' 待批';
-
-  const qr = document.getElementById('qr');
-  qr.innerHTML = '';
-  try{ new QRCode(qr,{text:S.entry_url,width:170,height:170,correctLevel:QRCode.CorrectLevel.M}); }catch(e){}
 
   document.getElementById('mods').innerHTML = Object.keys(MOD_META)
     .map(k=>toggleRow(MOD_META[k][0], MOD_META[k][1], S.modules[k], k, 'modules')).join('');
@@ -520,11 +531,11 @@ document.getElementById('savePwd').onclick = async ()=>{
   const v = document.getElementById('initPwd').value.trim();
   const j = await api('/api/v2/teacher/student-auth',{method:'POST',
     body:JSON.stringify({initial_password:v})});
-  alert(j.ok ? '已保存。学生下次登录用这个密码。' : (j.msg||'保存失败'));
+  await uiAlert(j.ok ? '已保存。学生下次登录用这个密码。' : (j.msg||'保存失败'));
 };
 
 document.getElementById('resetAll').onclick = async ()=>{
-  if(!confirm('把所有学生改过的密码重置为初始密码？')) return;
+  if(!(await uiConfirm('把所有学生改过的密码重置为初始密码？',{title:'重置密码',okText:'重置'}))) return;
   await api('/api/v2/teacher/reset-cred',{method:'POST',body:JSON.stringify({all:true})});
   await load();
 };
@@ -532,7 +543,7 @@ document.getElementById('resetAll').onclick = async ()=>{
 document.getElementById('saveUser').onclick = async ()=>{
   const u = document.getElementById('tUser').value.trim();
   const j = await api('/api/v2/teacher/account',{method:'POST',body:JSON.stringify({username:u})});
-  alert(j.ok ? '账号已改为 '+j.username : (j.msg||'保存失败'));
+  await uiAlert(j.ok ? '账号已改为 '+j.username : (j.msg||'保存失败'));
   await load();
 };
 
@@ -540,7 +551,7 @@ document.getElementById('saveTpwd').onclick = async ()=>{
   const old = document.getElementById('tOld').value, nw = document.getElementById('tNew').value;
   const j = await api('/api/v2/teacher/password',{method:'POST',
     body:JSON.stringify({old:old,new:nw})});
-  alert(j.ok ? '密码已更新。其它设备上的登录已失效。' : (j.msg||'修改失败'));
+  await uiAlert(j.ok ? '密码已更新。其它设备上的登录已失效。' : (j.msg||'修改失败'));
   if(j.ok){ document.getElementById('tOld').value=''; document.getElementById('tNew').value=''; }
 };
 
@@ -548,10 +559,10 @@ document.getElementById('saveQa').onclick = async ()=>{
   const q = (document.getElementById('qaQ').value||'').trim();
   const a = document.getElementById('qaA').value;
   const pwd = document.getElementById('qaPwd').value;
-  if(!q || !a.trim()){ alert('密保问题和答案都要填'); return; }
+  if(!q || !a.trim()){ await uiAlert('密保问题和答案都要填'); return; }
   const j = await api('/api/v2/teacher/security',{method:'POST',
     body:JSON.stringify({question:q,answer:a,password:pwd})});
-  alert(j.ok ? '密保问题已保存，忘记密码时可用它自助改密' : (j.msg||'保存失败'));
+  await uiAlert(j.ok ? '密保问题已保存，忘记密码时可用它自助改密' : (j.msg||'保存失败'));
   if(j.ok){ document.getElementById('qaA').value=''; document.getElementById('qaPwd').value=''; await load(); }
 };
 
@@ -602,6 +613,24 @@ async function load(){
 document.getElementById('logout').onclick = async ()=>{
   await api('/api/v2/auth/logout',{method:'POST',body:'{}'});
   location.href='/teacher/login';
+};
+document.getElementById('copyCode').onclick = ()=>{
+  const t = (S && S.class_code) || '';
+  if(!t) return;
+  const btn = document.getElementById('copyCode');
+  const done = ()=>{ btn.textContent='已复制'; setTimeout(()=>{btn.textContent='复制';},1600); };
+  const fallback = ()=>{
+    const ta = document.createElement('textarea');
+    ta.value = t; ta.setAttribute('readonly','');
+    ta.style.position='fixed'; ta.style.top='-1000px'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.select();
+    let ok=false; try{ ok=document.execCommand('copy'); }catch(e){}
+    document.body.removeChild(ta);
+    if(ok){ done(); } else { btn.textContent='请手动选中'; }
+  };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(t).then(done).catch(fallback);
+  } else { fallback(); }
 };
 load();
 setInterval(load, 6000);

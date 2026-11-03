@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>宠物形象与装扮 · 验收页</title>
+<style>
+  :root{--ink:#3F372E;--ink2:#6E665C;--ink3:#9A8B7F;--brand:#B45B33}
+  *{box-sizing:border-box}
+  body{margin:0;padding:24px 20px 60px;color:var(--ink);
+    background:radial-gradient(80% 58% at 50% 0%,#FFF9F0 0%,#F8F2E4 58%,#F2E8D6 100%);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;
+    -webkit-font-smoothing:antialiased}
+  .wrap{max-width:1120px;margin:0 auto}
+  h1{font-size:21px;margin:0 0 6px}
+  h2{font-size:15px;margin:26px 0 10px;color:var(--ink2)}
+  .sub{color:var(--ink2);font-size:13px;line-height:1.75;margin-bottom:16px}
+  .sub b{color:var(--brand)}
+  .grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(132px,1fr))}
+  .card{text-align:center;border-radius:18px;padding:10px 8px 11px;cursor:pointer;
+    background:linear-gradient(170deg,#FFFFFF,#FBF3EA);
+    border:1px solid rgba(200,160,120,.28);
+    box-shadow:0 2px 5px rgba(150,95,50,.07),inset 0 1px 0 #fff;
+    transition:transform .18s ease,box-shadow .18s ease}
+  .card:hover{transform:translateY(-3px);box-shadow:0 10px 20px rgba(150,95,50,.16),inset 0 1px 0 #fff}
+  .card .st{display:flex;justify-content:center;align-items:flex-end;height:126px;border-radius:14px;
+    background:radial-gradient(64% 54% at 50% 76%,#FFF7E9 0%,rgba(255,247,233,0) 74%)}
+  .card svg{width:120px;height:120px;display:block}
+  .card b{display:block;font-size:13.5px;margin-top:4px}
+  .card small{display:block;font-size:11px;color:var(--ink3);margin-top:2px;line-height:1.4;
+    min-height:30px;padding:0 2px}
+  .card .tag{display:inline-block;margin-top:4px;font-size:10.5px;color:#fff;border-radius:999px;
+    padding:2px 8px;background:linear-gradient(135deg,#D98A4A,#B45B33)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>伙伴形象 · 拟物质感验收</h1>
+  <div class="sub">
+    苹果拟物路线：<b>不描边，全靠光</b>——径向渐变本体 → 大柔高光 + 小锐高光 → 边缘暗角 →
+    头颈环境遮蔽 → 底部反光；动效保留呼吸、点头、眨眼、耳朵与尾巴的轻摆。<br>
+    <b>点任意一张卡片</b>可以重播动作；装扮卡片会播它对应的专属动作。
+  </div>
+
+  <h2>① 八只伙伴</h2>
+  <div class="grid" id="pets"></div>
+
+  <h2>② 八件装扮（穿在小橘猫身上）· 点一下看专属动作</h2>
+  <div class="grid" id="decos"></div>
+
+  <h2>③ 动作对照</h2>
+  <div class="grid" id="acts"></div>
+</div>
+<script src="/typing/typing-data.js?v=20261102v"></script>
+<script>
+(function () {
+  var pets = document.getElementById('pets');
+  TD.PETS.forEach(function (p) {
+    var d = document.createElement('div');
+    d.className = 'card';
+    d.innerHTML = '<div class="st">' + TD.petSvg(p, []) + '</div>' +
+      '<b>' + p.name + '</b><small>' + p.mood + '</small>';
+    d.onclick = function () { replay(d.querySelector('svg')); };
+    pets.appendChild(d);
+  });
+
+  var decos = document.getElementById('decos');
+  TD.DECOS.forEach(function (dd) {
+    var d = document.createElement('div');
+    d.className = 'card';
+    d.innerHTML = '<div class="st">' + TD.petSvg('cat', [dd.id], { act: 1 }) + '</div>' +
+      '<b>' + dd.name + '</b><small>' + (dd.act || '') + '</small>';
+    d.onclick = function () { d.querySelector('.st').innerHTML = TD.petSvg('cat', [dd.id], { act: 1 }); };
+    decos.appendChild(d);
+  });
+
+  var acts = document.getElementById('acts');
+  var all = TD.DECOS.map(function (d) { return d.id; });
+  var d2 = document.createElement('div');
+  d2.className = 'card';
+  d2.innerHTML = '<div class="st">' + TD.petSvg('dragon', all, { act: 1 }) + '</div>' +
+    '<b>全部穿上</b><small>最后一件的动作为准</small>';
+  d2.onclick = function () { acts.querySelector('.st').innerHTML = TD.petSvg('dragon', all, { act: 1 }); };
+  acts.appendChild(d2);
+
+  /* 重播：把 <svg> 换掉，等于重新挂载，CSS 动画从头再来 */
+  function replay(svg) {
+    if (!svg) return;
+    var box = svg.parentNode;
+    var tmp = document.createElement('div');
+    tmp.innerHTML = svg.outerHTML;
+    box.replaceChild(tmp.firstChild, svg);
+  }
+})();
+</script>
+</body>
+</html>

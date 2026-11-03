@@ -23,7 +23,10 @@
     // 学生提交的请假申请：老师端也要能读到、能改（控制台审批后本机跟着变）
     'leave_requests',
     // 导学单（2.0.4）：教师端发放 / 收回，学生端「今日」消费
-    'guides'
+    'guides',
+    // 课堂活动发放（2026-11-02 批次12）：教师在「上课」页选活动即发放，
+    // 学生端「今日」对应课程里出现「进入课堂活动」。漏掉它学生端永远收不到。
+    'activity_pushes'
   ];
   // 这两张表在本地没有 id（课表、考试成绩），服务端用业务键合成
   var NO_ID = { lessons: 1, exam_scores: 1 };
@@ -39,6 +42,7 @@
     lastError: '',
     pendingRender: false,
     errTimes: {},    // {table\0rid: 连续失败次数}，避免同一条坏行无限重推
+    warned: {},      // {table\0rid: 1} 循环引用行只提醒一次
     _scanTimer: null,
     _pushTimer: null,
     _pulling: false
@@ -86,7 +90,60 @@
       if (k === '_rev' || k === 'updated_at') continue;
       o[k] = r[k];
     }
-    try { return JSON.stringify(sortKeys(o)); } catch (e) { return String(r); }
+    try { return JSON.stringify(sortKeys(o)); }
+    catch (e) {
+      /* 行里有循环引用（比如运行期代码把一个带 course 回链的对象塞进了表行）。
+         以前直接返回 String(r)='[object Object]'，指纹还能稳定；
+         但 push 时 JSON.stringify(payload) 会整个炸掉 ——
+         表现为页面顶部红色「Converting circular structure to JSON」横幅，
+         且 NetSync.busy 卡在 true，同步从此假死。
+         现在对这种行改用「净化后」的数据算指纹，指纹同样稳定。 */
+      try { return 'S' + JSON.stringify(sortKeys(safeClone(o))); }
+      catch (e2) { return String(r); }
+    }
+  }
+
+  /* 循环引用安全深拷贝：保留第一层出现的数据，砍掉回链。
+     用途：把含循环引用的坏行净化成可序列化的普通对象，让它照样能同步，
+     而不是让整个同步通道瘫痪。 */
+  function safeClone(v) {
+    var seen = new WeakSet();
+    function walk(x) {
+      if (x === null || typeof x !== 'object') return x;
+      if (seen.has(x)) return undefined;          // 回链：砍掉
+      seen.add(x);
+      if (Array.isArray(x)) {
+        var a = [];
+        x.forEach(function (it) {
+          var c = walk(it);
+          if (c !== undefined) a.push(c);
+        });
+        return a;
+      }
+      var o = {};
+      Object.keys(x).forEach(function (k) {
+        var c = walk(x[k]);
+        if (c !== undefined) o[k] = c;
+      });
+      return o;
+    }
+    return walk(v);
+  }
+
+  /* 单行净化：能序列化就原样返回；不能就净化副本并提示一次。
+     返回值保证 JSON.stringify 不再抛错。 */
+  function sanitizeRow(r, t) {
+    try { JSON.stringify(r); return r; } catch (e) { /* 需要净化 */ }
+    var rid = '';
+    try { rid = ridOfLoose(r); } catch (e2) {}
+    var k = t + '\u0000' + String(rid);
+    if (!NetSync.warned[k]) {
+      NetSync.warned[k] = 1;
+      console.warn('[netsync] ' + t + ' 表有一行数据含循环引用（id=' + rid +
+        '），已自动净化后继续同步。请把这条日志反馈给开发者定位来源。', r);
+      notifyUser('检测到 1 条异常数据（循环引用），已自动修复并继续同步');
+    }
+    return safeClone(r);
   }
 
   function ridOf(t, r) {
@@ -209,7 +266,8 @@
         var rid = ridOf(t, r);
         var h = hashRow(r);
         mir[rid] = h;
-        mir['__row_' + rid] = JSON.parse(JSON.stringify(r));  // 供墓碑使用
+        try { mir['__row_' + rid] = JSON.parse(JSON.stringify(r)); }  // 供墓碑使用
+        catch (e) { mir['__row_' + rid] = safeClone(r); }
       });
       NetSync.mirror[t] = mir;
     });
@@ -222,7 +280,8 @@
         var rid = ridOfLoose(r);
         if (r.deleted) { delete mir[rid]; delete mir['__row_' + rid]; return; }
         mir[rid] = hashRow(r);
-        mir['__row_' + rid] = JSON.parse(JSON.stringify(r));
+        try { mir['__row_' + rid] = JSON.parse(JSON.stringify(r)); }
+        catch (e) { mir['__row_' + rid] = safeClone(r); }
       });
     });
   }
@@ -233,8 +292,23 @@
     var res = scan();
     if (!res.total) return;
     NetSync.busy = true;
-    var payload = { base_rev: NetSync.rev, changes: res.changes };
-    api('/api/v2/sync', { method: 'POST', body: JSON.stringify(payload) })
+    /* 逐行净化：任何一行有循环引用都只净化那一行，
+       绝不能再让 JSON.stringify(payload) 整个炸掉、把同步通道卡死。 */
+    var payload = { base_rev: NetSync.rev, changes: res.changes.map(function (ch) {
+      return { table: ch.table, rows: ch.rows.map(function (r) {
+        return sanitizeRow(r, ch.table);
+      }) };
+    }) };
+    var body;
+    try { body = JSON.stringify(payload); }
+    catch (e) {
+      /* 双保险：理论上 sanitize 后不会再炸；真炸了也别把 busy 卡死。 */
+      NetSync.busy = false;
+      NetSync.lastError = 'serialize: ' + (e && e.message || e);
+      console.error('[netsync] 同步数据序列化失败', e);
+      return;
+    }
+    api('/api/v2/sync', { method: 'POST', body: body })
       .then(function (j) {
         NetSync.busy = false;
         if (!j || !j.ok) { NetSync.lastError = (j && j.msg) || 'sync failed'; return; }
@@ -328,7 +402,7 @@
         pull();
       });
       /* 设置类变更（模块开关 / 可见字段 / 账号密码 / 密保）：不产生数据 rev，
-         单独走这个事件。密码被清空（管理员在教师机 reset）时直接回登录页。 */
+         单独走这个事件。密码被清空（管理员在服务器上 reset）时直接回登录页。 */
       NetSync.es.addEventListener('cfg', function (e) {
         var v = parseInt(e.data, 10) || 0;
         if (v === NetSync.cfgRev) return;
@@ -414,13 +488,12 @@
       NetSync.startWatch();
       renderSoon();
     }
-    /* ---- 同步状态指示（2026-10-31 第二次重排）----
-       设计者署名已挪到顶栏右上角，右下角空出来了，所以这个胶囊回到**视口右下角**：
-       right:16 / bottom:12，z-index 61（只压页脚/空白，低于迷你条 520、
-       学生面板 200、弹窗 1000+）。右下角同时被迷你计时条 .mini-bar（right:18/bottom:18）
-       和学生面板 .stu-panel（right:20/bottom:20）占用，所以落位时量一下它们的矩形，
-       有占用就把胶囊整体上移到它们上方 10px —— 任何时候都不叠。
-       登录 / 锁屏页没有 .app 外壳，退化到左下角，避开登录卡右下角的署名徽章。 */
+    /* ---- 同步状态指示（2026-11-01 第三次重排）----
+       以前固定在**视口右下角**（right:16/bottom:12），页面滚到中部时会压住
+       正文内容——首页底部的二维码曾被它盖住一角。现在改为**停靠进顶栏**：
+       顶栏是常驻文档流元素，胶囊成为其中一员（设计者署名左侧），无论滚到
+       哪里都不会再遮挡任何内容。登录 / 锁屏页没有顶栏，退回左下角固定，
+       避开登录卡右下角的署名徽章。 */
     var bar = document.createElement('div');
     bar.id = '__syncbar';
     bar.className = 'sync-net';
@@ -430,45 +503,40 @@
     var snVer = document.createElement('span'); snVer.className = 'sn-ver';
     bar.appendChild(snDot); bar.appendChild(snTxt); bar.appendChild(snVer);
     /* 定位与配色写内联：这份脚本不依赖 index.html 的样式表也能站对位置 */
-    bar.style.cssText = 'position:fixed;z-index:61;right:16px;bottom:12px;' +
-      'display:inline-flex;align-items:center;gap:6px;padding:3px 10px;' +
-      'border-radius:999px;border:1px solid rgba(29,158,117,.35);' +
+    var DOCK_CSS = 'position:static;display:inline-flex;align-items:center;gap:6px;' +
+      'padding:3px 10px;border:1px solid transparent;border-radius:999px;flex:none;' +
+      'margin:7px 0 0;max-width:100%;' +
       'font:600 11.5px/1.5 ui-monospace,Menlo,Consolas,monospace;' +
+      'white-space:nowrap;overflow:hidden;cursor:pointer;' +
+      'user-select:none;pointer-events:auto;opacity:.94';
+    var FLOAT_CSS = 'position:fixed;z-index:61;left:16px;right:auto;bottom:12px;' +
+      'display:inline-flex;align-items:center;gap:6px;padding:3px 10px;' +
+      'border:1px solid transparent;border-radius:999px;font:600 11.5px/1.5 ui-monospace,Menlo,Consolas,monospace;' +
       'white-space:nowrap;max-width:46vw;overflow:hidden;cursor:pointer;' +
       'user-select:none;pointer-events:auto;opacity:.94';
     bar.onclick = function () {
       var s = NetSync.status();
-      alert('数据版本 ' + s.rev + '\n状态 ' + (s.ready ? '已连接' : '未连接') +
-        (s.error ? '\n错误 ' + s.error : ''));
+      var msg = '数据版本 ' + s.rev + '\n状态 ' + (s.ready ? '已连接' : '未连接') +
+        (s.error ? '\n错误 ' + s.error : '');
+      /* 工作台页面里有统一弹窗就用它；单独加载时退回原生 alert */
+      if (window.uiAlert) window.uiAlert(msg, { title: '同步状态' });
+      else alert(msg);
     };
-    /** 落位：有 .app 外壳 → 视口右下角（被迷你条/学生面板占了就上移）；否则左下角 */
+    /** 落位：侧栏用户卡(.side-user)存在 → 停到用户名下方（文档流成员，
+        2026-11-01 从顶栏改到侧栏左下角；底部与右下角设计者署名同一条水平线）；
+        没有侧栏（登录 / 锁屏）→ 固定在左下角，避开登录卡右下角的署名徽章 */
     function placeSyncBar() {
-      var shell = document.querySelector('.app');
-      if (!shell) {                       /* 登录 / 锁屏：左下角，避开右下角的署名徽章 */
-        bar.style.left = '16px';
-        bar.style.right = 'auto';
-        bar.style.bottom = '12px';
+      var sideUser = document.querySelector('.side-user');
+      if (sideUser) {
+        if (bar.parentNode !== sideUser) {
+          bar.style.cssText = DOCK_CSS;
+          sideUser.appendChild(bar);
+        }
         return;
       }
-      bar.style.left = 'auto';
-      bar.style.right = '16px';
-      var bottom = 12;
-      var w = bar.offsetWidth || 150;
-      var bandL = window.innerWidth - 16 - w;      /* 胶囊占据的水平范围 */
-      var bandR = window.innerWidth - 16;
-      ['.mini-bar', '.stu-panel'].forEach(function (sel) {
-        var el = document.querySelector(sel);
-        if (!el) return;
-        var cs = window.getComputedStyle(el);
-        if (cs.display === 'none' || cs.visibility === 'hidden' || Number(cs.opacity) === 0) return;
-        var r = el.getBoundingClientRect();
-        if (!r.width || !r.height) return;
-        /* 只有真正压到胶囊水平范围、且落在下半屏的浮层才需要避让 */
-        if (r.right > bandL - 10 && r.left < bandR + 10 && r.top > window.innerHeight / 2) {
-          bottom = Math.max(bottom, Math.round(window.innerHeight - r.top + 10));
-        }
-      });
-      bar.style.bottom = bottom + 'px';
+      if (bar.parentNode !== document.body) document.body.appendChild(bar);
+      if (bar.style.position !== 'fixed') bar.style.cssText = FLOAT_CSS;
+      paintSyncBar();
     }
     /** 文案 + 配色：已连接=绿 / 离线补传=橙 / 出错=红（深浅色各一套） */
     function paintSyncBar() {

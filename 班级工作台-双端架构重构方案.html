@@ -134,10 +134,23 @@ footer{margin-top:70px;padding-top:22px;border-top:1px solid var(--line);color:v
 <body>
 <div class="wrap">
 
+<div class="summary" style="border-left:4px solid #C8892B;background:#FFF9EF">
+  <h2 style="color:#8A5A10">⚠ 历史方案（已被取代）</h2>
+  <p style="font-size:14px;line-height:1.75;color:#5A4318;margin:0">
+    本文写于 2026-10-30，当时的结论是「以教师机为唯一服务端」，据此设计了 Windows 下双击启动、
+    放行防火墙、教师机关机即全班掉线等一整套流程。<br>
+    现行部署改为 <b>Docker / NAS</b>：gateway（nginx）+ workbench + quickform 三个容器，
+    师生统一从 <code>http://&lt;NAS&gt;:8080/</code> 进入，<b>不再把任何一台电脑当作服务器</b>，
+    也不存在「教师机关机全班掉线」。<br>
+    目录结构、启动方式、镜像更新与数据迁移请以根目录 <code>README.md</code> 为准；
+    下文仅保留作设计过程记录，其中的端口（8080 直连）、.bat 脚本、防火墙步骤均已不适用。
+  </p>
+</div>
+
 <div class="cover">
   <span class="kicker">架构重构方案 · v1.0</span>
   <h1>班级工作台 2.0<br>教师端 / 学生端双端架构</h1>
-  <p class="lead">以教师机为唯一服务端与数据源，一套进程同时承载教师端与学生端网页；学生端启动即拿到教师端下发的功能开关与数据投影；双击一个入口完成启动，适配无外网、单交换机、机房还原卡等真实校园网络环境。</p>
+  <p class="lead">【历史方案，已被 Docker/NAS 部署取代，见页首说明】原设想：由一个进程同时承载教师端与学生端网页，学生端启动即拿到教师端下发的功能开关与数据投影；双击一个入口完成启动，适配无外网、单交换机、机房还原卡等真实校园网络环境。</p>
   <div class="meta-row">
     <span>分析对象：<b>3 个发行包（通用 / win-x64 / mac-arm）</b></span>
     <span>代码规模：<b>主程序 30,513 行 · 服务端 3,683 行</b></span>
@@ -150,8 +163,8 @@ footer{margin-top:70px;padding-top:22px;border-top:1px solid var(--line);color:v
   <div class="decisions">
     <div class="dec">
       <span class="n">DECISION 01</span>
-      <b>数据主权从浏览器搬到教师机</b>
-      <span>业务数据改存教师机 SQLite，浏览器只做缓存。这是“学生端能同步到数据”的唯一前提——现在数据被密码加密锁在老师那台电脑的 localStorage 里，任何外部端都读不到。</span>
+      <b>数据主权从浏览器搬到服务端</b>
+      <span>业务数据改存服务端 SQLite（现行部署：NAS 数据卷），浏览器只做缓存。这是“学生端能同步到数据”的唯一前提——当时数据被密码加密锁在老师那台电脑的 localStorage 里，任何外部端都读不到。</span>
     </div>
     <div class="dec">
       <span class="n">DECISION 02</span>
@@ -251,7 +264,7 @@ LS.set('wb-db-' + k, DATA_KEY_SET ? encStr(json) : json);</code></pre>
 <!-- ============================================================ -->
 <section id="s2">
   <h2 class="sec"><span class="num">02</span>目标架构与进程模型</h2>
-  <p class="sub">一台教师机、一个进程、一个端口，同时服务两种角色。</p>
+  <p class="sub">【历史】原设想：一台教室电脑、一个进程、一个端口，同时服务两种角色。</p>
 
   <div class="figure">
     <svg viewBox="0 0 1040 500" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="双端架构示意图">
@@ -266,7 +279,7 @@ LS.set('wb-db-' + k, DATA_KEY_SET ? encStr(json) : json);</code></pre>
       <rect x="0" y="0" width="1040" height="500" fill="#FBFDFC"/>
       <!-- 左：教师端 -->
       <rect x="24" y="70" width="230" height="330" rx="14" fill="#FFFFFF" stroke="#CFE3DB"/>
-      <text x="44" y="100" font-size="13" font-weight="700" fill="#0F6E56">教师机（唯一服务端）</text>
+      <text x="44" y="100" font-size="13" font-weight="700" fill="#0F6E56">服务端（NAS 容器）【历史图】</text>
       <rect x="44" y="116" width="190" height="86" rx="9" fill="#E1F5EE" stroke="#9FD3C1"/>
       <text x="60" y="140" font-size="12.5" font-weight="600" fill="#0B4F3E">教师端网页</text>
       <text x="60" y="160" font-size="11" fill="#3D6B5D">/teacher · 全量读写</text>
@@ -690,15 +703,15 @@ LS.set('wb-db-' + k, DATA_KEY_SET ? encStr(json) : json);</code></pre>
     <div class="step"><h4>打开浏览器</h4><p>默认开 <code>/teacher/</code>；<code>--no-browser</code> 可关。窗口关闭或 Ctrl+C → 优雅停服、刷盘、写关闭时间。</p></div>
   </div>
 
-  <h3>6.3 控制台横幅（实际输出形态）</h3>
+  <h3>6.3 控制台横幅（历史形态，已改为 docker compose 启动）</h3>
   <pre><code>════════════════════════════════════════════════════════════
-  班级工作台 2.0 · 教师端已启动（本机即服务端）
-  数据目录  &lt;安装目录&gt;\data
+  班级工作台 2.0 · 服务已启动
+  数据目录  /app/data
 ════════════════════════════════════════════════════════════
 
-  教师端（本机）    http://127.0.0.1:8080/teacher/
-  学生端（局域网）  http://192.168.x.x:8080/s/
-  大屏看板          http://192.168.x.x:8080/board
+  教师端    http://&lt;NAS&gt;:8080/teacher/
+  学生端    http://&lt;NAS&gt;:8080/s/
+  大屏看板  http://&lt;NAS&gt;:8080/board
 
   班级码  7K2M        在线  12 人
 
@@ -892,9 +905,9 @@ LS.set('wb-db-' + k, DATA_KEY_SET ? encStr(json) : json);</code></pre>
         <td>投影在服务端白名单实现，不依赖前端；上线前对每个接口做一次越权测试（换 student_id 能否读到他人数据）</td>
       </tr>
       <tr>
-        <td><b>教师机关机/休眠 = 全班掉线</b></td>
+        <td><b>NAS 单点：NAS 挂掉 = 全班掉线</b></td>
         <td><span class="tag t-part">中</span></td>
-        <td>交付文档明确“教师机是服务端”；电源策略设为不睡眠；启动器检测到电池供电时提示</td>
+        <td>已在 Docker 方案中处理：数据卷 + 每日加密备份；NAS 电源策略设为不休眠；重要考试前先导出一次全量备份</td>
       </tr>
       <tr>
         <td><b>机房还原卡清掉数据</b></td>

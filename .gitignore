@@ -32,3 +32,41 @@ Thumbs.db
 # 工作台数据快照（含学生真实姓名 / 学号，禁止入库；公开仓库尤其不能有）
 workbench.json
 workbench-*.json
+
+# ============================================================
+# 安全补充（2026-11-03 敏感数据审计）
+# 以下目录/文件此前未被忽略，存在误提交真实数据、大文件的风险
+# ============================================================
+
+# QuickForm 运行期数据：SQLite 库（账号 / 密码哈希 / 任务 / 提交）与上传附件
+quickform/app/data/*
+!quickform/app/data/.keep
+quickform/app/static/uploads/*
+!quickform/app/static/uploads/.keep
+quickform/app/static/assets/*
+!quickform/app/static/assets/.keep
+
+# 课件库：含大体积课件（单个 pptx >100MB，超 GitHub/Gitee 单文件限制）与课堂作品
+app/courseware/
+
+# 临时 / AI 产出目录（内部业务产物，不对外）
+work_dir/
+
+# 离线运行时与 wheel 包（体积巨大，按需本地构建，不入库）
+runtime/
+wheels/
+
+# 环境变量本地覆盖（保留示例文件）
+.env.*
+!.env.example
+
+# 通用数据库文件兜底（任意位置的 SQLite 都不入库）
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# 内部审计 / 评估报告：含凭据存放位置、数据清单等敏感描述，只在本地留存
+docs/安全审计-*.md
+docs/部署可行性分析-*.md

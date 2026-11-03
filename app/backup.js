@@ -386,11 +386,17 @@
         var n = Object.keys(dump.ls || {}).length;
         var when = dump.at ? ('（导出于 ' + dump.at + '）') : '';
         var tbl = env.dbKeys.filter(function (k) { return dump.ls['wb-db-' + k]; }).length;
-        if (!confirm('即将用这份备份覆盖本机数据' + when + '。\n\n'
+        if (!(await (window.uiConfirm
+          ? window.uiConfirm('即将用这份备份覆盖本机数据' + when + '。\n\n'
           + '· 备份共 ' + n + ' 项，含 ' + tbl + ' 张数据表\n'
           + '· 本机现有的班级 / 学生 / 成绩等会被替换\n'
           + (env.lockActive() ? '· 本机密码保持不变（备份里的旧密码不会覆盖它）\n' : '')
-          + '\n确定继续吗？')) return;
+          + '\n确定继续吗？', { title: '导入备份', okText: '导入' })
+          : Promise.resolve(confirm('即将用这份备份覆盖本机数据' + when + '。\n\n'
+          + '· 备份共 ' + n + ' 项，含 ' + tbl + ' 张数据表\n'
+          + '· 本机现有的班级 / 学生 / 成绩等会被替换\n'
+          + (env.lockActive() ? '· 本机密码保持不变（备份里的旧密码不会覆盖它）\n' : '')
+          + '\n确定继续吗？'))))) return;
         var cnt;
         try { cnt = apply(dump, key); }
         catch (e) { env.toast('导入失败：' + ((e && e.message) || e)); return; }
@@ -492,13 +498,21 @@
           var tblN = Object.keys(sv.tables || {})
             .filter(function (t) { return Array.isArray(sv.tables[t]) && sv.tables[t].length; }).length;
           var credsN = (sv.creds || []).length;
-          if (!confirm('全量恢复会整体替换两边的数据' +
+          if (!(await (window.uiConfirm
+            ? window.uiConfirm('全量恢复会整体替换两边的数据' +
             (dump.at ? '（导出于 ' + dump.at + '）' : '') + '：\n\n'
             + '· 服务端：' + tblN + ' 张表 + 配置' + (credsN ? ' + ' + credsN + ' 条学生密码' : '') + '\n'
             + '· 本机：' + n + ' 项界面数据\n'
             + '· 教师账号 / 学生密码 / 模块开关会回到备份时的状态\n'
             + (env.lockActive() ? '· 本机解锁密码保持不变\n' : '')
-            + '\n确定继续吗？')) return;
+            + '\n确定继续吗？', { title: '全量恢复', okText: '恢复' })
+            : Promise.resolve(confirm('全量恢复会整体替换两边的数据' +
+            (dump.at ? '（导出于 ' + dump.at + '）' : '') + '：\n\n'
+            + '· 服务端：' + tblN + ' 张表 + 配置' + (credsN ? ' + ' + credsN + ' 条学生密码' : '') + '\n'
+            + '· 本机：' + n + ' 项界面数据\n'
+            + '· 教师账号 / 学生密码 / 模块开关会回到备份时的状态\n'
+            + (env.lockActive() ? '· 本机解锁密码保持不变\n' : '')
+            + '\n确定继续吗？'))))) return;
           var cnt;
           try { cnt = apply(dump, key); }        /* 先落本机（失败不动服务端） */
           catch (e) { env.toast('本机数据导入失败：' + ((e && e.message) || e)); return; }
@@ -526,11 +540,17 @@
         /* 旧版纯本机备份：走原恢复流程 */
         var when = dump.at ? ('（导出于 ' + dump.at + '）') : '';
         var tbl = env.dbKeys.filter(function (k) { return dump.ls['wb-db-' + k]; }).length;
-        if (!confirm('即将用这份备份覆盖本机数据' + when + '。\n\n'
+        if (!(await (window.uiConfirm
+          ? window.uiConfirm('即将用这份备份覆盖本机数据' + when + '。\n\n'
           + '· 备份共 ' + n + ' 项，含 ' + tbl + ' 张数据表（纯本机备份，不含服务端数据）\n'
           + '· 本机现有的班级 / 学生 / 成绩等会被替换\n'
           + (env.lockActive() ? '· 本机密码保持不变（备份里的旧密码不会覆盖它）\n' : '')
-          + '\n确定继续吗？')) return;
+          + '\n确定继续吗？', { title: '导入备份', okText: '导入' })
+          : Promise.resolve(confirm('即将用这份备份覆盖本机数据' + when + '。\n\n'
+          + '· 备份共 ' + n + ' 项，含 ' + tbl + ' 张数据表（纯本机备份，不含服务端数据）\n'
+          + '· 本机现有的班级 / 学生 / 成绩等会被替换\n'
+          + (env.lockActive() ? '· 本机密码保持不变（备份里的旧密码不会覆盖它）\n' : '')
+          + '\n确定继续吗？'))))) return;
         var cnt2;
         try { cnt2 = apply(dump, key); }
         catch (e) { env.toast('导入失败：' + ((e && e.message) || e)); return; }

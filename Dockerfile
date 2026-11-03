@@ -1,14 +1,15 @@
-# syntax=docker/dockerfile:1
 # ============================================================
-# 班级工作台 2.0 · 单镜像（教师端 + 学生端 + 同步服务，一个进程一个端口）
+# 班级工作台 2.0 · 工作台镜像（教师端 + 学生端 + 同步服务，一个进程一个端口）
 # ------------------------------------------------------------
 # 只用 Python 标准库，没有 requirements.txt：不装第三方包，镜像小、构建快。
-# 数据（SQLite / 上传文件 / 每日快照）全部落在 /app/data，用 volume 持久化。
+# 数据（SQLite / 上传文件 / 课件库 / 每日快照）全部落在 /app/data，用 volume 持久化。
 #
+# 正式部署请用编排（会同时起 gateway 与 quickform）：
+#   docker compose up -d --build
+#
+# 只想单独跑工作台（不带 QuickForm）也可以：
 #   docker build -t teacher-workbench .
 #   docker run -d --name workbench -p 20020:20020 -v workbench-data:/app/data teacher-workbench
-#
-# 也可以直接用编排（推荐）：docker compose up -d --build
 # ============================================================
 FROM python:3.12-slim
 

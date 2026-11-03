@@ -29,6 +29,9 @@ DEFAULT_CONFIG = {
                    "leave_reason": False},
     "sync": {"poll_seconds": 5, "tombstone_days": 90, "page_size": 800},
     "backup": {"auto_daily": True, "keep": 14},
+    # 课堂活动数据服务（QuickForm 一类的外部提交服务）。
+    # 只在教师端配一次；学生端和导学单页面都从服务端读，学生不再手填地址。
+    "activity": {"api_base": "", "submit_hours": 12},
 }
 
 _LOCK = threading.RLock()
@@ -258,18 +261,48 @@ def parse_cookie(header, name="wb_sid"):
     return ""
 
 
+# 是否信任内网反向代理发来的 X-Forwarded-For。
+# 容器部署（compose 里的 gateway → workbench）时，TCP 对端是网关的内网地址，
+# 不是回环地址；不打开这个开关的话，所有师生会共用同一个「IP」，
+# 按 IP 的限速会互相拖累、登录失败记录也分不清是谁。
+# 只在 compose 里显式设 WB_TRUST_PROXY=1 才生效：直连场景保持不信任，防伪造。
+_TRUST_PROXY = (os.environ.get("WB_TRUST_PROXY") or "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _is_private_peer(ip):
+    """内网 / 回环地址判定（IPv4 私网段 + IPv6 本地地址）。"""
+    ip = (ip or "").strip().lower()
+    if not ip:
+        return False
+    if ip in ("127.0.0.1", "::1", "localhost"):
+        return True
+    if ip.startswith("::ffff:"):
+        ip = ip[7:]
+    for pfx in ("10.", "192.168.", "127."):
+        if ip.startswith(pfx):
+            return True
+    if ip.startswith("172."):
+        try:
+            return 16 <= int(ip.split(".")[1]) <= 31
+        except Exception:
+            return False
+    return ip.startswith("fc") or ip.startswith("fd") or ip.startswith("fe80")
+
+
 def client_ip(handler):
     """真实客户端 IP。
 
-    只有在「直连方是本机」时才信 X-Forwarded-For —— 那说明前面挂着同机的
-    反向代理（nginx/Caddy 反代到 127.0.0.1）。其它情况一律用 TCP 对端地址：
-    否则任何人都能伪造 XFF 绕过按 IP 的限速，或者把登录失败记录栽给别人。
+    只有在「直连方可信」时才信 X-Forwarded-For：
+      · 直连方是回环地址 —— 前面挂着同机的反向代理（nginx/Caddy 反代到 127.0.0.1）；
+      · 直连方是内网地址且设了 WB_TRUST_PROXY=1 —— 容器编排里的网关容器。
+    其它情况一律用 TCP 对端地址：否则任何人都能伪造 XFF 绕过按 IP 的限速，
+    或者把登录失败记录栽给别人。
     """
     try:
         peer = (handler.client_address or ["", ""])[0]
     except Exception:
         return ""
-    if peer in ("127.0.0.1", "::1"):
+    if peer in ("127.0.0.1", "::1") or (_TRUST_PROXY and _is_private_peer(peer)):
         try:
             xff = handler.headers.get("X-Forwarded-For") or ""
         except Exception:

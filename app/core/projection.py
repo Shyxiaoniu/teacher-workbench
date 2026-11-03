@@ -101,7 +101,7 @@ def _as_int_list(v):
     return []
 
 
-def _keep(tbl, row, cls, sid, my_seat_ids):
+def _keep(tbl, row, cls, sid, my_seat_ids, gmem=None):
     """这一行是否属于该学生"""
     if tbl == "classes":
         return _i(row.get("id")) == cls
@@ -110,12 +110,15 @@ def _keep(tbl, row, cls, sid, my_seat_ids):
     if tbl == "seats":
         return _i(row.get("id")) in my_seat_ids
     if tbl in ("lessons", "homeworks", "course_progress", "dutys",
-               "duty_areas", "materials", "guides"):
+               "duty_areas", "materials", "guides", "activity_pushes"):
         if _i(row.get("class_id")) != cls:
             return False
         if tbl == "guides":
             # 导学单只下发「已发放」的：草稿是老师还没备好的课，不该让学生看见
             return str(row.get("status") or "published") == "published"
+        if tbl == "activity_pushes":
+            # 课堂活动：收回（draft）不可见；已关闭（closed）仍下发，学生端显示条目但打不开
+            return str(row.get("status") or "published") in ("published", "closed")
         return True
     if tbl == "courseware_links":
         # 老数据/公共课件没有 class_id：放行；写了班级就严格按班过滤
@@ -125,12 +128,73 @@ def _keep(tbl, row, cls, sid, my_seat_ids):
                "scores", "exam_scores", "leave_requests"):
         return _i(row.get("student_id")) == sid
     if tbl == "groups":
-        ids = _as_int_list(row.get("student_ids"))
+        # 成员判定与教师端同口径：座位归组为主，student_ids 兜底
+        ids = (gmem or {}).get(_i(row.get("id"))) or set(_as_int_list(row.get("student_ids")))
         return _i(row.get("class_id")) == cls and (sid in ids)
     if tbl == "exams":
         return bool(row.get("published"))
     # periods / courses / morality_items / duty_positions：全班共用，直接放行
     return True
+
+
+def _group_member_ids(row, seat_stu):
+    """一个小组的成员学籍 id 集合（按座位顺序）。
+
+    小组以「座位」为准（教师端排座位后按 seat_ids 归组），
+    student_ids 是老数据的兜底来源；两者合并去重，座位序在前。
+    """
+    ids, seen = [], set()
+    for raw in (row.get("seat_ids") or []):
+        try:
+            st = seat_stu.get(int(float(raw)))
+        except Exception:
+            continue
+        if st and st not in seen:
+            seen.add(st)
+            ids.append(st)
+    for st in _as_int_list(row.get("student_ids")):
+        if st and st not in seen:
+            seen.add(st)
+            ids.append(st)
+    return ids
+
+
+def _group_members(row, seat_stu, name_of):
+    """小组成员名单（姓名 + 角色），在服务端算好再下发。
+
+    学生端只拿得到自己那行 student 档案，其他组员的 id 映射不出姓名，
+    这步必须留在服务端。角色判定与教师端 roleOf/normalizeRoles 同口径：
+    roles 里显式标了 leader 的座位是组长；整组都没标时首位兜底当组长。
+    """
+    roles = row.get("roles") or {}
+    seat_list = []
+    for raw in (row.get("seat_ids") or []):
+        try:
+            k = int(float(raw))
+        except Exception:
+            continue
+        seat_list.append((k, seat_stu.get(k)))
+    has_leader = any(str(roles.get(str(k)) or "") == "leader" for k, _ in seat_list)
+    out, seen = [], set()
+    for i, (k, st) in enumerate(seat_list):
+        if not st or st in seen:
+            continue
+        seen.add(st)
+        name = name_of.get(st)
+        if not name:
+            continue
+        r = str(roles.get(str(k)) or "")
+        out.append({"name": name,
+                    "role": "组长" if (r == "leader" or (not has_leader and i == 0)) else "组员"})
+    # 老数据只写了 student_ids、没有座位关联的组员补在最后
+    for st in _as_int_list(row.get("student_ids")):
+        if st in seen:
+            continue
+        seen.add(st)
+        name = name_of.get(st)
+        if name:
+            out.append({"name": name, "role": "组员"})
+    return out
 
 
 def _score_key(r):
@@ -191,8 +255,12 @@ def _score_stats(tables, rows=None):
     return stats
 
 
-def project(scope, ctx, tables, cfg=None, stats_scores=None):
-    """按角色裁剪。ctx: {role, class_id, student_id}"""
+def project(scope, ctx, tables, cfg=None, stats_scores=None, group_src=None):
+    """按角色裁剪。ctx: {role, class_id, student_id}
+
+    group_src：算小组成员名单用的全量 students/seats（增量同步的 tables
+    里可能不带这两张表，与 stats_scores 同一思路，由服务端注入）。
+    """
     if scope != "student":
         return tables
 
@@ -215,13 +283,32 @@ def project(scope, ctx, tables, cfg=None, stats_scores=None):
                    if ("scores" in tables and not blocked.intersection(
                        MODULE_TABLES.get("scores", set()))) else {})
 
+    # 小组成员名单：学生端只有本人档案，组员 id → 姓名必须服务端算。
+    # 增量同步时 tables 可能缺 students/seats，用 group_src 的全量表兜底。
+    g_seat_stu, g_names, gmem = {}, {}, {}
+    if "groups" in tables:
+        for r in (group_src or {}).get("seats") or tables.get("seats") or []:
+            try:
+                k, st = int(float(r.get("id"))), int(float(r.get("student_id")))
+            except Exception:
+                continue
+            if st:
+                g_seat_stu[k] = st
+        for r in (group_src or {}).get("students") or tables.get("students") or []:
+            try:
+                g_names[int(float(r.get("id")))] = str(r.get("name") or "")
+            except Exception:
+                pass
+        for r in tables.get("groups") or []:
+            gmem[_i(r.get("id"))] = set(_group_member_ids(r, g_seat_stu))
+
     out = {}
     for tbl, rows in tables.items():
         if tbl in STUDENT_HIDDEN_TABLES or tbl in blocked:
             continue
         picked = []
         for row in rows:
-            if not _keep(tbl, row, cls, sid, my_seat_ids):
+            if not _keep(tbl, row, cls, sid, my_seat_ids, gmem):
                 continue
             if row.get("deleted"):
                 # 墓碑只带 id，避免把别的班的数据带出去
@@ -235,6 +322,8 @@ def project(scope, ctx, tables, cfg=None, stats_scores=None):
                     rk = (st.get("rank_of") or {}).get(_score_ident(row))
                     if rk:
                         item["_rank"] = rk
+                if tbl == "groups":
+                    item["_members"] = _group_members(row, g_seat_stu, g_names)
                 picked.append(item)
         if picked:
             out[tbl] = picked

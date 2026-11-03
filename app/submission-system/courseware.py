@@ -39,7 +39,14 @@ DATA = (os.environ.get("WB_SUBMISSION_DATA_DIR")
             if os.environ.get("WB_DATA_DIR") else "")
         or os.path.join(ROOT, "data"))
 CFG_PATH = os.path.join(DATA, "courseware.json")
-DEFAULT_ROOT = os.path.join(WB_ROOT, "courseware")         # 默认自动生成的位置
+# 课件库根目录：
+#   ① WB_COURSEWARE_DIR（容器部署，指到数据卷，重建镜像不丢）
+#   ② WB_DATA_DIR/courseware（只设了数据目录时跟着走）
+#   ③ 桌面版老行为：工作台根目录下的 courseware/
+DEFAULT_ROOT = (os.environ.get("WB_COURSEWARE_DIR")
+                or (os.path.join(os.environ["WB_DATA_DIR"], "courseware")
+                    if os.environ.get("WB_DATA_DIR") else "")
+                or os.path.join(WB_ROOT, "courseware"))
 MAX_UPLOAD = 300 * 1024 * 1024                             # 单文件上限 300MB
 
 # 目录里不当作课件的东西（工作台自己在每个课程下写的说明文件除外）
@@ -67,6 +74,11 @@ def load_cfg():
     except Exception:
         cfg = {}
     root = str(cfg.get("root") or "").strip()
+    # 容器部署：以环境变量为准。旧配置里可能留着 Windows/macOS 的绝对路径
+    # （导入的备份、从桌面版迁移过来的数据），照搬会让课件页整片 404。
+    env_root = os.environ.get("WB_COURSEWARE_DIR")
+    if env_root:
+        root = os.path.normpath(env_root)
     if not root:
         root = DEFAULT_ROOT
         # 注意：只补字段，不能整个重建 cfg —— 否则 mounts（本地资料夹）、allow_lan
@@ -75,6 +87,14 @@ def load_cfg():
         cfg["root"] = root
         cfg["auto"] = True
         cfg["updated_at"] = cfg.get("updated_at") or _now()
+        save_cfg(cfg)
+        ensure_root(root)
+    elif os.path.normpath(str(cfg.get("root") or "")) != os.path.normpath(root):
+        # 环境变量纠正了根目录（容器里挂载点变了 / 旧机器路径）：落盘一次，
+        # 后续所有读写都用新路径，课件与推送记录不会对不上。
+        cfg["root"] = root
+        cfg["auto"] = os.path.normpath(root) == os.path.normpath(DEFAULT_ROOT)
+        cfg["updated_at"] = _now()
         save_cfg(cfg)
         ensure_root(root)
     cfg.setdefault("version", 1)
@@ -594,7 +614,7 @@ def preview_html(full, name, dark=False):
     elif kind == "text":
         body = _text_html(full, name)
     elif kind == "legacy":
-        body = ("<p>这是旧版 Office 格式（%s），浏览器和本机都无法安全解析。</p>"
+        body = ("<p>这是旧版 Office 格式（%s），浏览器和服务器都无法安全解析。</p>"
                 "<p>建议用 Office / WPS 另存为 <b>.docx / .xlsx / .pptx</b> 后再上传，就能在线查看了。</p>" % e.upper())
         note = "旧格式只能下载后打开。"
     else:
@@ -684,14 +704,16 @@ def archive_items(course, activity, base, items):
             skipped.append({"name": nm, "msg": "没有文件地址"})
             continue
         blob = None
-        # ① 本机文件系统直读（QuickForm 的 /static/... 就在隔壁，最快最稳）
+        # ① 服务器本地文件系统直读（QuickForm 的 /static/... 就在隔壁，最快最稳）
         #    必须做 commonpath 校验：url 是前端传来的，`/../../etc/passwd`、
         #    `/../../data/config.json` 这种能顺着拼出程序目录外的任意文件，
         #    读出来再落到课件库里就能被下载走（任意文件读取）。
         if url.startswith("/"):
             rel = url.lstrip("/").replace("\\", "/")
             if ".." not in rel.split("/"):
-                for base_dir in (os.path.join(WB_ROOT, "quickform-server"), WB_ROOT):
+                for base_dir in (os.path.join(WB_ROOT, "quickform", "app"),
+                                 os.path.join(WB_ROOT, "quickform-server"),
+                                 WB_ROOT):
                     c = os.path.normpath(os.path.join(base_dir, rel))
                     try:
                         if os.path.commonpath([os.path.normpath(base_dir), c]) != os.path.normpath(base_dir):
@@ -740,24 +762,46 @@ def archive_items(course, activity, base, items):
 def fetch_remote(base, url, timeout=20):
     """把「活动」里学生提交的文件取回来（QuickForm 的 /static/...）。
 
-    优先直接读本机文件（QuickForm 就在隔壁，省一次网络往返），读不到再走 HTTP。
-    安全：只接受以 / 开头的相对地址，且 base 必须是本机 / 局域网地址，
-    避免被人拿来当跳板访问外网（SSRF）。
+    优先直接读服务器本地文件（QuickForm 就在隔壁，省一次网络往返），读不到再走 HTTP。
+    安全：只接受以 / 开头的相对地址，且 base 必须是站点内部地址，
+    避免被人拿来当跳板访问外网（SSRF）。允许的范围：
+      · 回环 / 私网 IP；
+      · compose 里的服务名（quickform），或 WB_QUICKFORM_URL 里配置的主机名。
     """
     url = str(url or "").strip()
     if not url.startswith("/"):
         raise ValueError("只接受以 / 开头的站内地址")
     base = str(base or "").rstrip("/")
-    local = os.path.join(WB_ROOT, "quickform-server", url.lstrip("/"))
-    if os.path.isfile(local):
-        with open(local, "rb") as f:
-            return f.read()
+    # 前端现在交来的是同源相对地址（/qf）：服务端自己按容器服务名去取。
+    # 这样网关换了端口、换了域名都不用改前端代码。
+    if not base.startswith("http"):
+        base = (os.environ.get("WB_QUICKFORM_URL") or "").rstrip("/")
+    rel = url.lstrip("/")
+    if ".." not in rel.split("/"):
+        for root in (os.path.join(WB_ROOT, "quickform", "app"),
+                     os.path.join(WB_ROOT, "quickform-server")):
+            local = os.path.normpath(os.path.join(root, rel))
+            try:
+                if os.path.commonpath([os.path.normpath(root), local]) != os.path.normpath(root):
+                    continue
+            except ValueError:
+                continue
+            if os.path.isfile(local):
+                with open(local, "rb") as f:
+                    return f.read()
     if not base:
-        raise ValueError("缺少活动服务地址，无法取回文件")
+        raise ValueError("缺少 QuickForm 服务地址，无法取回文件")
     parsed = urllib.parse.urlparse(base)
     host = (parsed.hostname or "").lower()
-    if not (host in ("localhost", "127.0.0.1", "::1") or re.match(r"^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)", host)):
-        raise ValueError("活动服务地址必须是本机或局域网地址")
+    try:
+        qf_host = (urllib.parse.urlparse(os.environ.get("WB_QUICKFORM_URL") or "").hostname or "").lower()
+    except Exception:
+        qf_host = ""
+    private = host in ("localhost", "127.0.0.1", "::1") or \
+        bool(re.match(r"^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)", host))
+    service = host in ("quickform", "quickform-server") or (qf_host and host == qf_host)
+    if not (private or service):
+        raise ValueError("QuickForm 服务地址必须是站内地址（回环 / 私网 / compose 服务名）")
     req = urllib.request.Request(base + url, headers={"User-Agent": "class-workbench"})
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return r.read()
@@ -812,18 +856,33 @@ def delete_file(rel):
         return {"ok": False, "msg": "删除失败：%s" % e}
 
 
-def rename_or_move(rel, course):
+def rename_or_move(rel, course=None, new_name=None):
+    """改文件名（new_name）/ 换课程目录（course），或两者同时。"""
     full = abs_of(rel, must_exist=True)
-    dst_dir = abs_of(safe_course(course))
-    if not full or not dst_dir:
-        return {"ok": False, "msg": "路径不合法"}
+    if not full or not os.path.isfile(full):
+        return {"ok": False, "msg": "文件不存在"}
+    cur_dir = os.path.dirname(full)
+    dst_dir = abs_of(safe_course(course)) if str(course or "").strip() else cur_dir
+    if not dst_dir:
+        return {"ok": False, "msg": "课程名不合法"}
+    nm = safe_name(new_name) if str(new_name or "").strip() else os.path.basename(full)
     try:
         os.makedirs(dst_dir, exist_ok=True)
-        target = unique_path(dst_dir, os.path.basename(full))
+        target = unique_path(dst_dir, nm)
         shutil.move(full, target)
-        return {"ok": True, "msg": "已移动到「%s」" % safe_course(course), "id": rel_of(target)}
+        moved = os.path.normpath(dst_dir) != os.path.normpath(cur_dir)
+        renamed = nm != os.path.basename(full)
+        if moved and renamed:
+            msg = "已改名为「%s」并移动到「%s」" % (nm, safe_course(course))
+        elif renamed:
+            msg = "已改名为「%s」" % nm
+        elif moved:
+            msg = "已移动到「%s」" % safe_course(course)
+        else:
+            msg = "没有变化"
+        return {"ok": True, "msg": msg, "id": rel_of(target), "name": nm}
     except Exception as e:
-        return {"ok": False, "msg": "移动失败：%s" % e}
+        return {"ok": False, "msg": "操作失败：%s" % e}
 
 
 def set_root(new_root, move):
@@ -883,427 +942,9 @@ def set_root(new_root, move):
 
 
 # ===========================================================================
-# 本地资料夹（mounts）—— 只加载 / 只展示
+# 本地资料夹（mounts）已于 2026-11-01 整体下线
 # ---------------------------------------------------------------------------
-# 与上面的「课件库」是两套东西，请勿混用：
-#   · 课件库：工作台自己管理的目录，可上传 / 删除 / 归档，目录即数据；
-#   · 资料夹：老师电脑上**原本就有**的任意文件夹（如「D:\教学\八年级」），
-#     工作台只是把它「挂」进来读一读、展示出来，**绝不写入、绝不移动、绝不删除**。
-#
-# 关键约束（界面上的说明与这里是同一套规则）：
-#   1. 只读：本模块不含任何写磁盘的函数，全部是 listdir / stat / open(rb)；
-#   2. 不同步：资料夹列表只存 config/data/courseware.json，不进浏览器数据库，
-#      所以「导出备份 / 从备份恢复」都不会带走它 —— 换电脑要重新添加一次；
-#   3. 路径锁死：所有相对路径都在 mount 根目录内做 commonpath 校验，防 ../ 穿越；
-#   4. 有上限：单次扫描最多 SCAN_LIMIT 个文件、SCAN_DEPTH 层目录，避免误挂 C:\ 卡死。
+# 按需求「所有资料统一上传到服务器存储」，不再支持把老师电脑上的本地文件夹
+# 挂进来只读展示。原先的 mounts / pick_dir 代码已整体移除；
+# 旧配置文件里残留的 cfg["mounts"] 字段会被忽略，不影响课件库读写。
 # ===========================================================================
-MAX_MOUNTS = 20
-SCAN_LIMIT = 6000
-SCAN_DEPTH = 6
-
-
-def _clean_path(raw):
-    """用户输入的路径 → 规范化绝对路径（支持 ~ 和 %VAR%，去掉复制粘贴带上的引号）"""
-    p = str(raw or "").strip().strip('"').strip("'")
-    if not p:
-        return ""
-    p = os.path.expanduser(os.path.expandvars(p))
-    try:
-        p = os.path.normpath(p)
-    except Exception:
-        return ""
-    return p
-
-
-def _bad_path(p):
-    """危险目录（系统盘根 / 系统目录）返回 True"""
-    low = p.lower().replace("\\", "/")
-    if len(p.rstrip("/\\")) <= 1:
-        return True
-    if low.rstrip("/") in [x.lower().rstrip("/") for x in _BAD_ROOTS]:
-        return True
-    for bad in _BAD_PREFIX:
-        b = bad.replace("\\", "/")
-        if low == b or low.startswith(b + "/"):
-            return True
-    return False
-
-
-def mounts_raw(cfg=None):
-    cfg = cfg if isinstance(cfg, dict) else load_cfg()
-    arr = cfg.get("mounts")
-    return arr if isinstance(arr, list) else []
-
-
-def mount_find(mid, cfg=None):
-    for m in mounts_raw(cfg):
-        if str(m.get("id")) == str(mid):
-            return m
-    return None
-
-
-def mount_root(m):
-    """挂载点根目录（不存在就返回空串，交给上层报错，不自动创建）"""
-    p = _clean_path((m or {}).get("path"))
-    return p if p and os.path.isdir(p) else ""
-
-
-def mount_public(m):
-    """给前端的挂载点信息（不含磁盘上的任何文件内容）"""
-    p = _clean_path(m.get("path"))
-    ok = bool(p) and os.path.isdir(p)
-    err = ""
-    if not ok:
-        err = "文件夹不存在或已断开（U 盘拔了 / 移动了位置？）"
-    else:
-        try:
-            os.listdir(p)
-        except Exception as e:
-            ok = False
-            err = "无法读取：%s" % e
-    st = m.get("last_scan") or {}
-    return {
-        "id": m.get("id"), "name": m.get("name") or os.path.basename(p) or "资料夹",
-        "path": p, "ok": ok, "error": err,
-        "hidden_count": len(m.get("hidden") or []),
-        "alias_count": len(m.get("aliases") or {}),
-        "count": int(st.get("count") or 0),
-        "size": int(st.get("size") or 0),
-        "size_text": human_size(st.get("size") or 0) if st.get("count") else "",
-        "scanned_at": st.get("at") or "",
-        "truncated": bool(st.get("truncated")),
-        "added_at": m.get("added_at") or "",
-    }
-
-
-def mounts_list():
-    return [mount_public(m) for m in mounts_raw()]
-
-
-def mount_add(path, name=""):
-    p = _clean_path(path)
-    if not p:
-        return {"ok": False, "msg": "请填写文件夹路径"}
-    if _bad_path(p):
-        return {"ok": False, "msg": "这个位置太危险（系统目录 / 磁盘根目录），请选一个真正放资料的文件夹"}
-    if not os.path.exists(p):
-        return {"ok": False, "msg": "文件夹不存在：%s" % p}
-    if not os.path.isdir(p):
-        return {"ok": False, "msg": "这是一个文件，不是文件夹：%s" % p}
-    try:
-        os.listdir(p)
-    except Exception as e:
-        return {"ok": False, "msg": "没有读取权限：%s" % e}
-    cfg = load_cfg()
-    arr = mounts_raw(cfg)
-    if len(arr) >= MAX_MOUNTS:
-        return {"ok": False, "msg": "最多同时添加 %d 个资料夹，请先移除不用的" % MAX_MOUNTS}
-    rp = os.path.realpath(p)
-    for m in arr:
-        if os.path.realpath(_clean_path(m.get("path"))) == rp:
-            return {"ok": False, "msg": "这个文件夹已经添加过了，直接点它的卡片即可"}
-    nm = safe_name(name).strip() if str(name or "").strip() else os.path.basename(p)
-    nm = (nm or os.path.basename(p) or "资料夹")[:40]
-    rec = {
-        "id": "m%d" % int(datetime.datetime.now().timestamp() * 1000),
-        "name": nm, "path": p,
-        "hidden": [], "aliases": {},
-        "added_at": _now(), "last_scan": {},
-    }
-    arr.append(rec)
-    cfg["mounts"] = arr
-    cfg["updated_at"] = _now()
-    save_cfg(cfg)
-    return {"ok": True, "msg": "已添加资料夹「%s」" % nm, "mount": mount_public(rec)}
-
-
-def mount_update(mid, name=None, path=None):
-    cfg = load_cfg()
-    arr = mounts_raw(cfg)
-    m = None
-    for x in arr:
-        if str(x.get("id")) == str(mid):
-            m = x
-            break
-    if not m:
-        return {"ok": False, "msg": "资料夹不存在（可能已被移除）"}
-    if name is not None:
-        nm = safe_name(name).strip()[:40]
-        if not nm:
-            return {"ok": False, "msg": "名称不能为空"}
-        m["name"] = nm
-    if path is not None and str(path).strip():
-        p = _clean_path(path)
-        if _bad_path(p):
-            return {"ok": False, "msg": "这个位置太危险（系统目录 / 磁盘根目录），请换一个"}
-        if not os.path.isdir(p):
-            return {"ok": False, "msg": "文件夹不存在：%s" % p}
-        for x in arr:
-            if str(x.get("id")) != str(mid) and os.path.realpath(_clean_path(x.get("path"))) == os.path.realpath(p):
-                return {"ok": False, "msg": "这个文件夹已经被别的资料夹占用了"}
-        m["path"] = p
-        m["last_scan"] = {}
-    cfg["mounts"] = arr
-    cfg["updated_at"] = _now()
-    save_cfg(cfg)
-    return {"ok": True, "msg": "已保存", "mount": mount_public(m)}
-
-
-def mount_remove(mid):
-    """只移除「挂载记录」，磁盘上的文件一个都不动"""
-    cfg = load_cfg()
-    arr = mounts_raw(cfg)
-    left = [m for m in arr if str(m.get("id")) != str(mid)]
-    if len(left) == len(arr):
-        return {"ok": False, "msg": "资料夹不存在"}
-    cfg["mounts"] = left
-    cfg["updated_at"] = _now()
-    save_cfg(cfg)
-    return {"ok": True, "msg": "已从列表移除（磁盘上的文件没有动）"}
-
-
-def mount_abs(mid, rel, must_exist=True):
-    """资料夹内的相对路径 → 绝对路径；越界 / 不存在返回 None"""
-    m = mount_find(mid)
-    base = mount_root(m)
-    if not base:
-        return None
-    r = str(rel or "").replace("\\", "/").strip("/")
-    if not r or ".." in r.split("/"):
-        return None
-    full = os.path.normpath(os.path.join(base, r.replace("/", os.sep)))
-    try:
-        if os.path.commonpath([os.path.normpath(base), full]) != os.path.normpath(base):
-            return None
-    except ValueError:
-        return None
-    if must_exist and not os.path.isfile(full):
-        return None
-    return full
-
-
-def mount_scan(mid, limit=SCAN_LIMIT, depth=SCAN_DEPTH):
-    """扫描资料夹（只读）。返回文件清单 + 目录清单 + 是否被截断。"""
-    m = mount_find(mid)
-    if not m:
-        return {"ok": False, "msg": "资料夹不存在（可能已被移除）", "files": [], "dirs": []}
-    base = mount_root(m)
-    if not base:
-        return {"ok": False, "msg": "文件夹打不开：不存在或已断开连接",
-                "files": [], "dirs": [], "mount": mount_public(m)}
-    hidden = set(m.get("hidden") or [])
-    aliases = m.get("aliases") or {}
-    files, dirs = [], []
-    total_size = 0
-    truncated = False
-    base_depth = base.rstrip(os.sep).count(os.sep)
-    for dirpath, dirnames, filenames in os.walk(base):
-        dirnames[:] = sorted([d for d in dirnames if not d.startswith(".") and d.lower() not in _IGNORE],
-                             key=lambda x: x.lower())
-        cur_depth = dirpath.rstrip(os.sep).count(os.sep) - base_depth
-        if cur_depth >= depth:
-            dirnames[:] = []
-        rel_dir = os.path.relpath(dirpath, base).replace(os.sep, "/")
-        if rel_dir == ".":
-            rel_dir = ""
-        if rel_dir:
-            dirs.append(rel_dir)
-        for fn in sorted(filenames, key=lambda x: x.lower()):
-            if fn.startswith(".") or fn.lower() in _IGNORE:
-                continue
-            full = os.path.join(dirpath, fn)
-            try:
-                if not os.path.isfile(full):
-                    continue
-                st = os.stat(full)
-            except Exception:
-                continue
-            rel = (rel_dir + "/" + fn) if rel_dir else fn
-            size = st.st_size
-            total_size += size
-            k = kind_of(fn)
-            al = str(aliases.get(rel) or "").strip()
-            files.append({
-                "rel": rel, "name": fn, "dir": rel_dir, "depth": cur_depth,
-                "ext": ext_of(fn), "kind": k,
-                "size": size, "size_text": human_size(size),
-                "mtime": datetime.datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M"),
-                "mtime_ts": int(st.st_mtime),
-                "alias": al, "display": al or fn,
-                "hidden": rel in hidden,
-                "previewable": k in ("image", "video", "audio", "pdf", "office", "text"),
-            })
-            if len(files) >= limit:
-                truncated = True
-                break
-        if truncated:
-            break
-    # 顺手把「上次加载」的统计写回配置（只写 cfg，不碰文件）
-    try:
-        cfg = load_cfg()
-        for x in mounts_raw(cfg):
-            if str(x.get("id")) == str(mid):
-                x["last_scan"] = {"at": _now(), "count": len(files),
-                                  "size": total_size, "truncated": truncated}
-        cfg["mounts"] = mounts_raw(cfg)
-        cfg["updated_at"] = _now()
-        save_cfg(cfg)
-        m = mount_find(mid) or m
-    except Exception:
-        pass
-    return {"ok": True, "files": files, "dirs": sorted(dirs, key=lambda x: x.lower()),
-            "total": len(files), "truncated": truncated, "limit": limit, "depth": depth,
-            "size": total_size, "size_text": human_size(total_size),
-            "mount": mount_public(m), "scanned_at": _now()}
-
-
-def mount_set_alias(mid, rel, alias):
-    cfg = load_cfg()
-    arr = mounts_raw(cfg)
-    m = None
-    for x in arr:
-        if str(x.get("id")) == str(mid):
-            m = x
-            break
-    if not m:
-        return {"ok": False, "msg": "资料夹不存在"}
-    if not mount_abs(mid, rel):
-        return {"ok": False, "msg": "文件不存在或不在这个资料夹里"}
-    al = safe_name(alias).strip()[:80] if str(alias or "").strip() else ""
-    mp = m.get("aliases") or {}
-    if al:
-        mp[rel] = al
-    else:
-        mp.pop(rel, None)
-    m["aliases"] = mp
-    cfg["mounts"] = arr
-    cfg["updated_at"] = _now()
-    save_cfg(cfg)
-    return {"ok": True, "msg": "已改为显示名「%s」" % al if al else "已恢复原名", "alias": al}
-
-
-def mount_set_hidden(mid, rels, hidden=True):
-    """隐藏 / 恢复（只影响展示，磁盘文件不动）"""
-    cfg = load_cfg()
-    arr = mounts_raw(cfg)
-    m = None
-    for x in arr:
-        if str(x.get("id")) == str(mid):
-            m = x
-            break
-    if not m:
-        return {"ok": False, "msg": "资料夹不存在"}
-    cur = set(m.get("hidden") or [])
-    rs = [str(r).replace("\\", "/").strip("/") for r in (rels or []) if str(r).strip()]
-    if not rs:
-        return {"ok": False, "msg": "没有选中文件"}
-    if hidden:
-        cur.update(rs)
-    else:
-        cur.difference_update(rs)
-    m["hidden"] = sorted(cur)
-    cfg["mounts"] = arr
-    cfg["updated_at"] = _now()
-    save_cfg(cfg)
-    return {"ok": True, "msg": ("已隐藏 %d 个文件" if hidden else "已恢复 %d 个文件") % len(rs),
-            "hidden_count": len(cur)}
-
-
-def pick_dir(prompt_text="选择要加载的资料文件夹"):
-    """调系统原生「选择文件夹」对话框。返回 (ok, 路径或提示语)。
-
-    只在老师的本机对话框里选，不猜路径；取消 / 不支持都返回可读原因，
-    前端会退回「手动填路径」的输入框，功能不会因此不可用。
-    """
-    import platform
-    import subprocess
-    s = platform.system().lower()
-    try:
-        if s == "darwin":
-            script = ('try\nPOSIX path of (choose folder with prompt "%s")\n'
-                      'on error number -128\nreturn ""\nend try' % prompt_text.replace('"', "'"))
-            r = subprocess.run(["osascript", "-e", script], capture_output=True,
-                               text=True, timeout=600)
-            out = (r.stdout or "").strip()
-            if out:
-                return True, out.rstrip("/")
-            err = (r.stderr or "").strip()
-            if err:
-                return False, "系统对话框打不开：%s（直接粘贴路径即可）" % err.splitlines()[-1]
-            return False, "没有选中文件夹（如果刚才没看到弹窗，可能是系统拦了对话框——直接把路径粘进输入框也行）"
-        if s == "windows":
-            ps = (
-                "Add-Type -AssemblyName System.Windows.Forms;"
-                "$d=New-Object System.Windows.Forms.FolderBrowserDialog;"
-                "$d.Description='%s';$d.ShowNewFolderButton=$false;"
-                "if($d.ShowDialog() -eq 'OK'){Write-Output $d.SelectedPath}" % prompt_text.replace("'", "''")
-            )
-            r = subprocess.run(["powershell", "-NoProfile", "-STA", "-Command", ps],
-                               capture_output=True, text=True, timeout=600)
-            out = (r.stdout or "").strip()
-            if out:
-                return True, out
-            err = (r.stderr or "").strip()
-            if err:
-                return False, "系统对话框打不开：%s（直接粘贴路径即可）" % err.splitlines()[-1]
-            return False, "没有选中文件夹（如果刚才没看到弹窗，直接把路径粘进输入框也行）"
-        for cmd in (["zenity", "--file-selection", "--directory", "--title", prompt_text],
-                    ["kdialog", "--getexistingdirectory", "."]):
-            from shutil import which
-            if which(cmd[0]):
-                r = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
-                out = (r.stdout or "").strip()
-                if out:
-                    return True, out
-                return False, "已取消选择"
-        return False, "当前系统没有可用的图形选择框，请手动填写文件夹路径"
-    except Exception as e:
-        return False, "打开系统对话框失败：%s（可手动填写路径）" % e
-
-
-def mount_copy_to_library(mid, rels, course="", move=False):
-    """把资料夹里选中的文件「复制」进课件库（默认复制，源文件不动）。
-
-    为什么要复制而不是引用：资料夹是只读挂载、不进备份，换电脑或 U 盘拔掉就没了；
-    进了课件库才是工作台自己的资料，可以随目录整体搬走。
-    """
-    m = mount_find(mid)
-    if not m:
-        return {"ok": False, "msg": "资料夹不存在（可能已被移除）", "copied": [], "failed": []}
-    if not mount_root(m):
-        return {"ok": False, "msg": "资料夹打不开：文件夹不存在或已断开", "copied": [], "failed": []}
-    rs = [str(r).replace("\\", "/").strip("/") for r in (rels or []) if str(r).strip()]
-    if not rs:
-        return {"ok": False, "msg": "没有选中文件", "copied": [], "failed": []}
-    cname = safe_course(course) if str(course or "").strip() else "未分课程"
-    dst_dir = abs_of(cname)
-    if not dst_dir:
-        return {"ok": False, "msg": "课程名不合法", "copied": [], "failed": []}
-    try:
-        os.makedirs(dst_dir, exist_ok=True)
-    except Exception as e:
-        return {"ok": False, "msg": "无法创建课程目录：%s" % e, "copied": [], "failed": []}
-    copied, failed = [], []
-    for rel in rs:
-        src = mount_abs(mid, rel)
-        if not src:
-            failed.append({"rel": rel, "msg": "文件不存在或不在这个资料夹里"})
-            continue
-        try:
-            target = unique_path(dst_dir, os.path.basename(src))
-            if move:
-                shutil.move(src, target)
-            else:
-                shutil.copy2(src, target)
-            copied.append({"name": os.path.basename(target), "id": rel_of(target),
-                           "from": rel})
-        except Exception as e:
-            failed.append({"rel": rel, "msg": str(e)})
-    ok = bool(copied)
-    if ok and not failed:
-        msg = "已加入课件库：%d 个文件 → 「%s」" % (len(copied), cname)
-    elif ok:
-        msg = "已加入 %d 个，%d 个失败（见下方明细）" % (len(copied), len(failed))
-    else:
-        msg = "没有一个文件加入成功，请检查文件是否还在原文件夹里"
-    return {"ok": ok, "msg": msg, "course": cname, "copied": copied, "failed": failed}

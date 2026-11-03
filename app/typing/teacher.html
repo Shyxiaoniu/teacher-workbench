@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>打字练习管理 · 班级工作台</title>
+<style>
+:root{
+  --brand:#F4632E; --brand2:#FF8A4C; --ink:#2B2B33; --ink2:#5C5C68; --ink3:#9A9AA6;
+  --bg:#FFF7F0; --card:#fff; --line:#F0E3D8; --ok:#3E9E5B; --warn:#E0A93C; --purple:#8E6FD8;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:
+  radial-gradient(1000px 400px at 90% -10%, #FFE8D9 0%, transparent 60%), var(--bg);
+  color:var(--ink);padding:18px 18px 40px;-webkit-font-smoothing:antialiased}
+#app{max-width:1000px;margin:0 auto}
+button{font-family:inherit;cursor:pointer;border:none;background:none}
+.btn{background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;border:none;
+  padding:9px 20px;border-radius:12px;font-size:14.5px;font-weight:600;box-shadow:0 4px 12px rgba(244,99,46,.28)}
+.btn.ghost{background:#fff;color:var(--ink2);border:1.5px solid var(--line);box-shadow:none}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.head{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.head h1{font-size:20px}
+.head small{color:var(--ink3);font-size:12.5px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:860px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:20px;box-shadow:0 6px 18px rgba(60,30,10,.05)}
+.card h2{font-size:15.5px;margin-bottom:4px}
+.card .hint{font-size:12.5px;color:var(--ink3);line-height:1.7;margin-bottom:12px}
+.switch-row{display:flex;align-items:center;gap:14px;margin-top:8px}
+.sw{width:64px;height:34px;border-radius:999px;background:#E4DCD2;position:relative;transition:background .2s;flex:none}
+.sw::after{content:'';position:absolute;top:3px;left:3px;width:28px;height:28px;border-radius:50%;background:#fff;
+  box-shadow:0 2px 6px rgba(0,0,0,.18);transition:left .2s}
+.sw.on{background:linear-gradient(135deg,var(--ok),#63C57F)}
+.sw.on::after{left:33px}
+.state-pill{padding:5px 14px;border-radius:999px;font-size:13px;font-weight:700}
+.state-pill.off{background:#F4EAE2;color:var(--ink3)}
+.state-pill.on{background:#E7F5EC;color:var(--ok)}
+.grade-wrap{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 14px}
+.gchip{padding:7px 14px;border-radius:11px;font-size:13.5px;font-weight:600;background:#fff;
+  border:1.5px solid var(--line);color:var(--ink2)}
+.gchip.on{border-color:var(--brand);color:var(--brand);background:#FFF3EC}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:10px}
+.stat{background:#FFF6EF;border-radius:14px;padding:12px 14px}
+.stat b{display:block;font-size:20px;color:var(--brand)}
+.stat span{font-size:11.5px;color:var(--ink3)}
+select{font-family:inherit;font-size:14px;padding:8px 12px;border:1.5px solid var(--line);border-radius:11px;background:#fff;color:var(--ink)}
+.lb-row{display:flex;align-items:center;gap:12px;padding:10px 8px;border-radius:12px}
+.lb-row+.lb-row{border-top:1px solid #F6EDE5}
+.lb-row.me{background:#FFF3EC}
+.lb-rank{width:30px;height:30px;border-radius:10px;display:flex;align-items:center;justify-content:center;
+  font-weight:800;font-size:14px;background:#F4EAE2;color:var(--ink2);flex:none}
+.lb-rank.r1{background:linear-gradient(135deg,#FFD34D,#F0A500);color:#fff}
+.lb-rank.r2{background:linear-gradient(135deg,#C8CDD6,#9BA5B3);color:#fff}
+.lb-rank.r3{background:linear-gradient(135deg,#E8A876,#C97B42);color:#fff}
+.lb-pet{width:38px;height:38px;border-radius:12px;flex:none;overflow:hidden;
+  background:radial-gradient(72% 62% at 50% 74%,#FFF8EC 0%,#F8EADC 100%);
+  border:1px solid rgba(200,160,120,.28);
+  box-shadow:inset 0 1px 0 #fff,0 1px 3px rgba(150,95,50,.1)}
+.lb-pet svg{width:100%;height:100%}
+.lb-pet.empty{display:flex;align-items:center;justify-content:center;font-size:16px;color:#D8CFC5}
+.lb-name{font-weight:700;font-size:14.5px}
+.lb-val{margin-left:auto;font-weight:800;color:var(--brand);font-variant-numeric:tabular-nums}
+.lb-val small{font-size:11px;color:var(--ink3);font-weight:400;margin-left:2px}
+.tabs{display:flex;gap:6px;margin:10px 0}
+.tabs button{padding:6px 14px;border-radius:10px;font-size:13px;font-weight:600;background:#fff;border:1.5px solid var(--line);color:var(--ink2)}
+.tabs button.on{background:#FFF1E8;border-color:var(--brand);color:var(--brand)}
+.demo-bar{background:#FFF8E2;border:1.5px dashed #E8C96A;color:#8A6A1C;border-radius:12px;
+  padding:10px 14px;font-size:13.5px;margin-bottom:14px}
+.toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%);background:#2B2B33;color:#fff;
+  padding:10px 22px;border-radius:12px;font-size:14px;opacity:0;transition:opacity .25s;pointer-events:none;z-index:99}
+.toast.show{opacity:.95}
+.off-box{text-align:center;padding:70px 30px;color:var(--ink2)}
+.off-box .big{font-size:46px;margin-bottom:10px}
+</style>
+</head>
+<body>
+<div id="app"><div style="text-align:center;padding:80px 0;color:#B9AFA4">正在加载打字练习管理面板…</div></div>
+<div class="toast" id="toast"></div>
+<script src="/typing/typing-data.js?v=20261102x"></script>
+<script>
+(function () {
+'use strict';
+var $ = function (s) { return document.querySelector(s); };
+var app = $('#app');
+var S = { demo: false, enabled: false, grades: [], classes: [], lbClass: '', scope: 'week', rows: [], lbName: '' };
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+function api(url, opts) {
+  return fetch(url, Object.assign({ credentials: 'same-origin' }, opts || {}))
+    .then(function (r) { return r.json().catch(function () { return {}; }); });
+}
+function toast(msg) {
+  var t = $('#toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(function () { t.classList.remove('show'); }, 1800);
+}
+var DEMO_CLASSES = [
+  { id: '1', name: '三年(1)班', students: 42, joined: 38, levels: 216, stars: 412, best_wpm: 52 },
+  { id: '2', name: '三年(2)班', students: 41, joined: 30, levels: 150, stars: 260, best_wpm: 47 },
+  { id: '3', name: '四年(1)班', students: 43, joined: 12, levels: 44, stars: 96, best_wpm: 38 }
+];
+var DEMO_ROWS = [
+  { name: '李晓明', value: 18, pet: 'dog', decos: ['crown'] },
+  { name: '演示同学', value: 15, pet: 'cat', decos: ['hat-red'] },
+  { name: '张思思', value: 13, pet: 'unicorn', decos: ['bow'] },
+  { name: '陈快乐', value: 9, pet: '', decos: [] },
+  { name: '王小虎', value: 7, pet: 'dino', decos: [] }
+];
+
+function boot() {
+  api('/api/v2/typing/overview').then(function (r) {
+    if (r && r.ok) {
+      S.demo = false;
+      S.enabled = !!r.enabled; S.grades = r.grades || [];
+      S.classes = r.classes || [];
+      if (S.classes.length && !S.lbClass) S.lbClass = S.classes[0].id;
+    } else {
+      S.demo = true;
+      S.enabled = true; S.grades = [3]; S.classes = DEMO_CLASSES;
+      S.lbClass = DEMO_CLASSES[0].id;
+    }
+    render();
+    loadLb();
+  }).catch(function () { S.demo = true; render(); });
+}
+
+function render() {
+  if (S.demo) {
+    app.innerHTML = '<div class="demo-bar">🎬 演示模式：当前未登录教师账号，以下为示例数据。' +
+      '登录教师端后打开「打字」页，即可管理真实班级。</div>' + body();
+  } else {
+    app.innerHTML = body();
+  }
+  bind();
+}
+function body() {
+  var gradeChips = TD.GRADES.map(function (g, i) {
+    var n = i + 1;
+    var on = S.grades.indexOf(n) >= 0;
+    return '<button class="gchip' + (on ? ' on' : '') + '" data-grade="' + n + '">' + g + '</button>';
+  }).join('');
+  var stats = S.classes.map(function (c) {
+    var rate = c.students ? Math.round(c.joined / c.students * 100) : 0;
+    return '<div class="stat"><b>' + esc(c.name) + '</b>' +
+      '<span>' + c.joined + '/' + c.students + ' 人已练 · ' + rate + '%</span>' +
+      '<div style="font-size:11.5px;color:var(--ink3);margin-top:4px">累计 ' + c.stars + ' 星 · 最快 ' +
+      (Math.round(c.best_wpm * 10) / 10) + ' KPM · 通关 ' + c.levels + ' 关</div></div>';
+  }).join('');
+  var clsOpts = S.classes.map(function (c) {
+    return '<option value="' + esc(c.id) + '"' + (c.id === S.lbClass ? ' selected' : '') + '>' + esc(c.name) + '</option>';
+  }).join('');
+  return '<div class="head"><h1>⌨️ 打字练习</h1>' +
+    '<small>开放给学生端后，学生「今日」页和底部导航会出现「打字」入口</small></div>' +
+    '<div class="grid">' +
+      '<div class="card">' +
+        '<h2>开放开关</h2>' +
+        '<div class="hint">开关实时生效：打开后学生端立即出现入口（不用刷新）；关闭后入口消失，' +
+        '但已练成绩与宠物全部保留。</div>' +
+        '<div class="switch-row">' +
+          '<button class="sw' + (S.enabled ? ' on' : '') + '" id="swBtn" aria-label="开放开关"></button>' +
+          '<span class="state-pill ' + (S.enabled ? 'on' : 'off') + '">' + (S.enabled ? '已开放 · 学生可以开练' : '未开放') + '</span>' +
+        '</div>' +
+        '<h2 style="margin-top:20px">中文词库年级</h2>' +
+        '<div class="hint">限定「中文词语」篇章的素材范围；文章阅读的篇目由学生在文章库里自选。' +
+        '键位、字母、单词、大小写标点、数字小键盘、中英混排篇章不受此限制。</div>' +
+        '<div class="grade-wrap">' + gradeChips + '</div>' +
+        '<button class="btn" id="saveGrades">保存年级设置</button>' +
+        '<button class="btn ghost" id="resetWeek" style="margin-left:8px">清零本周星光榜</button>' +
+      '</div>' +
+      '<div class="card">' +
+        '<h2>参与统计</h2>' +
+        '<div class="hint">哪些班练起来了、谁还没动，一眼看清。数据随学生练习实时更新。</div>' +
+        '<div class="stat-grid">' + (stats || '<span style="color:var(--ink3);font-size:13px">还没有班级数据</span>') + '</div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="card" style="margin-top:14px">' +
+      '<h2>班级排行榜</h2>' +
+      '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px">' +
+        '<select id="clsSel">' + (clsOpts || '<option>（暂无班级）</option>') + '</select>' +
+        '<div class="tabs" style="margin:0">' +
+          [['week', '⭐ 本周星光'], ['total', '🏆 总星'], ['speed', '⚡ 手速']].map(function (t) {
+            return '<button class="' + (S.scope === t[0] ? 'on' : '') + '" data-scope="' + t[0] + '">' + t[1] + '</button>';
+          }).join('') +
+        '</div>' +
+      '</div>' +
+      '<div id="lbBox" style="margin-top:8px"><span style="color:var(--ink3);font-size:13px">加载中…</span></div>' +
+    '</div>';
+}
+
+function bind() {
+  var sw = $('#swBtn');
+  if (sw) sw.onclick = function () {
+    var next = !S.enabled;
+    if (S.demo) { S.enabled = next; render(); return; }
+    sw.style.pointerEvents = 'none';
+    api('/api/v2/typing/config', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: next })
+    }).then(function (r) {
+      sw.style.pointerEvents = '';
+      if (r && r.ok) { S.enabled = r.enabled; toast(r.enabled ? '已开放，学生端入口实时出现' : '已关闭'); }
+      else toast((r && r.msg) || '保存失败');
+      render();
+    });
+  };
+  document.querySelectorAll('[data-grade]').forEach(function (b) {
+    b.onclick = function () {
+      var n = +b.getAttribute('data-grade');
+      var i = S.grades.indexOf(n);
+      if (i >= 0) S.grades.splice(i, 1); else S.grades.push(n);
+      b.classList.toggle('on');
+    };
+  });
+  var sg = $('#saveGrades');
+  if (sg) sg.onclick = function () {
+    if (S.demo) { toast('演示模式：年级设置只在本页生效'); return; }
+    api('/api/v2/typing/config', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ grades: S.grades })
+    }).then(function (r) {
+      if (r && r.ok) toast('已保存：中文词库限定 ' + (S.grades.length ? S.grades.map(function (g) { return TD.GRADES[g - 1]; }).join('、') : '全部年级'));
+      else toast((r && r.msg) || '保存失败');
+    });
+  };
+  var rw = $('#resetWeek');
+  if (rw) rw.onclick = function () {
+    if (S.demo) { toast('演示模式'); return; }
+    if (!confirm('确定把本周星光榜清零吗？（总星与宠物不受影响）')) return;
+    api('/api/v2/typing/reset-week', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+      .then(function (r) { toast(r && r.ok ? '本周星光榜已清零' : '操作失败'); loadLb(); });
+  };
+  var cs = $('#clsSel');
+  if (cs) cs.onchange = function () { S.lbClass = cs.value; loadLb(); };
+  document.querySelectorAll('[data-scope]').forEach(function (b) {
+    b.onclick = function () { S.scope = b.getAttribute('data-scope'); loadLb();
+      document.querySelectorAll('[data-scope]').forEach(function (x) {
+        x.classList.toggle('on', x.getAttribute('data-scope') === S.scope);
+      }); };
+  });
+}
+
+function loadLb() {
+  var box = $('#lbBox');
+  if (!box) return;
+  var paint = function (rows, name) {
+    if (!rows.length) {
+      box.innerHTML = '<div style="color:var(--ink3);font-size:13px;padding:16px 0;text-align:center">' +
+        (name ? esc(name) + ' 还没有练习记录' : '还没有练习记录') + '</div>';
+      return;
+    }
+    var unit = S.scope === 'speed' ? 'KPM' : '星';
+    box.innerHTML = rows.map(function (r, i) {
+      var rankCls = i === 0 ? 'r1' : i === 1 ? 'r2' : i === 2 ? 'r3' : '';
+      var medal = i < 3 ? ['🥇', '🥈', '🥉'][i] : (i + 1);
+      var pet = r.pet ? TD.petSvg(r.pet, r.decos) : '';
+      return '<div class="lb-row">' +
+        '<span class="lb-rank ' + rankCls + '">' + medal + '</span>' +
+        (pet ? '<span class="lb-pet">' + pet + '</span>' : '<span class="lb-pet empty">🐾</span>') +
+        '<span class="lb-name">' + esc(r.name) +
+          (r.student_no ? '<small style="font-weight:400;color:var(--ink3)"> ' + esc(r.student_no) + ' 号</small>' : '') + '</span>' +
+        '<span class="lb-val">' + (Math.round(r.value * 10) / 10) + '<small>' + unit + '</small></span>' +
+        '</div>';
+    }).join('');
+  };
+  if (S.demo) {
+    var rows = DEMO_ROWS.map(function (r) { return Object.assign({}, r); });
+    if (S.scope === 'total') rows.forEach(function (r) { r.value = r.value * 6 + 40; });
+    if (S.scope === 'speed') rows.forEach(function (r, i) { r.value = 52 - i * 3.6; });
+    paint(rows, '三年(1)班');
+    return;
+  }
+  api('/api/v2/typing/leaderboard?scope=' + S.scope + '&class_id=' + encodeURIComponent(S.lbClass))
+    .then(function (r) {
+      if (r && r.ok) paint(r.rows || [], r.class_name);
+      else box.innerHTML = '<div style="color:var(--bad);font-size:13px;padding:12px">' + esc((r && r.msg) || '加载失败') + '</div>';
+    }).catch(function () {
+      box.innerHTML = '<div style="color:var(--bad);font-size:13px;padding:12px">网络错误</div>';
+    });
+}
+
+boot();
+})();
+</script>
+</body>
+</html>

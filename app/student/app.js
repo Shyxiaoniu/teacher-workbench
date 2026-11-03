@@ -1,14 +1,19 @@
-/* 学生端 · 单页应用（v2.0.4 重构）
+/* 学生端 · 单页应用（v3.0.0 三页签版，2026-11-02）
    ------------------------------------------------------------
-   结构（2026-10-31）：只保留「今日」「我的」两个模块。
-   · 今日 = 签到 + 今日课程（每节课的导学单：资料查看 / 活动提交 / 测验作答）
-     + 待交作业 + 值日。所有「看资料、交东西」的操作都在导学单 / 今日页完成。
-   · 我的 = 个人信息 + 学习进度（作业、成绩概览、课堂评价）+ 已完成的活动。
-   独立的「课表 / 作业 / 资料 / 成绩」页签已并入上述两处；课表查看入口移除，
-   课程信息只在「今日」按当天展示。
+   布局：左侧侧边栏 + 右侧主内容区，窄屏（≤860px）侧栏收起换底部 Tab。
+   页签精简为三个（v2.x 的 概览/成绩/考勤 页全部收进左下角账号卡
+   弹出的个人信息面板 #suPop，含学习摘要 + 成绩/考勤/德育明细弹层）：
+   · 今日   = 签到 + 今日课程（每节课的交互式学习单入口）+ 待交作业 + 值日
+   · 作业   = 本班全部作业与我的提交状态（已提交·待批改 / 已批改 / 逾期）
+   · 课程   = 老师设置的课程 + 每门课的资源文件，点击在线预览
+              （/cw/<id> 闸门按登录身份 + 本班 + 已下发放行，内联输出，
+               PDF / 图片 / 音视频 / 文本直接浏览器里看，不用下载）
+
+   提交反馈：每一步操作（签到 / 作业提交 / 学习单提交）都有明确状态——
+   toast 即时提示 + 列表标签（待交 / 已提交·待批改 / 已批改 / 逾期）+ 回执卡。
 
    数据全部来自 /api/v2/sync?scope=student —— 服务端已经裁剪过，
-   这里拿不到别人的手机号、别人的分数，也拿不到没发布的考试。 */
+   这里拿不到别人的手机号、别人的分数，也拿不到没下发的资源。 */
 (function () {
   'use strict';
 
@@ -39,7 +44,11 @@
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' +
       String(d.getDate()).padStart(2, '0');
   }
-  function toast(msg) {
+  /* 统一提示：全部走 WBUI（app/student/ui-dialog.js），
+     弹窗/吐司的配色、圆角、动效与整站护眼主题保持一套。
+     组件没加载成功时退回旧的 .toast，保证提示不丢。 */
+  function toast(msg, tone) {
+    if (window.WBUI && WBUI.toast) { WBUI.toast(msg, tone); return; }
     var t = document.createElement('div');
     t.className = 'toast';
     t.textContent = msg;
@@ -97,6 +106,7 @@
       /* 老师改了「学生能用哪些功能 / 可见字段」：配置不产生数据 rev，
          要单独收这个事件，否则学生端入口要等手动刷新才变。 */
       S.es.addEventListener('cfg', function () {
+        refreshTyping();
         pull(S.rev, false).then(render);
       });
     } catch (e) {}
@@ -107,10 +117,23 @@
     }, 10000);
   }
 
+  /* 打字冒险岛开关（2026-11-02）：老师开放/关闭后学生端入口实时增减 */
+  function refreshTyping() {
+    api('/api/v2/auth/session').then(function (j) {
+      if (j && j.ok) {
+        S.typingOn = !!(j.typing && j.typing.enabled);
+        render();
+      }
+    }).catch(function () {});
+  }
+
   /* ---------------- 数据选择器 ---------------- */
   function T(name) { return S.T[name] || []; }
   function myClass() { return T('classes').filter(function (c) { return c.id === S.me.class_id; })[0] || {}; }
   function mySeat() { return T('seats').filter(function (s) { return s.student_id === S.me.id; })[0] || null; }
+  /* 我所在的小组（服务端投影已按“我是组员”过滤，每人最多命中自己那一行）。
+     _members 是服务端算好的名单：[{name, role}]，role 为「组长」或「组员」。 */
+  function myGroup() { return T('groups')[0] || null; }
   function periodMap() {
     var m = {};
     T('periods').forEach(function (p) { m[p.id] = p; });
@@ -144,52 +167,48 @@
     return T('scores').filter(function (s) { return s.student_id === S.me.id; })
       .sort(function (a, b) { return String(b.date || '').localeCompare(String(a.date || '')); });
   }
-  /* 教师登记的考勤状态（学生端只读展示，不能自己改） */
+  /* 教师登记的考勤状态（学生端只读展示，不能自己改）。
+     v2：登录即自动签到，迟到/缺勤由服务端按课表时间判定。 */
   var ATT_TEXT = { checked: '已签到', unchecked: '未签到', sick: '病假',
-                   personal: '事假', absent: '旷课',
+                   personal: '事假', absent: '缺勤',
                    present: '出勤', late: '迟到', early_leave: '早退' };
   function attLabel(st) { return ATT_TEXT[st] || (st ? String(st) : '未签到'); }
 
-  /* 学习资料：老师按班下发，学生只读 */
-  function materials() {
-    return T('materials').filter(function (m) {
-      return Number(m.class_id) === S.me.class_id;
-    });
-  }
-  function materialById(id) {
-    return materials().filter(function (m) { return String(m.id) === String(id); })[0] || null;
-  }
+  /* （materials/materialById 已随 2026-11-02 导学单移除而删除；
+     课件库推送走 cwPushed()。） */
 
-  /* ---------------- 导学单 ---------------- */
-  /* 教师按「班级 + 课程 + 日期」发放；学生端只在今日课程里展示当天的 */
-  function guides() {
-    return T('guides').filter(function (g) {
-      return Number(g.class_id) === S.me.class_id;
+  /* ---------------- 课堂活动（QuickForm 交互式学习单） ----------------
+     教师在「上课」页选好 QuickForm 活动即发放，记录在 activity_pushes 表；
+     服务端只下发本班已发放的行（收回 / 草稿学生端不可见，口径与教师端一致）。
+     打开即教师设计的交互式学习单（/submit/custom.html 外壳 + QuickForm 提交 API）。 */
+  function pushOpen(p) {
+    return String((p && p.status) || 'published') === 'published';
+  }
+  function pushes() {
+    return T('activity_pushes').filter(function (p) {
+      var st = String(p.status || 'published');
+      return st === 'published' || st === 'closed';   // closed：学生可见，但打不开
     });
   }
-  function guideOf(courseId, dateStr) {
-    var hit = guides().filter(function (g) {
-      return String(g.course_id) === String(courseId) &&
-        String(g.date || '') === String(dateStr);
+  /* 某门课的发放活动（按课程名匹配；同课多次发放取最新） */
+  function pushOfCourse(courseName, dateStr) {
+    var hit = pushes().filter(function (p) {
+      return courseName && String(p.course || '') === String(courseName) &&
+        (!dateStr || String(p.date || '') === String(dateStr));
     });
     if (!hit.length) return null;
-    /* 同一课多份时取节次最接近当前节的那份，否则取最新一份 */
-    var seq = periodSeq();
-    hit.sort(function (a, b) {
-      var da = Math.abs((Number(a.period) || 0) - seq), db = Math.abs((Number(b.period) || 0) - seq);
-      return da - db;
+    var open = hit.filter(pushOpen);   // 同一课程有多份时，优先能打开的那份
+    return open.length ? open[open.length - 1] : hit[hit.length - 1];
+  }
+  /* 课件库（2026-11-01 v2）：老师在工作台课件页点「推送」的课件，按班同步。
+     原来放在导学单详情里，导学单移除后改为「今日」页独立入口。 */
+  function cwPushed() {
+    return T('materials').filter(function (m) {
+      return !m.deleted && m.from === 'courseware' &&
+        String(m.class_id) === String(S.me.class_id);
+    }).sort(function (a, b) {
+      return String(b.date || '').localeCompare(String(a.date || ''));
     });
-    return hit[0];
-  }
-  /* 导学单条目归类 */
-  function guideItems(g, type) {
-    var items = Array.isArray(g && g.items) ? g.items : [];
-    return items.filter(function (it) { return (it.type || 'link') === type; });
-  }
-  function itemLabel(it) {
-    var kind = { material: '资料', activity: '活动', quiz: '测验',
-                 link: '链接', text: '图文', homework: '作业' }[it.type] || '条目';
-    return kind;
   }
 
   /* ---------------- 课堂签到 ---------------- */
@@ -265,19 +284,51 @@
       var p = pm[l.period_id] || {}, c = cm[l.course_id] || {};
       var st = p.start_time || '', et = p.end_time || '';
       var isNow = st && et && now >= toMin(st) && now <= toMin(et);
-      var g = guideOf(l.course_id, todayStr());
-      var gTag = g
-        ? '<div class="tag" data-guide="' + esc(g.id) + '">打开导学单</div>'
-        : '<div class="tag mut">未发放</div>';
-      return '<div class="lesson' + (isNow ? ' now' : '') + '" ' +
-        (g ? 'data-guide="' + esc(g.id) + '"' : '') + '>' +
+      var push = pushOfCourse(c.name || l.course_name || '', todayStr());
+      var locked = push && !pushOpen(push);
+      var gTag = push
+        ? (locked
+            ? '<div class="tag mut" data-locked="1">学习单已关闭</div>'
+            : '<div class="tag hot" data-act="' + esc(push.url || '') + '" data-act-title="' +
+              esc(push.task_title || '课堂活动') + '">进学习单</div>')
+        : '<div class="tag mut">暂无学习单</div>';
+      return '<div class="lesson' + (isNow ? ' now' : '') + (locked ? ' locked' : '') + '" ' +
+        (push ? (locked
+          ? 'data-locked="1"'
+          : 'data-act="' + esc(push.url || '') + '" data-act-title="' + esc(push.task_title || '课堂活动') + '"') : '') + '>' +
         '<div class="t"><b>' + esc(p.label || ('第' + (p.seq || '') + '节')) + '</b>' + esc(st) + '</div>' +
         '<div class="m"><b>' + esc(c.name || l.course_name || '课程') + '</b>' +
-        '<span>' + (g
-          ? ('导学单 · ' + (g.items || []).length + ' 项任务' + (g.title && g.title !== (c.name || '') ? ' · ' + esc(g.title) : ''))
+        '<span>' + (push
+          ? (locked ? '老师已关闭，暂时无法打开' : ('课堂活动 · ' + esc(push.task_title || 'Interactive')))
           : esc(l.room_override || c.location || '')) + '</span></div>' +
         gTag + '</div>';
     }).join('') : '<div class="empty">今天没有课，好好休息</div>';
+
+    /* 今日课堂活动（按日期，不依赖课表）：
+       周末 / 临时停课时课表里没课，按课程找活动的入口就没了——
+       这里按「日期 = 今天」单独列一区块，有课没课都能打开。 */
+    var gds = pushes().filter(function (p) {
+      return String(p.date || '') === todayStr();
+    });
+    var gdHtml = gds.length
+      ? '<div class="card"><h3>今日课堂活动<span class="more">' + gds.length + ' 个</span></h3>' +
+        gds.map(function (p) {
+          var locked = !pushOpen(p);
+          return '<div class="lesson' + (locked ? ' locked' : '') + '" ' +
+            (locked
+              ? 'data-locked="1"'
+              : 'data-act="' + esc(p.url || '') + '" data-act-title="' + esc(p.task_title || '课堂活动') + '"') + '>' +
+            '<div class="t"><b>' + esc(p.course || '课堂活动') + '</b></div>' +
+            '<div class="m"><b>' + esc(p.task_title || '课堂活动') + '</b>' +
+            '<span>' + (locked ? '老师已关闭，暂时无法打开' : '交互式学习单 · 点开作答并提交，提交后有状态提示') + '</span></div>' +
+            (locked
+              ? '<div class="tag mut" data-locked="1">已关闭</div>'
+              : '<div class="tag hot" data-act="' + esc(p.url || '') + '" data-act-title="' + esc(p.task_title || '课堂活动') + '">打开学习单</div>') +
+            '</div>';
+        }).join('') + '</div>'
+      : '';
+
+    /* 课程资源已独立成「课程」页（v3.0.0），今日页不再重复放课件库入口 */
 
     var hwHtml = hwTodo.length ? hwTodo.slice(0, 4).map(function (h) {
       return '<div class="hw" data-hw="' + esc(h.id) + '"><div class="dot"></div>' +
@@ -286,135 +337,159 @@
         '<div class="tag">待交</div></div>';
     }).join('') : '<div class="empty">作业都交齐了</div>';
 
-    /* 课堂签到卡：登录后一键签到，教师端座位表实时看到 */
+    /* 课堂签到卡：登录时服务端已自动签到，这里展示状态；按钮只作补签 */
     var ck = myCheckin();
     var p = curPeriod();
     var pLabel = p ? (p.label || ('第' + (p.seq || '') + '节')) : '本节课';
-    var ckHtml = '<div class="card ckin' + (ck && ck.status === 'checked' ? ' on' : '') + '">' +
+    var ckDone = ck && (ck.status === 'checked' || ck.status === 'present' || ck.status === 'late');
+    var ckTxt;
+    if (ckDone) {
+      ckTxt = '已签到 ' + esc(ck.checked_at || '') + (ck.status === 'late' ? '（迟到）' : '');
+    } else if (ck && (ck.status === 'sick' || ck.status === 'personal')) {
+      ckTxt = esc(attLabel(ck.status)) + '（老师已登记）';
+    } else if (ck && ck.status === 'absent') {
+      ckTxt = '缺勤（本节课超15分钟未登录，已记缺勤）';
+    } else {
+      ckTxt = ck ? esc(attLabel(ck.status)) : '还没签到，点右边按钮';
+    }
+    var ckHtml = '<div class="card ckin' + (ckDone ? ' on' : '') + '">' +
       '<div class="ck-l"><b>' + esc(pLabel) + '签到</b>' +
-      '<span>' + (ck && ck.status === 'checked'
-        ? ('已签到 ' + esc(ck.checked_at || ''))
-        : (ck ? esc(attLabel(ck.status)) : '还没签到，点右边按钮')) + '</span></div>' +
-      (ck && ck.status === 'checked'
-        ? '<div class="ck-done">✓</div>'
+      '<span>' + ckTxt + '</span></div>' +
+      (ckDone
+        ? '<div class="ck-done">' + (ck.status === 'late' ? '迟' : '✓') + '</div>'
         : '<button class="btn ck-b" id="ckBtn">一键签到</button>') +
       '</div>';
 
-    return '<div class="hero"><div class="hi">' + esc(greet()) + '，' + esc(WD[todayIdx()]) + '</div>' +
-      '<div class="nm">' + esc(S.me.name) + '<small>' + esc(myClass().name || '') + '</small></div>' +
-      '<div class="meta">' +
-      (seat ? '<span class="pill">座位 <b>' + esc(seat.row) + ' 排 ' + esc(seat.col) + ' 座</b></span>' : '') +
-      '<span class="pill">今日 <b>' + ls.length + '</b> 节课</span>' +
-      (hwTodo.length ? '<span class="pill">待交 <b>' + hwTodo.length + '</b> 项</span>' : '') +
-      '</div></div>' +
+    /* 打字冒险岛入口卡（老师开放后才出现，2026-11-02） */
+    var typingHtml = S.typingOn
+      ? '<div class="card" data-typing-go style="cursor:pointer;display:flex;align-items:center;gap:14px">' +
+        '<div style="font-size:32px;line-height:1">⌨️</div>' +
+        '<div style="flex:1"><b style="font-size:15.5px">打字冒险岛</b>' +
+        '<div style="font-size:12.5px;color:var(--ink3);margin-top:3px">闯关练打字 · 赢星星 · 孵宠物 · 上排行榜</div></div>' +
+        '<span class="tag hot">去闯关 ›</span></div>'
+      : '';
+
+    return '<div class="stat-grid">' +
+      '<div class="stat"><div class="stat-num">' + ls.length + '<small>节</small></div>' +
+      '<div class="stat-label">今日课程</div></div>' +
+      '<div class="stat"><div class="stat-num">' + hwTodo.length + '<small>项</small></div>' +
+      '<div class="stat-label">待交作业</div></div>' +
+      (seat ? '<div class="stat"><div class="stat-num" style="font-size:17px">' +
+        esc(seat.row) + ' 排 ' + esc(seat.col) + ' 座</div><div class="stat-label">我的座位</div></div>' : '') +
+      '</div>' +
       ckHtml +
-      '<div class="offline" id="off"></div>' +
-      '<div class="card"><h3>今日课程 · 导学单<span class="more">点课打开</span></h3>' + lessonHtml + '</div>' +
+      typingHtml +
+      '<div class="cols2">' +
+      '<div class="card"><h3>今日课程<span class="more">点课进学习单</span></h3>' + lessonHtml + '</div>' +
+      gdHtml +
       (S.flags.homework ? '<div class="card"><h3>待交作业<span class="more">' + hwTodo.length + ' 项</span></h3>' + hwHtml + '</div>' : '') +
       (duty.length ? '<div class="card"><h3>今天我值日</h3>' + duty.map(function (x) {
         return '<div class="hw"><div class="dot done"></div><div class="m"><b>' + esc(x.area || '值日') + '</b>' +
           '<span>记得课后完成</span></div><div class="tag done">' + (x.done ? '已完成' : '待完成') + '</div></div>';
-      }).join('') + '</div>' : '');
+      }).join('') + '</div>' : '') +
+      '</div>';
   }
 
-  /* ---------------- 视图：我的 ---------------- */
-  function doneRecords() {
-    return T('homework_records').filter(function (r) {
-      return r.student_id === S.me.id &&
-        ['submitted', 'checked', 'done', 'practice'].indexOf(r.status) >= 0;
-    });
-  }
+  /* ---------------- 我的记录（2026-11-01 深夜新增） ----------------
+     服务端 projection 已保证 attendance / morality_records 只下发本人行，
+     这里直接过滤展示即可；只读，学生端没有任何写入入口。 */
   function moralityMine() {
     return T('morality_records').filter(function (r) { return r.student_id === S.me.id; })
       .sort(function (a, b) { return String(b.date || '').localeCompare(String(a.date || '')); });
   }
-  var REC_TEXT = { submitted: '已提交', checked: '已批改', done: '已完成', practice: '已练习' };
 
-  function vMe() {
-    var seat = mySeat();
-    var list = homeworks();
-    var doneN = 0, lateN = 0;
-    list.forEach(function (h) {
-      var st = hwState(h);
-      if (st.done) doneN++;
-      else if (st.late) lateN++;
+  function attMine() {
+    return T('attendance').filter(function (a) { return a.student_id === S.me.id; })
+      .sort(function (a, b) {
+        return String(b.date || '').localeCompare(String(a.date || '')) ||
+          (Number(b.period) || 0) - (Number(a.period) || 0);
+      });
+  }
+  /** 节次序号 → 名称（attendance.period 存的是 seq，不是 periods.id） */
+  function periodNameBySeq(seq) {
+    var hit = T('periods').filter(function (p) {
+      return Number(p.seq || p.id) === Number(seq);
+    })[0];
+    return hit ? (hit.label || ('第' + (hit.seq || seq) + '节')) : ('第' + seq + '节');
+  }
+  /** 德育记录全量明细（底部弹层） */
+  function openMorSheet() {
+    var moral = moralityMine();
+    var sum = 0;
+    moral.forEach(function (r) { sum += Number(r.score) || 0; });
+    var body = moral.length ? moral.map(function (r) {
+      var v = Number(r.score) || 0;
+      return '<div class="hw"><div class="dot' + (v >= 0 ? ' done' : '') + '"></div>' +
+        '<div class="m"><b>' + esc(r.item_name || r.reason || '课堂评价') + '</b>' +
+        '<span>' + esc(r.date || '') +
+        (r.reason && r.item_name ? ' · ' + esc(r.reason) : '') + '</span></div>' +
+        '<div class="tag ' + (v >= 0 ? 'done' : 'late') + '">' + (v > 0 ? '+' : '') + v + '</div></div>';
+    }).join('') : '<div class="empty">还没有德育记录</div>';
+    showSheet('<div class="sh"><b>我的德育记录</b>' +
+      '<button class="x" id="shClose">×</button></div>' +
+      '<div class="note">累计 ' + (sum > 0 ? '+' : '') + sum + ' 分 · 共 ' + moral.length + ' 条 · 按日期倒序</div>' +
+      body);
+    var c = $('#shClose'); if (c) c.onclick = hideSheet;
+  }
+  /** 考勤记录全量明细（底部弹层） */
+  function openAttSheet() {
+    var atts = attMine();
+    var n = { checked: 0, late: 0, leave: 0, absent: 0 };
+    atts.forEach(function (a) {
+      var s = String(a.status || '');
+      if (s === 'checked') n.checked++;
+      else if (s === 'late' || s === 'early_leave') n.late++;
+      else if (s === 'sick' || s === 'personal') n.leave++;
+      else n.absent++;
     });
+    var body = atts.length ? atts.map(attRow).join('') : '<div class="empty">还没有考勤记录</div>';
+    showSheet('<div class="sh"><b>我的考勤记录</b>' +
+      '<button class="x" id="shClose">×</button></div>' +
+      '<div class="note">已到 ' + n.checked + ' · 迟到/早退 ' + n.late +
+      ' · 请假 ' + n.leave + ' · 旷课 ' + n.absent + ' · 按日期倒序</div>' +
+      body);
+    var c = $('#shClose'); if (c) c.onclick = hideSheet;
+  }
+  /** 成绩全量明细（底部弹层，2026-11-02）。
+     sc() 拿到的本身就是服务端投影后的「本人成绩行」，班均/名次是
+     服务端按全班算好再挂在自己行上的聚合值，看不到别人的分数。 */
+  function openScoreSheet() {
     var sc = scores();
     var vis = S.vis || {};
-    var moral = moralityMine();
-    var moralSum = 0;
-    moral.forEach(function (r) { moralSum += Number(r.score) || 0; });
-    var done = doneRecords();
-
-    var html = '<div class="hero"><div class="nm">我的</div>' +
-      '<div class="meta"><span class="pill">学习进度一目了然</span></div></div>';
-
-    /* 学习进度 */
-    html += '<div class="card"><h3>学习进度</h3>';
-    if (S.flags.homework !== false) {
-      html += '<div class="hw stat"><div class="dot' + (doneN ? ' done' : '') + '"></div>' +
-        '<div class="m"><b>作业</b><span>共 ' + list.length + ' 项 · 已交 ' + doneN +
-        (lateN ? ' · 逾期 ' + lateN : '') + '</span></div>' +
-        '<div class="tag' + (lateN ? ' late' : (doneN ? ' done' : '')) + '">' +
-        (list.length ? Math.round(doneN / list.length * 100) + '%' : '—') + '</div></div>';
-    }
-    if (S.flags.scores !== false) {
-      html += sc.length
-        ? sc.slice(0, 3).map(function (s) {
-            var full = s.full_score || 100;
-            return '<div class="score"><div class="m"><b>' + esc(s.title || '考试') + '</b><span>' +
-              esc(s.date || '') + (s._avg != null ? ' · 班均 ' + s._avg : '') +
-              (vis.rank && s._rank ? ' · 第 ' + s._rank + ' 名' : '') + '</span></div>' +
-              '<div class="v">' + esc(fmtNum(s.score)) + '<small>/' + esc(full) + '</small></div></div>';
-          }).join('')
-        : '<div class="empty" style="padding:6px 0;text-align:left">还没有发布的成绩</div>';
-      if (sc.length > 3) html += '<div class="note">只显示最近 3 次成绩</div>';
-    }
-    if (S.flags.morality !== false) {
-      html += '<div style="height:6px"></div><div class="hw stat"><div class="dot' + (moralSum >= 0 ? ' done' : '') + '"></div>' +
-        '<div class="m"><b>课堂评价</b><span>累计 ' + (moralSum > 0 ? '+' : '') + moralSum + ' 分 · ' +
-        moral.length + ' 条记录</span></div>' +
-        '<div class="tag ' + (moralSum >= 0 ? 'done' : 'late') + '">' + (moralSum > 0 ? '+' : '') + moralSum + '</div></div>' +
-        moral.slice(0, 3).map(function (r) {
-          var v = Number(r.score) || 0;
-          return '<div class="hw"><div class="dot' + (v >= 0 ? ' done' : '') + '"></div>' +
-            '<div class="m"><b>' + esc(r.item_name || r.reason || '课堂评价') + '</b>' +
-            '<span>' + esc(r.date || '') + '</span></div>' +
-            '<div class="tag ' + (v >= 0 ? 'done' : 'late') + '">' + (v > 0 ? '+' : '') + v + '</div></div>';
-        }).join('');
-    }
-    html += '</div>';
-
-    /* 已完成的活动 */
-    html += '<div class="card"><h3>已完成的活动<span class="more">' + done.length + ' 项</span></h3>';
-    html += done.length ? done.slice(0, 6).map(function (r) {
-      var h = homeworks().filter(function (x) { return String(x.id) === String(r.homework_id); })[0] || {};
-      return '<div class="hw" data-rec="' + esc(r.homework_id) + '"><div class="dot done"></div>' +
-        '<div class="m"><b>' + esc(h.title || h.subject || '活动') + '</b>' +
-        '<span>' + esc(h.subject || '') + (r.updated_at ? ' · ' + esc(String(r.updated_at).slice(0, 16)) : '') +
-        (r.note ? ' · ' + esc(r.note) : '') + '</span></div>' +
-        '<div class="tag done">' + esc(REC_TEXT[r.status] || '已完成') + '</div></div>';
-    }).join('') : '<div class="empty">还没有完成的活动，去「今日」的导学单里看看</div>';
-    html += '</div>';
-
-    /* 个人信息 + 服务 */
-    html += '<div class="card"><h3>身份</h3>' +
-      row('姓名', S.me.name) + row('学号', S.me.student_no || '—') +
-      row('班级', myClass().name || '—') +
-      row('座位', seat ? (seat.row + ' 排 ' + seat.col + ' 座') : '未排座') +
-      '</div>' +
-      '<div class="card"><h3>服务</h3>' +
-      row('数据版本', 'v' + S.rev) + row('连接', '同一局域网') +
-      '<div style="height:12px"></div><button class="btn line" id="chpwd">修改密码</button>' +
-      '<div style="height:8px"></div><button class="btn line" id="logout">退出登录</button></div>' +
-      '<div class="empty" style="font-size:12px;padding:8px 0 24px">班级工作台 2.0 · 数据存在老师电脑上</div>';
-    return html;
+    var body = sc.length ? sc.map(scoreRow).join('') : '<div class="empty">还没有发布的成绩</div>';
+    showSheet('<div class="sh"><b>我的成绩</b>' +
+      '<button class="x" id="shClose">×</button></div>' +
+      '<div class="note">共 ' + sc.length + ' 次 · 按日期倒序 · 只显示老师已发布的成绩</div>' +
+      body);
+    var c = $('#shClose'); if (c) c.onclick = hideSheet;
   }
-
-  function row(k, v) {
-    return '<div style="display:flex;justify-content:space-between;padding:8px 0;' +
-      'border-bottom:1px solid rgba(15,110,86,.07);font-size:14px">' +
-      '<span style="color:var(--ink3)">' + esc(k) + '</span><b>' + esc(v == null ? '—' : v) + '</b></div>';
+  /** 全部作业明细（底部弹层，2026-11-02）。
+     本班作业列表 + 我的提交状态（待交 / 已交 / 逾期），
+     点任意一条进入作业详情弹层，与「今日」页的待交作业同一交互。 */
+  function openHwAllSheet() {
+    var list = homeworks();
+    var n = { todo: 0, done: 0, late: 0 };
+    list.forEach(function (h) {
+      var st = hwState(h);
+      if (st.done) n.done++; else if (st.late) n.late++; else n.todo++;
+    });
+    var body = list.length ? list.map(hwRow).join('') : '<div class="empty">老师还没有布置作业</div>';
+    showSheet('<div class="sh"><b>我的作业</b>' +
+      '<button class="x" id="shClose">×</button></div>' +
+      '<div class="note">共 ' + list.length + ' 项 · 待交 ' + n.todo +
+      ' · 已交 ' + n.done + (n.late ? ' · 逾期 ' + n.late : '') +
+      ' · 点一条查看详情</div>' + body);
+    var c = $('#shClose'); if (c) c.onclick = hideSheet;
+    /* 弹层里的行也要能点开详情（render() 只绑 #app 里的） */
+    document.querySelectorAll('#sheet [data-hw]').forEach(function (el) {
+      el.onclick = function () { openHw(el.getAttribute('data-hw')); };
+    });
+  }
+  var REC_TEXT = { submitted: '已提交', checked: '已批改', done: '已完成', practice: '已练习' };
+  /** 提交状态一句话（带「待批改」中间态提示） */
+  function stTxt(s) {
+    if (s === 'submitted') return '已提交 · 等老师批改';
+    return REC_TEXT[s] || '已提交';
   }
 
   function fmtNum(v) {
@@ -427,64 +502,35 @@
     return h < 6 ? '凌晨好' : h < 11 ? '早上好' : h < 14 ? '中午好' : h < 18 ? '下午好' : '晚上好';
   }
 
-  /* ---------------- 导学单详情 ---------------- */
-  function openGuide(gid) {
-    var g = guides().filter(function (x) { return String(x.id) === String(gid); })[0];
-    if (!g) return;
-    var cm = courseMap();
-    var c = cm[g.course_id] || {};
-    var body = '';
-    var kinds = [
-      ['material', '课堂资料'],
-      ['activity', '课堂活动'],
-      ['quiz', '课堂测验'],
-      ['link', '拓展链接'],
-      ['text', '图文说明'],
-      ['homework', '课后作业']
-    ];
-    var any = false;
-    kinds.forEach(function (kd) {
-      var items = guideItems(g, kd[0]);
-      if (!items.length) return;
-      any = true;
-      body += '<div class="g-sec"><b>' + kd[1] + '</b></div>';
-      body += items.map(function (it, i) {
-        var url = String(it.url || '');
-        var m = it.material_id ? materialById(it.material_id) : null;
-        if (m && !url) url = m.url || '';
-        var note = it.note || (m && m.note) || '';
-        if (kd[0] === 'text' && it.content) {
-          return '<div class="g-item"><b>' + esc(it.title || ('说明 ' + (i + 1))) + '</b>' +
-            '<div class="g-txt">' + esc(it.content) + '</div>' +
-            (note ? '<span class="g-sub">' + esc(note) + '</span>' : '') + '</div>';
-        }
-        var act = '';
-        if (kd[0] === 'material' && m && m.kind === 'text') {
-          act = '<div class="g-txt">' + esc(m.content || '') + '</div>';
-        }
-        if (url) {
-          act += '<a class="btn g-go" href="' + esc(url) + '" target="_blank" rel="noopener">' +
-            (kd[0] === 'activity' ? '进入活动' : kd[0] === 'quiz' ? '开始测验' : '打开查看') + '</a>';
-        }
-        if (!act) act = '<div class="g-sub">这项内容老师还没有附上地址</div>';
-        return '<div class="g-item"><b>' + esc(it.title || m && m.title || (kd[1] + ' ' + (i + 1))) + '</b>' +
-          (note ? '<span class="g-sub">' + esc(note) + '</span>' : '') + act + '</div>';
-      }).join('');
-    });
-    if (!any) body = '<div class="empty">导学单还是空的，等老师补充内容</div>';
-    if (g.note) body += '<div class="note">' + esc(g.note) + '</div>';
-    showSheet('<div class="sh"><b>' + esc(g.title || (c.name || '导学单')) + '</b>' +
-      '<button class="x" id="shClose">×</button></div>' +
-      '<div class="note">' + esc(c.name || '') + (g.date ? ' · ' + esc(g.date) : '') +
-      (g.period ? ' · 第' + esc(g.period) + '节' : '') + '</div>' + body);
-    var cl = $('#shClose'); if (cl) cl.onclick = hideSheet;
-  }
+  /* （课件库弹层 openCwSheet 已随 v3.0.0 移除：资源展示与预览
+     统一收敛到「课程」页，避免同一份资料两个入口。） */
 
-  /* ---------------- 壳与路由 ---------------- */
-  var TABS = [
+  /* ---------------- 壳与路由（v3.0.0：三页签 今日 / 作业 / 课程） ----------------
+     概览、成绩、考勤、德育等「关于我」的内容全部收进左下角账号卡弹出的
+     个人信息面板（#suPop）；课程资源独立成页，在线预览不走下载。 */
+  var NAV = [
     { id: 'today', name: '今日', ic: '☀' },
-    { id: 'me', name: '我的', ic: '☺' }
+    { id: 'homework', name: '作业', ic: '✎', flag: 'homework' },
+    { id: 'courses', name: '课程', ic: '📚' },
+    /* 打字冒险岛：老师开放后显示，站内 iframe 内嵌（2026-11-02） */
+    { id: 'typing', name: '打字', ic: '⌨️' }
   ];
+  var VIEWS = ['today', 'homework', 'courses', 'typing'];
+  var TITLES = {
+    today: ['今日', '签到 · 课堂学习单 · 要交的作业'],
+    homework: ['我的作业', '全部作业与提交状态 · 点一条查看详情'],
+    courses: ['我的课程', '老师发布的课程与资源 · 点击即可在线预览'],
+    typing: ['打字冒险岛', '闯关练打字 · 赢星星 · 孵宠物 · 上排行榜']
+  };
+
+  function pendingCount() { return todoHomeworks().length; }
+  function badgeFor(id) {
+    if (id === 'today' || id === 'homework') {
+      var n = pendingCount();
+      if (n > 0) return '<span class="bdg">' + n + '</span>';
+    }
+    return '';
+  }
 
   function go(v) {
     S.view = v;
@@ -492,48 +538,319 @@
     render();
   }
 
+  function sideHtml() {
+    return '<div class="side-brand"><span class="side-dot"></span>班级工作台' +
+      '<small>学生端</small></div>' +
+      '<div class="side-nav" id="sideNav"></div>' +
+      /* 左下角概览 / 账号卡（教师端 .side-user 同款）：点开上弹个人信息面板。
+         v3.0.1：学号跟在姓名旁（页头不再重复显示姓名，这里就是唯一身份位） */
+      '<div class="side-user">' +
+      '<button class="su-btn" id="suBtn" aria-haspopup="true" aria-expanded="false">' +
+      '<span class="av-slot" data-av="">' + avHtml('') + '</span>' +
+      '<span class="su-txt"><b>' + esc(S.me.name) +
+      '<em class="su-no">学号 ' + esc(S.me.student_no || '—') + '</em></b>' +
+      '<i>' + esc(myClass().name || '') + '</i></span>' +
+      '<span class="su-gear" aria-hidden="true">⚙</span></button>' +
+      '</div>';
+  }
+
   function render() {
     if (!S.me) return;
     var app = $('#app');
     if (!app) return;
     if (S.loading) {
-      app.innerHTML = '<div class="wrap" style="padding-top:24px">' +
-        '<div class="skel"></div><div class="skel"></div><div class="skel"></div></div>';
+      app.innerHTML = '<main class="main" style="padding-top:24px">' +
+        '<div class="skel"></div><div class="skel"></div><div class="skel"></div></main>';
       return;
     }
-    if (['today', 'me'].indexOf(S.view) < 0) S.view = 'today';
-    var map = { today: vToday, me: vMe };
-    app.innerHTML = '<div class="wrap">' + map[S.view]() + '</div>';
+    if (VIEWS.indexOf(S.view) < 0) S.view = 'today';
+    var map = { today: vToday, homework: vHwAll, courses: vCourses, typing: vTyping };
+    var t = TITLES[S.view] || TITLES.today;
+    app.innerHTML =
+      '<aside class="sidebar">' + sideHtml() + '</aside>' +
+      '<main class="main">' +
+      '<div class="page-head"><div>' +
+      '<div class="page-title">' + esc(t[0]) + '</div>' +
+      '<div class="page-sub">' + esc(t[1]) + '</div></div>' +
+      '</div>' +
+      '<div class="offline" id="off"></div>' +
+      map[S.view]() +
+      '</main>' +
+      /* 窄屏：侧栏隐藏，左下角悬浮头像键打开同一个面板 */
+      '<button class="su-fab" id="suFab" aria-label="个人信息与设置">' +
+      '<span class="av-slot" data-av="">' + avHtml('') + '</span></button>' +
+      suPopHtml() +
+      '<nav class="tabbar" id="tabbar"></nav>';
     bind();
-    paintTabs();
+    bindSu();
+    paintNav();
     // 今日页里待交作业可直接点开
     document.querySelectorAll('[data-hw]').forEach(function (el) {
       el.onclick = function () { openHw(el.getAttribute('data-hw')); };
     });
-    // 导学单入口（课程行或标签上都可点）
-    document.querySelectorAll('[data-guide]').forEach(function (el) {
+    // 今日页「打字冒险岛」入口卡 → 站内切到打字页（2026-11-02）
+    var tgo = document.querySelector('[data-typing-go]');
+    if (tgo) tgo.onclick = function () { go('typing'); };
+    // 课堂活动入口（课程行或标签上都可点）：新开交互式学习单
+    document.querySelectorAll('[data-act],[data-locked]').forEach(function (el) {
       el.onclick = function (ev) {
         ev.stopPropagation();
-        openGuide(el.getAttribute('data-guide'));
+        if (el.getAttribute('data-locked')) { toast('老师已关闭这份学习单，等老师重新开启后再打开'); return; }
+        var url = el.getAttribute('data-act');
+        if (!url) { toast('这个活动暂时打不开，等老师重新发放'); return; }
+        window.open(url, '_blank');
       };
+    });
+    // 课程页 / 各处资源行：点开在线预览（/cw/ 闸门内联输出，不用下载）
+    document.querySelectorAll('[data-mat]').forEach(function (el) {
+      el.onclick = function () { openMatSheet(el.getAttribute('data-mat')); };
     });
     // 「我的」里已完成的活动可回看详情
     document.querySelectorAll('[data-rec]').forEach(function (el) {
       el.onclick = function () { openHw(el.getAttribute('data-rec')); };
     });
+    // 我的德育明细（成绩 / 作业 / 考勤已升级为独立页签）
+    document.querySelectorAll('[data-mor]').forEach(function (el) {
+      el.onclick = function () { openMorSheet(); };
+    });
   }
 
-  function paintTabs() {
-    var box = $('#tabbar');
-    if (!box) return;
-    box.innerHTML = TABS.filter(function (t) { return !t.flag || S.flags[t.flag] !== false; })
-      .map(function (t) {
-        return '<button class="tab' + (S.view === t.id ? ' on' : '') + '" data-go="' + t.id + '">' +
-          '<span class="ic">' + t.ic + '</span>' + t.name + '</button>';
+  function paintNav() {
+    /* 侧边栏（宽屏） */
+    var side = $('#sideNav');
+    if (side) {
+      side.innerHTML = NAV.map(function (n) {
+        if (n.group) return '<div class="nav-gt">' + n.group + '</div>';
+        if (n.id === 'typing' && !S.typingOn) return '';
+        if (n.flag && S.flags[n.flag] === false) return '';
+        return '<div class="side-item' + (S.view === n.id ? ' active' : '') + '" data-go="' + n.id + '">' +
+          '<span class="ic">' + n.ic + '</span>' + n.name + badgeFor(n.id) + '</div>';
       }).join('');
-    box.querySelectorAll('[data-go]').forEach(function (b) {
+    }
+    /* 底部 Tab（窄屏） */
+    var bar = $('#tabbar');
+    if (bar) {
+      bar.innerHTML = NAV.filter(function (n) {
+          if (n.id === 'typing' && !S.typingOn) return false;
+          return n.id && (!n.flag || S.flags[n.flag] !== false);
+        })
+        .map(function (n) {
+          return '<button class="tab' + (S.view === n.id ? ' on' : '') + '" data-go="' + n.id + '">' +
+            '<span class="ic">' + n.ic + '</span>' + n.name + '</button>';
+        }).join('');
+    }
+    document.querySelectorAll('[data-go]').forEach(function (b) {
       b.onclick = function () { go(b.getAttribute('data-go')); };
     });
+  }
+
+  /* ---------------- 视图：打字冒险岛（2026-11-02 站内内嵌） ----------------
+     游戏本身是独立单页应用，放进 iframe 嵌在学生端页面框架内显示，
+     不再跳出新窗口；?embed=1 让它收窄边距、隐藏页脚，视觉融入本页。
+     打字时键盘焦点始终在 iframe 内部，不会干扰外层页面。 */
+  function vTyping() {
+    if (!S.typingOn) {
+      return '<div class="card" style="text-align:center;padding:44px 20px">' +
+        '<div style="font-size:40px">🚧</div>' +
+        '<div style="font-weight:600;margin-top:8px">老师还没开放打字练习</div>' +
+        '<div style="font-size:12.5px;color:var(--ink3);margin-top:4px">等老师打开开关，这里就是打字冒险岛</div></div>';
+    }
+    return '<iframe src="/typing/?embed=1" title="打字冒险岛" ' +
+      'style="width:100%;height:calc(100vh - 150px);min-height:460px;' +
+      'border:1.5px solid var(--line,#eee);border-radius:16px;background:#F8F2E4;' +
+      'box-shadow:0 6px 20px rgba(60,30,10,.06)"></iframe>';
+  }
+
+  /* ---------------- 明细行 / 小工具（页面与弹层共用，v2.1.0） ---------------- */
+  function statCard(num, label) {
+    return '<div class="stat"><div class="stat-num">' + num + '</div>' +
+      '<div class="stat-label">' + esc(label) + '</div></div>';
+  }
+  function emptyBox(title, desc) {
+    return '<div class="empty"><div style="font-weight:600;margin-bottom:4px">' + esc(title) + '</div>' +
+      (desc ? '<div style="font-size:12px">' + esc(desc) + '</div>' : '') + '</div>';
+  }
+  function scoreRow(s) {
+    var full = Number(s.full_score) || 100;
+    var v = Number(s.score);
+    var pct = isFinite(v) ? (v / full) * 100 : null;
+    var tagCls = pct == null ? 'mut' : (pct >= 85 ? 'done' : (pct >= 60 ? 'mut' : 'late'));
+    var vis = S.vis || {};
+    return '<div class="score"><div class="m"><b>' + esc(s.title || '考试') + '</b><span>' +
+      esc(s.date || '') + (s._avg != null ? ' · 班均 ' + esc(s._avg) : '') +
+      (vis.rank && s._rank ? ' · 第 ' + esc(s._rank) + ' 名' : '') + '</span></div>' +
+      '<div class="v">' + esc(fmtNum(s.score)) + '<small>/' + esc(full) + '</small></div>' +
+      '<span class="tag ' + tagCls + '">' + (pct == null ? '—' : Math.round(pct) + '%') + '</span></div>';
+  }
+  function hwRow(h) {
+    var st = hwState(h);
+    var txt, cls;
+    if (st.done) {
+      /* 提交后的状态一眼可辨：已提交=待老师批改，已批改/已完成=有结果 */
+      txt = st.rec.status === 'submitted' ? '已提交 · 待批改' : (REC_TEXT[st.rec.status] || '已完成');
+      cls = 'done';
+    }
+    else if (st.late) { txt = '逾期未交'; cls = 'late'; }
+    else { txt = '待交'; cls = ''; }
+    return '<div class="hw" data-hw="' + esc(h.id) + '"><div class="dot' + (st.done ? ' done' : '') + '"></div>' +
+      '<div class="m"><b>' + esc(h.title || h.subject || '作业') + '</b>' +
+      '<span>' + esc(h.subject || '') + (h.due ? ' · 截止 ' + esc(h.due) : '') +
+      (st.rec && st.rec.note ? ' · ' + esc(st.rec.note) : '') + '</span></div>' +
+      '<div class="tag ' + cls + '">' + txt + '</div></div>';
+  }
+  function attRow(a) {
+    var ok = a.status === 'checked';
+    return '<div class="hw"><div class="dot' + (ok ? ' done' : '') + '"></div>' +
+      '<div class="m"><b>' + esc(a.date || '') + ' · ' + esc(periodNameBySeq(a.period || 1)) + '</b>' +
+      '<span>' + esc(a.reason || '') + '</span></div>' +
+      '<div class="tag ' + (ok ? 'done' : (String(a.status) === 'absent' ? 'late' : 'mut')) + '">' +
+      esc(attLabel(a.status)) + '</div></div>';
+  }
+
+  /* ---------------- 视图：作业（v3.0.0 保留；成绩/考勤移入个人信息面板） ---------------- */
+  function vHwAll() {
+    var list = homeworks();
+    var n = { todo: 0, done: 0, late: 0 };
+    list.forEach(function (h) {
+      var st = hwState(h);
+      if (st.done) n.done++; else if (st.late) n.late++; else n.todo++;
+    });
+    var html = '<div class="stat-grid">' +
+      statCard(list.length, '作业总数') + statCard(n.done, '已完成') +
+      (n.todo ? statCard(n.todo, '待交') : '') +
+      (n.late ? statCard(n.late, '逾期') : '') + '</div>';
+    html += '<div class="card"><h3>作业列表<span class="more">点一条查看详情</span></h3>' +
+      (list.length ? list.map(hwRow).join('')
+        : emptyBox('老师还没有布置作业', '布置后这里会第一时间出现')) +
+      '</div>';
+    return html;
+  }
+  /* ---------------- 视图：课程（v3.0.0 新增） ----------------
+     展示老师设置的课程 + 每门课推送的资源文件；资源走 /cw/<id> 闸门，
+     服务端按「登录身份 + 本班 + 已下发」放行并内联输出，浏览器直接
+     预览（PDF / 图片 / 音视频 / 文本），不需要下载。 */
+  /** 本班课程列表：课表里出现过的课程优先，只推过资源也补进来 */
+  function myCourses() {
+    var cm = courseMap(), names = [], seen = {};
+    T('lessons').filter(function (l) { return Number(l.class_id) === S.me.class_id; })
+      .forEach(function (l) {
+        var c = cm[l.course_id] || {};
+        var nm = c.name || l.course_name || '';
+        if (nm && !seen[nm]) { seen[nm] = 1; names.push({ name: nm, location: c.location || '' }); }
+      });
+    cwPushed().forEach(function (m) {
+      var k = String(m.lesson || m.subject || '');
+      if (k && !seen[k]) { seen[k] = 1; names.push({ name: k, location: '' }); }
+    });
+    return names;
+  }
+  function matsOfCourse(name) {
+    return cwPushed().filter(function (m) {
+      return String(m.lesson || m.subject || '') === String(name);
+    });
+  }
+  /** 归不进任何课程的推送（没写课节 / 课节名不在课表）→「其他资料」 */
+  function otherMats() {
+    var seen = {};
+    myCourses().forEach(function (c) { seen[c.name] = 1; });
+    return cwPushed().filter(function (m) {
+      var k = String(m.lesson || m.subject || '');
+      return !k || !seen[k];
+    });
+  }
+  /** 浏览器能不能直接预览：按文件名扩展判断（推送记录的 title 就是原始文件名） */
+  var MAT_IMG = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg', 'avif'];
+  var MAT_AUDIO = ['mp3', 'wav', 'm4a', 'aac', 'ogg', 'flac'];
+  var MAT_VIDEO = ['mp4', 'webm', 'ogv', 'mov', 'm4v', 'mkv'];
+  var MAT_DOC = ['doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx'];   // Office：经 WPS 转 PDF 后预览
+  var MAT_TEXT = ['txt', 'md', 'csv', 'json', 'xml', 'htm', 'html'];
+  function matExt(m) {
+    var t = String(m.title || m.url || '');
+    var i = t.lastIndexOf('.');
+    return i >= 0 ? t.slice(i + 1).toLowerCase() : '';
+  }
+  /** 文件预览类型：image / audio / video / pdf / doc / text / other */
+  function matKind(m) {
+    var e = matExt(m);
+    if (MAT_IMG.indexOf(e) >= 0) return 'image';
+    if (MAT_AUDIO.indexOf(e) >= 0) return 'audio';
+    if (MAT_VIDEO.indexOf(e) >= 0) return 'video';
+    if (e === 'pdf') return 'pdf';
+    if (MAT_DOC.indexOf(e) >= 0) return 'doc';
+    if (MAT_TEXT.indexOf(e) >= 0) return 'text';
+    return 'other';
+  }
+  function matPreviewable(m) { return matKind(m) !== 'other'; }
+  function resRow(m) {
+    var ok = m.url && matPreviewable(m);
+    return '<div class="hw res-row" data-mat="' + esc(m.id) + '"><div class="dot done"></div>' +
+      '<div class="m"><b>' + esc(m.title || '资源') + '</b>' +
+      '<span>' + (m.date ? esc(m.date) + ' 推送 · ' : '') + (ok ? '可在线预览' : '点击查看') + '</span></div>' +
+      '<div class="tag done">' + (ok ? '预览' : '打开') + '</div></div>';
+  }
+  function vCourses() {
+    var cs = myCourses();
+    var html = '<div class="stat-grid">' +
+      statCard(cs.length, '我的课程') + statCard(cwPushed().length, '资源文件') + '</div>';
+    if (!cs.length) {
+      return html + emptyBox('还没有课程', '老师在教师端排好课表、推送资源后，这里就会亮起来');
+    }
+    html += '<div class="cols2">';
+    cs.forEach(function (c) {
+      var mats = matsOfCourse(c.name);
+      html += '<div class="card course-card"><h3><span class="cc-name">' + esc(c.name) + '</span>' +
+        '<span class="more">' + (c.location ? esc(c.location) + ' · ' : '') + mats.length + ' 份资源</span></h3>' +
+        (mats.length ? mats.map(resRow).join('')
+          : '<div class="empty slim">这门课还没有资源，老师上传后会出现在这里</div>') +
+        '</div>';
+    });
+    var others = otherMats();
+    if (others.length) {
+      html += '<div class="card"><h3><span class="cc-name">其他资料</span>' +
+        '<span class="more">' + others.length + ' 份</span></h3>' + others.map(resRow).join('') + '</div>';
+    }
+    html += '</div>';
+    return html;
+  }
+  /** 资源在线预览：按文件类型选最合适的浏览器内联方式（2026-11-02 重写）
+      · 图片 → <img>   · 音频 → <audio>   · 视频 → <video>
+      · PDF / 文本 / HTML → <iframe>（/cwpv 闸门原样输出）
+      · Office（Word/Excel/PPT）→ <iframe> 指向 /cwpv，服务端把文档渲染成 HTML 内联
+      所有预览都走 /cwpv/<id> 闸门（与 /cw 同权限，「下载原文件/在新窗口打开」
+      仍指向原始 /cw/<id>）。 */
+  function openMatSheet(id) {
+    var m = cwPushed().filter(function (x) { return String(x.id) === String(id); })[0];
+    if (!m || !m.url) { toast('这份资源暂时打不开，可能已被老师收回'); return; }
+    var kind = matKind(m), e = matExt(m);
+    var pv = String(m.url).replace('/cw/', '/cwpv/');   // 预览闸门（Office 由服务端渲染）
+    var dl = m.url;                                      // 原始文件（下载 / 新窗口）
+    var body;
+    if (kind === 'image') {
+      body = '<img class="mat-img" src="' + esc(pv) + '" alt="' + esc(m.title || '') + '">';
+    } else if (kind === 'audio') {
+      body = '<div class="mat-audio"><div class="note" style="margin:0 0 8px">音频可以直接播放，拖动进度条可以跳着听</div>' +
+        '<audio class="mat-audio-el" src="' + esc(pv) + '" controls preload="metadata"></audio></div>';
+    } else if (kind === 'video') {
+      body = '<video class="mat-media" src="' + esc(pv) + '" controls preload="metadata" playsinline></video>';
+    } else if (kind === 'doc') {
+      body = '<div class="note" style="margin:10px 0 0">在线还原的版面（动画、母版装饰不显示；要原样效果可下载原文件）</div>' +
+        '<iframe class="mat-frame" src="' + esc(pv) + '" title="' + esc(m.title || '资源') + '"></iframe>';
+    } else if (kind === 'pdf' || kind === 'text') {
+      body = '<iframe class="mat-frame" src="' + esc(pv) + '" title="' + esc(m.title || '资源') + '"></iframe>';
+    } else {
+      body = '<div class="empty" style="margin:10px 0">「' + esc(e ? e.toUpperCase() : '未知格式') +
+        '」暂不支持在线预览，可点下面按钮下载到本机，用对应软件打开。</div>';
+    }
+    var isDoc = (kind === 'doc');
+    showSheet('<div class="sh"><b>' + esc(m.title || '资源预览') + '</b>' +
+      '<button class="x" id="shClose">×</button></div>' +
+      '<div class="note">' + (m.lesson || m.subject ? esc(m.lesson || m.subject) + ' · ' : '') +
+      (m.date ? esc(m.date) + ' 推送 · ' : '') + '在线查看，不用下载</div>' +
+      body +
+      '<a class="btn line" style="text-align:center;text-decoration:none;margin-top:12px" href="' +
+      esc(dl) + '" target="_blank" rel="noopener">' + (isDoc ? '下载原文件' : '在新窗口打开') + '</a>',
+      (kind === 'other') ? null : 'preview');
+    var cl = $('#shClose'); if (cl) cl.onclick = hideSheet;
   }
 
   /* ---------------- 作业详情 / 提交 ---------------- */
@@ -547,9 +864,11 @@
       '<div class="note">' + esc(h.subject || '') + (h.due ? ' · 截止 ' + esc(h.due) : '') + '</div>' +
       (h.note ? '<div style="font-size:13.6px;color:var(--ink2);margin:10px 0">' + esc(h.note) + '</div>' : '') +
       (done ? '<div class="card" style="margin:12px 0;box-shadow:none"><b style="color:var(--brand)">' +
-        esc(REC_TEXT[rec.status] || '已提交') + '</b>' +
+        esc(stTxt(rec.status)) + '</b>' +
         '<div style="font-size:13px;color:var(--ink3);margin-top:4px">' +
-        esc(rec.note || '老师已收到你的作业') +
+        esc(rec.note || (rec.status === 'submitted'
+          ? '老师已收到，批改后这里会显示结果'
+          : '老师已收到你的作业')) +
         (rec.updated_at ? '<br>提交时间：' + esc(String(rec.updated_at).slice(0, 16)) : '') + '</div></div>'
         : '<label>给老师留言（选填）</label><textarea id="hwNote" rows="3" placeholder="例如：写在作业本第 12 页"></textarea>' +
           '<div style="height:12px"></div><button class="btn" id="hwSend">确认提交</button>');
@@ -562,24 +881,429 @@
         method: 'POST',
         body: JSON.stringify({ homework_id: h.id, status: 'submitted', note: ($('#hwNote') || {}).value || '' })
       }).then(function (j) {
-        if (!j.ok) { toast(j.msg || '提交失败'); s.disabled = false; s.textContent = '确认提交'; return; }
+        if (!j.ok) { toast(j.msg || '提交失败，请再试一次'); s.disabled = false; s.textContent = '确认提交'; return; }
         hideSheet();
-        toast('已提交，老师那边会看到');
+        toast('提交成功！老师已收到，批改后状态会更新');
         return pull(S.rev, false).then(render);
+      }).catch(function () {
+        s.disabled = false; s.textContent = '确认提交';
+        toast('网络不通，提交没有成功，请再试一次');
       });
     };
   }
 
-  function showSheet(html) {
+  function showSheet(html, variant) {
     var mask = $('#mask'), sheet = $('#sheet');
+    if (!sheet) return;
+    // 清掉上一次拖拽 / 缩放留下的内联定位，回到 CSS 默认（居中 / 默认尺寸）
+    sheet.style.transform = '';
+    sheet.style.left = ''; sheet.style.top = '';
+    sheet.style.right = ''; sheet.style.bottom = '';
+    sheet.style.width = ''; sheet.style.height = '';
+    sheet.style.maxHeight = '';
+    sheet.className = 'sheet' + (variant === 'preview' ? ' sheet--preview' : '');
     sheet.innerHTML = html;
     mask.classList.add('on');
     sheet.classList.add('on');
     mask.onclick = hideSheet;
+    bindSheetChrome();
   }
   function hideSheet() {
     $('#mask').classList.remove('on');
     $('#sheet').classList.remove('on');
+  }
+
+  /* ---------------- 弹层拖拽 / 缩放（2026-11-02） ----------------
+     预览窗口支持鼠标与触摸：拖标题栏移动、拖右下角缩放。
+     只在标题栏（.sh，排除关闭按钮 / 链接 / 输入）与缩放手柄上触发，
+     不干扰弹层内正文与表单。 */
+  function bindSheetChrome() {
+    var sheet = $('#sheet');
+    if (!sheet) return;
+    var head = sheet.querySelector('.sh');
+    if (head && !head._wbDrag) {
+      head._wbDrag = true;
+      head.addEventListener('pointerdown', function (ev) {
+        if (ev.target.closest('.x,button,a,input,textarea,select')) return;
+        if (ev.button != null && ev.button !== 0) return;
+        ev.preventDefault();
+        sheetDragStart(ev, sheet);
+      });
+    }
+    // 缩放手柄只给预览弹层：普通弹层是 overflow:auto 的滚动容器，
+    // 绝对定位的手柄会跟着内容滚走，反而碍事。
+    if (!sheet.classList.contains('sheet--preview')) return;
+    var rs = sheet.querySelector('.sheet-rs');
+    if (!rs) {
+      rs = document.createElement('div');
+      rs.className = 'sheet-rs';
+      rs.title = '拖动缩放窗口';
+      sheet.appendChild(rs);
+    }
+    if (!rs._wbRs) {
+      rs._wbRs = true;
+      rs.addEventListener('pointerdown', function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        sheetResizeStart(ev, sheet);
+      });
+    }
+  }
+  function sheetDragStart(ev, sheet) {
+    var rect = sheet.getBoundingClientRect();
+    sheet.style.transform = 'none';
+    sheet.style.left = rect.left + 'px';
+    sheet.style.top = rect.top + 'px';
+    sheet.style.right = 'auto';
+    sheet.style.bottom = 'auto';
+    sheet.style.maxHeight = 'none';
+    sheet.style.width = rect.width + 'px';
+    sheet.style.height = rect.height + 'px';
+    var sx = ev.clientX, sy = ev.clientY, ox = rect.left, oy = rect.top;
+    function move(e) {
+      var nx = ox + (e.clientX - sx), ny = oy + (e.clientY - sy);
+      nx = Math.max(6, Math.min(nx, window.innerWidth - rect.width - 6));
+      ny = Math.max(6, Math.min(ny, window.innerHeight - rect.height - 6));
+      sheet.style.left = nx + 'px';
+      sheet.style.top = ny + 'px';
+    }
+    function up() {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    }
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  }
+  function sheetResizeStart(ev, sheet) {
+    var rect = sheet.getBoundingClientRect();
+    sheet.style.transform = 'none';
+    sheet.style.left = rect.left + 'px';
+    sheet.style.top = rect.top + 'px';
+    sheet.style.maxHeight = 'none';
+    sheet.style.width = rect.width + 'px';
+    sheet.style.height = rect.height + 'px';
+    var sx = ev.clientX, sy = ev.clientY, ow = rect.width, oh = rect.height;
+    function move(e) {
+      var nw = Math.max(320, ow + (e.clientX - sx));
+      var nh = Math.max(240, oh + (e.clientY - sy));
+      nw = Math.min(nw, window.innerWidth - rect.left - 6);
+      nh = Math.min(nh, window.innerHeight - rect.top - 6);
+      sheet.style.width = nw + 'px';
+      sheet.style.height = nh + 'px';
+    }
+    function up() {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    }
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  }
+
+  /* ---------------- 个人中心（v2.3.0：左下角概览 / 预设头像 / 主题 / 改密 / 报告） ----------------
+     与教师端同一套交互语言：左下角账号卡（.side-user/.su-btn，教师端同款）
+     点击上弹个人信息面板（#suPop，教师端 .su-pop 同款出入场），主题切换带
+     高光（themeFlash 同款）。窄屏侧栏隐藏时由左下角悬浮头像键打开同一面板。
+     头像不支持上传，提供教师端同款的预设样式（文字 / emoji / 动态），
+     只存本机 localStorage；键名 wb-savatar 与教师端 wb-avatar 分开。 */
+  var AV_KEY = 'wb-savatar';     // 与教师端 wb-avatar 分键：同一端口下 localStorage 共享
+  var MODE_KEY = 'wb-smode';     // 'light' / 'dark'（缺省浅色，与教师端 wb-mode 默认一致）
+  /* 预设头像样式（教师端 avatarPickerHtml 同思路）：text=姓名首字，
+     emoji=静态表情，anim=CSS 动画底色（v 值同时是样式类名） */
+  var AV_PRESETS = [
+    { kind: 'text', v: '', label: '默认' },
+    { kind: 'emoji', v: '😊', label: '微笑' },
+    { kind: 'emoji', v: '🚀', label: '火箭' },
+    { kind: 'emoji', v: '🐱', label: '小猫' },
+    { kind: 'emoji', v: '🌟', label: '星星' },
+    { kind: 'emoji', v: '⚽', label: '足球' },
+    { kind: 'emoji', v: '🎨', label: '画画' },
+    { kind: 'anim', v: 'uav-aurora', label: '极光' },
+    { kind: 'anim', v: 'uav-pulse', label: '心跳' },
+    { kind: 'anim', v: 'uav-wave', label: '流彩' }
+  ];
+
+  function avPref() {
+    try { return JSON.parse(localStorage.getItem(AV_KEY) || 'null'); } catch (e) { return null; }
+  }
+  /** 渲染头像 span（cls: '' / sm / lg / xl） */
+  function avHtml(cls) {
+    var p = avPref(), c = 'acct-av ' + (cls || ''), ch = esc(((S.me && S.me.name) || '学').slice(0, 1));
+    if (p && p.kind === 'img' && p.v) {           // 兼容旧版本机上传数据（新版本不再提供上传）
+      return '<span class="' + c + '"><img src="' + p.v + '" alt="头像"></span>';
+    }
+    if (p && p.kind === 'emoji' && p.v) {
+      return '<span class="' + c + ' uav-emoji">' + esc(p.v) + '</span>';
+    }
+    if (p && p.kind === 'anim' && p.v) {
+      return '<span class="' + c + ' ' + esc(p.v) + '">' + ch + '</span>';
+    }
+    return '<span class="' + c + '">' + ch + '</span>';
+  }
+  /** 头像变化后刷新页面上所有 .av-slot（页头胶囊 / 账号卡 / 面板 / 悬浮键），带弹跳进场 */
+  function refreshAvatars() {
+    document.querySelectorAll('.av-slot').forEach(function (slot) {
+      slot.innerHTML = avHtml(slot.getAttribute('data-av') || '');
+      var sp = slot.firstChild;
+      if (sp) sp.classList.add('av-pop');
+    });
+  }
+
+  function modeState() {
+    /* 缺省浅色（与教师端一致）；旧版本存过的 '' / 异常值一律归一为 light */
+    try { return localStorage.getItem(MODE_KEY) === 'dark' ? 'dark' : 'light'; } catch (e) { return 'light'; }
+  }
+  function applyMode() {
+    var dark = modeState() === 'dark';
+    document.documentElement.setAttribute('data-mode', dark ? 'dark' : 'light');
+    var dark = modeState() === 'dark';
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', dark ? '#191210' : '#B45B33');
+  }
+  function setMode(m) {
+    try { localStorage.setItem(MODE_KEY, m); } catch (e) {}
+    /* 教师端同款：切换瞬间铺一层品牌色高光，过渡不生硬 */
+    document.body.classList.add('theme-switching');
+    setTimeout(function () { document.body.classList.remove('theme-switching'); }, 450);
+    applyMode();
+    paintModeBtns();
+    toast(m === 'dark' ? '已切换到夜间模式' : '已切换到浅色模式');
+  }
+  function paintModeBtns() {
+    var cur = modeState();
+    document.querySelectorAll('#suPop [data-mode]').forEach(function (b) {
+      b.classList.toggle('on', b.getAttribute('data-mode') === cur);
+    });
+  }
+
+  /** 个人信息面板（教师端 .su-pop 同款）：概览摘要 + 详情 + 设置。
+      v3.0.0：原「概览/成绩/考勤」页签的内容全部收进这个面板——
+      头部是学习摘要（待交作业 / 已到课 / 课堂评价），下面是成绩、
+      考勤、德育等明细弹层入口。fixed 定位停靠左下角。 */
+  function suPopHtml() {
+    var seat = mySeat();
+    var hwTodo = todoHomeworks().length;
+    var atts = attMine(), ck = 0;
+    atts.forEach(function (a) { if (a.status === 'checked' || a.status === 'present') ck++; });
+    var moral = moralityMine(), mSum = 0;
+    moral.forEach(function (r) { mSum += Number(r.score) || 0; });
+    var sc = scores();
+    /* 小组成员（v3.0.1）：名单由服务端投影算好下发，这里只负责展示；
+       自己的名字加高亮，组长挂小标。没分组时不占版面。 */
+    var grp = myGroup(), grpHtml = '';
+    if (grp && grp.name) {
+      var mems = grp._members || [];
+      var chips = mems.map(function (m) {
+        return '<span class="gmem-chip' + (m.name === S.me.name ? ' me' : '') + '">' +
+          esc(m.name) + (m.role === '组长' ? '<em>组长</em>' : '') + '</span>';
+      }).join('');
+      grpHtml = '<div class="sup-group"><div class="sup-g-head">👥 ' + esc(grp.name) +
+        '<span>' + mems.length + ' 人</span></div>' +
+        '<div class="sup-g-chips">' +
+        (chips || '<span class="gmem-empty">老师还没有安排组员</span>') +
+        '</div></div>';
+    }
+    return '<div class="acct-pop" id="suPop" hidden>' +
+      '<div class="sup-head"><span class="av-slot" data-av="lg">' + avHtml('lg') + '</span>' +
+      '<div style="min-width:0"><b>' + esc(S.me.name) + '</b>' +
+      '<i>' + esc(myClass().name || '') + ' · 学号 ' + esc(S.me.student_no || '—') + '</i></div></div>' +
+      '<div class="sup-info">' +
+      '<span>座位 <b>' + esc(seat ? (seat.row + ' 排 ' + seat.col + ' 座') : '未排座') + '</b></span>' +
+      '<span>待交作业 <b>' + hwTodo + '</b></span>' +
+      '<span>已到课 <b>' + ck + '</b>/' + atts.length + '</span>' +
+      '<span>课堂评价 <b>' + (mSum > 0 ? '+' : '') + mSum + '</b></span></div>' +
+      grpHtml +
+      '<div class="sup-grid">' +
+      '<button type="button" class="sup-q" data-mode="light">☀ 浅色</button>' +
+      '<button type="button" class="sup-q" data-mode="dark">🌙 夜间</button></div>' +
+      (S.flags.scores !== false ? '<button type="button" class="sup-item" id="mScore">📊 我的成绩<span class="si-n">' + sc.length + ' 次</span></button>' : '') +
+      '<button type="button" class="sup-item" id="mAtt">🕗 考勤记录<span class="si-n">' + atts.length + ' 条</span></button>' +
+      '<button type="button" class="sup-item" id="mAvatar">🖼 头像样式</button>' +
+      '<button type="button" class="sup-item" id="mReport">📋 我的学习报告</button>' +
+      (S.flags.morality !== false ? '<button type="button" class="sup-item" id="mMor">🧭 德育记录</button>' : '') +
+      '<button type="button" class="sup-item" id="mPwd">🔑 修改密码</button>' +
+      '<button type="button" class="sup-item danger" id="mLogout">退出登录</button>' +
+      '</div>';
+  }
+  function bindSu() {
+    var pop = $('#suPop');
+    if (!pop) return;
+    /* 两个触发点：侧栏账号卡（桌面）+ 左下角悬浮键（窄屏） */
+    ['#suBtn', '#suFab'].forEach(function (sel) {
+      var btn = $(sel);
+      if (!btn) return;
+      btn.onclick = function (ev) {
+        ev.stopPropagation();
+        pop.hidden = !pop.hidden;
+        btn.setAttribute('aria-expanded', pop.hidden ? 'false' : 'true');
+        if (!pop.hidden) paintModeBtns();
+      };
+    });
+    /* 点面板与触发点之外的地方收起（只挂一次全局监听） */
+    if (!bindSu._doc) {
+      bindSu._doc = true;
+      document.addEventListener('click', function (ev) {
+        var p = $('#suPop');
+        if (p && !p.hidden &&
+            !p.contains(ev.target) &&
+            !(ev.target.closest && ev.target.closest('#suBtn,#suFab'))) {
+          p.hidden = true;
+        }
+      });
+    }
+    pop.querySelectorAll('[data-mode]').forEach(function (b) {
+      b.onclick = function () { setMode(b.getAttribute('data-mode')); };
+    });
+    var ms = $('#mScore'); if (ms) ms.onclick = function () { pop.hidden = true; openScoreSheet(); };
+    var ma = $('#mAtt'); if (ma) ma.onclick = function () { pop.hidden = true; openAttSheet(); };
+    var mav = $('#mAvatar'); if (mav) mav.onclick = function () { pop.hidden = true; openAvatarSheet(); };
+    var mr = $('#mReport'); if (mr) mr.onclick = function () { pop.hidden = true; openReportSheet(); };
+    var mm = $('#mMor'); if (mm) mm.onclick = function () { pop.hidden = true; openMorSheet(); };
+    var mp = $('#mPwd'); if (mp) mp.onclick = function () { pop.hidden = true; openPwdSheet(); };
+    var ml = $('#mLogout');
+    if (ml) ml.onclick = function () {
+      pop.hidden = true;
+      /* 退出登录会丢失当前页面状态，属于「需要二次确认」的操作 —— 用统一确认框 */
+      var ask = (window.WBUI && WBUI.confirm)
+        ? WBUI.confirm({
+            title: '退出登录', tone: 'warn', confirmText: '退出登录',
+            message: '退出后需要重新输入账号和密码才能进来，确定要退出吗？'
+          })
+        : Promise.resolve(true);
+      ask.then(function (ok) {
+        if (!ok) return;
+        api('/api/v2/auth/logout', { method: 'POST', body: '{}' }).then(function () { location.reload(); });
+      });
+    };
+  }
+
+  /** 头像样式（教师端 avatarPicker 同款交互）：预设可选，点选即换，
+      不支持上传；带实时预览（弹层里的大号头像就是最终效果）。 */
+  function openAvatarSheet() {
+    var p = avPref();
+    var cur = p ? (p.kind + ':' + (p.v || '')) : 'text:';
+    var opts = AV_PRESETS.map(function (o) {
+      var on = (o.kind + ':' + (o.v || '')) === cur ? ' on' : '';
+      var inner;
+      if (o.kind === 'emoji') inner = '<span class="acct-av uav-emoji">' + esc(o.v) + '</span>';
+      else if (o.kind === 'anim') inner = '<span class="acct-av ' + esc(o.v) + '">' +
+        esc(((S.me && S.me.name) || '学').slice(0, 1)) + '</span>';
+      else inner = '<span class="acct-av">' + esc(((S.me && S.me.name) || '学').slice(0, 1)) + '</span>';
+      return '<button type="button" class="av-opt' + on + '" data-kind="' + o.kind +
+        '" data-v="' + esc(o.v) + '">' + inner + '<i>' + esc(o.label) + '</i></button>';
+    }).join('');
+    showSheet('<div class="sh"><b>头像样式</b>' +
+      '<button class="x" id="shClose">×</button></div>' +
+      '<div class="av-preview"><span class="av-slot" data-av="xl" id="avBig">' + avHtml('xl') + '</span>' +
+      '<div class="note" style="margin:0;flex:1">挑一个喜欢的样式，点一下就换上；头像只保存在这台设备上。</div></div>' +
+      '<div class="av-picker" id="avPicker" style="margin-top:12px">' + opts + '</div>');
+    var cl = $('#shClose'); if (cl) cl.onclick = hideSheet;
+    /* 点选即生效 + 大图预览同步 + 选中态高亮（教师端 .av-opt.on 同款） */
+    document.querySelectorAll('#avPicker .av-opt').forEach(function (b) {
+      b.onclick = function () {
+        var kind = b.getAttribute('data-kind'), v = b.getAttribute('data-v');
+        var pref = kind === 'text' ? { kind: 'text', v: '' } : { kind: kind, v: v };
+        try { localStorage.setItem(AV_KEY, JSON.stringify(pref)); } catch (e) { toast('保存失败，本机存储不可用'); return; }
+        document.querySelectorAll('#avPicker .av-opt').forEach(function (x) { x.classList.remove('on'); });
+        b.classList.add('on');
+        refreshAvatars();
+        toast(kind === 'text' ? '已恢复默认文字头像' : '头像已更新');
+      };
+    });
+  }
+
+  /** 修改密码（登录后的常规入口）：当前密码 / 新密码 / 确认新密码，
+      三者校验规则一致，错误就地提示；首次登录改密仍走 showChangePwd 全屏流程。 */
+  function openPwdSheet() {
+    showSheet('<div class="sh"><b>修改密码</b>' +
+      '<button class="x" id="shClose">×</button></div>' +
+      '<div class="note" style="margin-top:0">新密码至少 4 位，修改成功后下次登录请用新密码。</div>' +
+      '<label>当前密码</label><input id="p0" type="password" autocomplete="current-password" placeholder="现在用的密码">' +
+      '<label>新密码（至少 4 位）</label><input id="p1" type="password" autocomplete="new-password" placeholder="想好用什么新密码">' +
+      '<label>确认新密码</label><input id="p2" type="password" autocomplete="new-password" placeholder="再输一遍新密码">' +
+      '<div class="err" id="pErr"></div>' +
+      '<button class="btn" id="pOk">保存新密码</button>');
+    var cl = $('#shClose'); if (cl) cl.onclick = hideSheet;
+    var err = $('#pErr'), ok = $('#pOk');
+    function fail(msg) { err.textContent = msg; ok.disabled = false; ok.textContent = '保存新密码'; }
+    ok.onclick = function () {
+      err.textContent = '';
+      var o = $('#p0').value, n1 = $('#p1').value, n2 = $('#p2').value;
+      if (!o) { err.textContent = '请先输入当前密码'; return; }
+      if (n1.length < 4) { err.textContent = '新密码至少 4 位'; return; }
+      if (n1 === o) { err.textContent = '新密码不能和当前密码一样'; return; }
+      if (n1 !== n2) { err.textContent = '两次输入的新密码不一致'; return; }
+      ok.disabled = true; ok.textContent = '保存中…';
+      api('/api/v2/student/password', {
+        method: 'POST', body: JSON.stringify({ old: o, new: n1 })
+      }).then(function (j) {
+        if (j._status === 401) { fail(j.msg || '当前密码不正确，再想想'); return; }
+        if (!j.ok) { fail(j.msg || '修改失败，请稍后再试'); return; }
+        hideSheet();
+        toast('密码已修改，下次登录请用新密码');
+      }).catch(function () {
+        fail('连不上服务器，请确认网络后再试');
+      });
+    };
+  }
+
+  /** 我的学习报告：把同步快照里「我自己的」数据汇总成一页只读报告 */
+  function openReportSheet() {
+    var list = homeworks(), doneN = 0, lateN = 0;
+    list.forEach(function (h) {
+      var st = hwState(h);
+      if (st.done) doneN++; else if (st.late) lateN++;
+    });
+    var sc = scores(), pctSum = 0, pctN = 0, best = null;
+    sc.forEach(function (s) {
+      var full = Number(s.full_score) || 100, v = Number(s.score);
+      if (isFinite(v) && full > 0) {
+        pctSum += v / full * 100; pctN++;
+        if (!best || v / full > Number(best.score) / (Number(best.full_score) || 100)) best = s;
+      }
+    });
+    var atts = attMine(), ck = 0;
+    atts.forEach(function (a) { if (a.status === 'checked' || a.status === 'present') ck++; });
+    var moral = moralityMine(), mSum = 0;
+    moral.forEach(function (r) { mSum += Number(r.score) || 0; });
+
+    var hwRate = list.length ? Math.round(doneN / list.length * 100) : null;
+    var avg = pctN ? Math.round(pctSum / pctN * 10) / 10 : null;
+    /* 一句话点评：只依据本人数据，不与他人比较排名 */
+    var words = !list.length && !sc.length
+      ? '新学期刚开始，先在「今日」里签个到、看看今天的课堂活动吧！'
+      : (lateN > 0 ? '作业要抓紧啦，别让逾期拖了后腿，赶一赶就上来了！'
+        : hwRate !== null && hwRate >= 90
+          ? '作业又快又齐' + (avg != null && avg >= 85 ? '，成绩也稳稳的，继续保持！' : '，继续保持这个节奏！')
+          : '按自己的节奏一步一步来，每天进步一点点就很棒！');
+
+    var stat = function (num, unit, label) {
+      return '<div class="stat"><div class="stat-num">' + num + (unit ? '<small>' + unit + '</small>' : '') +
+        '</div><div class="stat-label">' + label + '</div></div>';
+    };
+    var body =
+      '<div class="stat-grid" style="margin-top:2px">' +
+      stat(hwRate === null ? '—' : hwRate, '%', '作业完成率') +
+      stat(avg === null ? '—' : avg, '', '平均得分率') +
+      stat(atts.length ? ck + '/' + atts.length : '—', '', '出勤次数') +
+      stat((mSum > 0 ? '+' : '') + mSum, '', '课堂评价') + '</div>' +
+      '<div class="note" style="margin-top:0">' + words + '</div>' +
+      (best ? '<div class="score"><div class="m"><b>最佳一次 · ' + esc(best.title || '考试') + '</b>' +
+        '<span>' + esc(best.date || '') +
+        (S.vis && S.vis.rank && best._rank ? ' · 第 ' + esc(best._rank) + ' 名' : '') +
+        (best._avg != null ? ' · 班均 ' + esc(best._avg) : '') + '</span></div>' +
+        '<div class="v">' + esc(fmtNum(best.score)) + '<small>/' + esc(Number(best.full_score) || 100) + '</small></div></div>' : '') +
+      '<div class="hw stat"><div class="dot' + (lateN ? '' : ' done') + '"></div>' +
+      '<div class="m"><b>作业台账</b><span>共 ' + list.length + ' 项 · 已交 ' + doneN +
+      (lateN ? ' · 逾期 ' + lateN : ' · 无逾期') + '</span></div>' +
+      '<div class="tag' + (lateN ? ' late' : (doneN ? ' done' : '')) + '">' +
+      (list.length ? Math.round(doneN / list.length * 100) + '%' : '—') + '</div></div>' +
+      '<div class="empty slim" style="font-size:11.5px">报告生成于 ' + todayStr() +
+      ' · 数据来自老师发布的学习记录，仅本人可见</div>';
+    showSheet('<div class="sh"><b>我的学习报告</b>' +
+      '<button class="x" id="shClose">×</button></div>' +
+      '<div class="page-sub" style="margin-bottom:10px">' + esc(S.me.name) + ' · ' +
+      esc(myClass().name || '') + '</div>' + body);
+    var cl = $('#shClose'); if (cl) cl.onclick = hideSheet;
   }
 
   function bind() {
@@ -599,12 +1323,6 @@
         toast('连不上老师电脑，请确认在同一 Wi-Fi');
       });
     };
-    var cp = $('#chpwd');
-    if (cp) cp.onclick = function () { showChangePwd(false); };
-    var lo = $('#logout');
-    if (lo) lo.onclick = function () {
-      api('/api/v2/auth/logout', { method: 'POST', body: '{}' }).then(function () { location.reload(); });
-    };
   }
 
   /* ---------------- 登录 ---------------- */
@@ -620,8 +1338,10 @@
       '<label>密码</label><input id="pwd" type="password" autocomplete="current-password" placeholder="老师给你的密码">' +
       '<div class="err" id="err">' + esc(msg || '') + '</div>' +
       '<button class="btn" id="go">进入</button>' +
-      '<div class="empty" style="font-size:12px;padding-top:16px">' +
-      '第一次登录用老师设的初始密码，进去后可以在「我的」里改。</div></div>';
+      '<div class="empty" style="font-size:13px;padding-top:16px">' +
+      '第一次登录用老师设的初始密码；进去后点左下角头像 →「修改密码」可更换。</div></div>' +
+      /* 右下角设计者署名（教师端 .af-credit/.corner-credit 同款） */
+      '<span class="af-credit corner-credit" title="班级工作台 · 设计者">🐮 牛老师设计</span>';
 
     var cls = $('#cls'), stu = $('#stu'), nm = $('#nm'), codeEl = $('#code');
     function codeQs() {
@@ -744,7 +1464,15 @@
 
   /* ---------------- 启动 ---------------- */
   function boot() {
-    api('/api/v2/auth/session').then(function (j) {
+    applyMode();   // 主题模式在登录页就生效（浅色/夜间/跟随系统）
+    /* 登录成功是 location.reload() 进来的：reload 后第一条请求偶发撞上
+       浏览器回收旧连接（实测 ERR 连接重置，稍后手动重发即成功）。
+       教室 Wi-Fi 也常有这类抖动，所以网络级失败先静默重试一次，
+       仍失败才落到登录页并提示，避免一次抖动把学生挡在门外。 */
+    var getSession = function () { return api('/api/v2/auth/session'); };
+    getSession().catch(function () {
+      return new Promise(function (res) { setTimeout(res, 800); }).then(getSession);
+    }).then(function (j) {
       if (!j.ok || j.role !== 'student') {
         if (/[?&]setpwd=1/.test(location.search) || j.must_change) {
           // 未登录但带着改密标记：先正常登录，不在登录页卡住
@@ -759,18 +1487,22 @@
       S.me = j.student;
       S.me.id = j.student.student_id;   // 统一字段：recordOf 等处用 me.id 比对
       S.flags = j.modules || {};
+      S.typingOn = !!(j.typing && j.typing.enabled);
       S.rev = j.rev || 0;
       return pull(0, true).then(function () {
         document.body.innerHTML =
           '<div id="app"></div><div id="mask" class="sheet-mask"></div>' +
-          '<div id="sheet" class="sheet"></div><div id="tabbar" class="tabbar"></div>';
+          '<div id="sheet" class="sheet"></div><div id="tabbar" class="tabbar"></div>' +
+          /* 右下角常驻设计者署名（教师端同款）：放 #app 外，render() 重画主区不会丢 */
+          '<span class="af-credit corner-credit" title="班级工作台 · 设计者">🐮 牛老师设计</span>';
         var h = (location.hash || '').replace('#', '');
-        S.view = ['today', 'me'].indexOf(h) >= 0 ? h : 'today';
+        S.view = VIEWS.indexOf(h) >= 0 ? h : 'today';
         S.loading = false;
         render();
         watch();
       });
-    }).catch(function () {
+    }).catch(function (e) {
+      if (window.console && console.error) console.error('启动失败', e);
       showLogin('连不上老师电脑，确认手机和电脑在同一个 Wi-Fi');
     });
   }

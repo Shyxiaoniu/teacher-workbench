@@ -512,7 +512,7 @@ def check_token(token, cls="", sid=""):
 # 临时上传文件的命名：<32 位 uid>__<原始文件名>
 #
 # 原来用 "::" 当分隔符。":" 在 Windows 上是非法文件名字符，open() 直接抛
-# [Errno 13] Permission denied —— 也就是说在 Windows 教师机上「学生上传作品」
+# [Errno 13] Permission denied —— 也就是说在 Windows 主机上「学生上传作品」
 # 这一步百分之百失败，而且报的还是「写入失败」，看着像磁盘权限问题，很难查。
 # 分隔符改成两个下划线，uid 长度固定 32 位，解析时不会和文件名里的下划线混淆；
 # 老的 "::" 文件仍然能被认出来（兼容已经在 Linux/Mac 上交过的历史数据）。
@@ -1150,19 +1150,13 @@ def material_add(data):
 def _resolve_material_source(it):
     """把前端传来的素材条目解析成 (绝对路径, 文件名)。
 
-    只认两种来源：课件库（course）与本地资料夹（mount）。
+    只认一种来源：课件库（course）。本地资料夹（mount）已于 2026-11-01 下线。
     以前还有一个「兜底：直接给绝对路径」的分支，于是
     `POST /api/enh/material/add {"items":[{"path":"C:/Windows/win.ini"}]}`
     就能把服务器上任意文件登记成素材，再用 /api/enh/dl 下载走 —— 任意文件读取。
-    课件库/资料夹本身都有 commonpath 边界，不需要这个后门。
+    课件库本身有 commonpath 边界，不需要这个后门。
     """
     frm = it.get("from")
-    if frm == "mount":
-        mid, rel = it.get("id"), it.get("rel") or ""
-        full = CW.mount_abs(mid, rel)
-        if not full:
-            return None
-        return full, os.path.basename(rel) or os.path.basename(full)
     if frm == "course":
         cid = it.get("id")
         full = CW.abs_of(cid, must_exist=True)

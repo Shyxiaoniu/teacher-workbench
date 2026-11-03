@@ -1,0 +1,2717 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>打字冒险岛 · 班级工作台</title>
+<style>
+:root{
+  --brand:#B45B33; --brand2:#C9713F; --ink:#3B322A; --ink2:#6F6257; --ink3:#9A8B7F;
+  --bg:#F8F2E4; --card:#FFFCF4; --line:#EADFD2; --ok:#3E9E5B; --warn:#D9A054; --bad:#C0392B;
+  --sky:#5B8DEF; --purple:#8E6FD8; --teal:#2FA6A0;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:
+  radial-gradient(1200px 500px at 80% -10%, #F6E4CE 0%, transparent 60%),
+  radial-gradient(900px 400px at -10% 110%, #EDE9D5 0%, transparent 55%),
+  var(--bg);
+  color:var(--ink);-webkit-font-smoothing:antialiased}
+#app{max-width:1180px;margin:0 auto;padding:14px 16px 20px}
+button{font-family:inherit;cursor:pointer;border:none;background:none}
+.btn{background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;border:none;
+  padding:10px 22px;border-radius:12px;font-size:15px;font-weight:600;
+  box-shadow:0 4px 14px rgba(180,91,51,.3);transition:transform .12s}
+.btn:hover{transform:translateY(-1px)}
+.btn.line{background:#fff;color:var(--brand);border:2px solid var(--brand);box-shadow:none}
+.btn.ghost{background:#fff;color:var(--ink2);border:1.5px solid var(--line);box-shadow:none}
+.btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+
+/* 顶栏 */
+.top{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);
+  border-radius:18px;padding:10px 16px;box-shadow:0 6px 20px rgba(60,30,10,.06)}
+.logo{font-size:22px;font-weight:800;color:var(--brand);letter-spacing:1px;white-space:nowrap}
+.logo small{font-size:12px;color:var(--ink3);font-weight:400;margin-left:6px}
+.meter{display:flex;gap:8px;align-items:center;margin-left:auto;flex-wrap:wrap}
+.chip{background:#F6E7D6;color:var(--brand);border-radius:999px;padding:5px 12px;font-size:13px;font-weight:600;
+  display:flex;align-items:center;gap:5px}
+.chip.b{background:#FFF8E2;color:#B07A1A}
+.chip.p{background:#F1EDFB;color:var(--purple)}
+.pet-mini{width:44px;height:44px;border-radius:13px;flex:none;overflow:hidden;
+  background:radial-gradient(72% 62% at 50% 74%,#FFF7E9 0%,#FBEADB 100%);
+  border:1px solid rgba(200,160,120,.3);
+  box-shadow:inset 0 1px 0 #fff,0 1px 3px rgba(150,95,50,.12)}
+.pet-mini svg{width:100%;height:100%}
+.tabs{display:flex;gap:6px;margin:14px 0 0}
+.tabs button{padding:9px 18px;border-radius:12px;font-size:14.5px;font-weight:600;color:var(--ink2);
+  background:#fff;border:1.5px solid var(--line)}
+.tabs button.on{color:#fff;background:linear-gradient(135deg,var(--brand),var(--brand2));border-color:transparent;
+  box-shadow:0 4px 12px rgba(180,91,51,.25)}
+.demo-bar{margin-top:12px;background:#FFF8E2;border:1.5px dashed #E8C96A;color:#8A6A1C;
+  border-radius:12px;padding:9px 14px;font-size:13.5px}
+.off-bar{margin:60px auto 0;max-width:460px;text-align:center;background:var(--card);border:1px solid var(--line);
+  border-radius:20px;padding:44px 30px;box-shadow:0 8px 24px rgba(60,30,10,.07)}
+.off-bar .big{font-size:44px;margin-bottom:10px}
+.off-bar h2{font-size:19px;margin-bottom:8px}
+.off-bar p{color:var(--ink2);font-size:14px;line-height:1.7}
+
+/* 冒险地图 */
+.map-head{display:flex;align-items:center;gap:10px;margin:16px 0 10px;flex-wrap:wrap}
+.stage-chip{display:flex;align-items:center;gap:6px;padding:8px 13px;border-radius:12px;font-size:13.5px;
+  font-weight:600;background:#fff;border:1.5px solid var(--line);color:var(--ink2)}
+.stage-chip.on{border-color:var(--brand);color:var(--brand);background:#F8EEDF}
+.stage-chip .ic{font-size:16px}
+.stage-desc{font-size:13px;color:var(--ink3);margin:0 0 12px 2px}
+.chap-bar{display:flex;align-items:center;gap:10px;margin:6px 0 14px}
+.chap-bar b{font-size:16px;color:var(--ink)}
+.chap-nav{margin-left:auto;display:flex;gap:6px;align-items:center}
+.chap-nav button{width:34px;height:34px;border-radius:10px;background:#fff;border:1.5px solid var(--line);
+  font-size:16px;color:var(--ink2)}
+.chap-nav button:disabled{opacity:.35}
+.chap-nav span{font-size:13px;color:var(--ink3);min-width:70px;text-align:center}
+.level-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.lv{background:var(--card);border:2px solid var(--line);border-radius:16px;padding:14px;position:relative;
+  transition:transform .12s,border-color .12s;text-align:left;width:100%}
+.lv:not(.lock):hover{transform:translateY(-2px);border-color:var(--brand)}
+.lv.lock{opacity:.55;cursor:not-allowed;background:#FBF6F1}
+.lv .no{font-size:13px;color:var(--ink3);font-weight:600}
+.lv .nm{font-size:15.5px;font-weight:700;margin:3px 0 7px;color:var(--ink)}
+.lv .stars{font-size:13px;letter-spacing:2px;color:#E8C96A}
+.lv .stars .off{color:#E4DCD2}
+.lv.boss{border-color:#E8C96A;background:linear-gradient(160deg,#FFFDF4,#FFF6DF)}
+.lv.boss .nm{color:#B07A1A}
+.lv .boss-tag{position:absolute;top:-9px;right:10px;background:#E0A93C;color:#fff;font-size:10.5px;
+  padding:2px 8px;border-radius:999px;font-weight:700}
+.lv .lock-tag{position:absolute;top:12px;right:12px;font-size:14px}
+.lv .best{font-size:11.5px;color:var(--ink3);margin-top:5px}
+.chap-done{display:inline-block;margin-left:8px;font-size:12px;color:var(--ok);font-weight:600}
+
+/* 练习 */
+/* 2026-11-02 二次调整：练习卡片改为「撑满一屏的弹性列」——
+   卡片吃掉视口剩余高度，键盘容器 flex:1 吸收余量，页面底部不再留大片空白；
+   键盘本身不再是「键帽各自 clamp」，而是一整块 880px 设计稿整体等比缩放，
+   放大缩小时键宽/键高/字号/圆角/间距同比例变化，不会被单独拉长。 */
+.play-wrap{margin-top:0;min-height:calc(100vh - 34px);display:flex}
+body.embed .play-wrap{min-height:calc(100vh - 20px)}
+.play-card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:12px 18px 10px;
+  box-shadow:0 8px 26px rgba(60,30,10,.07);
+  flex:1 1 auto;display:flex;flex-direction:column;min-height:0}
+.play-body{flex:1 1 auto;display:flex;flex-direction:column;min-height:0}
+.play-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.play-top .bt{font-size:15.5px;font-weight:800}
+.play-top .sub{font-size:11.5px;color:var(--ink3)}
+.live{margin-left:auto;display:flex;gap:8px}
+.live .chip{font-variant-numeric:tabular-nums}
+.ime-hint{margin-top:10px;background:#EAF3FF;border:1.5px solid #BBD4F5;color:#2E5E9E;border-radius:10px;
+  padding:8px 12px;font-size:13px;flex:0 0 auto}
+.stage1-hint{display:flex;align-items:center;gap:8px;margin-top:10px;color:var(--ink2);font-size:13px}
+.stage1-hint b{color:var(--brand)}
+/* 课文区（2026-11-02 改）：默认只显示汉字，不显示拼音；
+   点击任意汉字，在它上方弹出带声调的拼音气泡（点击别处/再点同字收起）。
+   气泡挂在 .text-wrap（position:relative）上 —— 课文打字时逐字重渲染，
+   挂在里面会被 innerHTML 冲掉。已打=绿、当前=暖底纹+光标、未打=灰。 */
+/* 输入法 / 修饰键提示条（2026-11-02 新增）
+   练「大小写与标点」「中英混排」「数字小键盘」时，学生卡住的原因几乎
+   都不是"不会打"，而是：输入法状态没切、忘了按 Shift、NumLock 没开。
+   所以把「现在该处于什么状态」和「这一下要不要按 Shift」直接摆在
+   课文上方，不用等打错了才发现。 */
+.ime-bar{display:flex;align-items:center;gap:9px;margin-top:8px;flex-wrap:wrap;
+  background:#FFFCF4;border:1.5px dashed #E6D6C2;border-radius:12px;padding:6px 11px;flex:0 0 auto}
+.ime-badge{font-size:12.5px;font-weight:800;padding:3px 9px;border-radius:8px;
+  background:#EDF3FB;color:#2F5C93;white-space:nowrap;transition:background .15s,color .15s}
+.ime-bar.on-cn .ime-badge{background:#FBEFE2;color:#B4632A}
+.ime-bar.on-en .ime-badge{background:#EAF4EC;color:#2C7A46}
+.ime-note{font-size:12px;color:var(--ink3);line-height:1.5;flex:1 1 120px;min-width:0}
+.ime-key{margin-left:auto;display:flex;align-items:center;gap:5px;font-size:12.5px;
+  font-weight:800;color:var(--brand);white-space:nowrap}
+.ime-key kbd{font-family:Consolas,monospace;background:#fff;border:1.5px solid #E0CBB6;
+  border-bottom-width:2.5px;border-radius:6px;padding:1px 6px;font-size:12px;color:var(--ink)}
+.ime-key .sl{color:#B9AC9D;font-weight:700;font-size:11px}
+/* 小键盘篇章：主键区压暗、小键盘提亮，一眼看出用哪个区 */
+.kb-blk.kb-dim{opacity:.24;filter:grayscale(.55);transition:opacity .2s}
+.kb-blk.kb-focus{filter:drop-shadow(0 0 9px rgba(232,161,60,.45))}
+.text-wrap{position:relative;flex:0 0 auto;margin-top:8px}
+.text-line{background:#FBF5E9;border:2px solid var(--line);
+  /* 顶部留 24px：这是拼音气泡的"停靠带"，气泡落在框内而不是压到上面的标题栏 */
+  border-radius:16px;padding:24px 12px 9px;min-height:64px;
+  display:flex;flex-wrap:wrap;gap:2px 3px;align-content:flex-start;
+  /* 课文居中（2026-11-02 按标注调整）：一句话只有十几个字时，左对齐会让
+     框右侧空出大半，学生视线被甩到左边；居中后当前字始终落在框的中央。 */
+  justify-content:center}
+.ch{display:inline-flex;align-items:center;justify-content:center;line-height:1;
+  padding:0 1px;border-radius:7px;cursor:pointer}
+.ch .hz{font-size:26px;line-height:30px;font-weight:600;color:#C2B9AE;
+  transition:color .12s,background .12s;border-radius:7px}
+.ch:hover .hz{color:var(--ink);background:#F3E8D8}
+.ch.o .hz{color:#3E9E5B}
+.ch.e .hz{color:var(--bad);background:#FBE3DE;box-shadow:0 2px 0 #E5A99F}
+.ch.c .hz{color:var(--ink);background:#F7E2D2;box-shadow:0 2px 0 var(--brand)}
+/* 空格占位：画成一个可见的浅色小方块，已打变绿、当前变暖色 ——
+   中英混排里「QQ 练」中间那一格，学生以前完全看不出要按空格。 */
+.ch.sp{width:15px;height:20px;cursor:default;align-self:center;border-radius:5px;
+  background:#EFE5D6;box-shadow:inset 0 0 0 1px #E3D5C2;transition:background .12s}
+.ch.sp.o{background:#D8EEDD;box-shadow:inset 0 0 0 1px #B8DDC1}
+.ch.sp.c{background:#F7E2D2;box-shadow:0 2px 0 var(--brand)}
+.ch.sp.e{background:#FBE3DE;box-shadow:inset 0 0 0 1px #E5A99F}
+/* 拼音气泡：深底浅字 + 小三角，pointer-events:none 不挡后面的点击；
+   顶上放不下时加 .flip 翻到字下面，三角也跟着朝上 */
+.py-pop{position:absolute;z-index:40;background:#4A3F33;color:#FFEFD9;
+  font-size:12.5px;line-height:1;padding:4px 9px 5px;border-radius:8px;
+  box-shadow:0 3px 8px rgba(60,40,20,.28);white-space:nowrap;pointer-events:none}
+.py-pop::after{content:'';position:absolute;left:50%;bottom:-4px;margin-left:-4px;
+  border:4px solid transparent;border-top-color:#4A3F33;border-bottom:0}
+.py-pop.flip::after{bottom:auto;top:-4px;border-top:0;border-bottom:4px solid #4A3F33}
+/* 英文关卡：不标拼音，按普通流式排版（和上一版一致，避免空格被 flex 吃掉） */
+.en-line{display:block;font-size:26px;line-height:1.7;letter-spacing:1px;
+  word-break:break-all;font-family:Consolas,Menlo,monospace;font-weight:600;color:#C2B9AE}
+.en-line .d{color:#C2B9AE}
+.en-line .o{color:var(--ok)}
+.en-line .c{color:var(--ink);background:#F7E2D2;border-radius:6px;box-shadow:0 2px 0 var(--brand)}
+.en-line .e{color:var(--bad);background:#FBE3DE}
+/* 英文课文区：没有拼音气泡，顶部那 24px 的「停靠带」就是纯留白，
+   上下改成等距后一行字才真正落在框的正中（还顺手把框压缩了一圈）。 */
+.text-line.en-line{padding:13px 16px;text-align:center}
+/* 大键帽：只做"按哪个键"的提示，竖向占位要小 —— 上一版 112px 高，
+   加上文字和间距吃掉了 96px 高度，正好是键盘缺的那 100px。 */
+.key-big{flex:0 0 auto;margin-top:2px;display:flex;flex-direction:column;align-items:center;gap:2px;padding:1px 0 2px}
+.key-cap{width:clamp(54px,7.6vh,70px);height:clamp(54px,7.6vh,70px);border-radius:14px;background:#fff;border:2.5px solid var(--brand);
+  display:flex;align-items:center;justify-content:center;font-size:clamp(28px,3.9vh,38px);font-weight:800;color:var(--ink);
+  box-shadow:0 3px 0 #D9B49C,0 7px 14px rgba(180,91,51,.15);text-transform:uppercase;font-family:Consolas,monospace}
+.key-finger{font-size:13px;color:#4A4238}
+.key-finger b{color:var(--brand)}
+/* 输入台：输入框里实时回显「已经打出来的字」（金山打字通的上屏区）——
+   打对的字留在框里不消失，打错自动截回，退格可整字回退。 */
+/* 输入台（2026-11-02 第二轮：改成「与课文逐字同列」的上屏区）
+   核心思路 —— 不去算坐标，而是让回显层复用课文的排版网格：
+     ① 外框与 .text-line 同宽、同左右内边距（12px），内容区宽度完全一致；
+     ② .tb-echo 照抄课文的字号 26px / 行高 30px / gap 2px 3px / 居中 / 换行规则；
+     ③ 未输入的字用透明色占位（不是不渲染）—— 占位保住了宽度，第 i 个字
+        才会稳稳落在课文第 i 个字的正下方，多行时换行位置也一模一样；
+     ④ 真正的 <input> 绝对定位盖在上面、文字全透明，只负责接收输入法和光标，
+        视觉完全交给回显层，两边不会互相打架。
+   字少的时候不需要额外拉间距：占位符本来就把每个字放在课文对应的槽里，
+   看起来自然是「词与词之间均匀分开、与上文字对齐」。 */
+.typing-bar{margin-top:8px;flex:0 0 auto;display:flex;align-items:stretch;
+  background:#FFFCF4;border:2px solid var(--line);border-radius:14px;padding:6px 12px;
+  transition:border-color .15s,box-shadow .15s}
+.typing-bar:focus-within{border-color:var(--brand);box-shadow:0 0 0 3px rgba(180,91,51,.12)}
+.tb-field{position:relative;flex:1 1 auto;min-width:0}
+/* 回显层：与课文同字号、同行高、同 gap —— 这几项是逐字对齐的全部前提 */
+.tb-echo{display:flex;flex-wrap:wrap;gap:2px 3px;justify-content:center;
+  align-content:flex-start;min-height:30px;
+  font-size:26px;line-height:30px;font-weight:600;pointer-events:none}
+.tb-echo .ch.o .hz{color:var(--brand)}
+.tb-echo .ch.d .hz{color:transparent}
+.tb-echo .ch.d .hz,.tb-echo .ch.o .hz{background:none;box-shadow:none}
+.tb-echo .ch.sp.d{background:transparent;box-shadow:none}
+.tb-echo .ch.sp.o{background:#F3E2D2;box-shadow:inset 0 0 0 1px #E3C9B0}
+/* 真输入框：铺满回显层、文字透明，只保留输入法能力 */
+.tb-input{position:absolute;inset:0;width:100%;height:100%;
+  border:none;outline:none;background:transparent;padding:0;margin:0;
+  font-size:26px;line-height:30px;font-family:inherit;letter-spacing:0;
+  color:transparent;caret-color:transparent}
+.tb-input::placeholder{color:transparent}
+/* 输入法组合中（2026-11-03 修复：拼音不再让 input 显形）
+   旧做法是隐藏回显层、把真 input 的文字亮出来显示拼音 —— 但 input 是左对齐的，
+   一组合整串「晋太元中，wu」就从框左边冒出来，和居中的课文完全对不上。
+   现在：input 永远透明，回显层一直显示已上屏的字，组合中的拼音单独做成
+   一个跟随的小标（.tb-comp），定位在「本轮要上屏的那个字」的格子里。 */
+.tb-comp{position:absolute;z-index:6;padding:0 7px;height:24px;line-height:24px;
+  font-size:16px;font-weight:600;color:#B4632A;background:#FFF3E6;
+  border:1px solid #E9C7A6;border-radius:7px;white-space:nowrap;
+  pointer-events:none;box-shadow:0 2px 6px rgba(180,91,51,.14)}
+.tb-comp[hidden]{display:none}
+/* 提示浮层：空态时在整个框内居中（多行课文时也不会贴在第一行） */
+.tb-ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-size:14px;font-weight:400;letter-spacing:0;color:#BCB2A6;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
+.tb-input:not(:placeholder-shown) + .tb-ph{display:none}
+.tb-count{flex:none;font-size:12px;color:var(--ink3);
+  font-variant-numeric:tabular-nums;white-space:nowrap}
+/* 进度条与字数同一行：字数从输入框里搬出来，输入框才能整宽参与对齐 */
+.prog-row{flex:0 0 auto;display:flex;align-items:center;gap:12px;margin-top:8px}
+.prog-row .progress-track{flex:1 1 auto;margin-top:0}
+.progress-track{flex:0 0 auto;margin-top:8px;height:10px;border-radius:99px;background:#F4EAE2;overflow:hidden}
+.progress-fill{height:100%;border-radius:99px;background:linear-gradient(90deg,var(--brand),#D89A6E);transition:width .15s}
+
+/* 键盘指法示意图 · 104 键全尺寸（主键区 + 导航簇 + 右侧数字小键盘）
+   2026-11-02 三次调整：按标准 104 键重新排版。设计稿用固定像素
+   （1u = 48px、键间隙 6、行距 52、主键区 15u / 导航 3u / 小键盘 4u），
+   每个键 absolute 定位到 (col,row)，跨行键（+ 和 Enter）用 span 撑高；
+   外层只做 transform:scale —— 键宽 / 键高 / 字号 / 圆角 / 间距同比例变化。 */
+.kb-wrap{position:relative;flex:1 1 auto;min-height:150px;margin-top:6px;width:100%;overflow:hidden}
+.kb{position:absolute;left:50%;top:50%;width:1115px;max-width:none;margin:0;
+  transform:translate(-50%,-50%) scale(var(--kbs,1));transform-origin:center center;
+  background:#FBF5E9;border:1.5px solid var(--line);border-radius:14px;padding:10px;user-select:none}
+.kb-board{position:relative;width:1092px;height:258px;padding-top:44px;display:flex;gap:18px}
+/* 功能键行：单独一层绝对定位，和主键区之间留一道缝（真机也是分开的一组） */
+.kb-frow{position:absolute;top:0;height:38px}
+.kb-blk{position:relative;height:214px;flex:0 0 auto}
+.kb-k{position:absolute;height:38px;background:#FBF7F3;border:1px solid #EADFD4;border-bottom-width:3px;border-radius:8px;
+  display:flex;align-items:center;justify-content:center;
+  line-height:1;
+  text-align:center;font-size:15px;font-weight:600;letter-spacing:.4px;color:#6B6257;padding:0;
+  font-family:Consolas,Menlo,monospace;transition:transform .1s}
+/* 功能键（Home / NumLk / Enter 等）字多，再缩一档 */
+.kb-k.kb-sm{font-size:10.5px;letter-spacing:.1px;font-family:inherit}
+/* 导航簇与小键盘的空位保持干净（不画键位底色） */
+.kb-k i{position:absolute;top:2px;left:5px;font-size:9px;color:#9C9186;font-style:normal;font-weight:600}
+.kb-k.f-LP,.kb-k.f-RP{background:#F1EBFB;border-color:#DFD0F4}
+.kb-k.f-LR,.kb-k.f-RR{background:#EAF2FE;border-color:#CFE0F8}
+.kb-k.f-LM,.kb-k.f-RM{background:#E7F6F5;border-color:#C4E7E5}
+.kb-k.f-LI{background:#FDF3E3;border-color:#F3DFBD}
+.kb-k.f-RI{background:#EAF6EC;border-color:#CDE8D2}
+.kb-k.f-TH{background:#F3F1EE;border-color:#E4E0DA}
+.kb-k.hot{background:#F7E2D2;border-color:var(--brand);color:var(--brand);
+  box-shadow:0 0 0 2px rgba(180,91,51,.3);animation:kbpulse 1s ease infinite;z-index:1}
+.kb-k.hotsh{background:#FFEFD9;border-color:var(--warn);color:#B07A1A;box-shadow:0 0 0 2px rgba(217,160,84,.35)}
+@keyframes kbpulse{50%{transform:translateY(1.5px)}}
+.kb-legend{display:flex;gap:11px;flex-wrap:wrap;margin-top:6px;
+  padding:1px 2px 0;font-size:12.5px;color:#7A7266;align-items:center}
+.kb-legend b{display:inline-block;width:12px;height:12px;
+  border-radius:3px;margin-right:4px;vertical-align:-1px}
+.kb-legend .kb-tip{margin-left:auto;color:var(--brand);font-weight:700;font-size:12.5px}
+/* 指法图：2026-11-02 四次调整 —— 从「圆角方块」改成「圆形徽章 + 手指剪影」：
+   ① 每根手指一个白底彩边圆，圆内是一只竖着的手指（指尖圆、指节有折痕），
+      圆比方块更贴近"手指落键"的意象，也顺手把十根手指拉成同一节拍；
+   ② 名字与键位串排在圆下方，各留 15px / 27px 的基线，行高固定，绝不压字；
+   ③ 高亮时圆填色、手指变白、下方名字染成手指色 —— 一眼知道该抬哪根。 */
+.hands{flex:0 0 auto;width:100%;max-width:660px;margin:5px auto 0;background:#FBF5E9;
+  border:1.2px solid var(--line);border-radius:12px;padding:6px 8px 4px;user-select:none}
+.hands svg{width:100%;height:auto;display:block}
+.finger{transition:transform .16s ease}
+.finger .fcircle{fill:#FFFFFF;stroke:var(--c,#ccc);stroke-width:2.2;transition:fill .16s,stroke .16s}
+/* 指纹纹路（2026-11-02 替换手指剪影）：
+   原来圆里画一根带指甲的手指，本意是"用这根手指"，但学生第一眼
+   容易读成"点这个按钮"的手指指示，反而误解。指纹图标没有歧义 ——
+   它就是手机上解锁时按的那个图案，一眼知道"该用哪根手指去碰键"。 */
+.finger .fp{fill:none;stroke:var(--c,#ccc);stroke-width:2.15;stroke-linecap:round;
+  stroke-linejoin:round;transition:stroke .16s,stroke-opacity .16s}
+.finger .fp.dim{stroke-opacity:.42;stroke-width:1.75}
+.finger.active{transform:translateY(-4px)}
+.finger.active .fcircle{fill:var(--c,#ccc);stroke:#fff;
+  filter:drop-shadow(0 4px 6px rgba(0,0,0,.18))}
+.finger.active .fp{stroke:#fff}
+.finger.active .fp.dim{stroke-opacity:.72}
+/* 文字：深色 + 同底色描边，叠在彩色圆上也照样清楚 */
+.finger .fn{font-size:12.5px;font-weight:800;fill:#2E2822;transition:fill .16s;
+  paint-order:stroke;stroke:#FBF5E9;stroke-width:2.6px;stroke-linejoin:round}
+.finger.active .fn{fill:var(--c)}
+.finger .fk{font-size:9.5px;font-weight:700;fill:#4A4238;font-family:Consolas,Menlo,monospace;
+  letter-spacing:-.2px;transition:fill .16s;paint-order:stroke;stroke:#FBF5E9;stroke-width:2.4px;stroke-linejoin:round}
+.finger .fk.s{font-size:8.5px}
+.finger.active .fk{fill:#2E2822}
+/* 矮屏压缩：只收顶部与面板留白，键盘交给整体缩放，不再单独改键高字号 */
+@media (max-height:820px){
+  .play-card{padding:10px 16px 8px}
+  .play-top .bt{font-size:14.5px}
+  .play-top .sub{font-size:11px}
+  .key-cap{width:clamp(46px,6.6vh,58px);height:clamp(46px,6.6vh,58px);border-radius:12px;
+    font-size:clamp(24px,3.4vh,32px);box-shadow:0 3px 0 #D9B49C,0 6px 12px rgba(180,91,51,.14)}
+  .key-big{gap:1px;padding:1px 0}
+  .key-finger{font-size:12.5px}
+  .kb-wrap{min-height:120px;margin-top:4px}
+  .hands{margin-top:5px;padding:5px 7px 4px}
+  .finger .fn{font-size:13px}
+  .finger .fk{font-size:10px}
+}
+.hands .hgrp{font-size:9.5px;font-weight:700;fill:#9A8B7F;letter-spacing:1.5px}
+
+/* 学生端内嵌模式：收窄边距，融入外层页面框架 */
+body.embed{background:var(--bg)}
+body.embed #app{max-width:none;padding:8px 12px 12px}
+body.embed .top{padding:8px 14px;border-radius:14px}
+body.embed .logo{font-size:18px}
+body.embed .credit{display:none}
+
+/* 结算弹层 */
+.mask{position:fixed;inset:0;background:rgba(40,25,15,.45);display:flex;align-items:center;justify-content:center;
+  z-index:50;padding:18px;backdrop-filter:blur(2px)}
+.result{background:var(--card);border:1px solid var(--line);border-radius:24px;padding:30px 34px;width:min(460px,94vw);text-align:center;
+  animation:pop .3s ease}
+@keyframes pop{0%{transform:scale(.8);opacity:0}100%{transform:scale(1);opacity:1}}
+.result .r-stars{font-size:44px;letter-spacing:8px;margin:6px 0 2px}
+.result .r-stars .off{color:#E4DCD2}
+.result .r-stars .on{color:#F6B93C;animation:twinkle .5s ease both}
+.result .r-stars .on:nth-child(2){animation-delay:.18s}
+.result .r-stars .on:nth-child(3){animation-delay:.36s}
+@keyframes twinkle{0%{transform:scale(0) rotate(-40deg)}70%{transform:scale(1.3) rotate(8deg)}100%{transform:scale(1)}}
+.result h2{font-size:20px;margin-bottom:2px}
+.result .r-sub{color:var(--ink3);font-size:13px;margin-bottom:14px}
+.r-grid{display:flex;gap:10px;justify-content:center;margin:14px 0}
+.r-cell{background:#FFF6EF;border-radius:14px;padding:10px 18px;min-width:92px}
+.r-cell b{display:block;font-size:21px;color:var(--brand)}
+.r-cell span{font-size:11.5px;color:var(--ink3)}
+.r-reward{background:#FFF8E2;border:1.5px dashed #E8C96A;border-radius:14px;padding:10px 14px;font-size:13.5px;
+  color:#8A6A1C;margin-bottom:16px}
+.r-btns{display:flex;gap:10px;justify-content:center}
+
+/* 排行榜 */
+.lb-card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:20px 22px;margin-top:14px}
+.lb-tabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+.lb-tabs button{padding:7px 15px;border-radius:10px;font-size:13.5px;font-weight:600;background:#fff;
+  border:1.5px solid var(--line);color:var(--ink2)}
+.lb-tabs button.on{background:#F6E7D6;border-color:var(--brand);color:var(--brand)}
+.lb-row{display:flex;align-items:center;gap:12px;padding:11px 10px;border-radius:14px}
+.lb-row.me{background:#F8EEDF;border:1.5px solid #FFD3BB}
+.lb-row+.lb-row{border-top:1px solid #F6EDE5}
+.lb-rank{width:34px;height:34px;border-radius:11px;display:flex;align-items:center;justify-content:center;
+  font-weight:800;font-size:15px;background:#F4EAE2;color:var(--ink2);flex:none}
+.lb-rank.r1{background:linear-gradient(135deg,#FFD34D,#F0A500);color:#fff}
+.lb-rank.r2{background:linear-gradient(135deg,#C8CDD6,#9BA5B3);color:#fff}
+.lb-rank.r3{background:linear-gradient(135deg,#E8A876,#C97B42);color:#fff}
+.lb-pet{width:42px;height:42px;border-radius:13px;flex:none;overflow:hidden;
+  background:radial-gradient(72% 62% at 50% 74%,#FFF8EC 0%,#F8EADC 100%);
+  border:1px solid rgba(200,160,120,.28);
+  box-shadow:inset 0 1px 0 #fff,0 1px 3px rgba(150,95,50,.1)}
+.lb-pet svg{width:100%;height:100%}
+.lb-pet.empty{display:flex;align-items:center;justify-content:center;font-size:18px;color:#D8CFC5}
+.lb-name{font-weight:700;font-size:15px}
+.lb-name small{font-weight:400;color:var(--ink3);margin-left:6px;font-size:12px}
+.lb-val{margin-left:auto;font-weight:800;font-size:17px;color:var(--brand);font-variant-numeric:tabular-nums}
+.lb-val small{font-size:11.5px;color:var(--ink3);font-weight:400;margin-left:3px}
+
+/* 牧场 */
+.ranch-grid{display:grid;grid-template-columns:340px 1fr;gap:14px;margin-top:14px}
+@media (max-width:900px){.ranch-grid{grid-template-columns:1fr}}
+.ranch-side{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:18px;text-align:center}
+/* 展示台：径向暖光打底 + 内阴影造出"台面凹进去"的体积，宠物才像站在台上而不是贴在纸上 */
+.ranch-side .stage-box{position:relative;border-radius:20px;padding:10px 10px 4px;margin-bottom:14px;
+  overflow:hidden;cursor:pointer;-webkit-tap-highlight-color:transparent;
+  background:radial-gradient(118% 92% at 50% 6%,#FFFAF1 0%,#FBE9D7 46%,#F1D9C4 100%);
+  box-shadow:inset 0 2px 7px rgba(176,118,68,.17),inset 0 -3px 9px rgba(255,255,255,.8),
+             0 6px 18px rgba(150,95,50,.10);
+  transition:transform .22s ease,box-shadow .22s ease}
+.ranch-side .stage-box:hover{transform:translateY(-2px);
+  box-shadow:inset 0 2px 7px rgba(176,118,68,.15),inset 0 -3px 9px rgba(255,255,255,.85),
+             0 12px 26px rgba(150,95,50,.16)}
+.ranch-side .stage-box:active{transform:translateY(0) scale(.994)}
+/* 顶光：让宠物头顶有一圈更亮的光晕，暗示"聚光灯" */
+.stage-glow{position:absolute;left:50%;top:6%;width:86%;height:66%;transform:translateX(-50%);
+  border-radius:50%;pointer-events:none;
+  background:radial-gradient(52% 52% at 50% 34%,rgba(255,250,232,.95),rgba(255,240,214,0) 74%)}
+/* 台面反光：底部一道柔和高光，强化"平面 vs 立面"的转折 */
+.ranch-side .stage-box::after{content:'';position:absolute;left:12%;right:12%;bottom:2px;height:22px;
+  border-radius:50%;pointer-events:none;
+  background:radial-gradient(50% 50% at 50% 50%,rgba(255,255,255,.85),rgba(255,255,255,0) 78%)}
+.stage-pet{position:relative;z-index:1;display:flex;justify-content:center;align-items:flex-end;min-height:170px}
+.stage-pet svg{width:166px;height:166px;display:block;
+  filter:drop-shadow(0 5px 6px rgba(140,88,48,.16));
+  animation:p3FadeIn .24s ease-out}
+.stage-box.swapin .stage-pet svg{animation:p3PopIn .44s cubic-bezier(.34,1.56,.64,1)}
+.stage-box.shake{animation:stageShake .4s ease}
+.stage-empty{font-size:56px;line-height:150px;color:#D8CFC5}
+.stage-nav{position:absolute;top:46%;transform:translateY(-50%);width:30px;height:30px;z-index:2;
+  border-radius:50%;border:1px solid rgba(180,120,70,.24);background:rgba(255,255,255,.9);
+  color:#8A6242;font-size:17px;line-height:1;display:flex;align-items:center;justify-content:center;
+  cursor:pointer;box-shadow:0 2px 7px rgba(150,95,50,.18);transition:transform .16s ease,background .16s ease}
+.stage-nav:hover{background:#fff;transform:translateY(-50%) scale(1.1)}
+.stage-nav.prev{left:5px}
+.stage-nav.next{right:5px}
+@keyframes p3FadeIn{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:scale(1)}}
+@keyframes p3PopIn{0%{opacity:0;transform:scale(.7) translateY(12px)}
+  62%{opacity:1;transform:scale(1.07) translateY(-3px)}100%{opacity:1;transform:scale(1) translateY(0)}}
+@keyframes stageShake{0%,100%{transform:translateX(0)}22%{transform:translateX(-4px)}70%{transform:translateX(4px)}}
+.ranch-side h3{font-size:17px}
+.ranch-side .mood{font-size:12.5px;color:var(--ink3);margin-top:3px}
+.deco-row{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:12px}
+.deco-dot{width:54px;height:54px;border-radius:15px;position:relative;overflow:hidden;
+  background:linear-gradient(170deg,#FFFFFF,#F7EDE1);border:1px solid rgba(200,160,120,.26);
+  box-shadow:0 2px 4px rgba(150,95,50,.09),inset 0 1px 0 #fff;
+  display:flex;align-items:center;justify-content:center;
+  transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease}
+.deco-dot:hover{transform:translateY(-2px)}
+.deco-dot svg{width:86%;height:86%}
+.deco-dot.on{border-color:#E8A24E;background:linear-gradient(170deg,#FFFDF7,#FFF0D8);
+  box-shadow:0 0 0 2px rgba(232,162,78,.24),0 6px 14px rgba(200,140,70,.22),inset 0 1px 0 #fff}
+.deco-dot.lock{opacity:.42}
+.egg-card{position:relative;border:1.5px dashed rgba(214,178,90,.6);border-radius:18px;
+  padding:16px;margin-top:14px;
+  background:radial-gradient(120% 100% at 50% 0%,#FFFEF8,#FFF4D9 72%,#FBEAC1);
+  box-shadow:inset 0 1px 0 #fff,0 6px 16px rgba(190,150,60,.12)}
+.egg-card .egg{display:inline-block;animation:wiggle 1.8s ease-in-out infinite;
+  filter:drop-shadow(0 4px 5px rgba(160,130,60,.3))}
+.egg-card .egg svg{width:52px;height:62px;display:block}
+@keyframes wiggle{0%,100%{transform:rotate(-5deg) translateY(0)}50%{transform:rotate(5deg) translateY(-2px)}}
+.pet-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px}
+.pet-card{position:relative;width:100%;text-align:center;border-radius:18px;padding:8px 8px 11px;
+  background:linear-gradient(170deg,#FFFFFF,#FBF3EA);
+  border:1px solid rgba(200,160,120,.28);
+  box-shadow:0 2px 4px rgba(150,95,50,.07),inset 0 1px 0 #fff;
+  transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}
+.pet-card:hover{transform:translateY(-3px);
+  box-shadow:0 10px 20px rgba(150,95,50,.16),inset 0 1px 0 #fff}
+.pet-card.on{border-color:#E8A24E;
+  background:linear-gradient(170deg,#FFFDF6,#FFEFDA);
+  box-shadow:0 0 0 2px rgba(232,162,78,.22),0 10px 22px rgba(200,140,70,.20),inset 0 1px 0 #fff}
+.pet-card.lock{opacity:.55;background:linear-gradient(170deg,#FCFAF6,#F6F0E8)}
+/* 卡片里的小展台：一圈暖光托住宠物，和牧场大图是同一套语言 */
+.pet-stage{display:flex;justify-content:center;align-items:flex-end;height:104px;border-radius:14px;
+  background:radial-gradient(64% 54% at 50% 76%,#FFF7E9 0%,rgba(255,247,233,0) 74%)}
+.pet-card svg{width:98px;height:98px;display:block}
+.pet-card b{display:block;font-size:13.5px;margin-top:5px}
+.pet-card .eq{position:absolute;top:7px;right:7px;z-index:2;font-size:11px;color:#fff;font-weight:700;
+  border-radius:999px;padding:2px 8px;
+  background:linear-gradient(135deg,#FFDA85,#E09A2E);
+  box-shadow:0 2px 5px rgba(200,140,40,.35),inset 0 1px 0 rgba(255,255,255,.7)}
+.pet-card.lock .ph{font-size:40px;line-height:104px;color:#D8CFC5}
+.title-bar{margin-top:10px;display:flex;align-items:center;gap:8px;justify-content:center;flex-wrap:wrap}
+.title-chip{background:#F1EDFB;color:var(--purple);border-radius:999px;padding:5px 13px;font-size:13px;font-weight:700}
+.credit{display:block;text-align:center;margin-top:26px;font-size:11.5px;color:#C9BFB4}
+.egg-open{display:inline-block;animation:eggshake .5s ease infinite}
+.egg-card .egg.egg-open svg{width:66px;height:78px}
+@keyframes eggshake{0%,100%{transform:rotate(-10deg) scale(1.05)}50%{transform:rotate(10deg) scale(1.1)}}
+
+/* ================= 2026-11-02 新增：文章库 / 道具 / 衣柜 ================= */
+
+/* ---- 地图上的「当前文章」条 ---- */
+.art-bar{display:flex;align-items:center;gap:12px;margin:10px 0 2px;padding:10px 14px;
+  background:linear-gradient(135deg,#FFF9F0,#FDF2E4);border:1.5px solid #EBD9C2;border-radius:14px}
+.ab-ic{font-size:22px;line-height:1}
+.ab-main{flex:1;min-width:0}
+.ab-t{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ab-t b{font-size:15px;color:var(--ink)}
+.ab-type{font-size:11.5px;font-weight:700;color:var(--brand);background:#FCE7D6;
+  border-radius:999px;padding:2px 9px}
+.ab-hard{font-size:11px;letter-spacing:1px}
+/* 文章难度星：文章库里用的是通用 starsHtml，要单独给这两个位置定色，
+   否则会和页面其它 .on 规则串色，三颗星全是一样的深色 */
+.ac-hard .on,.ab-hard .on{color:#E8A13C}
+.ac-hard .off,.ab-hard .off{color:#E4D9CA}
+.ab-meta{font-size:12px;color:var(--ink3);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.diff-tag{border-radius:999px;padding:2px 9px;font-size:11.5px;font-weight:800}
+.diff-tag.d1{background:#E4F5E7;color:#2F8A4C}
+.diff-tag.d2{background:#FFF1D6;color:#A8720E}
+.diff-tag.d3{background:#FBE1DE;color:#B5432F}
+.chap-speed{font-size:12px;color:var(--ink3);font-weight:600}
+
+/* ---- 文章库抽屉 ---- */
+.artlib{width:min(94vw,980px);max-height:88vh;display:flex;flex-direction:column;
+  background:#FFFDF9;border-radius:20px;padding:18px 20px 14px;
+  box-shadow:0 24px 60px rgba(80,54,30,.24);animation:pop .18s ease}
+@keyframes pop{from{transform:translateY(10px) scale(.985);opacity:0}to{transform:none;opacity:1}}
+.al-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.al-head b{font-size:17px}
+.al-sub{font-size:12px;color:var(--ink3);margin-left:10px}
+.al-x{border:0;background:#F1EAE0;color:#8A7C6C;width:30px;height:30px;border-radius:50%;
+  font-size:15px;cursor:pointer}
+.al-x:hover{background:#E7DCCD}
+.al-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 12px;padding-bottom:2px}
+.al-tabs button{border:1.5px solid #E6DACA;background:#fff;color:#6B5C4C;border-radius:999px;
+  padding:6px 13px;font-size:12.5px;font-weight:700;cursor:pointer;transition:.15s}
+.al-tabs button:hover{border-color:#D9BFA0}
+.al-tabs button.on{background:var(--brand);border-color:var(--brand);color:#fff;
+  box-shadow:0 4px 10px rgba(214,120,60,.25)}
+.al-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px;
+  overflow:auto;padding:2px 4px 6px}
+.al-card{text-align:left;border:1.5px solid #EADFD0;background:#fff;border-radius:14px;
+  padding:12px 13px;cursor:pointer;display:flex;flex-direction:column;gap:4px;transition:.15s}
+.al-card:hover{border-color:#D9BFA0;transform:translateY(-2px);box-shadow:0 8px 18px rgba(120,84,44,.1)}
+.al-card.on{border-color:var(--brand);background:#FFF8F1;box-shadow:0 0 0 3px rgba(214,120,60,.12)}
+.ac-top{display:flex;align-items:center;justify-content:space-between;gap:6px}
+.ac-type{font-size:11px;font-weight:800;color:#8A6A4A;background:#F6EEE3;border-radius:999px;padding:2px 8px}
+.ac-hard{font-size:10px;letter-spacing:1px}
+.ac-title{font-size:15.5px;color:var(--ink);line-height:1.3}
+.ac-author{font-size:11.5px;color:#9A8B7A}
+.ac-desc{font-size:12px;color:#7C6E5E;line-height:1.5;min-height:34px}
+.ac-meta{font-size:11px;color:#B0A294;margin-top:2px}
+.al-empty{grid-column:1/-1;text-align:center;color:var(--ink3);padding:30px 0}
+.al-foot{font-size:11.5px;color:#B0A294;text-align:center;margin-top:10px}
+
+/* ---- 指位图例 + 道具条同一行（2026-11-02 按标注二次调整） ----
+   图例原来在键盘框内部、跟着键盘一起缩放，右侧半行一直空着；
+   现在提到键盘外面，和道具条并排占一行：左图例、中道具、右目标键提示，
+   指法图仍单独占一行并保持居中。 */
+.legend-row{flex:0 0 auto;display:flex;align-items:center;gap:12px;
+  margin-top:6px;padding:0 2px;flex-wrap:wrap}
+.legend-row > .kb-legend{margin:0;padding:0;flex:0 1 auto}
+/* 道具条居右（2026-11-02）：虚线框收缩到内容宽度，靠右贴齐页边；
+   左端图例保持不动，中间留白归到图例一侧。右端出现「目标键」提示时，
+   道具框自动让到它左侧，两者间隔由 legend-row 的 gap 控制。 */
+.legend-row > .item-bar{flex:0 1 auto;margin-top:0;margin-left:auto;min-width:0;
+  max-width:100%;justify-content:flex-end}
+.legend-row > .kb-tip{margin-left:auto;color:var(--brand);font-weight:700;
+  font-size:12.5px;white-space:nowrap}
+
+/* ---- 练习页道具条 ---- */
+.item-bar{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:7px;
+  padding:6px 9px;background:#FBF7F0;border:1px dashed #E4D8C7;border-radius:12px}
+.ib-tip{font-size:11px;color:#B0A294;font-weight:700;margin-right:2px}
+.ib-dot{display:flex;align-items:center;gap:5px;border:1.4px solid #E6DACA;background:#fff;
+  border-radius:10px;padding:4px 9px;cursor:pointer;font-size:11.5px;color:#5E5145;transition:.15s}
+.ib-dot:hover{border-color:#D9BFA0;background:#FFFCF7}
+.ib-dot .ib-ic{font-size:13px}
+.ib-dot .ib-nm{font-weight:700}
+.ib-dot .ib-n{color:#A99A89;font-size:10.5px}
+.ib-dot.off{opacity:.72}
+.ib-dot.on{border-color:#63A97A;background:#F1FAF3;color:#2F7A48}
+.ib-dot.on .ib-n{color:#3E9E5B;font-weight:700}
+/* 提示卡生效：目标键持续呼吸，比静态高亮更像"有人在提醒你" */
+.play-card.hint-on .kb-k.hot{animation:hintPulse 1.25s ease-in-out infinite}
+@keyframes hintPulse{0%,100%{box-shadow:0 0 0 0 rgba(214,120,60,.55)}
+  55%{box-shadow:0 0 0 7px rgba(214,120,60,0)}}
+
+/* ---- 道具小商店（练习页弹层 / 牧场区块共用） ---- */
+.shop-pop{width:min(94vw,560px);max-height:86vh;overflow:auto;background:#FFFDF9;border-radius:20px;
+  padding:18px 20px 16px;box-shadow:0 24px 60px rgba(80,54,30,.24)}
+.sp-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.sp-head b{font-size:16px}
+.sp-coin{font-size:13px;font-weight:800;color:#A8720E;background:#FFF2D8;border-radius:999px;padding:3px 11px}
+.sp-list{display:flex;flex-direction:column;gap:10px}
+.sp-row{display:flex;gap:11px;align-items:flex-start;background:#fff;border:1.4px solid #EDE2D3;
+  border-radius:13px;padding:11px 12px}
+.sp-ic{font-size:20px;line-height:1.2}
+.sp-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.sp-main b{font-size:13.5px;color:var(--ink)}
+.sp-desc{font-size:12px;color:#7C6E5E;line-height:1.45}
+.sp-tip{font-size:11px;color:#B0A294}
+.sp-buy{display:flex;flex-direction:column;align-items:flex-end;gap:5px}
+.sp-have{font-size:10.5px;color:#A99A89}
+.sp-foot{font-size:11.5px;color:#B0A294;text-align:center;margin:12px 0 10px}
+
+/* ---- 牧场：衣柜 ---- */
+.equip-line{margin-top:12px;font-size:12.5px;color:var(--ink3);display:flex;align-items:center;
+  gap:6px;flex-wrap:wrap}
+.eq-chip{background:#F1EDFB;color:#6B4FB8;border-radius:999px;padding:2px 9px;font-size:11.5px;
+  font-weight:700}
+.equip-hint{font-size:11px;color:#B7A997;margin-top:6px;line-height:1.5}
+/* 没有宠物时的"空衣柜"提示：先有伙伴，才谈得上打扮 */
+.equip-empty{margin-top:12px;background:#FBF6EE;border:1.5px dashed #E7D6C3;border-radius:12px;
+  padding:11px 13px;font-size:12.5px;font-weight:700;color:#8A7A66;line-height:1.7}
+.equip-empty span{display:block;font-weight:400;font-size:11.5px;color:#B7A997;margin-top:2px}
+.wardrobe,.item-shop{margin-top:16px;background:#FFFDF9;border:1.5px solid #EDE2D3;border-radius:16px;
+  padding:13px 15px 15px}
+.w-head,.is-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.w-head b,.is-head b{font-size:14.5px;color:var(--ink)}
+.w-head span,.is-head span{font-size:11.5px;color:#B0A294}
+.w-coin{margin-left:auto;font-size:12px;font-weight:800;color:#A8720E;background:#FFF2D8;
+  border-radius:999px;padding:2px 10px}
+.w-body{display:flex;flex-direction:column;gap:10px}
+.deco-sec{border-top:1px dashed #EBDDC9;padding-top:9px}
+.deco-sec:first-child{border-top:0;padding-top:0}
+.ds-head{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+.ds-ic{font-size:13px}
+.ds-head b{font-size:12.5px;color:#5E5145}
+.ds-worn{font-size:11px;color:var(--brand);background:#FCE7D6;border-radius:999px;padding:1px 8px}
+.ds-worn.none{color:#B0A294;background:#F4EEE6}
+.deco-row{display:flex;gap:9px;flex-wrap:wrap}
+.deco-dot{position:relative;width:54px;height:54px;border-radius:13px;border:1.5px solid #E6DACA;
+  background:#fff;cursor:pointer;padding:3px;display:flex;align-items:center;justify-content:center;
+  transition:.15s}
+.deco-dot svg{width:100%;height:100%}
+.deco-dot:hover{border-color:#D9BFA0;transform:translateY(-2px)}
+.deco-dot.on{border-color:var(--brand);background:#FFF6EC;box-shadow:0 0 0 3px rgba(214,120,60,.14)}
+.deco-dot.buy{opacity:.92}
+.deco-dot.buy svg{opacity:.5}
+.dd-price{position:absolute;bottom:-1px;right:-1px;font-size:9.5px;font-weight:800;color:#fff;
+  background:#C9912F;border-radius:8px 0 11px 0;padding:1px 4px}
+/* 道具商店卡片 */
+.is-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:11px}
+.is-card{background:#fff;border:1.4px solid #EDE2D3;border-radius:13px;padding:11px 12px;
+  display:flex;flex-direction:column;gap:5px}
+.ic-top{display:flex;align-items:center;gap:7px}
+.ic-ic{font-size:16px}
+.ic-top b{font-size:13px;color:var(--ink);flex:1}
+.ic-have{font-size:10.5px;color:#A99A89;background:#F6F1E9;border-radius:999px;padding:1px 7px}
+.ic-desc{font-size:11.5px;color:#7C6E5E;line-height:1.5;min-height:32px}
+.ic-tip{font-size:10.5px;color:#B0A294;line-height:1.4;margin-bottom:3px}
+.is-card .btn{align-self:flex-start}
+.ranch-tip{font-size:12.5px;color:var(--ink3);margin-top:10px}
+
+/* ================= 2026-11-02 排版强化：非练习页统一放大 =================
+   背景：机房学生机 1080p、坐距一两米，原来 11~15px 的字看着吃力，
+   而且地图一排挤 7 张卡片，10 关排成 7+3，右上角空一大片。
+   做法：
+     1) 所有规则都带 #app / #view 前缀提高特异性，只作用于「地图 / 排行榜 /
+        牧场 / 文章库」这几个页面，练习页（.play-*、键盘、指法图）一条不碰；
+     2) 字号整体上调约 2~4px，标题 19~22px、正文 14~16.5px、辅助 13~14.5px；
+     3) 图标同步放大：阶段 chip 21px、文章图标 28px、部位图标 17px、道具图标 22px；
+     4) 减少空白：关卡由 7 列改 5 列（10 关正好两行铺满），卡片固定最小高度，
+        排行榜行高与头像放大，衣柜/商店卡片同步加高，页面不再上挤下空；
+     5) 窄屏（1000 / 760 / 520）逐级回退，保证小屏不挤、不横向滚动。 */
+
+/* ---------- 顶栏 ---------- */
+#app .top{padding:13px 20px;border-radius:20px;gap:14px}
+#app .logo{font-size:26px;letter-spacing:1.5px}
+#app .logo small{font-size:14px;margin-left:8px}
+#app .meter{gap:10px}
+#app .top .chip{padding:7px 15px;font-size:15.5px;gap:7px;font-weight:700}
+#app .top .pet-mini{width:52px;height:52px;border-radius:15px}
+#app .tabs{gap:9px;margin-top:16px}
+#app .tabs button{padding:12px 24px;border-radius:14px;font-size:17px}
+#app .demo-bar{padding:11px 18px;font-size:15px;line-height:1.55;border-radius:14px}
+#app .off-bar{padding:52px 34px;max-width:520px}
+#app .off-bar .big{font-size:52px}
+#app .off-bar h2{font-size:24px}
+#app .off-bar p{font-size:16.5px;line-height:1.8}
+#app .credit{margin-top:18px;font-size:13px}
+
+/* ---------- 冒险地图 ---------- */
+/* 篇章按钮：八大篇章固定 4 列两行。
+   原来 flex 自动换行，8 个按钮会排成 7+1 —— 最后一行孤零零一个，
+   看着像少了一个篇章。窄屏（≤1000px）自动降成 2 列。 */
+#view .map-head{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:18px 0 12px}
+#view .stage-chip{justify-content:center;padding:11px 14px;border-radius:14px;font-size:16px;gap:8px}
+#view .stage-chip .ic{font-size:21px}
+#view .stage-desc{font-size:15px;line-height:1.6;margin:0 0 14px 3px}
+#view .chap-bar{gap:12px;margin:8px 0 16px;flex-wrap:wrap}
+#view .chap-bar b{font-size:20px}
+#view .diff-tag{font-size:13.5px;padding:4px 12px}
+#view .chap-done{font-size:14.5px;margin-left:10px}
+#view .chap-speed{font-size:14.5px}
+#view .chap-nav{gap:8px}
+#view .chap-nav button{width:42px;height:42px;border-radius:12px;font-size:20px}
+#view .chap-nav span{font-size:15px;min-width:88px}
+/* 固定 5 列：10 关正好两行铺满，不会再出现 7+3 / 6+4 那种最后一行空半排。
+   #app 上限 1180px，所以 5 列每张 200px 出头，宽屏也不会被拉成大方块。 */
+#view .level-grid{grid-template-columns:repeat(5,1fr);gap:14px}
+#view .lv{padding:18px 18px 16px;border-radius:18px;min-height:152px;
+  display:flex;flex-direction:column;justify-content:center}
+#view .lv .no{font-size:14.5px}
+#view .lv .nm{font-size:19.5px;margin:5px 0 9px}
+#view .lv .stars{font-size:17px;letter-spacing:3px}
+#view .lv .best{font-size:14px;margin-top:7px}
+#view .lv .boss-tag{top:-11px;font-size:12.5px;padding:3px 10px}
+#view .lv .lock-tag{font-size:19px;top:14px;right:14px}
+
+/* ---------- 当前文章条 ---------- */
+#view .art-bar{padding:13px 18px;gap:15px;border-radius:16px;margin:12px 0 2px}
+#view .ab-ic{font-size:28px}
+#view .ab-t b{font-size:18.5px}
+#view .ab-type{font-size:13px;padding:3px 11px}
+#view .ab-hard{font-size:13px;letter-spacing:1.5px}
+#view .ab-meta{font-size:14px;margin-top:5px;white-space:normal;line-height:1.5}
+
+/* ---------- 排行榜 ---------- */
+#view .lb-card{padding:24px 26px 26px;border-radius:22px}
+#view .lb-title{font-weight:800;font-size:22px;margin-bottom:4px}
+#view .lb-sub{font-size:14.5px;color:var(--ink3);margin-bottom:14px;line-height:1.55}
+#view .lb-tabs{gap:8px;margin-bottom:18px}
+#view .lb-tabs button{padding:10px 20px;border-radius:12px;font-size:16px}
+#view .lb-row{padding:15px 12px;gap:14px;border-radius:16px}
+#view .lb-rank{width:44px;height:44px;border-radius:13px;font-size:19px}
+#view .lb-pet{width:56px;height:56px;border-radius:15px}
+#view .lb-pet.empty{font-size:24px}
+#view .lb-name{font-size:18.5px}
+#view .lb-name small{font-size:14px;margin-left:7px}
+#view .lb-val{font-size:23px}
+#view .lb-val small{font-size:14px;margin-left:4px}
+#view .lb-empty{color:var(--ink3);padding:34px 0;text-align:center;font-size:16px;line-height:1.6}
+
+/* ---------- 牧场：舞台与侧栏 ---------- */
+#view .ranch-grid{grid-template-columns:382px 1fr;gap:18px;margin-top:18px}
+#view .ranch-side{padding:22px;border-radius:22px;align-self:flex-start;position:sticky;top:16px}
+#view .ranch-side h3{font-size:21px}
+#view .ranch-side .mood{font-size:15px;margin-top:5px;line-height:1.5}
+#view .stage-pet{min-height:198px}
+#view .stage-pet svg{width:194px;height:194px}
+#view .stage-empty{font-size:68px;line-height:182px}
+#view .stage-nav{width:38px;height:38px;font-size:21px}
+#view .title-bar{margin-top:14px;gap:10px}
+#view .title-chip{font-size:15.5px;padding:7px 16px}
+#view .next-title{font-size:13.5px;color:var(--ink3)}
+#view .equip-line{font-size:14.5px;margin-top:14px;gap:8px;line-height:1.7}
+#view .eq-chip{font-size:13.5px;padding:3px 11px}
+#view .equip-hint{font-size:13px;margin-top:8px;line-height:1.6}
+#view .equip-empty{font-size:15px;padding:14px 16px;margin-top:14px;border-radius:14px}
+#view .equip-empty span{font-size:13px;margin-top:4px}
+#view .egg-card{padding:20px;border-radius:20px;margin-top:18px}
+#view .egg-card .egg svg{width:64px;height:76px}
+#view .egg-t{font-weight:700;font-size:17px;margin:8px 0 3px}
+#view .egg-s{font-size:14px;color:var(--ink3);line-height:1.5;margin-bottom:12px}
+
+/* ---------- 伙伴网格 ---------- */
+#view .pet-grid{grid-template-columns:repeat(auto-fill,minmax(152px,1fr));gap:14px}
+#view .pet-card{padding:12px 12px 16px;border-radius:20px}
+#view .pet-stage{height:134px;border-radius:16px}
+#view .pet-card svg{width:120px;height:120px}
+#view .pet-card b{font-size:17px;margin-top:7px}
+#view .pet-card .eq{font-size:13px;padding:3px 10px;top:9px;right:9px}
+#view .pet-card.lock .ph{font-size:52px;line-height:134px}
+#view .lock-tip{font-weight:400;font-size:13px;color:var(--ink3);margin-top:2px}
+
+/* ---------- 衣柜 ---------- */
+#view .wardrobe,#view .item-shop{margin-top:20px;padding:18px 20px 20px;border-radius:18px}
+#view .w-head,#view .is-head{gap:12px;margin-bottom:14px}
+#view .w-head b,#view .is-head b{font-size:19px}
+#view .w-head span,#view .is-head span{font-size:13.5px;line-height:1.5}
+#view .w-coin{font-size:15px;padding:4px 13px}
+#view .w-body{gap:14px}
+#view .deco-sec{padding-top:12px}
+#view .ds-head{gap:9px;margin-bottom:10px}
+#view .ds-ic{font-size:17px}
+#view .ds-head b{font-size:16px}
+#view .ds-worn{font-size:13px;padding:2px 10px}
+#view .deco-row{gap:12px;justify-content:flex-start}
+#view .deco-dot{width:68px;height:68px;border-radius:15px;padding:4px}
+#view .dd-price{font-size:12px;padding:2px 6px;border-radius:9px 0 12px 0}
+
+/* ---------- 道具商店 ---------- */
+#view .is-grid{grid-template-columns:repeat(auto-fill,minmax(238px,1fr));gap:14px}
+#view .is-card{padding:15px 16px;gap:7px;border-radius:15px}
+#view .ic-ic{font-size:22px}
+#view .ic-top b{font-size:16px}
+#view .ic-have{font-size:12.5px;padding:2px 9px}
+#view .ic-desc{font-size:14px;line-height:1.6;min-height:44px}
+#view .ic-tip{font-size:12.5px;line-height:1.5;margin-bottom:5px}
+#view .is-card .btn{align-self:stretch;font-size:15.5px;padding:9px 0;border-radius:12px}
+#view .ranch-tip{font-size:14.5px;line-height:1.6;margin-top:14px}
+#view .btn{font-size:16.5px;padding:11px 22px;border-radius:13px}
+#view .btn.sm{font-size:14.5px;padding:8px 16px}
+
+/* ---------- 文章库抽屉（从地图打开，一并放大） ---------- */
+.artlib{width:min(96vw,1080px);padding:22px 24px 18px;border-radius:22px}
+.al-head b{font-size:21px}
+.al-sub{font-size:14px;margin-left:12px}
+.al-x{width:38px;height:38px;font-size:19px}
+.al-tabs{gap:10px;margin:16px 0 14px}
+.al-tabs button{padding:9px 18px;font-size:15px}
+.al-grid{grid-template-columns:repeat(auto-fill,minmax(248px,1fr));gap:14px}
+.al-card{padding:16px 17px;gap:6px;border-radius:16px}
+.ac-type{font-size:13px;padding:3px 10px}
+.ac-hard{font-size:12.5px}
+.ac-title{font-size:19px;line-height:1.35}
+.ac-author{font-size:13.5px}
+.ac-desc{font-size:14px;line-height:1.6;min-height:44px}
+.ac-meta{font-size:13px;margin-top:3px}
+.al-empty{font-size:16px;padding:40px 0}
+.al-foot{font-size:13px;margin-top:12px;line-height:1.5}
+
+/* ---------- 按视口高度铺开（仅非练习页） ----------
+   地图内容本来只有两行卡片，1080p 屏下面会空出三四百像素。
+   这里让 #app 变成撑满一屏的弹性列：关卡网格吃掉剩余高度，
+   两行卡片等比长高（封顶 500px，避免超宽屏上卡片变成大空块），
+   页脚自然落到屏幕底部。练习页不挂 .ui-big，完全不受影响。 */
+#app.ui-big{display:flex;flex-direction:column;min-height:100vh}
+#app.ui-big #view{flex:1 1 auto;display:flex;flex-direction:column;min-height:0}
+#app.ui-big .map-page{flex:1 1 auto;display:flex;flex-direction:column;min-height:0}
+#app.ui-big #view .level-grid{flex:1 1 auto;grid-auto-rows:minmax(150px,1fr);min-height:0;
+  max-height:min(56vh,500px)}
+#app.ui-big .credit{margin-top:auto;padding-top:16px}
+
+/* ---------- 屏幕适配：宽屏饱满，窄屏不挤 ---------- */
+@media (max-width:1000px){
+  #app .logo{font-size:23px}
+  #app .tabs button{padding:11px 19px;font-size:16px}
+  #view .level-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+  #view .ranch-grid{grid-template-columns:1fr}
+  #view .ranch-side{position:static}
+  #view .stage-pet{min-height:180px}
+  #view .stage-pet svg{width:176px;height:176px}
+  #view .lv{padding:16px;min-height:142px}
+  #view .lv .nm{font-size:18px}
+}
+@media (max-width:760px){
+  #app{padding:10px 12px 18px}
+  #app .top{padding:10px 14px;border-radius:16px}
+  #app .logo{font-size:20px}
+  #app .logo small{display:none}
+  #app .top .chip{padding:6px 12px;font-size:14px}
+  #app .top .pet-mini{width:44px;height:44px}
+  #app .tabs{gap:7px}
+  #app .tabs button{padding:10px 14px;font-size:15px;flex:1}
+  #view .map-head{grid-template-columns:repeat(2,1fr);gap:8px}
+  #view .stage-chip{padding:9px 13px;font-size:14.5px}
+  #view .stage-chip .ic{font-size:18px}
+  #view .chap-bar b{font-size:18px}
+  #view .chap-speed,#view .chap-done{font-size:13.5px}
+  #view .level-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:11px}
+  #view .lv{min-height:132px;padding:14px}
+  #view .lv .nm{font-size:17.5px}
+  #view .lb-card{padding:18px 16px}
+  #view .lb-name{font-size:16.5px}
+  #view .lb-val{font-size:20px}
+  #view .deco-dot{width:60px;height:60px}
+  #view .is-grid,#view .pet-grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
+  #view .ranch-grid{gap:14px}
+  .artlib{width:96vw;padding:16px 16px 12px}
+  .al-grid{grid-template-columns:1fr 1fr}
+  .ac-title{font-size:16.5px}
+  .ac-desc{font-size:13px;min-height:auto}
+}
+@media (max-width:520px){
+  .al-grid{grid-template-columns:1fr}
+  #view .level-grid{grid-template-columns:1fr 1fr}
+}
+/* 窄屏：图例、道具条、目标键提示按顺序换行，谁都不被压扁。
+   注意：这段必须放在 .legend-row 主样式之后 —— 同特异性下后写的赢。 */
+@media (max-width:860px){
+  .legend-row{align-items:flex-start}
+  .legend-row > .item-bar{flex:1 1 100%}
+  .legend-row > .kb-tip{margin-left:0}
+}
+</style>
+</head>
+<body>
+<div id="app"><div style="text-align:center;padding:80px 0;color:#B9AFA4">正在登上打字冒险岛…</div></div>
+<script src="/student/ui-dialog.js?v=20261102"></script>
+<script src="/typing/pinyin.js?v=20261102w"></script>
+<script src="/typing/typing-data.js?v=20261102x"></script>
+<script src="/typing/articles.js?v=20261103a"></script>
+<script src="/typing/levels.js?v=20261102x"></script>
+<script>
+(function () {
+'use strict';
+var $ = function (s) { return document.querySelector(s); };
+var app = $('#app');
+var S = {
+  role: null, demo: false, me: null, progress: null, config: { enabled: false, grades: [] },
+  view: 'map', map: { stage: 1, chapter: 1 }, play: null,
+  lb: { scope: 'week', rows: [], class_name: '' },
+  ranch: { pet: '', decos: [] },
+  /* 文章阅读：art.id 是当前在读的文章，art.type 是文章库切到的分类 */
+  art: { id: '', type: 'all' },
+  shop: false,
+  eggOpening: false
+};
+/* 文章选择不涉及成绩，存本机即可（换机器会回到默认课文，不影响进度） */
+function readArtId() {
+  try { return localStorage.getItem('wb-typing-art') || ''; } catch (e) { return ''; }
+}
+function saveArtId(id) {
+  try { localStorage.setItem('wb-typing-art', id || ''); } catch (e) {}
+}
+
+/* ---------------- 基础 ---------------- */
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+function api(url, opts) {
+  return fetch(url, Object.assign({ credentials: 'same-origin' }, opts || {}))
+    .then(function (r) { return r.json().catch(function () { return {}; }); });
+}
+function starsHtml(n) {
+  var out = '';
+  for (var i = 1; i <= 3; i++) out += '<span class="' + (i <= n ? 'on' : 'off') + '">★</span>';
+  return out;
+}
+function fmtSpeed(v, mode) { return (Math.round(v * 10) / 10) + (mode === 'cn' ? ' 字/分' : ' KPM'); }
+/* 全站统一弹窗（app/student/ui-dialog.js）：提示 / 确认 / 警告 / 吐司
+   都在这里转发，组件没加载成功时退回原生 alert，保证提示不丢。 */
+function uiAlert(o) {
+  if (window.WBUI && WBUI.alert) return WBUI.alert(o);
+  try { alert(typeof o === 'string' ? o : ((o && (o.title ? o.title + '：' : '') + o.message) || '')); } catch (e) {}
+}
+function uiConfirm(o) {
+  if (window.WBUI && WBUI.confirm) return WBUI.confirm(o);
+  var ok = false;
+  try { ok = confirm(typeof o === 'string' ? o : ((o && ((o.title ? o.title + '\n' : '') + (o.message || ''))) || '')); } catch (e) {}
+  return Promise.resolve(ok);
+}
+function uiToast(msg, tone) {
+  if (window.WBUI && WBUI.toast) return WBUI.toast(msg, tone);
+}
+
+/* ---------------- 演示数据 ---------------- */
+var DEMO = {
+  me: { id: 'demo', name: '演示同学', class_id: '0', class_name: '三年(1)班' },
+  progress: {
+    stars: 26, week_stars: 12, coins: 180, eggs: 1,
+    pets: ['cat', 'dog'], decos: ['hat-red', 'crown', 'sunglass'],
+    equip: { pet: 'cat', decos: ['hat-red'] },
+    best: { 's1c1l1': { stars: 3, wpm: 34 }, 's1c1l2': { stars: 3, wpm: 31 }, 's1c1l3': { stars: 2, wpm: 27 },
+            's1c1l4': { stars: 2, wpm: 26 }, 's1c1l5': { stars: 3, wpm: 36 }, 's1c1l6': { stars: 1, wpm: 22 },
+            's1c1l7': { stars: 2, wpm: 28 }, 's1c1l8': { stars: 2, wpm: 29 }, 's1c1l9': { stars: 1, wpm: 24 },
+            's1c1l10': { stars: 2, wpm: 27 }, 's2c1l1': { stars: 3, wpm: 41 }, 's2c1l2': { stars: 2, wpm: 36 } }
+  },
+  lb: [
+    { name: '李晓明', value: 18, pet: 'dog', decos: ['crown'] },
+    { name: '王小虎', value: 15, pet: 'dino', decos: [] },
+    { name: '张思思', value: 13, pet: 'unicorn', decos: ['bow'] },
+    { name: '陈快乐', value: 9, pet: '', decos: [] },
+    { name: '演示同学', value: 12, pet: 'cat', decos: ['hat-red'], me: true }
+  ]
+};
+var DEMO_LB_NAMES = ['李晓明','王小虎','张思思','陈快乐','刘一一','赵小满','孙齐齐','周多多'];
+
+/* ---------------- 启动 ---------------- */
+function boot() {
+  var qs = new URLSearchParams(location.search);
+  S.art.id = readArtId() || (window.TA ? TA.DEFAULT_ID : '');
+  /* 学生端框架内嵌模式：收窄边距，视觉上融入外层页面 */
+  if (qs.get('embed') === '1') document.body.classList.add('embed');
+  api('/api/v2/typing/config').then(function (cfg) {
+    if (cfg && cfg.ok) S.config = { enabled: !!cfg.enabled, grades: cfg.grades || [] };
+    return api('/api/v2/typing/me');
+  }).then(function (me) {
+    if (me && me.ok) {
+      S.role = 'student'; S.demo = false;
+      S.me = me.me; S.progress = me.progress; S.config = me.config || S.config;
+      if (!S.progress.equip) S.progress.equip = { pet: '', decos: [] };
+      S.ranch = { pet: S.progress.equip.pet || '', decos: S.progress.equip.decos || [] };
+    } else {
+      S.demo = true;
+      S.me = DEMO.me; S.progress = JSON.parse(JSON.stringify(DEMO.progress));
+      try {
+        var saved = localStorage.getItem('wb-typing-demo');
+        if (saved) { var p = JSON.parse(saved); if (p && p.best) S.progress = p; }
+      } catch (e) {}
+      S.ranch = { pet: S.progress.equip.pet || '', decos: S.progress.equip.decos || [] };
+      if (me && me.role === 'teacher') S.role = 'teacher';
+    }
+    var sc = qs.get('screen');
+    if (sc && ['map', 'lb', 'ranch'].indexOf(sc) >= 0) S.view = sc;
+    if (qs.get('screen') === 'play' || qs.get('play') === '1') {
+      var st = parseInt(qs.get('stage') || '1', 10);
+      var ch = parseInt(qs.get('chapter') || '1', 10);
+      var lv = parseInt(qs.get('level') || '2', 10);
+      startLevel(st, ch, lv);
+      return;
+    }
+    render();
+  }).catch(function () {
+    S.demo = true; S.me = DEMO.me; S.progress = JSON.parse(JSON.stringify(DEMO.progress));
+    render();
+  });
+}
+function demoSave() {
+  if (!S.demo) return;
+  try { localStorage.setItem('wb-typing-demo', JSON.stringify(S.progress)); } catch (e) {}
+}
+
+/* ---------------- 解锁规则 ---------------- */
+function passed(st, ch, lv) {
+  var b = (S.progress.best || {})['s' + st + 'c' + ch + 'l' + lv];
+  return b && b.stars >= 1;
+}
+function passedCount(st, ch) {
+  var n = 0;
+  for (var i = 1; i <= 10; i++) if (passed(st, ch, i)) n++;
+  return n;
+}
+function chapterOpen(st, ch) { return ch === 1 || passedCount(st, ch - 1) >= 8; }
+function levelOpen(st, ch, lv) {
+  if (!chapterOpen(st, ch)) return false;
+  return lv === 1 || passed(st, ch, lv - 1);
+}
+function maxChapter(st) {
+  var ch = 1;
+  while (chapterOpen(st, ch + 1) && ch < 200) ch++;
+  return ch;
+}
+
+/* ---------------- 渲染框架 ---------------- */
+function render() {
+  var st = TD.titleFor(S.progress.stars || 0);
+  var petSvg = TD.petSvg(S.ranch.pet, S.ranch.decos);
+  var html =
+    '<div class="top">' +
+      '<span class="logo">⌨️ 打字冒险岛<small>班级工作台</small></span>' +
+      '<div class="meter">' +
+        '<span class="chip">⭐ ' + (S.progress.stars || 0) + ' 星</span>' +
+        '<span class="chip b">🪙 ' + (S.progress.coins || 0) + '</span>' +
+        '<span class="chip p">' + esc(st.name) + '</span>' +
+        (S.progress.eggs ? '<span class="chip b">🥚 ×' + S.progress.eggs + '</span>' : '') +
+        '<span class="pet-mini" title="出战宠物">' + (petSvg || '🐾') + '</span>' +
+      '</div>' +
+    '</div>' +
+    (S.demo ? '<div class="demo-bar">🎬 演示模式：当前未登录，展示的是示例数据，成绩只存在本机。' +
+      '学生登录后进入这里，成绩会真实记录并上榜。</div>' : '') +
+    (S.role === 'student' && !S.config.enabled
+      ? '<div class="off-bar"><div class="big">🚧</div><h2>老师还没开放打字练习</h2>' +
+        '<p>等老师在教师端打开开关，这里就会变成打字冒险岛。<br>先回「今日」页看看别的任务吧。</p></div>'
+      :
+      '<div class="tabs">' +
+        tabBtn('map', '🗺 冒险地图') + tabBtn('lb', '🏆 排行榜') + tabBtn('ranch', '🐾 宠物牧场') +
+      '</div>' + '<div id="view"></div>') +
+    '<span class="credit">打字冒险岛 · 班级工作台 2.0 · 牛老师设计</span>';
+  app.classList.add('ui-big');   /* 非练习页：内容按视口高度铺开，减少底部空白 */
+  app.innerHTML = html;
+  var v = $('#view');
+  if (!v) return;
+  if (S.view === 'map') v.innerHTML = viewMap();
+  else if (S.view === 'lb') { v.innerHTML = viewLb(); loadLb(); }
+  else v.innerHTML = viewRanch();
+  bindView();
+}
+function tabBtn(id, name) {
+  return '<button class="' + (S.view === id ? 'on' : '') + '" data-tab="' + id + '">' + name + '</button>';
+}
+function bindView() {
+  document.querySelectorAll('[data-tab]').forEach(function (b) {
+    b.onclick = function () { S.view = b.getAttribute('data-tab'); render(); };
+  });
+  document.querySelectorAll('[data-lv]').forEach(function (b) {
+    b.onclick = function () {
+      var p = b.getAttribute('data-lv').split(',');
+      if (b.classList.contains('lock')) return;
+      try {
+        startLevel(+p[0], +p[1], +p[2]);
+      } catch (err) {
+        uiAlert({ title: '关卡打不开', tone: 'err', message: '这一关加载出错了，刷新页面再试一次。\n如果还是不行，请截图告诉老师。' });
+      }
+    };
+  });
+  document.querySelectorAll('[data-chap]').forEach(function (b) {
+    b.onclick = function () {
+      S.map.chapter = +b.getAttribute('data-chap');
+      render();
+    };
+  });
+  document.querySelectorAll('[data-stage]').forEach(function (b) {
+    b.onclick = function () {
+      S.map.stage = +b.getAttribute('data-stage');
+      S.map.chapter = 1;
+      render();
+    };
+  });
+  var ao = $('#artOpen');
+  if (ao) ao.onclick = openArtLib;
+  bindLb();
+  bindRanch();
+}
+
+/* ---------------- 冒险地图 ---------------- */
+function viewMap() {
+  var stg = S.map.stage;
+  var stage = TD.stageById(stg) || TD.STAGES[0];
+  var ch = Math.min(S.map.chapter, maxChapter(stg));
+  S.map.chapter = ch;
+  var chips = TD.STAGES.map(function (s) {
+    return '<button class="stage-chip' + (s.id === stg ? ' on' : '') + '" data-stage="' + s.id + '">' +
+      '<span class="ic">' + s.icon + '</span>' + s.name + '</button>';
+  }).join('');
+  var nodes = '';
+  for (var lv = 1; lv <= 10; lv++) {
+    var open = levelOpen(stg, ch, lv);
+    var boss = lv === 10;
+    var b = (S.progress.best || {})['s' + stg + 'c' + ch + 'l' + lv];
+    var stars = b ? b.stars : 0;
+    nodes += '<button class="lv' + (boss ? ' boss' : '') + (open ? '' : ' lock') + '" data-lv="' +
+      stg + ',' + ch + ',' + lv + '">' +
+      (boss ? '<span class="boss-tag">BOSS</span>' : '') +
+      (!open ? '<span class="lock-tag">🔒</span>' : '') +
+      '<div class="no">第 ' + lv + ' 关</div>' +
+      '<div class="nm">' + esc(TL.topicOf(stg, lv) || levelName(stage, boss)) + '</div>' +
+      '<div class="stars">' + (open ? starsHtml(stars).replace(/class="on"/g, 'class="on"').replace(/class="off"/g, 'class="off"') : '') + '</div>' +
+      (b ? '<div class="best">最好 ' + (Math.round(b.wpm * 10) / 10) + (stage.lang === 'cn' ? ' 字/分' : ' KPM') + '</div>' : '') +
+      '</button>';
+  }
+  var done = passedCount(stg, ch);
+  var diff = TL.difficulty(stg, ch);
+  var unit = stage.lang === 'cn' ? ' 字/分' : ' KPM';
+  return '<div class="map-page"><div class="map-head">' + chips + '</div>' +
+    '<div class="stage-desc">' + esc(stage.icon + ' ' + stage.desc) + '</div>' +
+    (stg === 6 ? artBar() : '') +
+    '<div class="chap-bar"><b>' + stage.icon + ' 第 ' + ch + ' 卷</b>' +
+      '<span class="diff-tag d' + diff.n + '">' + diff.name + '</span>' +
+      '<span class="chap-done">本卷已通关 ' + done + '/10</span>' +
+      '<span class="chap-speed">速度线 ' + TL.speedLine(stg, ch) + unit + '</span>' +
+      '<span class="chap-nav">' +
+        '<button data-chap="' + Math.max(1, ch - 1) + '" ' + (ch <= 1 ? 'disabled' : '') + '>‹</button>' +
+        '<span>卷 ' + ch + ' / 无限</span>' +
+        '<button data-chap="' + (ch + 1) + '" ' + (chapterOpen(stg, ch + 1) ? '' : 'disabled') + '>›</button>' +
+      '</span></div>' +
+    '<div class="level-grid">' + nodes + '</div>' +
+  '</div>';
+}
+
+/* ---------------- 文章阅读：当前文章条 ---------------- */
+/* 关卡卡片上的名字：不同篇章做的事不一样，统一写「输入挑战」学生分不清。
+   有具体知识点的篇章（1/4/7/8）走 TL.topicOf，这里只兜底。 */
+function levelName(stage, boss) {
+  if (boss) return stage.type === 'keys' ? '守护者挑战' : '连读挑战';
+  if (stage.type === 'keys') return '键位训练';
+  if (stage.id === 4) return '大小写与标点';
+  if (stage.id === 7) return '小键盘';
+  if (stage.id === 8) return '中英混排';
+  if (stage.id === 5) return '打词语';
+  if (stage.id === 6) return '读一句';
+  return '输入挑战';
+}
+function artBar() {
+  var a = (window.TA) ? TA.get(S.art.id) : null;
+  if (!a) return '';
+  var ch = S.map.chapter;
+  var at = ((ch - 1) * 10) % a.count;       /* 本卷第 1 关从第几句开始 */
+  var left = a.count - at;
+  return '<div class="art-bar">' +
+    '<span class="ab-ic">📖</span>' +
+    '<div class="ab-main">' +
+      '<div class="ab-t"><b>' + esc(a.title) + '</b>' +
+        '<span class="ab-type">' + esc(a.typeName) + '</span>' +
+        '<span class="ab-hard">' + starsHtml(a.hard) + '</span></div>' +
+      '<div class="ab-meta">' + esc(a.author || '') + ' · ' + a.count + ' 句 / ' + a.chars + ' 字' +
+        ' · 本卷从第 ' + (at + 1) + ' 句开始，还剩 ' + left + ' 句' + '</div>' +
+    '</div>' +
+    '<button class="btn line sm" id="artOpen">换一篇</button>' +
+  '</div>';
+}
+/* ---------------- 文章库抽屉 ----------------
+   分类用按钮条切换（不用下拉：机房触屏和鼠标都好点），
+   卡片一行三列，每张都把「类型 / 难度 / 作者 / 句数字数」写全，
+   学生不用点进去就知道这篇适不适合自己。 */
+function openArtLib() {
+  if (!window.TA) return;
+  var total = TA.ARTICLES.reduce(function (n, a) { return n + a.chars; }, 0);
+  var mask = document.createElement('div');
+  mask.className = 'mask';
+  function cardHtml(a) {
+    return '<button class="al-card' + (a.id === S.art.id ? ' on' : '') + '" data-pick="' + a.id + '">' +
+      '<div class="ac-top"><span class="ac-type">' + esc(a.typeName) + '</span>' +
+        '<span class="ac-hard" title="难度">' + starsHtml(a.hard) + '</span></div>' +
+      '<b class="ac-title">' + esc(a.title) + '</b>' +
+      '<div class="ac-author">' + esc(a.author || '') + (a.grade ? ' · ' + esc(a.grade) : '') + '</div>' +
+      '<div class="ac-desc">' + esc(a.desc) + '</div>' +
+      '<div class="ac-meta">' + a.count + ' 句 · ' + a.chars + ' 字</div>' +
+    '</button>';
+  }
+  function tabsHtml() {
+    var all = '<button class="' + (S.art.type === 'all' ? 'on' : '') + '" data-arttype="all">全部 ' +
+      TA.ARTICLES.length + '</button>';
+    return all + TA.TYPES.map(function (t) {
+      return '<button class="' + (S.art.type === t.id ? 'on' : '') + '" data-arttype="' + t.id + '">' +
+        t.icon + ' ' + t.name + ' ' + t.articles.length + '</button>';
+    }).join('');
+  }
+  function gridHtml() {
+    var list = S.art.type === 'all' ? TA.ARTICLES : TA.list(S.art.type);
+    if (!list.length) return '<div class="al-empty">这一类还没有文章</div>';
+    return list.map(cardHtml).join('');
+  }
+  mask.innerHTML = '<div class="artlib">' +
+    '<div class="al-head">' +
+      '<div><b>📚 文章库</b><span class="al-sub">共 ' + TA.TYPES.length + ' 类 · ' +
+        TA.ARTICLES.length + ' 篇 · ' + total + ' 字</span></div>' +
+      '<button class="al-x" id="alX" aria-label="关闭">✕</button>' +
+    '</div>' +
+    '<div class="al-tabs" id="alTabs">' + tabsHtml() + '</div>' +
+    '<div class="al-grid" id="alGrid">' + gridHtml() + '</div>' +
+    '<div class="al-foot">选好文章后回到地图，从第 1 关开始读；读到哪一关，下次还从那里接着读。</div>' +
+    '</div>';
+  document.body.appendChild(mask);
+  function close() { mask.remove(); }
+  mask.addEventListener('click', function (e) { if (e.target === mask) close(); });
+  mask.querySelector('#alX').onclick = close;
+  mask.querySelector('#alTabs').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-arttype]');
+    if (!b) return;
+    S.art.type = b.getAttribute('data-arttype');
+    mask.querySelector('#alTabs').innerHTML = tabsHtml();
+    mask.querySelector('#alGrid').innerHTML = gridHtml();
+  });
+  mask.querySelector('#alGrid').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-pick]');
+    if (!b) return;
+    var id = b.getAttribute('data-pick');
+    S.art.id = id;
+    saveArtId(id);
+    S.map.stage = 6;
+    S.map.chapter = 1;               /* 换文章 = 从头读，进度按卷号累加，不会串 */
+    close();
+    render();
+  });
+}
+
+/* ---------------- 键盘指法示意图 ----------------
+   每个键按对应手指着色：紫=小指 蓝=无名指 青=中指
+   左食指=橙 右食指=绿 灰=拇指(空格)。目标键高亮闪烁。 */
+var KB_FINGERS = {
+  LP: { name: '小指', color: '#8E6FD8' },
+  LR: { name: '无名指', color: '#5B8DEF' },
+  LM: { name: '中指', color: '#2FA6A0' },
+  LI: { name: '食指', color: '#E8A13C' },
+  RI: { name: '食指', color: '#3E9E5B' },
+  RM: { name: '中指', color: '#2FA6A0' },
+  RR: { name: '无名指', color: '#5B8DEF' },
+  RP: { name: '小指', color: '#8E6FD8' },
+  TH: { name: '拇指', color: '#8B93A1' }
+};
+var KB_FINGER_OF = {
+  '`': 'LP', '1': 'LP', 'q': 'LP', 'a': 'LP', 'z': 'LP',
+  '2': 'LR', 'w': 'LR', 's': 'LR', 'x': 'LR',
+  '3': 'LM', 'e': 'LM', 'd': 'LM', 'c': 'LM',
+  '4': 'LI', '5': 'LI', 'r': 'LI', 't': 'LI', 'f': 'LI', 'g': 'LI', 'v': 'LI', 'b': 'LI',
+  '6': 'RI', '7': 'RI', 'y': 'RI', 'u': 'RI', 'h': 'RI', 'j': 'RI', 'n': 'RI', 'm': 'RI',
+  '8': 'RM', 'i': 'RM', 'k': 'RM', ',': 'RM',
+  '9': 'RR', 'o': 'RR', 'l': 'RR', '.': 'RR',
+  '0': 'RP', '-': 'RP', '=': 'RP', 'p': 'RP', '[': 'RP', ']': 'RP',
+  ';': 'RP', "'": 'RP', '/': 'RP', '\\': 'RP'
+};
+var KB_SHIFT_OF = { '!': '1', '@': '2', '#': '3', '$': '4', '%': '5', '^': '6',
+  '&': '7', '*': '8', '(': '9', ')': '0', '_': '-', '+': '=', '{': '[', '}': ']',
+  ':': ';', '"': "'", '<': ',', '>': '.', '?': '/', '~': '`', '|': '\\' };
+/* 小键盘键位 id → 手指。与 kbDiagram 里 kbKey() 第五参数保持同一套，
+   改一处必须改两处，否则高亮的键和指法图对不上。 */
+var KB_NUM_OF = {
+  n7: 'RI', n8: 'RM', n9: 'RR',
+  n4: 'RI', n5: 'RM', n6: 'RR',
+  n1: 'RI', n2: 'RM', n3: 'RR',
+  n0: 'TH', ndot: 'RR',
+  nadd: 'RP', nsub: 'RP', nmul: 'RP', ndiv: 'RP', nenter: 'RP', numlk: 'RP'
+};
+/* 小键盘字符 → 键位 id（NumLock 打开、右手小键盘输入时用） */
+var KB_NUM_CH = { '7': 'n7', '8': 'n8', '9': 'n9', '4': 'n4', '5': 'n5', '6': 'n6',
+  '1': 'n1', '2': 'n2', '3': 'n3', '0': 'n0', '.': 'ndot',
+  '+': 'nadd', '-': 'nsub', '*': 'nmul', '/': 'ndiv', '=': 'nenter' };
+var KB_HAND_OF = { LP: 'L', LR: 'L', LM: 'L', LI: 'L', RI: 'R', RM: 'R', RR: 'R', RP: 'R', TH: 'R' };
+function kbKeyInfo(ch, zone) {
+  ch = String(ch == null ? '' : ch);
+  if (ch.length !== 1) return null;
+  /* 小键盘篇章：同一个字符要指向右手小键盘那颗键，而不是主键盘数字行。
+     学生照着主键区打，手指就永远学不会小键盘的 4-5-6 定位。 */
+  if (zone === 'num' && KB_NUM_CH[ch]) {
+    var nid = KB_NUM_CH[ch];
+    var nf = KB_NUM_OF[nid] || 'RP';
+    return { id: nid, shift: null, f: nf, hand: KB_HAND_OF[nf], num: 1 };
+  }
+  var low = ch.toLowerCase();
+  var id = null, needShift = false;
+  if (/[a-z0-9]/.test(low)) { id = low; needShift = ch !== low && /[A-Z]/.test(ch); }
+  else if (KB_SHIFT_OF[ch]) { id = KB_SHIFT_OF[ch]; needShift = true; }
+  else if (KB_FINGER_OF[ch]) { id = ch; }
+  else if (ch === ' ') { return { id: 'space', shift: null, f: 'TH', hand: 'L' }; }
+  if (!id || !KB_FINGER_OF[id]) return null;
+  var f = KB_FINGER_OF[id];
+  var hand = KB_HAND_OF[f];
+  return { id: id, shift: needShift ? (hand === 'L' ? 'R' : 'L') : null, f: f, hand: hand };
+}
+/* ---------------- 104 键键盘 ----------------
+   设计稿坐标系：1u = 48px，键间隙 6px，行距 52px，键高 46px。
+   每个键用 (col, units) → left/width、(row, span) → top/height 绝对定位，
+   所以跨行键（小键盘 + 和 Enter）能精确对齐，行与行之间也不会错位。
+   主键区 15u(720) + 18 + 导航簇 3u(144) + 18 + 小键盘 4u(192) = 1092。
+   —— 指法配色只按「主键区 + 小键盘」的手指归属给，功能键统一灰。 */
+var KU = 48, KG = 6, KP = 44;
+function kbKey(id, label, alt, col, units, row, span, finger) {
+  units = units || 1; row = row || 0; span = span || 1;
+  var f = finger || KB_FINGER_OF[id] || 'TH';
+  var w = units * KU - KG;
+  var small = units <= 1 && label.length > 2;
+  return '<span class="kb-k f-' + f + (small ? ' kb-sm' : '') + '" data-kb="' + id + '"' +
+    ' style="left:' + (col * KU) + 'px;top:' + (row * KP) + 'px;width:' + w + 'px' +
+    (span > 1 ? ';height:' + (span * KP - KG) + 'px' : '') + '">' +
+    (alt ? '<i>' + alt + '</i>' : '') + label + '</span>';
+}
+function kbDiagram() {
+  /* 小键盘篇章：主键区与导航簇压暗、小键盘提亮 ——
+     不是装饰，是为了让"用哪只手、哪个区"变成视觉第一眼的信息 */
+  var zone = (S.play && S.play.L && S.play.L.kbzone) || '';
+  var dim = zone === 'num' ? ' kb-dim' : '';
+  var foc = zone === 'num' ? ' kb-focus' : '';
+  var r = '<div class="kb-wrap" id="kbWrap"><div class="kb" id="kbBox"><div class="kb-board">';
+
+  /* ---- 功能键行：Esc + F1~F12（主键区上方）+ PrtSc/ScrLk/Pause（导航簇上方） ---- */
+  r += '<div class="kb-frow" style="left:0;width:' + (15 * KU) + 'px">';
+  r += kbKey('esc', 'Esc', '', 0, 1, 0) +
+    kbKey('f1', 'F1', '', 2, 1, 0) + kbKey('f2', 'F2', '', 3, 1, 0) +
+    kbKey('f3', 'F3', '', 4, 1, 0) + kbKey('f4', 'F4', '', 5, 1, 0) +
+    kbKey('f5', 'F5', '', 6.5, 1, 0) + kbKey('f6', 'F6', '', 7.5, 1, 0) +
+    kbKey('f7', 'F7', '', 8.5, 1, 0) + kbKey('f8', 'F8', '', 9.5, 1, 0) +
+    kbKey('f9', 'F9', '', 11, 1, 0) + kbKey('f10', 'F10', '', 12, 1, 0) +
+    kbKey('f11', 'F11', '', 13, 1, 0) + kbKey('f12', 'F12', '', 14, 1, 0);
+  r += '</div>';
+  r += '<div class="kb-frow" style="left:' + (15 * KU + 18) + 'px;width:' + (3 * KU) + 'px">';
+  r += kbKey('prtsc', 'PrtSc', '', 0, 1, 0) + kbKey('scrlk', 'ScrLk', '', 1, 1, 0) +
+    kbKey('pause', 'Pause', '', 2, 1, 0);
+  r += '</div>';
+
+  /* ---- 主键区 15u ---- */
+  r += '<div class="kb-blk' + dim + '" style="width:' + (15 * KU) + 'px">';
+  r += kbKey('`', '`', '~', 0, 1, 0) + kbKey('1', '1', '!', 1, 1, 0) +
+    kbKey('2', '2', '@', 2, 1, 0) + kbKey('3', '3', '#', 3, 1, 0) +
+    kbKey('4', '4', '$', 4, 1, 0) + kbKey('5', '5', '%', 5, 1, 0) +
+    kbKey('6', '6', '^', 6, 1, 0) + kbKey('7', '7', '&', 7, 1, 0) +
+    kbKey('8', '8', '*', 8, 1, 0) + kbKey('9', '9', '(', 9, 1, 0) +
+    kbKey('0', '0', ')', 10, 1, 0) + kbKey('-', '-', '_', 11, 1, 0) +
+    kbKey('=', '=', '+', 12, 1, 0) + kbKey('backspace', '⌫', '', 13, 2, 0);
+  r += kbKey('tab', 'Tab', '', 0, 1.5, 1) + kbKey('q', 'Q', '', 1.5, 1, 1) +
+    kbKey('w', 'W', '', 2.5, 1, 1) + kbKey('e', 'E', '', 3.5, 1, 1) +
+    kbKey('r', 'R', '', 4.5, 1, 1) + kbKey('t', 'T', '', 5.5, 1, 1) +
+    kbKey('y', 'Y', '', 6.5, 1, 1) + kbKey('u', 'U', '', 7.5, 1, 1) +
+    kbKey('i', 'I', '', 8.5, 1, 1) + kbKey('o', 'O', '', 9.5, 1, 1) +
+    kbKey('p', 'P', '', 10.5, 1, 1) + kbKey('[', '[', '{', 11.5, 1, 1) +
+    kbKey(']', ']', '}', 12.5, 1, 1) + kbKey('\\', '\\', '|', 13.5, 1.5, 1);
+  r += kbKey('caps', 'Caps', '', 0, 1.75, 2) + kbKey('a', 'A', '', 1.75, 1, 2) +
+    kbKey('s', 'S', '', 2.75, 1, 2) + kbKey('d', 'D', '', 3.75, 1, 2) +
+    kbKey('f', 'F', '', 4.75, 1, 2) + kbKey('g', 'G', '', 5.75, 1, 2) +
+    kbKey('h', 'H', '', 6.75, 1, 2) + kbKey('j', 'J', '', 7.75, 1, 2) +
+    kbKey('k', 'K', '', 8.75, 1, 2) + kbKey('l', 'L', '', 9.75, 1, 2) +
+    kbKey(';', ';', ':', 10.75, 1, 2) + kbKey("'", "'", '"', 11.75, 1, 2) +
+    kbKey('enter', 'Enter ↵', '', 12.75, 2.25, 2);
+  r += kbKey('shiftL', 'Shift', '', 0, 2.25, 3) + kbKey('z', 'Z', '', 2.25, 1, 3) +
+    kbKey('x', 'X', '', 3.25, 1, 3) + kbKey('c', 'C', '', 4.25, 1, 3) +
+    kbKey('v', 'V', '', 5.25, 1, 3) + kbKey('b', 'B', '', 6.25, 1, 3) +
+    kbKey('n', 'N', '', 7.25, 1, 3) + kbKey('m', 'M', '', 8.25, 1, 3) +
+    kbKey(',', ',', '<', 9.25, 1, 3) + kbKey('.', '.', '>', 10.25, 1, 3) +
+    kbKey('/', '/', '?', 11.25, 1, 3) + kbKey('shiftR', 'Shift', '', 12.25, 2.75, 3);
+  r += kbKey('ctrlL', 'Ctrl', '', 0, 1.25, 4, 1, 'LP') + kbKey('winL', 'Win', '', 1.25, 1.25, 4, 1, 'LP') +
+    kbKey('altL', 'Alt', '', 2.5, 1.25, 4, 1, 'LP') +
+    kbKey('space', '—— 空格 · 拇指 ——', '', 3.75, 6.25, 4) +
+    kbKey('altR', 'Alt', '', 10, 1.25, 4, 1, 'RP') + kbKey('winR', 'Win', '', 11.25, 1.25, 4, 1, 'RP') +
+    kbKey('menu', 'Menu', '', 12.5, 1.25, 4, 1, 'RP') + kbKey('ctrlR', 'Ctrl', '', 13.75, 1.25, 4, 1, 'RP');
+  r += '</div>';
+
+  /* ---- 导航簇 3u：Ins/Home/PgUp · Del/End/PgDn · 方向键 ---- */
+  r += '<div class="kb-blk' + dim + '" style="width:' + (3 * KU) + 'px">';
+  r += kbKey('ins', 'Ins', '', 0, 1, 0, 1, 'RP') + kbKey('home', 'Home', '', 1, 1, 0, 1, 'RP') +
+    kbKey('pgup', 'PgUp', '', 2, 1, 0, 1, 'RP');
+  r += kbKey('del', 'Del', '', 0, 1, 1, 1, 'RP') + kbKey('end', 'End', '', 1, 1, 1, 1, 'RP') +
+    kbKey('pgdn', 'PgDn', '', 2, 1, 1, 1, 'RP');
+  r += kbKey('up', '↑', '', 1, 1, 3, 1, 'RI');
+  r += kbKey('left', '←', '', 0, 1, 4, 1, 'RI') + kbKey('down', '↓', '', 1, 1, 4, 1, 'RM') +
+    kbKey('right', '→', '', 2, 1, 4, 1, 'RR');
+  r += '</div>';
+
+  /* ---- 数字小键盘 4u：+ 与 Enter 各跨两行 ---- */
+  r += '<div class="kb-blk' + foc + '" style="width:' + (4 * KU) + 'px">';
+  r += kbKey('numlk', 'NumLk', '', 0, 1, 0, 1, 'RP') + kbKey('ndiv', '/', '', 1, 1, 0, 1, 'RP') +
+    kbKey('nmul', '*', '', 2, 1, 0, 1, 'RP') + kbKey('nsub', '-', '', 3, 1, 0, 1, 'RP');
+  r += kbKey('n7', '7', '', 0, 1, 1, 1, 'RI') + kbKey('n8', '8', '', 1, 1, 1, 1, 'RM') +
+    kbKey('n9', '9', '', 2, 1, 1, 1, 'RR') + kbKey('nadd', '+', '', 3, 1, 1, 2, 'RP');
+  r += kbKey('n4', '4', '', 0, 1, 2, 1, 'RI') + kbKey('n5', '5', '', 1, 1, 2, 1, 'RM') +
+    kbKey('n6', '6', '', 2, 1, 2, 1, 'RR');
+  r += kbKey('n1', '1', '', 0, 1, 3, 1, 'RI') + kbKey('n2', '2', '', 1, 1, 3, 1, 'RM') +
+    kbKey('n3', '3', '', 2, 1, 3, 1, 'RR') + kbKey('nenter', 'Enter', '', 3, 1, 3, 2, 'RP');
+  r += kbKey('n0', '0', '', 0, 2, 4, 1, 'TH') + kbKey('ndot', '.', '', 2, 1, 4, 1, 'RR');
+  r += '</div>';
+
+  r += '</div>';   /* .kb-board */
+  r += '</div></div>';   /* .kb / .kb-wrap */
+  return r;
+}
+/* 指位图例 + 道具条同一行（2026-11-02 按标注调整）
+   图例原来在键盘框内部，跟着键盘一起缩放、右侧半行是空的；
+   把它提到键盘外面，和道具条并排占一行，指法图仍在自己那一行居中。
+   kbTip 留在最右：它随当前目标键变化，靠右更容易在余光里扫到。 */
+function legendRow() {
+  return '<div class="legend-row">' +
+    '<div class="kb-legend">' +
+      '<span><b style="background:' + KB_FINGERS.LP.color + '"></b>小指</span>' +
+      '<span><b style="background:' + KB_FINGERS.LR.color + '"></b>无名指</span>' +
+      '<span><b style="background:' + KB_FINGERS.LM.color + '"></b>中指</span>' +
+      '<span><b style="background:' + KB_FINGERS.LI.color + '"></b>食指·左手</span>' +
+      '<span><b style="background:' + KB_FINGERS.RI.color + '"></b>食指·右手</span>' +
+      '<span><b style="background:' + KB_FINGERS.TH.color + '"></b>拇指·空格</span>' +
+    '</div>' +
+    itemBar() +
+    '<span class="kb-tip" id="kbTip"></span>' +
+  '</div>';
+}
+function paintKb(ch) {
+  var box = $('#kbBox');
+  if (!box) return;
+  box.querySelectorAll('.kb-k.hot, .kb-k.hotsh').forEach(function (el) {
+    el.classList.remove('hot', 'hotsh');
+  });
+  var tip = $('#kbTip');
+  var zone = (S.play && S.play.L && S.play.L.kbzone) || '';
+  var info = kbKeyInfo(ch, zone);
+  if (!info) { if (tip) tip.textContent = ''; paintHands(null); paintIme(); return; }
+  var k = box.querySelector('[data-kb="' + info.id + '"]');
+  if (k) k.classList.add('hot');
+  if (info.shift) {
+    var s = box.querySelector('[data-kb="' + (info.shift === 'L' ? 'shiftL' : 'shiftR') + '"]');
+    if (s) s.classList.add('hotsh');
+  }
+  if (tip) {
+    var nm = (ch === ' ') ? '空格' : ch.toUpperCase();
+    tip.textContent = info.num
+      ? ('目标键 ' + nm + ' → 右手' + KB_FINGERS[info.f].name + '（数字小键盘）')
+      : ('目标键 ' + nm + ' → ' + (info.hand === 'L' ? '左手' : '右手') +
+         KB_FINGERS[info.f].name +
+         (info.shift ? '，先按住' + (info.shift === 'L' ? '左' : '右') + 'Shift' : ''));
+  }
+  paintHands(info.f);
+  paintIme();
+}
+
+/* 键盘整体等比缩放 ------------------------------------------------
+   .kb 是固定设计稿（1115×~317），这里算出唯一缩放比 s 后整块 transform:scale(s)：
+   键宽 / 键高 / 字号 / 圆角 / 间距同比例变化 —— 是「整张键盘在缩放」，
+   而不是把每个按键单独拉长。
+   s 取「宽、高谁先受限」的较小值：窗口够高就撑满宽度，窗口矮就按高度收。
+   指法图不再跟着键盘拉满（2026-11-02 三次调整：它要更小更紧凑），
+   改为自己用 max-width 控制。 */
+function fitKeyboard() {
+  var wrap = $('#kbWrap'), kb = $('#kbBox');
+  if (!wrap || !kb) return;
+  var aw = wrap.clientWidth, ah = wrap.clientHeight;
+  if (!aw || !ah) return;
+  var dw = kb.offsetWidth || 1115;        // offsetWidth 不受 transform 影响，永远是设计稿宽度
+  var dh = kb.offsetHeight || 317;
+  var s = Math.max(0.3, Math.min(1.8, Math.min(aw / dw, ah / dh)));
+  kb.style.setProperty('--kbs', s.toFixed(3));
+  kb.style.transform = 'translate(-50%,-50%) scale(' + s.toFixed(3) + ')';
+}
+var _kbFitTimer = null;
+function scheduleFitKb() {
+  if (_kbFitTimer) clearTimeout(_kbFitTimer);
+  _kbFitTimer = setTimeout(function () { _kbFitTimer = null; fitKeyboard(); }, 60);
+}
+window.addEventListener('resize', scheduleFitKb);
+
+/* ---------------- 手指指法示意图（手形） ----------------
+   每个手指负责的按键区域由 KB_FINGER_OF 推导，保证与键盘配色完全一致；
+   当前应使用手指会高亮抬起，跟随打字实时变化。 */
+/* 注意：TH（拇指）不来自 KB_FINGER_OF，须一开始就是数组——
+   曾经写成 { TH: '空格' }（字符串），后续 .join(' ') 直接抛
+   "FINGER_ZONE[id].join is not a function"，导致整关打不开。 */
+var FINGER_ZONE = { TH: ['空格'] };
+Object.keys(KB_FINGER_OF).forEach(function (k) {
+  var f = KB_FINGER_OF[k];
+  // 防御：即使某个手指项被误初始化成非数组，也强制纠回数组再 push
+  if (!Array.isArray(FINGER_ZONE[f])) FINGER_ZONE[f] = [];
+  FINGER_ZONE[f].push(k.toUpperCase());
+});
+/* 手指名改用两字短标签（无名指→无名）：全称仍在键盘下方的图例里标注。
+   坐标分布按 1092 宽的设计稿（与键盘主键区同宽），左右手以 546 为中轴镜像，
+   这样面板拉到键盘宽度后，指位和上面的键盘分区大致对得上。 */
+var HANDS = [
+  { f: 'LP', x: 38,  name: '小指' },
+  { f: 'LR', x: 98,  name: '无名' },
+  { f: 'LM', x: 158, name: '中指' },
+  { f: 'LI', x: 218, name: '食指' },
+  { f: 'TH', x: 280, name: '拇指', thumb: true },
+  { f: 'TH', x: 360, name: '拇指', thumb: true },
+  { f: 'RI', x: 422, name: '食指' },
+  { f: 'RM', x: 482, name: '中指' },
+  { f: 'RR', x: 542, name: '无名' },
+  { f: 'RP', x: 602, name: '小指' }
+];
+function handsDiagram() {
+  /* 640×74 设计稿，1:1 出图：
+     圆 r18 排一行（圆心 y=22），圆内是指纹纹路；
+     名字基线 57、键位串基线 70 —— 圆底 40，留出 17px 再落字，怎么都不会压到图标。
+    2026-11-02：圆内图形由「手指剪影」改为「指纹纹路」（同心弧线）。
+    原来那根带指甲的手指，在 36px 的小圆里很容易被读成"点这里"的
+    指示图标；指纹没有第二层含义，一眼就知道是"用这根手指去碰键"。 */
+  var w = 640, h = 74, cy = 22, r = 18;
+  var s = '<div class="hands" id="handsBox">' +
+    '<svg viewBox="0 0 ' + w + ' ' + h + '" xmlns="http://www.w3.org/2000/svg">';
+  HANDS.forEach(function (d) {
+    var c = KB_FINGERS[d.f].color;
+    var zone = FINGER_ZONE[d.f];
+    var keys = Array.isArray(zone) ? zone.join('') : String(zone == null ? '' : zone);
+    /* 指纹不需要方向，拇指也不再旋转 */
+    s += '<g class="finger" data-finger="' + d.f + '" style="--c:' + c + '">' +
+      '<circle class="fcircle" cx="' + d.x + '" cy="' + cy + '" r="' + r + '"/>' +
+      '<g transform="translate(' + d.x + ',' + cy + ')">' +
+        /* 四层同心弧：外两层是主纹路，内两层收窄，中心一小段竖线做「斗」 */
+        '<path class="fp" d="M-11.8 5.2a11.8 11.8 0 0 1 23.6 0v4.4"/>' +
+        '<path class="fp" d="M-8.4 6.4a8.4 8.4 0 0 1 16.8 0v3.2"/>' +
+        '<path class="fp" d="M-4.9 7.6a4.9 4.9 0 0 1 9.8 0v2.2"/>' +
+        '<path class="fp dim" d="M-2 8.6a2 2 0 0 1 4 0v1.4"/>' +
+        /* 两侧各加一道短脊：指纹的纹路不是完美同心，边上总有分叉，
+           少了这两笔就容易被看成「WiFi / 水波纹」 */
+        '<path class="fp dim" d="M-13.9 6.4q-1.2 2.8-.6 5.6"/>' +
+        '<path class="fp dim" d="M13.9 6.4q1.2 2.8.6 5.6"/>' +
+      '</g>' +
+      '<text class="fn" x="' + d.x + '" y="57" text-anchor="middle">' + d.name + '</text>' +
+      '<text class="fk' + (keys.length > 7 ? ' s' : '') + '" x="' + d.x + '" y="70" text-anchor="middle">' + keys + '</text>' +
+    '</g>';
+  });
+  s += '</svg></div>';
+  return s;
+}
+function paintHands(fc) {
+  var box = $('#handsBox');
+  if (!box) return;
+  box.querySelectorAll('.finger').forEach(function (el) {
+    el.classList.toggle('active', fc != null && el.getAttribute('data-finger') === fc);
+  });
+}
+
+/* ---------------- 练习引擎 ---------------- */
+function startLevel(st, ch, lv) {
+  clearPlayBindings();
+  try {
+    var grades = (S.config && S.config.grades) || [];
+    /* 第 6 篇章把「正在读的文章」带进引擎：同一篇文章同一关，
+       在哪台机器上都是同一句 */
+    var artId = (st === 6 && S.art.id) ? S.art.id : null;
+    var L = TL.genLevel(st, ch, lv, grades, artId);
+    /* 防御：关卡数据生成异常（阶段越界 / 文本缺失等）时，给出明确错误而不是白屏或卡死 */
+    if (!L || !L.type) throw new Error('关卡数据生成失败（stage=' + st + ' chapter=' + ch + ' level=' + lv + '）');
+    if (L.type === 'keys' && !Array.isArray(L.items)) L.items = [];
+    if (L.type !== 'keys' && typeof L.text !== 'string') L.text = '';
+    S.view = 'play';
+    S.play = {
+      L: L, stage: st, chapter: ch, level: lv,
+      idx: 0, keys: 0, errors: 0, t0: 0, timer: null, done: false,
+      composing: false, composeText: '',
+      /* 道具：本关内有效，进关前点「用」才会置 true */
+      buff: { hint: false, extra: false, shield: false, double: false }
+    };
+    renderPlay();
+  } catch (err) {
+    console.error('打开关卡失败：', err);
+    uiAlert({
+      title: '这一关打不开', tone: 'err',
+      message: '页面遇到了一个错误：' + (err && err.message ? err.message : '未知错误') +
+        '\n\n先刷新页面重试；还是不行就截图把这句话发给老师。'
+    });
+  }
+}
+/* ---------------- 课文区渲染 ----------------
+   中文：逐字一列，默认只显示汉字；每个字把拼音写进 data-p（多音字靠
+   pinyin.js 的词级覆盖），点击时气泡才弹出来 —— 拼音是「查」出来的，
+   不是常驻的。英文：保持普通字符流（空格不会被 flex 吃掉）。 */
+function textHtml(text, idx, bad) {
+  var isCn = S.play && S.play.L && S.play.L.mode === 'cn';
+  var i, cls, s = '';
+  if (isCn && window.PY && PY.annotate) {
+    var arr = PY.annotate(text);
+    for (i = 0; i < arr.length; i++) {
+      cls = i < idx ? 'o' : (i === idx ? (bad ? 'e' : 'c') : 'd');
+      /* 空格也要带状态：中英混排关里空格很多，原来只渲染一个空 span，
+         学生根本看不出"这里要按一下空格"，只会以为两个字挨得近。 */
+      if (arr[i].c === ' ') { s += '<span class="ch sp ' + cls + '"></span>'; continue; }
+      s += '<span class="ch ' + cls + '"' +
+        (arr[i].p ? ' data-p="' + esc(arr[i].p) + '"' : '') +
+        '><span class="hz">' + esc(arr[i].c) + '</span></span>';
+    }
+    return s;
+  }
+  for (i = 0; i < text.length; i++) {
+    cls = i < idx ? 'o' : (i === idx ? (bad ? 'e' : 'c') : 'd');
+    s += '<span class="' + cls + '">' + esc(text[i]) + '</span>';
+  }
+  return s;
+}
+/* 输入框回显层：结构与课文 textHtml 逐字一致（同样的 .ch/.ch.sp 与字符顺序），
+   区别只有两点 —— 没有「当前字」高亮，未输入的字交给 CSS 调成透明占位。
+   结构一致是逐字对齐的根本：只要字符数和类名相同，flex 排出来的每个字宽度、
+   换行位置就和课文一模一样。 */
+function echoHtml(text, idx) {
+  var arr = (window.PY && PY.annotate) ? PY.annotate(text) : null;
+  var i, s = '', cls;
+  if (arr) {
+    for (i = 0; i < arr.length; i++) {
+      cls = i < idx ? 'o' : 'd';
+      if (arr[i].c === ' ') { s += '<span class="ch sp ' + cls + '"></span>'; continue; }
+      s += '<span class="ch ' + cls + '"><span class="hz">' + esc(arr[i].c) + '</span></span>';
+    }
+    return s;
+  }
+  for (i = 0; i < text.length; i++) {
+    s += '<span class="' + (i < idx ? 'o' : 'd') + '">' + esc(text[i]) + '</span>';
+  }
+  return s;
+}
+function paintEcho() {
+  var box = $('#tbEcho');
+  if (!box || !S.play) return;
+  box.innerHTML = echoHtml(S.play.L.text, S.play.idx);
+}
+function renderPlay() {
+  var P = S.play, L = P.L, stage = TD.stageById(L.stage) || TD.STAGES[0];
+  var petHtml = TD.petSvg(S.ranch.pet, S.ranch.decos) || '🐾';
+  var body = '';
+  if (L.type === 'keys') {
+    var cur = L.items[P.idx] || { k: '', hint: '' };
+    body = '<div class="key-big"><div class="key-cap" id="keyCap">' + esc(cur.k) + '</div>' +
+      '<div class="key-finger" id="keyFinger">用 <b>' + esc(cur.hint) + '</b> 敲下这个键</div></div>' +
+      kbDiagram() + legendRow() + handsDiagram() +
+      '<div class="progress-track"><div class="progress-fill" style="width:0%"></div></div>';
+  } else {
+    var isCn = L.mode === 'cn';
+    body = imeBarHtml() +
+      '<div class="text-wrap" id="textWrap">' +
+        '<div class="text-line' + (isCn ? '' : ' en-line') + '" id="textLine">' +
+          textHtml(L.text, P.idx, false) + '</div>' +
+        '<div class="py-pop" id="pyPop" hidden></div></div>' +
+      (isCn
+        ? '<div class="typing-bar" id="typeBar">' +
+            '<div class="tb-field" id="tbField">' +
+              /* 回显层与课文共用同一套字符网格（同样的字号、字距、gap、居中、换行宽度），
+                 所以第 i 个字必然落在课文第 i 个字的正下方 —— 逐字同列，不靠 JS 算坐标 */
+              '<div class="tb-echo" id="tbEcho" aria-hidden="true">' + echoHtml(L.text, 0) + '</div>' +
+              '<input class="tb-input" id="cnInput" autocomplete="off" autocorrect="off" ' +
+                'autocapitalize="off" spellcheck="false" placeholder=" " ' +
+                'aria-label="照着上面的课文打字，所打的字会出现在课文对应的位置">' +
+              '<span class="tb-ph" id="cnPh">照着上面的课文打字，打的字会出现在课文对应的位置</span>' +
+              '<span class="tb-comp" id="tbComp" hidden></span>' +
+            '</div>' +
+          '</div>'
+        : '') +
+      kbDiagram() + legendRow() + handsDiagram() +
+      '<div class="prog-row"><div class="progress-track"><div class="progress-fill" style="width:0%"></div></div>' +
+        (isCn ? '<span class="tb-count" id="tbCount">0 / ' + L.text.length + '</span>' : '') + '</div>';
+  }
+  app.classList.remove('ui-big');   /* 练习页回到原来的紧凑布局 */
+  app.innerHTML =
+    '<div class="play-wrap">' +
+      '<div class="play-card">' +
+        '<div class="play-top">' +
+          '<button class="btn ghost" id="playBack">‹ 回地图</button>' +
+          '<div><div class="bt">' + esc(stage.icon + ' ' + L.title) +
+            (L.articleTitle ? '　· ' + esc(L.articleTitle) : '') + '</div>' +
+          '<div class="sub">' + esc(stage.name) + ' · 目标：准确率 ≥90% 通关，' + L.speedLine +
+            (L.mode === 'cn' ? ' 字/分' : ' KPM') + ' 拿两星</div></div>' +
+          '<span class="pet-mini">' + petHtml + '</span>' +
+          '<div class="live"><span class="chip" id="liveSpeed">0' + (L.mode === 'cn' ? ' 字/分' : ' KPM') +
+            '</span><span class="chip b" id="liveAcc">100%</span></div>' +
+        '</div>' +
+        '<div class="play-body">' + body + '</div>' +
+      '</div>' +
+    '</div>';
+  $('#playBack').onclick = function () { clearPlayBindings(); S.view = 'map'; S.play = null; render(); };
+  bindPlay();
+  bindItemBar();
+  /* 进关前用过的道具（比如上一关的提示卡不跨关），这里只按本关 buff 恢复 */
+  paintHintOn(S.play && S.play.buff && S.play.buff.hint);
+  /* 键盘等比缩放要等浏览器完成一次布局（拿到容器真实宽高）后再算 */
+  requestAnimationFrame(fitKeyboard);
+  setTimeout(fitKeyboard, 180);
+  paintIme();
+}
+
+/* ---------------- 输入法 / 修饰键提示条 ----------------
+   四种"状态"提示，只在需要的那几种关卡出现（纯字母、纯单词关不显示，
+   否则练习页会越来越吵，学生最后什么都看不见）：
+     cn  ：中文输入法       —— 中文词语、文章阅读
+     mix ：中英来回切       —— 中英混排，badge 会随当前字符自动变
+     num ：数字小键盘       —— 提示 NumLock 与右手 4-5-6
+     cap ：英文 + Shift     —— 大小写与标点，右侧直接给出这一下怎么按
+   右侧那颗 kbd 是"这一下要不要按住 Shift"，看完就能按，不用试错。 */
+function imeBarHtml() {
+  var L = S.play && S.play.L;
+  if (!L) return '';
+  var stage = TD.stageById(L.stage) || {};
+  var kind = L.ime === 'mix' ? 'mix'
+    : (L.kbzone === 'num' ? 'num'
+    : (L.ime === 'cn' ? 'cn' : (stage.id === 4 ? 'cap' : '')));
+  if (!kind) return '';
+  var cfg = {
+    cn:  { b: '中文输入法', n: '按 Ctrl+空格 切换中英文；点生字可查拼音，退格可回退；，。？！ 直接打' },
+    mix: { b: '中英混排',   n: '中文用输入法打，遇到英文和数字切回英文状态；中文标点别打成英文的 , .' },
+    num: { b: '数字小键盘', n: '先按 NumLock 让指示灯亮；右手食指放 4、中指 5、无名指 6，眼睛看屏幕' },
+    cap: { b: '英文输入法', n: '打大写字母要按住另一只手的 Shift；标点都是英文半角' }
+  }[kind];
+  return '<div class="ime-bar" id="imeBar" data-kind="' + kind + '">' +
+    '<span class="ime-badge" id="imeBadge">' + cfg.b + '</span>' +
+    '<span class="ime-note">' + cfg.n + '</span>' +
+    '<span class="ime-key" id="imeKey"></span>' +
+  '</div>';
+}
+function paintIme() {
+  var bar = $('#imeBar'), key = $('#imeKey'), badge = $('#imeBadge');
+  if (!bar) return;
+  var L = S.play && S.play.L, P = S.play;
+  if (!L) return;
+  var ch = (L.type === 'keys')
+    ? ((L.items[P.idx] || {}).k || '')
+    : (L.text[P.idx] || '');
+  var kind = bar.getAttribute('data-kind');
+  if (!ch) { if (key) key.innerHTML = ''; return; }
+  /* 半角可见字符 = 需要英文状态；汉字与中文标点 = 需要中文状态。
+     中英混排关靠这一句把"该切哪个输入法"变成看得见的提示。 */
+  var isAscii = /[\x20-\x7E]/.test(ch);
+  if (kind === 'mix') {
+    if (badge) badge.textContent = isAscii ? '切到英文' : '切到中文';
+    bar.className = 'ime-bar ' + (isAscii ? 'on-en' : 'on-cn');
+  }
+  var info = kbKeyInfo(ch, L.kbzone);
+  var bits = '';
+  if (L.kbzone === 'num' && info && info.num) {
+    bits = '<span class="sl">小键盘</span><kbd>' + esc(ch) + '</kbd>';
+  } else if (info && info.shift) {
+    bits = '<span class="sl">按住</span><kbd>Shift</kbd><span class="sl">+</span>' +
+      '<kbd>' + esc(String(ch).toUpperCase()) + '</kbd>';
+  } else if (ch === ' ') {
+    bits = '<span class="sl">大拇指</span><kbd>空格</kbd>';
+  }
+  if (key) key.innerHTML = bits;
+}
+/* ---------------- 道具条 ----------------
+   设计分寸（回应「别让游戏性喧宾夺主」）：
+     ① 道具只出现在练习页最底一行，窄、安静，不弹窗、不打断打字；
+     ② 每个道具都写明「只帮这一关」，学生不会以为买了就能一直赢；
+     ③ 没有一件能改星级速度线 —— 想拿 2 星 3 星，手速还得自己练。
+   库存为 0 时按钮显示「没有」，点一下直接打开商店，不用绕去牧场。 */
+function itemBar() {
+  var inv = (S.progress && S.progress.items) || {};
+  var buff = (S.play && S.play.buff) || {};
+  return '<div class="item-bar" id="itemBar">' +
+    '<span class="ib-tip">本关道具</span>' +
+    TD.ITEMS.map(function (it) {
+      var n = inv[it.id] || 0;
+      var on = !!buff[it.id];
+      return '<button class="ib-dot' + (on ? ' on' : '') + (n || on ? '' : ' off') + '" ' +
+        'data-item="' + it.id + '" title="' + esc(it.name + '：' + it.desc) + '">' +
+        '<span class="ib-ic">' + it.icon + '</span>' +
+        '<span class="ib-nm">' + esc(it.name) + '</span>' +
+        '<span class="ib-n">' + (on ? '已生效' : (n ? '×' + n : '没有')) + '</span>' +
+      '</button>';
+    }).join('') +
+  '</div>';
+}
+function bindItemBar() {
+  var bar = $('#itemBar');
+  if (!bar) return;
+  bar.querySelectorAll('[data-item]').forEach(function (b) {
+    b.onclick = function () {
+      var id = b.getAttribute('data-item');
+      var inv = (S.progress && S.progress.items) || {};
+      if (!(inv[id] > 0) && !(S.play && S.play.buff && S.play.buff[id])) { openItemShop(); return; }
+      useItem(id);
+    };
+  });
+}
+function refreshItemBar() {
+  var el = $('#itemBar');
+  if (!el) return;
+  el.outerHTML = itemBar();
+  bindItemBar();
+}
+/** 提示卡生效时给整张练习卡挂个类，键盘上目标键会持续呼吸发光 */
+function paintHintOn(on) {
+  var card = document.querySelector('.play-card');
+  if (card) card.classList.toggle('hint-on', !!on);
+}
+function useItem(id) {
+  var P = S.play;
+  if (!P || P.done) return;
+  var it = TD.itemById(id);
+  if (!it) return;
+  if (P.buff[id]) { uiToast('这一关已经用过了', 'warn'); return; }
+  if (!((S.progress.items || {})[id] > 0)) { openItemShop(); return; }
+  function apply() {
+    P.buff[id] = true;
+    if (id === 'extra') {
+      /* 加时只放宽本关倒计时，不动速度线 */
+      P.L.timeLimit = Math.round(P.L.timeLimit * 1.5);
+    }
+    if (id === 'hint') paintHintOn(true);
+    uiToast('「' + it.name + '」已生效 · ' + it.tip, 'ok');
+    refreshItemBar();
+  }
+  if (S.demo) {
+    var inv = S.progress.items || {};
+    inv[id] = (inv[id] || 0) - 1;
+    S.progress.items = inv;
+    demoSave();
+    apply();
+    return;
+  }
+  api('/api/v2/typing/use-item', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: id })
+  }).then(function (r) {
+    if (r && r.ok) { if (r.stu) S.progress = r.stu; apply(); }
+    else uiToast((r && r.msg) || '这个道具现在用不了', 'warn');
+  }).catch(function () { uiToast('网络不通，道具没扣', 'warn'); });
+}
+/* 购买：道具与装扮共用一套流程，牧场商店和练习页小商店都走这里 */
+function buyItem(id) {
+  var it = TD.itemById(id);
+  if (!it) return;
+  var inv = (S.progress.items || {});
+  if ((inv[id] || 0) >= it.max) { uiToast('「' + it.name + '」最多带 ' + it.max + ' 个，先用掉再买', 'warn'); return; }
+  if ((S.progress.coins || 0) < it.price) { uiToast('金币还差 ' + (it.price - (S.progress.coins || 0)) + ' 个', 'warn'); return; }
+  if (S.demo) {
+    S.progress.coins -= it.price;
+    S.progress.items = inv;
+    inv[id] = (inv[id] || 0) + 1;
+    demoSave();
+    uiToast('买好了：' + it.name + ' ×1', 'ok');
+    afterBuy();
+    return;
+  }
+  api('/api/v2/typing/buy', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kind: 'item', id: id })
+  }).then(function (r) {
+    if (r && r.ok) { S.progress = r.stu || S.progress; uiToast('买好了：' + it.name + ' ×1', 'ok'); afterBuy(); }
+    else uiToast((r && r.msg) || '买不了', 'warn');
+  });
+}
+function buyDeco(d) {
+  if (!d) return;
+  if ((S.progress.decos || []).indexOf(d.id) >= 0) { uiToast('这件已经在衣柜里了', 'warn'); return; }
+  if ((S.progress.coins || 0) < (d.price || 0)) {
+    uiToast('金币还差 ' + ((d.price || 0) - (S.progress.coins || 0)) + ' 个', 'warn');
+    return;
+  }
+  if (S.demo) {
+    S.progress.coins -= d.price;
+    (S.progress.decos = S.progress.decos || []).push(d.id);
+    demoSave();
+    uiToast('「' + d.name + '」买到了，快去穿上', 'ok');
+    afterBuy();
+    return;
+  }
+  api('/api/v2/typing/buy', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kind: 'deco', id: d.id })   /* 价格一律由服务端查表，不传 */
+  }).then(function (r) {
+    if (r && r.ok) { S.progress = r.stu || S.progress; uiToast('「' + d.name + '」买到了', 'ok'); afterBuy(); }
+    else uiToast((r && r.msg) || '买不了', 'warn');
+  });
+}
+/* 买完之后的界面刷新：练习中就只刷道具条（别把正在打的关卡冲掉），
+   其它页面重渲染整个视图 */
+function afterBuy() {
+  if (S.play) { refreshItemBar(); var pop = document.querySelector('.shop-pop'); if (pop) { pop.outerHTML = shopPopHtml(); bindShopPop(); } return; }
+  render();
+  var pop2 = document.querySelector('.shop-pop');
+  if (pop2) { pop2.outerHTML = shopPopHtml(); bindShopPop(); }
+}
+/* 练习页里的道具小商店：不跳走，买完能接着打这一关 */
+function shopPopHtml() {
+  var inv = (S.progress && S.progress.items) || {};
+  return '<div class="shop-pop">' +
+    '<div class="sp-head"><b>🏪 道具商店</b>' +
+      '<span class="sp-coin">🪙 ' + (S.progress.coins || 0) + '</span></div>' +
+    '<div class="sp-list">' + TD.ITEMS.map(function (it) {
+      var n = inv[it.id] || 0;
+      return '<div class="sp-row"><span class="sp-ic">' + it.icon + '</span>' +
+        '<div class="sp-main"><b>' + esc(it.name) + '</b>' +
+          '<span class="sp-desc">' + esc(it.desc) + '</span>' +
+          '<span class="sp-tip">' + esc(it.tip) + '</span></div>' +
+        '<div class="sp-buy">' +
+          '<span class="sp-have">已有 ' + n + '/' + it.max + '</span>' +
+          '<button class="btn sm" data-buyitem="' + it.id + '">🪙 ' + it.price + '</button>' +
+        '</div></div>';
+    }).join('') + '</div>' +
+    '<div class="sp-foot">道具只帮一关，练熟了就别买啦。</div>' +
+    '<button class="btn ghost sm" id="spClose">收起</button>' +
+  '</div>';
+}
+function openItemShop() {
+  var mask = document.createElement('div');
+  mask.className = 'mask';
+  mask.innerHTML = shopPopHtml();
+  document.body.appendChild(mask);
+  function close() { mask.remove(); }
+  mask.addEventListener('click', function (e) { if (e.target === mask) close(); });
+  bindShopPop();
+}
+function bindShopPop() {
+  var pop = document.querySelector('.shop-pop');
+  if (!pop) return;
+  pop.querySelectorAll('[data-buyitem]').forEach(function (b) {
+    b.onclick = function () { buyItem(b.getAttribute('data-buyitem')); };
+  });
+  var c = pop.querySelector('#spClose');
+  if (c) c.onclick = function () { var m = pop.closest('.mask'); if (m) m.remove(); };
+}
+function bindPlay() {
+  var P = S.play, L = P.L;
+  P.t0 = 0;
+  var total = L.type === 'keys' ? L.items.length : L.text.length;
+
+  /* 由按键事件推出字符：优先用 e.code（物理键位，与输入法无关）。
+     中文拼音输入法开着时 e.key 会变成 'Process'，靠 e.key 判定必然"卡住"。 */
+  var KB_DIGIT_SHIFT = { '1': '!', '2': '@', '3': '#', '4': '$', '5': '%',
+    '6': '^', '7': '&', '8': '*', '9': '(', '0': ')' };
+  var KB_CODE_CHARS = { 'Minus': '-', 'Equal': '=', 'BracketLeft': '[', 'BracketRight': ']',
+    'Semicolon': ';', 'Quote': "'", 'Backquote': '`', 'Backslash': '\\',
+    'Comma': ',', 'Period': '.', 'Slash': '/' };
+  var KB_CODE_SHIFT = { 'Minus': '_', 'Equal': '+', 'BracketLeft': '{', 'BracketRight': '}',
+    'Semicolon': ':', 'Quote': '"', 'Backquote': '~', 'Backslash': '|',
+    'Comma': '<', 'Period': '>', 'Slash': '?' };
+  function evChar(e) {
+    var c = e.code, m;
+    if (c) {
+      if ((m = /^Key([A-Z])$/.exec(c))) return e.shiftKey ? m[1] : m[1].toLowerCase();
+      if ((m = /^Digit([0-9])$/.exec(c))) return e.shiftKey ? KB_DIGIT_SHIFT[m[1]] : m[1];
+      if (c === 'Space') return ' ';
+      if (e.shiftKey && KB_CODE_SHIFT[c]) return KB_CODE_SHIFT[c];
+      if (KB_CODE_CHARS[c]) return KB_CODE_CHARS[c];
+    }
+    if (e.key && e.key.length === 1) return e.key;
+    return null;
+  }
+  function begin() { if (!P.t0) { P.t0 = Date.now(); startTimer(); } }
+  function livePaint() {
+    var el = Math.max(0.001, (Date.now() - P.t0) / 60000);
+    var done = P.idx;
+    var spd = done / el;
+    var ks = Math.max(P.keys, 1);
+    var acc = Math.min(100, Math.round(done / ks * 100));
+    var s1 = $('#liveSpeed'), s2 = $('#liveAcc');
+    if (s1) s1.textContent = (Math.round(spd * 10) / 10) + (L.mode === 'cn' ? ' 字/分' : ' KPM');
+    if (s2) s2.textContent = acc + '%';
+  }
+  function startTimer() {
+    stopTimer();
+    P.timer = setInterval(livePaint, 300);
+  }
+  function advance() {
+    P.idx++;
+    var fill = document.querySelector('.progress-fill');
+    if (fill) fill.style.width = Math.round(P.idx / total * 100) + '%';
+    /* 键帽 / 光标 / 键盘示意图 / 手指指法图一起推进 */
+    if (L.type === 'keys') paintKeys();
+    else { paintText(false); paintKb(L.text[P.idx]); }
+    livePaint();
+    if (P.idx >= total) finish();
+  }
+  function paintKeys() {
+    var cur = L.items[P.idx] || { k: '', hint: '' };
+    var cap = $('#keyCap'), hf = $('#keyFinger');
+    if (cap) cap.textContent = cur.k;
+    if (hf) hf.innerHTML = '用 <b>' + esc(cur.hint) + '</b> 敲下这个键';
+    paintKb(cur.k);
+  }
+  function paintText(extraBad) {
+    var line = $('#textLine');
+    if (!line) return;
+    line.innerHTML = textHtml(L.text, P.idx, !!extraBad);
+    /* 课文重排后，原来指着的那颗字已经换位置/换元素，气泡跟着关掉 */
+    hidePyPop();
+  }
+  /* —— 拼音气泡：挂在 textWrap 上，课文重渲染冲不掉它。
+     定义在 startLevel 顶层（不能放进中文分支的块里，
+     否则英文关 paintText 调到的是 undefined）。 —— */
+  function hidePyPop() {
+    var pop = $('#pyPop');
+    if (pop) pop.hidden = true;
+    P.pyCh = null;
+  }
+  function showPyPop(ch) {
+    var pop = $('#pyPop');
+    if (!pop || P.done) return;
+    var p = ch.getAttribute('data-p') || '';
+    if (!p) { hidePyPop(); return; }
+    /* 再点同一个字 = 收起 */
+    if (P.pyCh === ch && !pop.hidden) { hidePyPop(); return; }
+    P.pyCh = ch;
+    pop.textContent = p;
+    pop.hidden = false;
+    pop.className = 'py-pop';
+    var wr = pop.parentNode.getBoundingClientRect();
+    var cr = ch.getBoundingClientRect();
+    pop.style.left = '0px'; pop.style.top = '0px';   /* 先摆出来才能量宽高 */
+    var w = pop.offsetWidth, h = pop.offsetHeight;
+      var left = cr.left - wr.left + cr.width / 2 - w / 2;
+      left = Math.max(2, Math.min(left, wr.width - w - 2));
+      /* 气泡只停在课文框的"停靠带"里（padding-top 24），不越到标题栏上方 */
+      var top = cr.top - wr.top - h - 5;
+      if (top < 2) top = 2;
+    pop.style.left = Math.round(left) + 'px';
+    pop.style.top = Math.round(top) + 'px';
+  }
+  function finish() {
+    if (P.done) return;
+    P.done = true;
+    stopTimer();
+    var dur = Math.max(3, (Date.now() - P.t0) / 1000);
+    var chars = total;
+    var ks = Math.max(P.keys, chars);
+    var acc = Math.min(100, Math.round(chars / ks * 1000) / 10);
+    var wpm = Math.round(chars / dur * 60 * 10) / 10;
+    var stars = TL.starsFor(L.stage, L.chapter, acc, wpm);
+    /* 容错卡：准确率 87% 也算通关，但只补到 1 星 ——
+       2 星 3 星的速度线与准确率一点没降，想冲星还得真打 */
+    if (!stars && P.buff.shield && acc >= 87) stars = 1;
+    submitResult({ stage: L.stage, chapter: L.chapter, level: L.level,
+      acc: acc, chars: chars, duration: Math.round(dur),
+      shield: P.buff.shield ? 1 : 0, double: P.buff.double ? 1 : 0 }, stars, wpm);
+  }
+  function wrongFlash() {
+    document.body.animate && document.body.animate(
+      [{ transform: 'translateX(0)' }, { transform: 'translateX(-4px)' }, { transform: 'translateX(4px)' }, { transform: 'translateX(0)' }],
+      { duration: 140 });
+  }
+
+  if (L.type === 'keys') {
+    P._kd = function (e) {
+      if (P.done) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      var cur = L.items[P.idx];
+      if (!cur) return;
+      var k = evChar(e);
+      if (k == null) return;
+      begin();
+      P.keys++;
+      /* 大写按键课要严格比对：目标是大写字母时必须按住 Shift。
+         小写关仍然宽容（大写锁开着也能通关），否则新手会卡在"我明明按了 A"。 */
+      var tgt = String(cur.k);
+      var strict = /[A-Z]/.test(tgt) || /[!@#$%^&*()_+{}|:"<>?~]/.test(tgt);
+      var hit = strict ? (k === tgt) : (k.toLowerCase() === tgt.toLowerCase());
+      if (hit) advance();
+      else { P.errors++; wrongFlash(); }
+      e.preventDefault();
+    };
+    clearKd();
+    document.addEventListener('keydown', P._kd);
+    S._kd = P._kd;
+    paintKeys();
+  } else if (L.mode === 'en') {
+    /* 英文关：document 级监听 + e.code 判定，输入法开着也不会卡；
+       不再依赖隐藏输入框（会被输入法接管组合输入）。 */
+    P._kd = function (e) {
+      if (P.done) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      var ch = evChar(e);
+      if (ch == null) return;
+      begin();
+      P.keys++;
+      if (ch === L.text[P.idx]) advance();
+      else {
+        P.errors++; wrongFlash();
+        /* 大小写锁提示：目标是小写、学生却打出大写 —— 十有八九是
+           CapsLock 开着。只提醒一次，不反复弹窗打断打字。 */
+        var t0 = L.text[P.idx];
+        if (!P._capTip && /[a-z]/.test(t0) && ch === t0.toUpperCase()) {
+          P._capTip = 1;
+          uiToast('打出来是大写？按一下 CapsLock 关掉大写锁', 'warn');
+        }
+        paintText(true);
+        setTimeout(function () { if (!P.done) paintText(false); }, 180);
+      }
+      e.preventDefault();
+    };
+    clearKd();
+    document.addEventListener('keydown', P._kd);
+    S._kd = P._kd;
+    paintKb(L.text[0]);
+  } else {
+    /* 中文：输入法组合输入 + 输入框实时回显（金山打字通的上屏区）
+       旧版每上屏一次就清空输入框，学生只看得到课文变色、框里永远空的。
+       现在输入框保留「已经打出来的字」，课文区同步推进，两边实时一致；
+       打错的字会被截回，退格可整字回退。 */
+    var cn = $('#cnInput');
+    if (!cn) return;
+    P.typed = '';
+    cn.value = '';
+    cn.focus();
+    function setCaret() {
+      try { cn.selectionStart = cn.selectionEnd = cn.value.length; } catch (e) {}
+    }
+    function syncCount() {
+      var c = $('#tbCount');
+      if (c) c.textContent = P.idx + ' / ' + total;
+    }
+    function pushFill() {
+      var fill = document.querySelector('.progress-fill');
+      if (fill) fill.style.width = Math.round(P.idx / total * 100) + '%';
+    }
+    /* 接受 n 个正确的字：课文区、输入框、进度、键盘、手指一起推进 */
+    function accept(n) {
+      begin();
+      P.idx += n;
+      P.keys += n;
+      P.typed = L.text.slice(0, P.idx);
+      cn.value = P.typed;
+      setCaret();
+      paintText(false);
+      paintEcho();
+      syncCount();
+      pushFill();
+      paintKb(L.text[P.idx]);
+      livePaint();
+      if (P.idx >= total) finish();
+    }
+    function onInput() {
+      if (P.done) return;
+      if (cn.value === P.typed) return;
+      var v = cn.value, pre = P.typed.length;
+      /* ① 变短 / 前缀被改：当作退格回退，只允许退到仍是原文前缀的位置 */
+      if (v.length < pre || v.slice(0, pre) !== P.typed) {
+        if (L.text.slice(0, v.length) === v) {
+          P.idx = v.length;
+          P.typed = v;
+          paintText(false);
+          paintEcho();
+          syncCount();
+          pushFill();
+          paintKb(L.text[P.idx]);
+          setCaret();
+        } else {
+          cn.value = P.typed;
+          setCaret();
+          wrongFlash();
+        }
+        return;
+      }
+      /* ② 新上屏的字：逐个核对，能对几个收几个，第一个错的就截断 */
+      var delta = v.slice(pre), ok = 0;
+      while (ok < delta.length && L.text[P.idx + ok] === delta.charAt(ok)) ok++;
+      if (ok < delta.length) {
+        P.errors++;
+        P.keys++;
+        cn.value = P.typed + delta.slice(0, ok);
+        setCaret();
+        wrongFlash();
+        if (ok) accept(ok);
+        /* 先收正确的部分再闪红：accept() 内部会 paintText(false)，
+           原来写成 else paintText(true)，只要有字收进去，错字就一闪都不闪。 */
+        if (!P.done) paintText(true);
+        setTimeout(function () { if (!P.done) paintText(false); }, 220);
+        return;
+      }
+      accept(delta.length);
+    }
+    /* 组合输入期间拼音的落点（2026-11-03 修复）
+       以前是隐藏回显层、让 input 显形显示拼音，可 input 左对齐，整串字会从
+       框左边冒出来，和居中的课文错开一大截。现在 input 始终透明，拼音只做成
+       一个浮标贴在「第 idx 个字」的格子上 —— 输入前后文字位置完全一致。
+       顺带把不可见 input 的 text-indent 挪到同一格，系统输入法的候选框也会
+       跟着跑到正在打的这个字附近，而不是停在框的最左边。 */
+    var tbf = $('#tbField');
+    var tbComp = $('#tbComp');
+    var mctx = document.createElement('canvas').getContext('2d');
+    function measureWidth(s) {
+      if (!s) return 0;
+      var cs = window.getComputedStyle(cn);
+      mctx.font = cs.fontWeight + ' ' + cs.fontSize + ' ' + cs.fontFamily;
+      return mctx.measureText(s).width;
+    }
+    function placeComp(txt) {
+      if (!tbComp || !tbf) return;
+      var box = $('#tbEcho');
+      var chars = box ? box.children : null;
+      if (!chars || !chars.length) { tbComp.hidden = true; return; }
+      var at = chars[Math.min(P.idx, chars.length - 1)];
+      if (!at) { tbComp.hidden = true; return; }
+      tbComp.hidden = false;
+      tbComp.textContent = txt || '　';
+      /* 卡片贴边保护：拼音比一个字宽时别顶出框外 */
+      var left = at.offsetLeft;
+      var maxLeft = tbf.clientWidth - tbComp.offsetWidth - 4;
+      if (left > maxLeft) left = Math.max(0, maxLeft);
+      tbComp.style.left = left + 'px';
+      tbComp.style.top = (at.offsetTop + 3) + 'px';
+      var w = measureWidth(cn.value);
+      cn.style.textIndent = Math.max(0, Math.round(left - w)) + 'px';
+    }
+    cn.addEventListener('compositionstart', function () {
+      P.composing = true;
+      if (tbf) tbf.classList.add('comp');
+      placeComp('');
+    });
+    cn.addEventListener('compositionupdate', function (e) {
+      if (P.composing) placeComp(e.data || '');
+    });
+    cn.addEventListener('compositionend', function () {
+      P.composing = false;
+      if (tbf) tbf.classList.remove('comp');
+      if (tbComp) tbComp.hidden = true;
+      cn.style.textIndent = '0px';
+      setTimeout(onInput, 0);
+    });
+    cn.addEventListener('input', function (e) {
+      if (P.composing || (e && e.isComposing)) return;
+      onInput();
+    });
+    clearAppClick();
+    S._appClick = function () { if (!P.done) { cn.focus(); setCaret(); } };
+    app.addEventListener('click', S._appClick);
+    $('#textLine').addEventListener('mousedown', function (e) {
+      var ch = e.target.closest ? e.target.closest('.ch') : null;
+      /* preventDefault：输入框不失焦，点完生字还能接着打 */
+      if (ch) e.preventDefault();
+      if (ch && ch.getAttribute('data-p')) showPyPop(ch); else hidePyPop();
+    });
+    S._pyDown = function (e) {
+      var t = e.target;
+      while (t) { if (t.id === 'textLine') return; t = t.parentNode; }
+      hidePyPop();
+    };
+    document.addEventListener('mousedown', S._pyDown);
+    paintKb(L.text[0]);
+    syncCount();
+  }
+  function stopTimer() { if (P.timer) { clearInterval(P.timer); P.timer = null; } }
+  S._stopTimer = stopTimer;
+}
+function stopTimer() { if (S._stopTimer) S._stopTimer(); }
+/* 清掉上一关挂在 document / app 上的监听器：
+   不清的话旧关卡处理器会在背后 preventDefault 按键、
+   甚至弹出旧结算层，表现为"点进去就卡死"。 */
+function clearKd() {
+  if (S._kd) { document.removeEventListener('keydown', S._kd); S._kd = null; }
+}
+function clearAppClick() {
+  if (S._appClick) { app.removeEventListener('click', S._appClick); S._appClick = null; }
+}
+function clearPyDown() {
+  if (S._pyDown) { document.removeEventListener('mousedown', S._pyDown); S._pyDown = null; }
+}
+function clearPlayBindings() {
+  clearKd();
+  clearPyDown();
+  clearAppClick();
+  stopTimer();
+}
+
+/* ---------------- 结算 ---------------- */
+function submitResult(payload, stars, wpm) {
+  if (S.demo) {
+    var key = 's' + payload.stage + 'c' + payload.chapter + 'l' + payload.level;
+    var pr = S.progress;
+    var prev = pr.best[key];
+    var newBest = !prev || stars > prev.stars || (stars === prev.stars && wpm > prev.wpm);
+    var gained = newBest ? Math.max(0, stars - (prev ? prev.stars : 0)) : 0;
+    if (newBest) {
+      pr.best[key] = { stars: stars, wpm: wpm };
+      pr.stars = (pr.stars || 0) + gained;
+      pr.week_stars = (pr.week_stars || 0) + gained;
+      /* 金币公式与 levels.js / typing_store.py 一致：首通按星给，加倍卡 ×2 */
+      var addCoins = TL.coinsFor(stars, payload.level, false);
+      if (payload.double) addCoins *= 2;
+      pr.coins = (pr.coins || 0) + addCoins;
+      var pool = ['hat-red', 'crown', 'sunglass', 'glasses', 'scarf', 'bow', 'headset', 'bg-star'];
+      var needs = [10, 20, 40, 60, 80, 100, 130, 160];
+      var newDecos = [];
+      for (var i = 0; i < needs.length; i++) {
+        if (pr.stars >= needs[i] && pr.decos.indexOf(pool[i]) < 0) { pr.decos.push(pool[i]); newDecos.push(pool[i]); }
+      }
+      var egg = payload.level === 10 && !prev && stars > 0;
+      if (egg) pr.eggs = (pr.eggs || 0) + 1;
+      demoSave();
+      showResult(stars, wpm, payload, { newBest: newBest, gained: gained, coins_gained: addCoins,
+        rewards: { egg: !!egg, decos: newDecos } });
+    } else {
+      var rep = TL.coinsFor(stars, payload.level, true);
+      if (payload.double) rep *= 2;
+      pr.coins = (pr.coins || 0) + rep;
+      demoSave();
+      showResult(stars, wpm, payload, { newBest: false, gained: 0, coins_gained: rep, rewards: {} });
+    }
+    return;
+  }
+  api('/api/v2/typing/record', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  }).then(function (r) {
+    if (r && r.ok) {
+      S.progress = r.stu;
+      if (S.progress && !S.progress.equip) S.progress.equip = { pet: '', decos: [] };
+      S.ranch = { pet: S.progress.equip.pet || '', decos: S.progress.equip.decos || [] };
+      showResult(r.stars, r.wpm, payload, r);
+    } else {
+      showResult(stars, wpm, payload, { error: (r && r.msg) || '成绩没有保存成功' });
+    }
+  }).catch(function () {
+    showResult(stars, wpm, payload, { error: '网络不通，成绩没有保存成功' });
+  });
+}
+function showResult(stars, wpm, payload, res) {
+  var L = S.play.L;
+  var stage = TD.stageById(L.stage) || TD.STAGES[0];
+  var nextOpen = stars > 0 && L.level < 10;
+  var nextChOpen = stars > 0 && L.level === 10;
+  var rewards = res.rewards || {};
+  var rewardBits = [];
+  if (rewards.egg) rewardBits.push('🥚 掉落了一颗宠物蛋！快去牧场孵化');
+  (rewards.decos || []).forEach(function (d) {
+    var dd = TD.decoById(d);
+    if (dd) rewardBits.push('🎀 解锁新装扮：「' + dd.name + '」');
+  });
+  if (res.coins_gained === undefined && res.gained) {
+    res.coins_gained = TL.coinsFor(stars, L.level, false);
+  }
+  if (res.gained) rewardBits.push('⭐ 星数 + ' + res.gained);
+  if (res.coins_gained) rewardBits.push('🪙 金币 + ' + res.coins_gained + (payload.double ? '（加倍卡 ×2）' : ''));
+  if (payload.shield && stars > 0 && payload.acc < 90) rewardBits.push('🛡 容错卡生效：这次按通关算，下次试试不用道具');
+  var hasNextCh = TL.isBoss(L.level) && stars > 0 && (L.chapter + 1 < 200);
+  var mask = document.createElement('div');
+  mask.className = 'mask';
+  mask.innerHTML =
+    '<div class="result">' +
+      '<h2>' + (stars > 0 ? (stars === 3 ? '完美通关！' : stars === 2 ? '优秀！' : '通关啦！') : '差一点点') + '</h2>' +
+      '<div class="r-sub">' + esc(stage.icon + ' ' + L.title) + '</div>' +
+      '<div class="r-stars">' + starsHtml(stars) + '</div>' +
+      '<div class="r-grid">' +
+        '<div class="r-cell"><b>' + wpm + '</b><span>' + (L.mode === 'cn' ? '字/分钟' : '击键/分钟') + '</span></div>' +
+        '<div class="r-cell"><b>' + payload.acc + '%</b><span>准确率</span></div>' +
+        '<div class="r-cell"><b>' + payload.duration + 's</b><span>用时</span></div>' +
+      '</div>' +
+      (res.error ? '<div class="r-reward">⚠️ ' + esc(res.error) + '</div>' :
+        (rewardBits.length ? '<div class="r-reward">' + rewardBits.join('<br>') + '</div>' : '')) +
+      '<div class="r-btns">' +
+        (stars > 0 && (nextOpen || nextChOpen)
+          ? '<button class="btn" id="rNext">下一关 ›</button>' : '') +
+        '<button class="btn line" id="rRetry">再打一次</button>' +
+        '<button class="btn ghost" id="rMap">回地图</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(mask);
+  mask.addEventListener('click', function (e) { if (e.target === mask) close(); });
+  function close() { clearPlayBindings(); mask.remove(); S.view = 'map'; S.play = null; render(); }
+  var bm = mask.querySelector('#rMap');
+  if (bm) bm.onclick = close;
+  var br = mask.querySelector('#rRetry');
+  if (br) br.onclick = function () { mask.remove(); startLevel(L.stage, L.chapter, L.level); };
+  var bn = mask.querySelector('#rNext');
+  if (bn) bn.onclick = function () {
+    mask.remove();
+    if (nextOpen) startLevel(L.stage, L.chapter, L.level + 1);
+    else if (nextChOpen) { S.map.stage = L.stage; S.map.chapter = L.chapter + 1; S.view = 'map'; S.play = null; render(); }
+  };
+}
+
+/* ---------------- 排行榜 ---------------- */
+function loadLb() {
+  if (S.demo) {
+    var names = DEMO_LB_NAMES.slice();
+    var scope = S.lb.scope;
+    var rows = names.map(function (n, i) {
+      var v = scope === 'week' ? Math.max(1, 20 - i * 2 + (i % 3))
+            : scope === 'total' ? 90 - i * 9
+            : Math.round((58 - i * 3.4) * 10) / 10;
+      var pets = ['dog', 'dino', 'unicorn', '', 'cat', 'penguin', 'panda', 'rabbit'];
+      return { name: n, value: v, pet: pets[i], decos: i === 0 ? ['crown'] : (i === 2 ? ['bow'] : []), me: n === S.me.name };
+    });
+    rows.push({ name: S.me.name, value: scope === 'speed' ? 33.6 : (scope === 'week' ? S.progress.week_stars || 0 : S.progress.stars || 0),
+      pet: S.ranch.pet, decos: S.ranch.decos, me: true });
+    rows.sort(function (a, b) { return b.value - a.value; });
+    S.lb.rows = rows; S.lb.class_name = S.me.class_name;
+    paintLb();
+    return;
+  }
+  api('/api/v2/typing/leaderboard?scope=' + S.lb.scope).then(function (r) {
+    if (r && r.ok) { S.lb.rows = r.rows || []; S.lb.class_name = r.class_name || ''; paintLb(); }
+  });
+}
+function viewLb() {
+  var tabs = [['week', '⭐ 本周星光'], ['total', '🏆 累计总星'], ['speed', '⚡ 手速之王']];
+  return '<div class="lb-card">' +
+    '<div class="lb-title">' + esc(S.me.class_name) + ' · 打字排行榜</div>' +
+    '<div class="lb-sub">每周一星光榜自动清零，坚持每天练一点，榜上见！</div>' +
+    '<div class="lb-tabs">' + tabs.map(function (t) {
+      return '<button class="' + (S.lb.scope === t[0] ? 'on' : '') + '" data-lbscope="' + t[0] + '">' + t[1] + '</button>';
+    }).join('') + '</div>' +
+    '<div id="lbRows"><div class="lb-empty">加载中…</div></div>' +
+    '</div>';
+}
+function paintLb() {
+  var box = $('#lbRows');
+  if (!box) return;
+  if (!S.lb.rows.length) {
+    box.innerHTML = '<div class="lb-empty">这周还没有人上榜，第一个通关的人就是你！</div>';
+    return;
+  }
+  var unit = S.lb.scope === 'speed' ? 'KPM' : '星';
+  box.innerHTML = S.lb.rows.map(function (r, i) {
+    var rankCls = i === 0 ? 'r1' : i === 1 ? 'r2' : i === 2 ? 'r3' : '';
+    var medal = i < 3 ? ['🥇', '🥈', '🥉'][i] : (i + 1);
+    var pet = r.pet ? TD.petSvg(r.pet, r.decos) : '';
+    return '<div class="lb-row' + (r.me ? ' me' : '') + '">' +
+      '<span class="lb-rank ' + rankCls + '">' + medal + '</span>' +
+      (pet ? '<span class="lb-pet">' + pet + '</span>' : '<span class="lb-pet empty">🐾</span>') +
+      '<span class="lb-name">' + esc(r.name) + (r.me ? '<small>（我）</small>' : '') + '</span>' +
+      '<span class="lb-val">' + (Math.round(r.value * 10) / 10) + '<small>' + unit + '</small></span>' +
+      '</div>';
+  }).join('');
+}
+function bindLb() {
+  document.querySelectorAll('[data-lbscope]').forEach(function (b) {
+    b.onclick = function () {
+      S.lb.scope = b.getAttribute('data-lbscope');
+      var box = $('#lbRows');
+      if (box) box.innerHTML = '<div class="lb-empty">加载中…</div>';
+      loadLb();
+      document.querySelectorAll('[data-lbscope]').forEach(function (x) {
+        x.classList.toggle('on', x.getAttribute('data-lbscope') === S.lb.scope);
+      });
+    };
+  });
+}
+
+/* ---------------- 宠物牧场 ---------------- */
+/** 3D 拟物蛋：径向蛋壳渐变 + 左上高光 + 边缘暗角 + 落地阴影，
+    替代原来的 🥚 emoji —— emoji 各平台长相不一，且没法跟宠物的材质统一。 */
+function eggSvg() {
+  return '<svg viewBox="0 0 100 124" xmlns="http://www.w3.org/2000/svg">' +
+    '<defs>' +
+    '<radialGradient id="egShell" cx="34%" cy="24%" r="82%">' +
+      '<stop offset="0" stop-color="#FFFFFF"/><stop offset="52%" stop-color="#FBF1DC"/>' +
+      '<stop offset="100%" stop-color="#D6BF92"/></radialGradient>' +
+    '<radialGradient id="egHi" cx="50%" cy="50%" r="50%">' +
+      '<stop offset="0" stop-color="#fff" stop-opacity=".95"/>' +
+      '<stop offset="100%" stop-color="#fff" stop-opacity="0"/></radialGradient>' +
+    '<radialGradient id="egVig" cx="50%" cy="40%" r="64%">' +
+      '<stop offset="58%" stop-color="#7A5A26" stop-opacity="0"/>' +
+      '<stop offset="100%" stop-color="#7A5A26" stop-opacity=".26"/></radialGradient>' +
+    '</defs>' +
+    '<ellipse cx="50" cy="114" rx="23" ry="5" fill="#A8894E" opacity=".26"/>' +
+    '<path d="M50 9c15.5 0 26 22.5 26 40.5S65.5 80 50 80 24 67.5 24 49.5 34.5 9 50 9Z" fill="url(#egShell)"/>' +
+    '<ellipse cx="39.5" cy="35" rx="7.5" ry="11.5" fill="url(#egHi)" opacity=".85" transform="rotate(-18 39.5 35)"/>' +
+    '<path d="M50 9c15.5 0 26 22.5 26 40.5S65.5 80 50 80 24 67.5 24 49.5 34.5 9 50 9Z" fill="url(#egVig)"/>' +
+    '<circle cx="63" cy="52" r="3.2" fill="#E3CDA0" opacity=".85"/>' +
+    '<circle cx="38" cy="62" r="2.5" fill="#E3CDA0" opacity=".7"/>' +
+    '<circle cx="55" cy="69" r="2" fill="#E3CDA0" opacity=".55"/>' +
+    '</svg>';
+}
+function viewRanch() {
+  var pr = S.progress;
+  var curPet = S.ranch.pet || (pr.pets && pr.pets[0]) || '';
+  var curDecos = S.ranch.decos || [];
+  var pet = curPet ? TD.petById(curPet) : null;
+  var owned = pr.pets || [];
+  var side =
+    '<div class="ranch-side">' +
+      '<h3>🏪 我的牧场</h3>' +
+      '<div class="stage-box' + (S.petSwap ? ' swapin' : '') + '" id="stageBox" ' +
+        'title="' + (owned.length > 1 ? '点一下换下一只伙伴' : '再去赢一颗宠物蛋，就能解锁更多伙伴') + '">' +
+        '<span class="stage-glow"></span>' +
+        '<div class="stage-pet">' +
+          ((pet && TD.petSvg(pet, curDecos, { act: 1 })) || '<div class="stage-empty">🐾</div>') +
+        '</div>' +
+        (owned.length > 1
+          ? '<button class="stage-nav prev" data-petnav="-1" aria-label="上一只宠物">‹</button>' +
+            '<button class="stage-nav next" data-petnav="1" aria-label="下一只宠物">›</button>'
+          : '') +
+      '</div>' +
+      '<h3>' + (pet ? esc(TD.PET_DEFAULT_NAME || pet.name) : '还没有出战宠物') + '</h3>' +
+      '<div class="mood">' + (pet ? esc(pet.name + ' · ' + pet.mood) : '先去闯一关 BOSS，赢一颗宠物蛋吧！') + '</div>' +
+      '<div class="title-bar"><span class="title-chip">' + esc(TD.titleFor(pr.stars || 0).name) + '</span>' +
+        '<span class="next-title">下一称号：' +
+        (TD.nextTitle(pr.stars || 0) ? TD.nextTitle(pr.stars || 0).name + '（' + TD.nextTitle(pr.stars || 0).need + ' 星）' : '已到顶！') +
+        '</span></div>' +
+      /* 装扮是"穿在宠物身上"的，没有宠物就没有可打扮的对象。
+         2026-11-02 修：以前这里无条件显示「已装备」，学生明明还没有伙伴，
+         却看到自己戴着墨镜和皇冠 —— 逻辑对不上，孩子会以为点错了。 */
+      (pet
+        ? '<div class="equip-line">👗 已装备　' +
+            (curDecos.length
+              ? curDecos.map(function (d) {
+                  var x = TD.decoById(d);
+                  return x ? '<span class="eq-chip">' + TD.catName(x.cat) + '·' + esc(x.name) + '</span>' : '';
+                }).join('')
+              : '<span style="color:var(--ink3)">还没穿任何装饰</span>') +
+          '</div>' +
+          '<div class="equip-hint">每个部位只能穿一件；「整套」会盖住上衣和下衣。</div>'
+        : '<div class="equip-empty">🐾 还没有伙伴可打扮' +
+          '<span>先去 BOSS 关赢一颗宠物蛋，孵出小伙伴就能试衣服了</span></div>') +
+      (pr.eggs > 0
+        ? '<div class="egg-card"><span class="egg' + (S.eggOpening ? ' egg-open' : '') + '">' + eggSvg() + '</span>' +
+          '<div class="egg-t">你有 ' + pr.eggs + ' 颗宠物蛋</div>' +
+          '<div class="egg-s">BOSS 关首通掉落 · 孵出一只你没有的伙伴</div>' +
+          '<button class="btn" id="eggBtn" ' + (S.eggOpening ? 'disabled' : '') + '>🥚 立刻孵化</button></div>'
+        : '<div class="egg-card" style="opacity:.78"><span class="egg">' + eggSvg() + '</span>' +
+          '<div class="egg-t">宠物蛋要从 BOSS 关赢</div>' +
+          '<div class="egg-s">每卷第 10 关首通必掉一颗蛋！</div></div>') +
+    '</div>';
+  var grid = '<div class="pet-grid">' + TD.PETS.map(function (p) {
+    var owned = (pr.pets || []).indexOf(p.id) >= 0;
+    var on = p.id === curPet;
+    if (owned) {
+      return '<button class="pet-card' + (on ? ' on' : '') + '" data-pet="' + p.id + '">' +
+        (on ? '<span class="eq">出战</span>' : '') +
+        '<span class="pet-stage">' + TD.petSvg(p, on ? curDecos : []) + '</span>' +
+        '<b>' + esc(p.name) + '</b></button>';
+    }
+    return '<div class="pet-card lock"><div class="ph">❓</div><b>???<div class="lock-tip">孵蛋解锁</div></b></div>';
+  }).join('') + '</div>' +
+    '<div class="ranch-tip">💡 点击伙伴即可切换出战；点牧场大图也能轮换，装扮会跟着它出现在练习页和排行榜上。</div>';
+  return '<div class="ranch-grid">' + side + '<div>' + grid +
+    (pet ? wardrobe() : '') + itemShopBox() + '</div></div>';
+}
+
+/* ---------------- 衣柜：按部位分架 ----------------
+   为什么要分架：原来十二件挤成一行，帽子眼镜围巾混在一起，
+   而且能同时戴三顶帽子。现在按「头饰 / 面饰 / 上衣 / 下衣 / 整套」
+   五个部位分开摆，同一部位只能穿一件 —— 换帽子就是摘帽子。
+   没买到的直接显示金币价，点一下就能买，不用先去别处解锁。 */
+function wardrobe() {
+  var pr = S.progress || {};
+  var owned = pr.decos || [];
+  var cur = S.ranch.decos || [];
+  var cats = TD.DECO_CATS.map(function (c) {
+    var list = TD.DECOS.filter(function (d) { return d.cat === c.id; });
+    if (!list.length) return '';
+    var worn = null;
+    list.forEach(function (d) { if (cur.indexOf(d.id) >= 0) worn = d; });
+    var dots = list.map(function (d) {
+      var has = owned.indexOf(d.id) >= 0;
+      var on = cur.indexOf(d.id) >= 0;
+      if (!has) {
+        return '<button class="deco-dot buy" data-decobuy="' + d.id + '" ' +
+          'title="' + esc(d.name + '：' + d.price + ' 金币，或累计 ' + d.need + ' 星解锁') + '">' +
+          TD.decoSvg(d) + '<span class="dd-price">🪙' + d.price + '</span></button>';
+      }
+      return '<button class="deco-dot' + (on ? ' on' : '') + '" data-deco="' + d.id + '" ' +
+        'title="' + esc(d.name + (on ? '（已穿，点击脱下）' : '（点击穿上）')) + '">' +
+        TD.decoSvg(d) + '</button>';
+    }).join('');
+    return '<div class="deco-sec">' +
+      '<div class="ds-head"><span class="ds-ic">' + c.icon + '</span><b>' + c.name + '</b>' +
+        (worn ? '<span class="ds-worn">' + esc(worn.name) + '</span>'
+              : '<span class="ds-worn none">空着</span>') +
+      '</div>' +
+      '<div class="deco-row">' + dots + '</div>' +
+    '</div>';
+  }).join('');
+  return '<div class="wardrobe">' +
+    '<div class="w-head"><b>👗 衣柜</b>' +
+      '<span>五类部位，同类只能穿一件 · 未拥有的可直接用金币买</span>' +
+      '<span class="w-coin">🪙 ' + (pr.coins || 0) + '</span></div>' +
+    '<div class="w-body">' + cats + '</div>' +
+  '</div>';
+}
+
+/* ---------------- 道具商店 ----------------
+   放在牧场而不是练习页主界面：道具是「卡住时的备用方案」，
+   不该在地图上一眼就看到，否则会变成「先买道具再打」。 */
+function itemShopBox() {
+  var pr = S.progress || {};
+  var inv = pr.items || {};
+  return '<div class="item-shop">' +
+    '<div class="is-head"><b>🏪 道具商店</b>' +
+      '<span>金币购买 · 只在当前这一关有效</span>' +
+      '<span class="w-coin">🪙 ' + (pr.coins || 0) + '</span></div>' +
+    '<div class="is-grid">' + TD.ITEMS.map(function (it) {
+      var n = inv[it.id] || 0;
+      var full = n >= it.max;
+      return '<div class="is-card">' +
+        '<div class="ic-top"><span class="ic-ic">' + it.icon + '</span>' +
+          '<b>' + esc(it.name) + '</b><span class="ic-have">' + n + '/' + it.max + '</span></div>' +
+        '<div class="ic-desc">' + esc(it.desc) + '</div>' +
+        '<div class="ic-tip">' + esc(it.tip) + '</div>' +
+        '<button class="btn sm' + (full ? ' line' : '') + '" data-buyitem="' + it.id + '"' +
+          (full ? ' disabled' : '') + '>🪙 ' + it.price + (full ? '　已满' : '　购买') + '</button>' +
+      '</div>';
+    }).join('') + '</div>' +
+  '</div>';
+}
+/** 在已拥有的伙伴之间轮换出战（dir = 1 下一只 / -1 上一只）。
+    只有一只时摇一下舞台做提示，不弹窗打断。 */
+function cyclePet(dir) {
+  var owned = (S.progress.pets || []);
+  var box = $('#stageBox');
+  if (owned.length < 2) {
+    if (box) {
+      box.classList.remove('shake');
+      void box.offsetWidth;              /* 强制回流，让动画可重复触发 */
+      box.classList.add('shake');
+    }
+    return;
+  }
+  var i = owned.indexOf(S.ranch.pet);
+  i = (i + (dir || 1) + owned.length) % owned.length;
+  S.ranch.pet = owned[i];
+  S.petSwap = 1;                        /* 下次渲染播放"登场"动画 */
+  saveEquip();
+  render();
+}
+/** 孵化成功的统一庆祝弹窗：把刚孵出的伙伴直接画进弹窗里，比一行字有仪式感 */
+function petHatched(id) {
+  var p = TD.petById(id);
+  uiAlert({
+    title: '孵化成功', tone: 'ok', confirmText: '去看看',
+    message: '恭喜！蛋壳裂开了，「' + (p ? p.name : '新伙伴') + '」已经住进你的牧场。',
+    html: p ? TD.petSvg(p, []) : ''
+  });
+}
+function bindRanch() {
+  S.petSwap = 0;
+  var sb = $('#stageBox');
+  if (sb) {
+    sb.onclick = function (ev) {
+      if (ev.target && ev.target.closest && ev.target.closest('[data-petnav]')) return;
+      cyclePet(1);
+    };
+  }
+  document.querySelectorAll('[data-petnav]').forEach(function (b) {
+    b.onclick = function (ev) {
+      ev.stopPropagation();
+      cyclePet(parseInt(b.getAttribute('data-petnav'), 10) || 1);
+    };
+  });
+  document.querySelectorAll('[data-pet]').forEach(function (b) {
+    b.onclick = function () {
+      S.ranch.pet = b.getAttribute('data-pet');
+      S.petSwap = 1;
+      saveEquip();
+      render();
+    };
+  });
+  document.querySelectorAll('[data-deco]').forEach(function (b) {
+    b.onclick = function () {
+      var id = b.getAttribute('data-deco');
+      /* 双保险：即便 DOM 被手动改过，也再校验一次是否真的拥有 */
+      if ((S.progress.decos || []).indexOf(id) < 0) {
+        var dd = TD.decoById(id);
+        uiToast('「' + (dd ? dd.name : '这个装扮') + '」还没解锁', 'warn');
+        return;
+      }
+      var wasOn = S.ranch.decos.indexOf(id) >= 0;
+      /* 部位互斥交给 TD.equipDeco：穿上新帽子自动摘下旧帽子，
+         穿整套自动脱掉上下装 —— 规则只写在一个地方，服务端再执行一遍 */
+      S.ranch.decos = TD.equipDeco(S.ranch.decos, id);
+      saveEquip();
+      render();
+      var dd2 = TD.decoById(id);
+      if (!wasOn && dd2) {
+        uiToast('「' + dd2.name + '」上身，' + (TD.PET_DEFAULT_NAME || '伙伴') +
+          (dd2.act || '开心地动了动'), 'ok');
+      }
+    };
+  });
+  /* 未拥有的装扮：点了直接问「买不买」，不再只是弹一句"还差几星" */
+  document.querySelectorAll('[data-decobuy]').forEach(function (b) {
+    b.onclick = function () {
+      var d = TD.decoById(b.getAttribute('data-decobuy'));
+      if (d) buyDeco(d);
+    };
+  });
+  document.querySelectorAll('[data-buyitem]').forEach(function (b) {
+    b.onclick = function () { buyItem(b.getAttribute('data-buyitem')); };
+  });
+  /* 锁着的装扮：可点，但只解释「还差多少星」，不会穿上 */
+  document.querySelectorAll('[data-deco-lock]').forEach(function (b) {
+    b.onclick = function () {
+      var d = TD.decoById(b.getAttribute('data-deco-lock'));
+      if (!d) return;
+      var lack = Math.max(0, (d.need || 0) - (S.progress.stars || 0));
+      uiToast(lack > 0
+        ? '「' + d.name + '」还差 ' + lack + ' 星解锁'
+        : '「' + d.name + '」需要累计 ' + d.need + ' 星', 'warn');
+    };
+  });
+  var eb = $('#eggBtn');
+  if (eb) eb.onclick = function () {
+    if (S.demo) {
+      var unowned = TD.PETS.map(function (p) { return p.id; })
+        .filter(function (id) { return S.progress.pets.indexOf(id) < 0; });
+      S.progress.eggs--;
+      if (unowned.length) {
+        var pet = unowned[Math.floor(Math.random() * unowned.length)];
+        S.progress.pets.push(pet);
+        if (!S.ranch.pet) S.ranch.pet = pet;
+        demoSave();
+        render();
+        setTimeout(function () { petHatched(pet); }, 60);
+      } else {
+        S.progress.coins += 50;
+        demoSave(); render();
+      }
+      return;
+    }
+    eb.disabled = true; eb.textContent = '孵化中…';
+    api('/api/v2/typing/claim', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+      .then(function (r) {
+        if (r && r.ok) {
+          return api('/api/v2/typing/me').then(function (me) {
+            if (me && me.ok) {
+              S.progress = me.progress;
+              if (!S.progress.equip) S.progress.equip = { pet: '', decos: [] };
+              S.ranch = { pet: S.progress.equip.pet || '', decos: S.progress.equip.decos || [] };
+            }
+            render();
+            if (r.pet) setTimeout(function () { petHatched(r.pet); }, 60);
+            else if (r.msg) setTimeout(function () {
+              uiAlert({ title: '没能孵化', tone: 'warn', message: r.msg });
+            }, 60);
+          });
+        }
+        render();
+      }).catch(function () { render(); });
+  };
+}
+function saveEquip() {
+  if (S.demo) {
+    S.progress.equip = { pet: S.ranch.pet, decos: S.ranch.decos.slice() };
+    demoSave();
+    return;
+  }
+  api('/api/v2/typing/equip', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pet: S.ranch.pet, decos: S.ranch.decos })
+  });
+}
+
+boot();
+})();
+</script>
+</body>
+</html>

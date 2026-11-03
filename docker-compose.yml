@@ -1,105 +1,124 @@
 # ============================================================
-# 班级工作台 2.0 · Docker Compose 编排
+# 班级工作台 2.0 · Docker Compose 编排（NAS 部署）
 # ------------------------------------------------------------
-# 服务与启动顺序：
-#   init ──(成功退出)──▶ workbench ──(healthy)──▶ 就绪可用
+# 一个网页入口，四个容器：
 #
-#   init       一次性容器：修正数据卷属主、补建子目录，跑完即退出（restart: "no"）
-#   workbench  主服务：教师端 / 学生端 / 同步服务 / 旧提交接口，单进程单端口
+#   gateway     nginx 反向代理，唯一对外端口（默认 8080）
+#                ├─ /       → workbench（教师端 /teacher/、学生端 /s/）
+#                └─ /qf/    → quickform（QuickForm 教师版）
+#   workbench   工作台主服务：教师端 / 学生端 / 同步 / 课件 / 提交（容器内 20020）
+#   quickform   QuickForm 教师版（容器内 5055，独立镜像、可单独升级替换）
+#   init        一次性容器：修正数据卷属主、补建子目录，跑完即退出
+#
+# 对外只有一个地址：  http://<NAS 的局域网 IP>:8080/
+#   · 教师端   http://<NAS>:8080/teacher/
+#   · 学生端   http://<NAS>:8080/s/
+#   · QuickForm http://<NAS>:8080/qf/
 #
 # 常用命令：
-#   docker compose up -d --build       构建并启动（后台）
-#   docker compose ps                  查看状态（STATUS=healthy 即可用）
-#   docker compose logs -f workbench   跟踪日志
-#   docker compose stop                停止（容器保留，数据保留）
-#   docker compose start               再次启动
-#   docker compose down                停止并删除容器（数据卷保留）
-#   docker compose down -v             连数据卷一起删（危险）
+#   docker compose up -d --build        构建并启动全部服务
+#   docker compose ps                   看状态（都 healthy 即可用）
+#   docker compose logs -f quickform    看 QuickForm 日志
+#   docker compose restart quickform    只重启 QuickForm
+#   docker compose down                 停止并删除容器（数据卷保留）
 #
-# 推到阿里云 ACR（镜像名已参数化，无需改本文件）：
-#   IMAGE_REPO=registry.cn-hangzhou.aliyuncs.com/<命名空间>/teacher-workbench \
-#   IMAGE_TAG=2.0.4 docker compose build
-#   docker compose push
+# 只更新 QuickForm（不动工作台）：
+#   docker compose build quickform && docker compose up -d quickform
+#   或把官方源码解压覆盖到 ./quickform/app 后：
+#   docker compose restart quickform
+#
+# 推到镜像仓库（可选）：
+#   IMAGE_REPO=registry.cn-guangzhou.aliyuncs.com/<命名空间>/teacher-workbench \
+#   IMAGE_TAG=2.0 docker compose build && docker compose push
 # ============================================================
 name: teacher-workbench
 
 services:
   # ---------------------------------------------------------
-  # init：一次性数据卷初始化
-  # 命名卷首次挂载会继承镜像里的属主（10001），一般不需要这一层；
-  # 但当数据卷是旧卷、或改成了 bind mount（宿主机目录属主不是 10001）时，
-  # 主服务会因写不了数据目录而直接退出。这一层先把属主修正，再放行主服务。
+  # init：一次性数据卷初始化（属主 / 子目录）
+  # 命名卷首次挂载会继承镜像里的属主；旧卷或 bind mount 则不一定，
+  # 主服务会因写不了数据目录直接退出。这一层先修好再放行。
   # ---------------------------------------------------------
   init:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ${IMAGE_REPO:-teacher-workbench}:${IMAGE_TAG:-2.0.4}
+    image: ${IMAGE_REPO:-teacher-workbench}:${IMAGE_TAG:-2.0}
     container_name: teacher-workbench-init
-    # root 才有权限改卷属主；只做这一件事，跑完立刻退出
     user: "0:0"
     entrypoint: ["/bin/sh", "-c"]
-    # 注意：Compose 会把命令里的 $XXX 当变量插值，脚本内的 shell 变量必须写成 $$XXX，
-    # 这里干脆不用变量，避免踩坑。
+    # 注意：Compose 会把 $XXX 当变量插值，脚本里的 shell 变量必须写 $$XXX；
+    # 这里故意不用变量，避免踩坑。
     command:
       - |
         set -eu
-        if [ ! -w /app/data ] || [ "$(stat -c %u /app/data 2>/dev/null || echo 0)" != "10001" ]; then
-          echo "[init] 数据卷属主异常，正在修正 -> 10001:10001"
+        if [ ! -w /app/data ] || [ "$$(stat -c %u /app/data 2>/dev/null || echo 0)" != "10001" ]; then
+          echo "[init] 工作台数据卷属主异常，修正 -> 10001:10001"
           chown -R 10001:10001 /app/data
         else
-          echo "[init] 数据卷属主正常（10001），无需修改"
+          echo "[init] 工作台数据卷属主正常（10001）"
         fi
-        mkdir -p /app/data/files /app/data/backup \
+        mkdir -p /app/data/files /app/data/backup /app/data/courseware \
                  /app/data/submissions/enh /app/data/submissions/uploads
         chown -R 10001:10001 /app/data
+
+        if [ -d /qfdata ]; then
+          echo "[init] QuickForm 数据卷 -> 10002:10002"
+          mkdir -p /qfdata/db /qfdata/uploads /qfdata/assets /qfdata/logs
+          chown -R 10002:10002 /qfdata
+        fi
         echo "[init] 数据卷就绪"
     volumes:
       - workbench-data:/app/data
+      - quickform-data:/qfdata
     environment:
       TZ: ${TZ:-Asia/Shanghai}
     restart: "no"
-    network_mode: none          # 不需要网络，只碰数据卷
+    network_mode: none
     security_opt:
       - no-new-privileges:true
 
   # ---------------------------------------------------------
-  # workbench：主服务（唯一对外端口）
+  # workbench：工作台主服务（不直接对外，统一从 gateway 进）
   # ---------------------------------------------------------
   workbench:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ${IMAGE_REPO:-teacher-workbench}:${IMAGE_TAG:-2.0.4}
+    image: ${IMAGE_REPO:-teacher-workbench}:${IMAGE_TAG:-2.0}
     container_name: teacher-workbench
-    # 启动顺序：init 成功退出之后才启动本服务
     depends_on:
       init:
         condition: service_completed_successfully
     restart: unless-stopped
-    # 宿主机 IP:宿主机端口 : 容器端口（容器内固定 20020，换端口不用重建镜像）
+    # 只绑宿主机回环，留一个「绕开网关」的排障入口；
+    # 学生和老师平时都走 gateway 的 8080，不要用这个端口。
     ports:
-      - "${WORKBENCH_HOST_IP:-0.0.0.0}:${WORKBENCH_PORT:-20020}:20020"
+      - "127.0.0.1:${WORKBENCH_DEBUG_PORT:-20020}:20020"
     environment:
       TZ: ${TZ:-Asia/Shanghai}
-      # 以下变量由 entrypoint.sh 与 server.py 读取，决定监听地址与数据落盘位置
       PORT: "20020"
       BIND: "0.0.0.0"
       WB_DATA_DIR: /app/data
       WB_SUBMISSION_DATA_DIR: /app/data/submissions
+      # 课件库根目录：放在数据卷里，重建镜像 / 换容器都不丢
+      WB_COURSEWARE_DIR: /app/data/courseware
       PYTHONUNBUFFERED: "1"
-      # 宿主机端口：只用于把启动日志里的访问地址打印对。
-      # 二维码 / 学生端地址不依赖它——那些由浏览器实际访问的地址自动推导。
-      WB_HOST_PORT: "${WORKBENCH_PORT:-20020}"
-      # 对外访问地址（可选，一般留空）：
-      #   留空 = 自动跟随浏览器访问的地址，改 WORKBENCH_PORT 后二维码自动跟着变；
-      #   只有当你在前面挂了反向代理、或必须固定外部域名时才需要填。
+      # 对外地址（可选）：留空 = 跟随浏览器访问的地址（推荐）。
+      # 只有前面还套了一层域名/端口映射时才需要写死，例如 http://nas.example.lan:8080
       WB_PUBLIC_URL: "${WB_PUBLIC_URL:-}"
+      # QuickForm 服务地址（后端生成学生提交页链接时用；前端走同源 /qf）
+      WB_QUICKFORM_URL: "${WB_QUICKFORM_URL:-http://quickform:5055}"
+      # 信任内网反向代理传来的 X-Forwarded-For（网关容器 → 本容器）。
+      # 不开的话所有师生会共用网关那一个 IP：限速互相拖累、日志分不清是谁。
+      WB_TRUST_PROXY: "1"
+      # 内部调用密钥：跨容器调用 QuickForm 的 /_wb_internal/* 时校验。
+      # 必须与 quickform 服务的同名变量完全一致，否则「数据大屏」清空/删除会 403。
+      WB_INTERNAL_SECRET: "${WB_INTERNAL_SECRET:-wb-internal-change-me}"
     volumes:
-      # 单一数据卷：SQLite / 配置 / 上传 / 每日快照 / 提交系统数据全在里面
       - workbench-data:/app/data
-      # 想直接在宿主机上看文件，把上一行换成（Linux 需先 chown -R 10001:10001 ./app/data）：
-      # - ./app/data:/app/data
+      # 想在 NAS 文件管理器里直接改数据，把上一行换成（Linux 需先 chown -R 10001:10001 ./data）：
+      # - ./data:/app/data
     healthcheck:
       test:
         - CMD
@@ -110,7 +129,6 @@ services:
       timeout: 5s
       start_period: 20s
       retries: 3
-    # 给 SQLite 留时间做 WAL 检查点，避免直接 kill 导致下次启动回放
     stop_grace_period: 15s
     security_opt:
       - no-new-privileges:true
@@ -120,7 +138,91 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # ---------------------------------------------------------
+  # quickform：QuickForm 教师版（独立镜像，可单独升级）
+  # 源码在 ./quickform/app，替换后重启本容器即生效；
+  # 数据（SQLite / 学生提交附件 / 任务附件）全在 quickform-data 卷里。
+  # ---------------------------------------------------------
+  quickform:
+    build:
+      context: .
+      dockerfile: quickform/Dockerfile
+    image: ${QF_IMAGE_REPO:-teacher-workbench-quickform}:${QF_IMAGE_TAG:-2.5}
+    container_name: teacher-workbench-quickform
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      # 会话加密密钥：务必在 .env 里换成随机串（不换则每次重启登录态失效）
+      SECRET_KEY: "${QF_SECRET_KEY:-please-change-me-in-dotenv}"
+      QF_PREFIX: /qf
+      QUICKFORM_PORT: "5055"
+      QF_DATA_DIR: /data
+      # 首次启动自动创建的账号（已存在任何账号时不会覆盖）
+      QF_ADMIN_USER: "${QF_ADMIN_USER:-wst}"
+      QF_ADMIN_PASSWORD: "${QF_ADMIN_PASSWORD:-quickform}"
+      # 内部调用密钥：必须与 workbench 服务的同名变量一致（同改同不改）
+      WB_INTERNAL_SECRET: "${WB_INTERNAL_SECRET:-wb-internal-change-me}"
+    volumes:
+      - quickform-data:/data
+      # 想让「换官方源码」不用重建镜像：把官方仓库解压到宿主机目录后挂进来（下一行取消注释）
+      # - ./quickform/app:/opt/quickform/app:ro
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import sys,urllib.request;r=urllib.request.urlopen('http://127.0.0.1:5055/login',timeout=4);sys.exit(0 if r.status<500 else 1)"
+      interval: 30s
+      timeout: 6s
+      start_period: 40s
+      retries: 3
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ---------------------------------------------------------
+  # gateway：统一网页入口（唯一对外端口）
+  # ---------------------------------------------------------
+  gateway:
+    image: nginx:1.27-alpine
+    container_name: teacher-workbench-gateway
+    depends_on:
+      workbench:
+        condition: service_started
+      quickform:
+        condition: service_started
+    restart: unless-stopped
+    ports:
+      # 老师/学生都访问这个端口；换端口只改 .env 的 WEB_PORT，不用重建镜像
+      - "${WEB_PORT:-8080}:80"
+    volumes:
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/gw-health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "2"
+
 volumes:
+  # 固定卷名：换 compose 项目名、重装容器都不会丢数据
   workbench-data:
-    # 固定卷名：换 compose 项目名、重装容器都不会丢数据
     name: ${WORKBENCH_VOLUME:-teacher-workbench-data}
+  quickform-data:
+    name: ${QUICKFORM_VOLUME:-teacher-workbench-quickform-data}

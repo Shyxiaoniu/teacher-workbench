@@ -37,7 +37,8 @@ TABLES = [
     "seat_tpl", "student_notes", "quick_links", "courseware_links",
     "leave_requests",   # 学生请假申请（教师端考勤页/控制台审批）
     "materials",        # 教师下发的学习资料（按班级），学生端「资料」页签只读
-    "guides",           # 导学单：教师按班/课程发放，学生端「今日」在导学单里完成资料查看与提交
+    "guides",           # 导学单（2026-11-02 起教师端不再新建；旧数据保留兼容）
+    "activity_pushes",  # 课堂活动发放：教师选好 QuickForm 活动即写入，学生端「今日」可见
 ]
 
 # 这些字段是前端临时态，不进指纹也不落库（否则同一行会无限“变脏”）
@@ -691,6 +692,13 @@ class Store(object):
         with self.lock:
             r = self.conn.execute("SELECT COUNT(*) AS c FROM student_creds").fetchone()
         return int(r["c"])
+
+    def cred_ids(self):
+        """单独设过密码的学生 id 列表（教师端「学生页」标「独立密码」徽章用）。
+        只给 id，不带哈希——哈希只在全量备份导出时才出库。"""
+        with self.lock:
+            rows = self.conn.execute("SELECT student_id FROM student_creds").fetchall()
+        return [r["student_id"] for r in rows]
 
     def clear_creds(self, student_ids=None):
         with self.lock:
