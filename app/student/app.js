@@ -784,7 +784,7 @@
       (turned ? '<div class="smap-note">老师设置的讲台在' + stageCn +
         '，这里统一翻到上方显示，座位号与老师那张表一致</div>' : '') +
       '<div class="smap-scroll"><div class="smap-grid" style="--c:' + (C + 1) +
-        ';--fs:12px">' +
+        ';--fs:13px">' +
         cells + '</div></div>' +
       '<div class="smap-note smap-axis-note">左侧数字是第几排 · 顶部数字是第几列' +
         ' · 格子左下角是座位号</div>' +
@@ -800,11 +800,11 @@
       '</div>';
   }
 
-  /* 座位卡字号自适应（2026-11-03 牛哥反馈：字体太小看不清）：
-     不再按「列数」定字号，改按「格子实际宽度」换算，观感对齐教师端
-     （教师端 .seat-name 13.5px 配约 120~150px 格宽，比例约 11%）。
-     宽屏格子大 → 字就大；手机 8 列格子 40px → 自动缩到下限；
-     缩放窗口时 resize 监听实时重算，字号跟着格子走。 */
+  /* 座位卡字号自适应（2026-11-03 两轮调整）：
+     第一轮：不再按「列数」定字号，改按「格子实际宽度」换算；
+     第二轮（本次）：比例 0.115→0.15、夹取 10.5~14 → 12.5~17 ——
+     老师反馈 PC 宽屏 8 列时还是看不清，直接放大一档；
+     手机 8 列格子 37px 也能拿到 12.5px（原来只有 10.5px）。 */
   function smapAutoSize() {
     var grid = document.querySelector('.smap-grid');
     if (!grid) return;
@@ -812,7 +812,7 @@
     if (!cell) return;
     var w = cell.getBoundingClientRect().width;
     if (!w) return;
-    var fs = Math.max(10.5, Math.min(14, w * 0.115));
+    var fs = Math.max(12.5, Math.min(17, w * 0.15));
     grid.style.setProperty('--fs', fs.toFixed(1) + 'px');
   }
   window.addEventListener('resize', smapAutoSize);

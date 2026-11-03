@@ -1585,6 +1585,11 @@ class Handler(LEG.Handler):
             if not s:
                 return self._json({"ok": False, "msg": "未登录"}, 401)
             if s["role"] != "student":
+                if s["role"] == "teacher":
+                    # 教师练习模式（2026-11-03）：同一张打字地图教师也能练，
+                    # 成绩默认只存本机；前端页顶有「计入班级排行榜」开关。
+                    return self._json({"ok": False, "role": "teacher",
+                                       "msg": "教师练习模式"})
                 return self._json({"ok": False, "msg": "只有学生有练习档案"}, 403)
             r = student_row(s.get("student_id"))
             if not r:
@@ -1634,6 +1639,14 @@ class Handler(LEG.Handler):
                              "value": d["value"], "stars": d["stars"],
                              "pet": d["pet"], "decos": d["decos"]})
             rows.sort(key=lambda x: -x["value"])
+            # 教师练习成绩（2026-11-03）：开启「计入班级排行榜」后，以「老师」
+            # 一行参与排序；本周星为 0 时不进周榜（与学生口径一致）。
+            tv = TYPING.teacher_lb_value(class_id, scope)
+            if tv and not (scope == "week" and tv["value"] <= 0):
+                rows.append({"student_id": "__teacher__", "name": tv["name"],
+                             "student_no": "", "value": tv["value"],
+                             "stars": tv["stars"], "pet": "", "decos": []})
+                rows.sort(key=lambda x: -x["value"])
             rows = rows[:50]
             if me_id:
                 for i, row in enumerate(rows):
@@ -2683,6 +2696,18 @@ class Handler(LEG.Handler):
                 STORE.audit("student:%s" % r.get("name"), "typing-record",
                             "s%sc%sl%s %s星" % (body.get("stage"), body.get("chapter"),
                                                body.get("level"), res.get("stars")))
+            return self._json(res)
+        if path == "/api/v2/typing/teacher-record":
+            # 教师练习成绩上报（2026-11-03）：前端勾选「计入班级排行榜」才调
+            if not self._is_teacher():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            tname = str((CFG.get("teacher") or {}).get("username") or "老师")
+            res = TYPING.teacher_record(body.get("class_id"), tname, body or {})
+            if res.get("ok"):
+                STORE.audit("teacher", "typing-teacher-record",
+                            "class=%s s%sc%sl%s %s星" % (body.get("class_id"),
+                                                         body.get("stage"), body.get("chapter"),
+                                                         body.get("level"), res.get("stars")))
             return self._json(res)
         if path == "/api/v2/typing/claim":
             s = self._session()

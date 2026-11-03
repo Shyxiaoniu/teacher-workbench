@@ -125,6 +125,14 @@ button{font-family:inherit;cursor:pointer;border:none;background:none}
   box-shadow:0 4px 12px rgba(180,91,51,.25)}
 .demo-bar{margin-top:12px;background:var(--sun-bg);border:1.5px dashed var(--sun-line);color:var(--sun-ink);
   border-radius:12px;padding:9px 14px;font-size:13.5px}
+/* 教师练习条：开关与班级选择跟文字同行，窄屏自动换行（2026-11-03） */
+.teacher-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.teacher-bar .tw-lb{display:inline-flex;align-items:center;gap:5px;font-weight:700;cursor:pointer;white-space:nowrap}
+.teacher-bar .tw-lb input{margin:0;cursor:pointer;accent-color:var(--brand)}
+.teacher-bar select{font-family:inherit;font-size:13px;padding:4px 9px;border-radius:9px;
+  border:1.5px solid var(--sun-line);background:var(--card);color:inherit;cursor:pointer}
+.teacher-bar select:disabled{opacity:.55;cursor:not-allowed}
+.teacher-bar .tw-tip{font-size:12px;opacity:.85}
 .off-bar{margin:60px auto 0;max-width:460px;text-align:center;background:var(--card);border:1px solid var(--line);
   border-radius:20px;padding:44px 30px;box-shadow:0 8px 24px var(--shadow)}
 .off-bar .big{font-size:44px;margin-bottom:10px}
@@ -254,6 +262,10 @@ body.embed .play-wrap{min-height:calc(100vh - 20px)}
   display:flex;align-items:center;justify-content:center;font-size:clamp(28px,3.9vh,38px);font-weight:800;color:var(--ink);
   box-shadow:0 3px 0 var(--key-3d),0 7px 14px rgba(180,91,51,.15);text-transform:uppercase;font-family:Consolas,monospace}
 .key-finger{font-size:13px;color:var(--ink2)}
+/* 按键课敲错标注（2026-11-03）：没有输入框，红字挂在键帽下方；min-height 防跳动 */
+.key-err{min-height:19px;font-size:13px;color:var(--bad);font-weight:600}
+.key-err:empty{display:none}
+.key-err .key-err-bad{color:var(--bad)}
 .key-finger b{color:var(--brand)}
 /* 输入台：输入框里实时回显「已经打出来的字」（金山打字通的上屏区）——
    打对的字留在框里不消失，打错自动截回，退格可整字回退。 */
@@ -342,16 +354,15 @@ body.embed .play-wrap{min-height:calc(100vh - 20px)}
   box-shadow:0 0 0 2px color-mix(in srgb,var(--brand) 32%,transparent);animation:kbpulse 1s ease infinite;z-index:1}
 .kb-k.hotsh{background:var(--sun-bg);border-color:var(--warn);color:var(--sun-ink);box-shadow:0 0 0 2px color-mix(in srgb,var(--warn) 35%,transparent)}
 @keyframes kbpulse{50%{transform:translateY(1.5px)}}
-.kb-legend{display:flex;gap:11px;flex-wrap:wrap;margin-top:6px;
-  padding:1px 2px 0;font-size:12.5px;color:var(--ink2);align-items:center}
-.kb-legend b{display:inline-block;width:12px;height:12px;
-  border-radius:3px;margin-right:4px;vertical-align:-1px}
-/* 图例原位高亮（2026-11-03）：用到哪根手指，哪枚图例点亮——
-   色块加同色描边并微微放大，文字染成手指色，一眼对上键盘上的分区 */
-.kb-legend span{border-radius:7px;padding:1px 4px;transition:.15s}
-.kb-legend span.on{color:var(--ink);font-weight:800;background:#FFF6EC;
-  box-shadow:inset 0 0 0 1.5px #E8CFAF}
-.kb-legend span.on b{transform:scale(1.25);box-shadow:0 0 0 2px rgba(214,120,60,.35)}
+/* 实际敲键瞬态高亮（2026-11-03）：任意按键按下，虚拟键盘上对应的键闪一下。
+   .press 正常敲下（品牌橙、按下位移），.press-bad 敲错（红）；
+   与常驻的 .hot「目标键」高亮互不干扰，180ms 后自动退场。 */
+.kb-k.press{background:var(--cur-bg);border-color:var(--brand);color:var(--brand);
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--brand) 45%,transparent);
+  transform:translateY(2px);z-index:2}
+.kb-k.press-bad{background:var(--bad-soft);border-color:var(--bad);color:var(--bad);
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--bad,#E24B4A) 38%,transparent);
+  transform:translateY(2px);z-index:2}
 /* 指法图：2026-11-02 四次调整 —— 从「圆角方块」改成「圆形徽章 + 手指剪影」：
    ① 每根手指一个白底彩边圆，圆内是一只竖着的手指（指尖圆、指节有折痕），
       圆比方块更贴近"手指落键"的意象，也顺手把十根手指拉成同一节拍；
@@ -628,17 +639,14 @@ body.embed .credit{display:none}
 .al-empty{grid-column:1/-1;text-align:center;color:var(--ink3);padding:30px 0}
 .al-foot{font-size:11.5px;color:#B0A294;text-align:center;margin-top:10px}
 
-/* ---- 指位图例 + 道具条同一行（2026-11-02 按标注二次调整） ----
-   图例原来在键盘框内部、跟着键盘一起缩放，右侧半行一直空着；
-   现在提到键盘外面，和道具条并排占一行：左图例、中道具、右目标键提示，
+/* ---- 图例行 + 道具条（2026-11-03 三次调整） ----
+   手指示例图例已删，本行只剩道具条，居中放置（margin:0 auto）；
    指法图仍单独占一行并保持居中。 */
 .legend-row{flex:0 0 auto;display:flex;align-items:center;gap:12px;
   margin-top:6px;padding:0 2px;flex-wrap:wrap}
-.legend-row > .kb-legend{margin:0;padding:0;flex:0 1 auto}
-/* 道具条独占最右（2026-11-03）：右端的「目标键」提示已删，虚线框直接贴右页边；
-   左端图例保持不动，中间留白由 margin-left:auto 吃掉。 */
-.legend-row > .item-bar{flex:0 1 auto;margin-top:0;margin-left:auto;min-width:0;
-  max-width:100%;justify-content:flex-end}
+/* 道具条居中（2026-11-03 牛哥要求）：图例删除后本行只有它，直接 auto 居中 */
+.legend-row > .item-bar{flex:0 1 auto;margin-top:0;margin-left:auto;margin-right:auto;min-width:0;
+  max-width:100%}
 
 /* ---- 练习页道具条 ---- */
 .item-bar{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:7px;
@@ -940,7 +948,7 @@ body.embed .credit{display:none}
   .al-grid{grid-template-columns:1fr}
   #view .level-grid{grid-template-columns:1fr 1fr}
 }
-/* 窄屏：图例、道具条按顺序换行，谁都不被压扁。
+/* 窄屏：道具条独占一行（图例已删），谁都不被压扁。
    注意：这段必须放在 .legend-row 主样式之后 —— 同特异性下后写的赢。 */
 @media (max-width:860px){
   .legend-row{align-items:flex-start}
@@ -954,9 +962,6 @@ body.embed .credit{display:none}
    统一在这里按"暗一档的纸面 + 半透明品牌描边"重刷一遍。
    金色系（星星 / 金币 / 蛋）保留但提亮，夜间不发脏。 */
 html[data-mode="dark"] .mask{background:rgba(0,0,0,.62)}
-/* 图例原位高亮的夜间版：浅米底在暗纸上太扎眼，换成暗底亮描边 */
-html[data-mode="dark"] .kb-legend span.on{background:rgba(255,255,255,.08);
-  box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.22)}
 html[data-mode="dark"] .result{box-shadow:0 24px 60px rgba(0,0,0,.55)}
 html[data-mode="dark"] .r-cell{background:var(--surface)}
 html[data-mode="dark"] .r-reward{background:var(--sun-bg);border-color:var(--sun-line);color:var(--sun-ink)}
@@ -1199,7 +1204,33 @@ function boot() {
         if (saved) { var p = JSON.parse(saved); if (p && p.best) S.progress = p; }
       } catch (e) {}
       S.ranch = { pet: S.progress.equip.pet || '', decos: S.progress.equip.decos || [] };
-      if (me && me.role === 'teacher') S.role = 'teacher';
+      if (me && me.role === 'teacher') {
+        /* 教师练习模式（2026-11-03）：老师用同一张地图练手，
+           成绩默认只存本机；想跟学生比，可在页顶开关「计入班级排行榜」。
+           开关与班级选择记在本机，下次打开保持。 */
+        S.role = 'teacher';
+        try {
+          var tlb = JSON.parse(localStorage.getItem('wb-typing-teacher-lb') || '{}');
+          S.teacherLb = { on: !!tlb.on, class_id: tlb.class_id || '' };
+        } catch (e) { S.teacherLb = { on: false, class_id: '' }; }
+        api('/api/v2/typing/overview').then(function (ov) {
+          if (ov && ov.ok) {
+            S.teacherClasses = ov.classes || [];
+            if (S.teacherClasses.length && !S.teacherLb.class_id) {
+              S.teacherLb.class_id = S.teacherClasses[0].id;
+            }
+            /* 教师条已渲染，开关班级下拉补数据 */
+            var sel = $('#twCls');
+            if (sel) {
+              sel.innerHTML = S.teacherClasses.map(function (c) {
+                return '<option value="' + esc(c.id) + '"' +
+                  (c.id === S.teacherLb.class_id ? ' selected' : '') + '>' + esc(c.name) + '</option>';
+              }).join('') || '<option>（暂无班级）</option>';
+              sel.disabled = !S.teacherLb.on;
+            }
+          }
+        }).catch(function () {});
+      }
     }
     var sc = qs.get('screen');
     if (sc && ['map', 'lb', 'ranch'].indexOf(sc) >= 0) S.view = sc;
@@ -1259,8 +1290,15 @@ function render() {
           + (themeIsDark() ? '☀' : '🌙') + '</button>' +
       '</div>' +
     '</div>' +
-    (S.demo ? '<div class="demo-bar">🎬 演示模式：当前未登录，展示的是示例数据，成绩只存在本机。' +
-      '学生登录后进入这里，成绩会真实记录并上榜。</div>' : '') +
+    (S.demo && S.role !== 'teacher'
+      ? '<div class="demo-bar">🎬 演示模式：当前未登录，展示的是示例数据，成绩只存在本机。' +
+        '学生登录后进入这里，成绩会真实记录并上榜。</div>' : '') +
+    (S.demo && S.role === 'teacher'
+      ? '<div class="demo-bar teacher-bar">👩‍🏫 <b>教师练习模式</b>：和学生同一张冒险地图，成绩默认只存本机。' +
+        '<label class="tw-lb"><input type="checkbox" id="twLb"' + (S.teacherLb && S.teacherLb.on ? ' checked' : '') + '>' +
+        '把我的成绩计入</label>' +
+        '<select id="twCls"' + (S.teacherLb && S.teacherLb.on ? '' : ' disabled') + '><option>加载中…</option></select>' +
+        '<span class="tw-tip">班级排行榜（选班后生效）</span></div>' : '') +
     (S.role === 'student' && !S.config.enabled
       ? '<div class="off-bar"><div class="big">🚧</div><h2>老师还没开放打字练习</h2>' +
         '<p>等老师在教师端打开开关，这里就会变成打字冒险岛。<br>先回「今日」页看看别的任务吧。</p></div>'
@@ -1317,6 +1355,26 @@ function bindView() {
   if (ao) ao.onclick = openArtLib;
   bindLb();
   bindRanch();
+  bindTeacherBar();
+}
+
+/* 教师练习条的开关与班级选择（2026-11-03）：
+   记在 localStorage['wb-typing-teacher-lb']，成绩提交时按它决定是否上报。 */
+function bindTeacherBar() {
+  var cb = $('#twLb'), sel = $('#twCls');
+  if (!cb && !sel) return;
+  if (cb) cb.onchange = function () {
+    S.teacherLb = S.teacherLb || { on: false, class_id: '' };
+    S.teacherLb.on = cb.checked;
+    if (sel) sel.disabled = !cb.checked;
+    try { localStorage.setItem('wb-typing-teacher-lb', JSON.stringify(S.teacherLb)); } catch (e) {}
+    uiToast(cb.checked ? '好，下次通关会把成绩计入所选班级的排行榜' : '成绩恢复为只存本机');
+  };
+  if (sel) sel.onchange = function () {
+    S.teacherLb = S.teacherLb || { on: false, class_id: '' };
+    S.teacherLb.class_id = sel.value;
+    try { localStorage.setItem('wb-typing-teacher-lb', JSON.stringify(S.teacherLb)); } catch (e) {}
+  };
 }
 
 /* ---------------- 冒险地图 ---------------- */
@@ -1628,28 +1686,14 @@ function kbDiagram() {
   r += '</div></div>';   /* .kb / .kb-wrap */
   return r;
 }
-/* 指位图例 + 道具条同一行（2026-11-03 按标注再调）
-   图例在左，道具条独占最右（2026-11-03 牛哥要求：道具放最右边）；
-   原来挂在右端的「目标键 → 手指」文字提示（kbTip）已删——
-   键帽下方「用 ×指 敲下这个键」已经说了同一件事，两处重复反而吵。
-   图例会随当前按键在「原位置」高亮：用到哪根手指，哪枚图例点亮。 */
+/* 图例行（2026-11-03 二次调整）：
+   手指示例图例（9 枚手指色块）已按牛哥要求删除——
+   键盘分区配色 + 手指指法图本身就说明了「哪根手指管哪些键」，
+   再摆一排图例属于第三次重复；删除后本行只留道具条，居中放置。 */
 function legendRow() {
-  return '<div class="legend-row">' +
-    '<div class="kb-legend" id="kbLegend">' +
-      '<span data-lgf="LP"><b style="background:' + KB_FINGERS.LP.color + '"></b>小指</span>' +
-      '<span data-lgf="LR"><b style="background:' + KB_FINGERS.LR.color + '"></b>无名指</span>' +
-      '<span data-lgf="LM"><b style="background:' + KB_FINGERS.LM.color + '"></b>中指</span>' +
-      '<span data-lgf="LI"><b style="background:' + KB_FINGERS.LI.color + '"></b>食指·左手</span>' +
-      '<span data-lgf="RI"><b style="background:' + KB_FINGERS.RI.color + '"></b>食指·右手</span>' +
-      '<span data-lgf="RM"><b style="background:' + KB_FINGERS.RM.color + '"></b>中指·右手</span>' +
-      '<span data-lgf="RR"><b style="background:' + KB_FINGERS.RR.color + '"></b>无名指·右手</span>' +
-      '<span data-lgf="RP"><b style="background:' + KB_FINGERS.RP.color + '"></b>小指·右手</span>' +
-      '<span data-lgf="TH"><b style="background:' + KB_FINGERS.TH.color + '"></b>拇指·空格</span>' +
-    '</div>' +
-    itemBar() +
-  '</div>';
+  return '<div class="legend-row">' + itemBar() + '</div>';
 }
-/* 图例原位高亮：给当前手指对应的图例加 .on（2026-11-03 牛哥标注） */
+/* 图例原位高亮的历史函数：图例已删，#kbLegend 不存在时自动空转（保留调用点兼容） */
 function paintLegend(f) {
   var lg = $('#kbLegend');
   if (!lg) return;
@@ -1678,6 +1722,35 @@ function paintKb(ch) {
   paintHands(info.f, info.shift);
   paintIme();
 }
+
+/* 实际敲键瞬态高亮（2026-11-03 牛哥要求）：任意按键按下的那一瞬间，
+   虚拟键盘上被按的那颗键闪一下 —— 和常驻的 .hot「目标键」高亮互相独立。
+   ok=false（敲错）用红色，正确/普通用品牌色；180ms 自动退场，连打不糊。
+   info.shift 时对应手的 Shift 键一起闪。供 keys / 英文 / 中文三个模式共用。 */
+function flashPressKey(ch, ok) {
+  var box = $('#kbBox');
+  if (!box) return;
+  var zone = (S.play && S.play.L && S.play.L.kbzone) || '';
+  var info = kbKeyInfo(ch, zone);
+  if (!info) return;
+  var ids = [info.id];
+  if (info.shift) ids.push(info.shift === 'L' ? 'shiftL' : 'shiftR');
+  ids.forEach(function (id) {
+    var el = box.querySelector('[data-kb="' + id + '"]');
+    if (!el) return;
+    var cls = ok === false ? 'press-bad' : 'press';
+    el.classList.remove('press', 'press-bad');
+    el.getBoundingClientRect();      /* 强制重排：连续快敲时瞬态也能重放 */
+    el.classList.add(cls);
+    if (el._pt) clearTimeout(el._pt);
+    el._pt = setTimeout(function () { el.classList.remove('press', 'press-bad'); }, 180);
+  });
+}
+window.kbDebugPress = function (ch) {
+  var el = $('#kbBox .kb-k.press, #kbBox .kb-k.press-bad');
+  return { ch: ch || '', pressed: el ? el.getAttribute('data-kb') : '',
+           bad: el ? el.classList.contains('press-bad') : false };
+};
 
 /* 键盘整体等比缩放 ------------------------------------------------
    .kb 是固定设计稿（1115×~317），这里算出唯一缩放比 s 后整块 transform:scale(s)：
@@ -1847,6 +1920,7 @@ function startLevel(st, ch, lv) {
     S.play = {
       L: L, stage: st, chapter: ch, level: lv,
       idx: 0, keys: 0, errors: 0, t0: 0, timer: null, done: false,
+      errChar: null,   /* 当前敲错的字（红色就地标注，打对自动替换） */
       composing: false, composeText: '',
       /* 道具：本关内有效，进关前点「用」才会置 true */
       buff: { hint: false, extra: false, shield: false, double: false }
@@ -1867,6 +1941,8 @@ function startLevel(st, ch, lv) {
    不是常驻的。英文：保持普通字符流（空格不会被 flex 吃掉）。 */
 function textHtml(text, idx, bad) {
   var isCn = S.play && S.play.L && S.play.L.mode === 'cn';
+  /* 当前格挂着敲错的字（2026-11-03）：红色就地显示，打对自动替换 */
+  var errCh = (S.play && S.play.errChar) || '';
   var i, cls, s = '';
   if (isCn && window.PY && PY.annotate) {
     var arr = PY.annotate(text);
@@ -1875,6 +1951,11 @@ function textHtml(text, idx, bad) {
       /* 空格也要带状态：中英混排关里空格很多，原来只渲染一个空 span，
          学生根本看不出"这里要按一下空格"，只会以为两个字挨得近。 */
       if (arr[i].c === ' ') { s += '<span class="ch sp ' + cls + '"></span>'; continue; }
+      if (i === idx && errCh) {
+        s += '<span class="ch e" title="这个字打错了，打对会自动替换">' +
+          '<span class="hz">' + esc(errCh) + '</span></span>';
+        continue;
+      }
       s += '<span class="ch ' + cls + '"' +
         (arr[i].p ? ' data-p="' + esc(arr[i].p) + '"' : '') +
         '><span class="hz">' + esc(arr[i].c) + '</span></span>';
@@ -1883,6 +1964,7 @@ function textHtml(text, idx, bad) {
   }
   for (i = 0; i < text.length; i++) {
     cls = i < idx ? 'o' : (i === idx ? (bad ? 'e' : 'c') : 'd');
+    if (i === idx && errCh) { s += '<span class="e" title="这个字打错了，打对会自动替换">' + esc(errCh) + '</span>'; continue; }
     s += '<span class="' + cls + '">' + esc(text[i]) + '</span>';
   }
   return s;
@@ -1892,17 +1974,23 @@ function textHtml(text, idx, bad) {
    结构一致是逐字对齐的根本：只要字符数和类名相同，flex 排出来的每个字宽度、
    换行位置就和课文一模一样。 */
 function echoHtml(text, idx) {
+  var errCh = (S.play && S.play.errChar) || '';
   var arr = (window.PY && PY.annotate) ? PY.annotate(text) : null;
   var i, s = '', cls;
   if (arr) {
     for (i = 0; i < arr.length; i++) {
       cls = i < idx ? 'o' : 'd';
       if (arr[i].c === ' ') { s += '<span class="ch sp ' + cls + '"></span>'; continue; }
+      if (i === idx && errCh) {
+        s += '<span class="ch e"><span class="hz">' + esc(errCh) + '</span></span>';
+        continue;
+      }
       s += '<span class="ch ' + cls + '"><span class="hz">' + esc(arr[i].c) + '</span></span>';
     }
     return s;
   }
   for (i = 0; i < text.length; i++) {
+    if (i === idx && errCh) { s += '<span class="e">' + esc(errCh) + '</span>'; continue; }
     s += '<span class="' + (i < idx ? 'o' : 'd') + '">' + esc(text[i]) + '</span>';
   }
   return s;
@@ -1919,7 +2007,8 @@ function renderPlay() {
   if (L.type === 'keys') {
     var cur = L.items[P.idx] || { k: '', hint: '' };
     body = '<div class="key-big"><div class="key-cap" id="keyCap">' + esc(cur.k) + '</div>' +
-      '<div class="key-finger" id="keyFinger">用 <b>' + esc(cur.hint) + '</b> 敲下这个键</div></div>' +
+      '<div class="key-finger" id="keyFinger">用 <b>' + esc(cur.hint) + '</b> 敲下这个键</div>' +
+      '<div class="key-err" id="keyErr"></div></div>' +
       kbDiagram() + legendRow() + handsDiagram() +
       '<div class="progress-track"><div class="progress-fill" style="width:0%"></div></div>';
   } else {
@@ -2340,13 +2429,20 @@ function bindPlay() {
       var tgt = String(cur.k);
       var strict = /[A-Z]/.test(tgt) || /[!@#$%^&*()_+{}|:"<>?~]/.test(tgt);
       var hit = strict ? (k === tgt) : (k.toLowerCase() === tgt.toLowerCase());
+      /* 任意按键都在虚拟键盘上闪对应键：敲对橙、敲错红（2026-11-03） */
+      flashPressKey(k, hit);
+      var ke = $('#keyErr');
       if (hit) {
         flashFinger(kbFingerOfKey(k), 'hit');     /* 先闪"刚按下的那根手指" */
         advance();                                 /* 再推进到下一键的目标手指 */
+        if (ke) ke.textContent = '';
       } else {
         P.errors++;
         wrongFlash();
         flashFinger(kbFingerOfKey(tgt), 'miss');   /* 敲错：把正确的那根手指标红，纠错更直观 */
+        /* 敲错的内容就地标注（按键课没有输入框，红字挂在目标键帽下方） */
+        if (ke) ke.innerHTML = '刚才按了 <b class="key-err-bad">' + esc(k === ' ' ? '空格' : k) +
+          '</b>，目标是 <b>' + esc(tgt) + '</b>';
       }
       e.preventDefault();
     };
@@ -2356,7 +2452,9 @@ function bindPlay() {
     paintKeys();
   } else if (L.mode === 'en') {
     /* 英文关：document 级监听 + e.code 判定，输入法开着也不会卡；
-       不再依赖隐藏输入框（会被输入法接管组合输入）。 */
+       不再依赖隐藏输入框（会被输入法接管组合输入）。
+       2026-11-03：敲错的字不再一闪而过 —— 就地显示在课文流的当前格，
+       红色标注，打对自动替换（P.errChar）。 */
     P._kd = function (e) {
       if (P.done) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -2365,11 +2463,17 @@ function bindPlay() {
       begin();
       P.keys++;
       if (ch === L.text[P.idx]) {
+        P.errChar = null;
+        flashPressKey(ch, true);
         flashFinger(kbFingerOfKey(ch), 'hit');
         advance();
       } else {
         P.errors++; wrongFlash();
+        flashPressKey(ch, false);
         flashFinger(kbFingerOfKey(L.text[P.idx]), 'miss');
+        /* 错字保留显示（红色），不再 setTimeout 恢复 —— 打对才替换 */
+        P.errChar = ch;
+        paintText(false);
         /* 大小写锁提示：目标是小写、学生却打出大写 —— 十有八九是
            CapsLock 开着。只提醒一次，不反复弹窗打断打字。 */
         var t0 = L.text[P.idx];
@@ -2377,8 +2481,6 @@ function bindPlay() {
           P._capTip = 1;
           uiToast('打出来是大写？按一下 CapsLock 关掉大写锁', 'warn');
         }
-        paintText(true);
-        setTimeout(function () { if (!P.done) paintText(false); }, 180);
       }
       e.preventDefault();
     };
@@ -2423,15 +2525,22 @@ function bindPlay() {
       livePaint();
       if (P.idx >= total) finish();
     }
+    /* 2026-11-03 重写错误处理（牛哥要求）：打错的字不再截回/吞掉，
+       而是保留在输入框里、在回显层的当前格以红色标注；
+       打对的那一下自动替换错字并推进。P.errChar = 当前挂着的错字。 */
+    P.errChar = null;
     function onInput() {
       if (P.done) return;
-      if (cn.value === P.typed) return;
-      var v = cn.value, pre = P.typed.length;
-      /* ① 变短 / 前缀被改：当作退格回退，只允许退到仍是原文前缀的位置 */
+      var pre = P.typed.length;
+      var v = cn.value;
+      if (v === P.typed + (P.errChar || '')) return;   /* 没有新内容（只是光标动） */
+      /* ① 变短 / 前缀被改：当作退格回退，只允许退到仍是原文前缀的位置。
+            退格删到错字时把红标错字一并清掉。 */
       if (v.length < pre || v.slice(0, pre) !== P.typed) {
         if (L.text.slice(0, v.length) === v) {
           P.idx = v.length;
           P.typed = v;
+          P.errChar = null;
           paintText(false);
           paintEcho();
           syncCount();
@@ -2439,30 +2548,43 @@ function bindPlay() {
           paintKb(L.text[P.idx]);
           setCaret();
         } else {
-          cn.value = P.typed;
+          cn.value = P.typed + (P.errChar || '');
           setCaret();
           wrongFlash();
         }
         return;
       }
-      /* ② 新上屏的字：逐个核对，能对几个收几个，第一个错的就截断 */
-      var delta = v.slice(pre), ok = 0;
-      while (ok < delta.length && L.text[P.idx + ok] === delta.charAt(ok)) ok++;
-      if (ok < delta.length) {
-        P.errors++;
-        P.keys++;
-        cn.value = P.typed + delta.slice(0, ok);
-        setCaret();
-        wrongFlash();
-        if (ok) accept(ok);
-        /* 先收正确的部分再闪红：accept() 内部会 paintText(false)，
-           原来写成 else paintText(true)，只要有字收进去，错字就一闪都不闪。 */
-        if (!P.done) paintText(true);
-        setTimeout(function () { if (!P.done) paintText(false); }, 220);
-        return;
+      /* ② 新上屏的内容逐字核对：
+            - 与课文相符 → 确认推进（错字同时被正确字顶替）；
+            - 不相符 → 不吞不截，字留在输入框，红标注在当前格；
+              连续多字上屏时，错字只保留最后一个显示（前面的被顶掉）。 */
+      var delta = v.slice(pre);
+      if (P.errChar && delta.charAt(0) === P.errChar) delta = delta.slice(1);
+      if (!delta.length) { P.errChar = null; return; }   /* 旧错字被退格删掉 */
+      var k = 0, err = P.errChar;
+      while (k < delta.length) {
+        var c = delta.charAt(k);
+        if (L.text.charAt(P.idx) === c) { err = null; accept(1); }
+        else { err = c; P.errors++; P.keys++; wrongFlash(); }
+        k++;
+        if (P.done) break;
       }
-      accept(delta.length);
+      P.errChar = err;
+      if (err) {
+        cn.value = P.typed + err;
+        setCaret();
+        paintText(false);
+        paintEcho();
+      }
     }
+    /* 中文模式下任意按键也要在虚拟键盘上闪对应键（含拼音输入期间：
+       IME 组合时 e.key 是 'Process'，但 e.code 始终是物理键位）。 */
+    cn.addEventListener('keydown', function (e) {
+      if (P.done) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      var k = evChar(e);
+      if (k != null) flashPressKey(k, null);
+    });
     /* 组合输入期间拼音的落点（2026-11-03 修复）
        以前是隐藏回显层、让 input 显形显示拼音，可 input 左对齐，整串字会从
        框左边冒出来，和居中的课文错开一大截。现在 input 始终透明，拼音只做成
@@ -2581,6 +2703,14 @@ function submitResult(payload, stars, wpm) {
       var egg = payload.level === 10 && !prev && stars > 0;
       if (egg) pr.eggs = (pr.eggs || 0) + 1;
       demoSave();
+      /* 教师练习模式：勾了「计入班级排行榜」就把这关同步给服务端
+         （星数与速度由服务端按同一套公式复核，防刷） */
+      if (S.role === 'teacher' && S.teacherLb && S.teacherLb.on && S.teacherLb.class_id) {
+        api('/api/v2/typing/teacher-record', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(Object.assign({ class_id: S.teacherLb.class_id }, payload))
+        });
+      }
       showResult(stars, wpm, payload, { newBest: newBest, gained: gained, coins_gained: addCoins,
         rewards: { egg: !!egg, decos: newDecos } });
     } else {
@@ -2666,6 +2796,22 @@ function showResult(stars, wpm, payload, res) {
 /* ---------------- 排行榜 ---------------- */
 function loadLb() {
   if (S.demo) {
+    /* 教师练习模式且选了班级 → 拉真实班级榜（接口支持教师会话按班查询，
+       服务端会把开启上报的教师成绩一并排进去） */
+    if (S.role === 'teacher' && S.teacherLb && S.teacherLb.on && S.teacherLb.class_id) {
+      api('/api/v2/typing/leaderboard?scope=' + S.lb.scope +
+          '&class_id=' + encodeURIComponent(S.teacherLb.class_id))
+        .then(function (r) {
+          if (r && r.ok) {
+            S.lb.rows = (r.rows || []).map(function (row) {
+              return Object.assign({}, row, { me: row.student_id === '__teacher__' });
+            });
+            S.lb.class_name = r.class_name || '';
+          } else { S.lb.rows = []; S.lb.class_name = ''; }
+          paintLb();
+        }).catch(function () { paintLb(); });
+      return;
+    }
     var names = DEMO_LB_NAMES.slice();
     var scope = S.lb.scope;
     var rows = names.map(function (n, i) {

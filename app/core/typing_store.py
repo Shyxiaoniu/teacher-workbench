@@ -117,7 +117,10 @@ class TypingStore:
     def __init__(self, path):
         self.path = path
         self.lock = threading.Lock()
-        self.data = {"students": {}}
+        # teacher 段（2026-11-03）：教师练习成绩，按班级存 ——
+        # {class_id: {name, best:{levelKey:{stars,wpm}}, week:{k,stars}, stars, best_wpm, updated}}
+        # 开启「计入班级排行榜」才写入；不占用学生档案，排行榜组装时单独成行。
+        self.data = {"students": {}, "teacher": {}}
         self._load()
 
     # ---------------- 底层 ----------------
@@ -129,6 +132,8 @@ class TypingStore:
                 self.data = d
         except Exception:
             pass
+        if not isinstance(self.data.get("teacher"), dict):
+            self.data["teacher"] = {}
 
     def _save(self):
         tmp = self.path + ".tmp"
@@ -367,6 +372,77 @@ class TypingStore:
             self._save()
             return {"ok": True, "stu": self.summary(stu), "item": item_id,
                     "count": have - 1}
+
+    # ---------------- 教师练习成绩（2026-11-03） ----------------
+    def teacher_record(self, cid, name, body):
+        """教师练习一关的成绩。星数/速度用与学生完全相同的公式复核。
+        教师成绩按班级独立存放在 teacher 段，不写进任何学生档案；
+        排行榜组装时以「老师」一行参与排序。"""
+        try:
+            stage = int(body.get("stage", 0))
+            chapter = int(body.get("chapter", 0))
+            level = int(body.get("level", 0))
+            acc = float(body.get("acc", 0))
+            chars = int(body.get("chars", 0))
+            duration = float(body.get("duration", 0))
+        except Exception:
+            return {"ok": False, "msg": "成绩数据不完整"}
+        if not str(cid or "").strip():
+            return {"ok": False, "msg": "请先选择要计入的班级"}
+        if not (1 <= stage <= 8) or chapter < 1 or not (1 <= level <= 10):
+            return {"ok": False, "msg": "关卡不存在"}
+        if duration < MIN_DURATION or chars < 1:
+            return {"ok": False, "msg": "用时太短，成绩不计入"}
+        acc = max(0.0, min(100.0, acc))
+        wpm = min(WPM_CAP, round(chars / duration * 60, 1))
+        stars = stars_for(stage, chapter, acc, wpm)
+        key = "s%dc%dl%d" % (stage, chapter, level)
+        with self.lock:
+            t = (self.data.setdefault("teacher", {}).setdefault(str(cid), {}))
+            if not isinstance(t, dict):
+                t = {}
+                self.data["teacher"][str(cid)] = t
+            if not t.get("name"):
+                t["name"] = (str(name).strip() if name else "") or "老师"
+            best = t.setdefault("best", {})
+            prev = best.get(key)
+            new_best = (prev is None or stars > prev.get("stars", 0)
+                        or (stars == prev.get("stars", 0) and wpm > prev.get("wpm", 0)))
+            gained = 0
+            if new_best:
+                gained = max(0, stars - (prev.get("stars", 0) if prev else 0))
+                best[key] = {"stars": stars, "wpm": wpm, "ts": int(time.time())}
+                wk = week_key()
+                if t.get("week", {}).get("k") != wk:
+                    t["week"] = {"k": wk, "stars": 0}
+                t["week"]["stars"] = t["week"].get("stars", 0) + gained
+            # 总星口径与学生一致：各关最高星之和（week 已是累计口径）
+            t["stars"] = sum(b.get("stars", 0) for b in best.values())
+            t["best_wpm"] = max([b.get("wpm", 0) for b in best.values()], default=0)
+            t["updated"] = int(time.time())
+            try:
+                self._save()
+            except Exception:
+                pass
+            return {"ok": True, "stars": stars, "new_best": new_best,
+                    "gained": gained, "wpm": wpm}
+
+    def teacher_lb_value(self, cid, scope):
+        """排行榜里「老师」这一行的取值（scope 与学生榜一致：week/total/speed）。
+        没有成绩返回 None；week 星为 0 时不参与本周榜。"""
+        with self.lock:
+            t = (self.data.get("teacher") or {}).get(str(cid))
+            if not isinstance(t, dict) or not t.get("best"):
+                return None
+            if scope == "week":
+                wk = t.get("week") or {}
+                v = wk.get("stars", 0) if wk.get("k") == week_key() else 0
+            elif scope == "speed":
+                v = t.get("best_wpm", 0)
+            else:
+                v = t.get("stars", 0)
+            return {"value": v, "stars": t.get("stars", 0),
+                    "name": t.get("name") or "老师"}
 
     # ---------------- 排行榜 ----------------
     def leaderboard_data(self, scope):

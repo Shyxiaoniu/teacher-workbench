@@ -155,7 +155,10 @@ function body() {
     return '<option value="' + esc(c.id) + '"' + (c.id === S.lbClass ? ' selected' : '') + '>' + esc(c.name) + '</option>';
   }).join('');
   return '<div class="head"><h1>⌨️ 打字练习</h1>' +
-    '<small>开放给学生端后，学生「今日」页和底部导航会出现「打字」入口</small></div>' +
+    '<small>开放给学生端后，学生「今日」页和底部导航会出现「打字」入口</small>' +
+    '<span style="margin-left:auto"></span>' +
+    '<button class="btn ghost" id="tryPlay" title="老师也能练：和学生同一张冒险地图，页顶可选是否计入班级排行榜">🎮 教师试玩</button>' +
+    '</div>' +
     '<div class="grid">' +
       '<div class="card">' +
         '<h2>开放开关</h2>' +
@@ -193,6 +196,8 @@ function body() {
 }
 
 function bind() {
+  var tp = $('#tryPlay');
+  if (tp) tp.onclick = function () { window.open('/typing/', '_blank'); };
   var sw = $('#swBtn');
   if (sw) sw.onclick = function () {
     var next = !S.enabled;
