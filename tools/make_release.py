@@ -8,7 +8,7 @@
     python tools/make_release.py --out D:\\dist    # 指定输出目录
 
 产物：<out>/班级工作台<版本>-<yyMMdd>.zip
-包内第一层是同名目录，结构与本仓库一致（app / quickform / docker / docs + 说明文档），
+包内第一层是同名目录，结构与本仓库一致（app / docker / docs + 说明文档），
 只是**不含任何运行期数据**：真实班级、学生、成绩、上传附件、课件库、数据库、日志一律不进包。
 """
 import argparse
@@ -21,7 +21,7 @@ import zipfile
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # 整目录带上的
-INCLUDE_DIRS = ["app", "quickform", "docker"]
+INCLUDE_DIRS = ["app", "docker"]
 # docs 只带 md（截图约 5 MB，本地留着就行）
 INCLUDE_DOC_GLOB = ".md"
 # 根目录散文件
@@ -39,9 +39,6 @@ SKIP_FILE_NAMES = {".DS_Store", "Thumbs.db", ".env", "workbench.json"}
 DATA_ONLY_KEEP = {
     "app/data",
     "app/submission-system/data",
-    "quickform/app/data",
-    "quickform/app/static/uploads",
-    "quickform/app/static/assets",
 }
 KEEP_NAMES = {"README.txt", ".keep", ".gitkeep"}
 
@@ -74,26 +71,18 @@ NOTES = """# {name} · 发行说明
 | 路径 | 内容 |
 |---|---|
 | `启动工作台.bat` / `.command` | 双击启动（Windows / macOS），参数原样传给 `app/launch.py` |
-| `app/` | 工作台主程序：服务端、教师端页面、学生端、打字练习、提交系统、图标、启动脚本 |
-| `quickform/` | 表单服务 QuickForm（收集表、活动任务、数据大屏）；`app/` 是官方源码，零改动 |
+| `app/` | 工作台主程序：服务端、教师端页面、学生端、打字练习、提交系统、图标、启动脚本（课堂活动已内嵌） |
 | `docker/` | Docker 部署用的入口脚本与 nginx 网关配置 |
 | `Dockerfile` / `docker-compose.yml` / `.env.example` | 容器化部署三件套 |
-| `docs/` | 使用与设计文档，以及文档里引用的功能截图（`docs/shots/` 下 app / student / student-pc / quickform 四个目录） |
+| `docs/` | 使用与设计文档，以及文档里引用的功能截图（`docs/shots/` 下 app / student / student-pc 三个目录） |
 | `README.md` | 完整使用说明：功能、部署、建班、一堂课的用法、备份换机、常见问题 |
 | `LICENSE` | 本项目的 MIT 许可证（Copyright (c) 2026 Shyxiaoniu） |
-| `THIRD-PARTY-NOTICES.md` | 第三方组件与许可清单（QuickForm 的 MIT、前端库、Python 依赖） |
-| `quickform/app/LICENSE` | **QuickForm 上游 MIT 全文（Copyright (c) 2026 xiezuoru 谢作如）** |
+| `THIRD-PARTY-NOTICES.md` | 第三方组件与许可清单 |
 
 ## 一点五、许可提醒（转发前请看一眼）
 
-本包里**有两套 MIT 许可，两个版权人**：
-
-- 本项目原创部分（`app/`、`docker/`、`tools/`、`docs/`）→ `LICENSE`，© 2026 Shyxiaoniu
-- `quickform/app/` 下的 QuickForm 官方源码 → `quickform/app/LICENSE`，© 2026 谢作如
-
 MIT 的义务只有一条：**再分发时保留版权声明与许可全文**。所以把这个包发给同事、传到网盘、
-或放进自己的仓库时，**请不要删除上面两个 LICENSE 和 `THIRD-PARTY-NOTICES.md`**；
-也不要删掉 QuickForm 页面页脚的「免责声明 / 访问 QF 在线版 / 联系我们」链接。
+或放进自己的仓库时，**请不要删除 `LICENSE` 和 `THIRD-PARTY-NOTICES.md`**。
 详见 `THIRD-PARTY-NOTICES.md` 与 `README.md` 第十节。
 
 ## 二、怎么启动
@@ -106,12 +95,12 @@ MIT 的义务只有一条：**再分发时保留版权声明与许可全文**。
 4. 学生用手机访问 `http://<这台电脑的局域网 IP>:20020/s/`。
 
 前置：Python 3.9 或更高（Windows 安装时勾选 **Add Python to PATH**）。
-若网络受限，`/qf/` 起不来也不影响考勤、座位、作业、成绩等主功能。
+若拿到的是带 runtime 的版本，无需另装 Python。
 
 ### 方式二：Docker（推荐长期使用）
 
 ```bash
-cp .env.example .env      # 至少改 QF_SECRET_KEY
+cp .env.example .env
 docker compose up -d --build
 ```
 
@@ -120,7 +109,7 @@ docker compose up -d --build
 ## 三、数据存在哪
 
 - 直接运行：`app/data/`（数据库、上传附件、课件库、每日快照）
-- Docker：命名卷 `teacher-workbench-data`、`teacher-workbench-quickform-data`
+- Docker：命名卷 `teacher-workbench-data`
 
 换机器请用教师端 **设置 → 数据与备份 → 一键导出 / 一键恢复**，不要手工拷数据库。
 
@@ -191,7 +180,7 @@ def collect():
             if fn.endswith(INCLUDE_DOC_GLOB):
                 out.append("docs/" + fn)
     # 文档里引用的功能截图：一起带上，离线看文档才不会裂图
-    for sub in ("app", "student", "student-pc", "quickform"):
+    for sub in ("app", "student", "student-pc"):
         shots = os.path.join(ROOT, "docs", "shots", sub)
         if not os.path.isdir(shots):
             continue

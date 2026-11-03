@@ -196,10 +196,10 @@
   /* （materials/materialById 已随 2026-11-02 导学单移除而删除；
      课件库推送走 cwPushed()。） */
 
-  /* ---------------- 课堂活动（QuickForm 交互式学习单） ----------------
-     教师在「上课」页选好 QuickForm 活动即发放，记录在 activity_pushes 表；
+  /* ---------------- 课堂活动（交互式学习单） ----------------
+     教师在「上课」页选好活动即发放，记录在 activity_pushes 表；
      服务端只下发本班已发放的行（收回 / 草稿学生端不可见，口径与教师端一致）。
-     打开即教师设计的交互式学习单（/submit/custom.html 外壳 + QuickForm 提交 API）。 */
+     打开即教师设计的交互式学习单（/submit/custom.html 外壳 + 活动提交 API）。 */
   function pushOpen(p) {
     return String((p && p.status) || 'published') === 'published';
   }

@@ -256,7 +256,7 @@ LS.set('wb-db-' + k, DATA_KEY_SET ? encStr(json) : json);</code></pre>
     </div>
     <div class="card">
       <h4>双服务、双端口、双数据目录</h4>
-      <p>QuickForm 跑在 5055，数据在另一个 SQLite，活动作品在第三个目录。双端架构下这种分裂会直接变成“学生端要连两个地址”，必须收敛。</p>
+      <p>早期的表单服务跑在独立端口 5055，数据在另一个 SQLite，活动作品在第三个目录。双端架构下这种分裂会直接变成“学生端要连两个地址”，必须收敛。</p>
     </div>
   </div>
 </section>
@@ -374,7 +374,7 @@ LS.set('wb-db-' + k, DATA_KEY_SET ? encStr(json) : json);</code></pre>
     </tbody>
   </table>
 
-  <div class="note"><b>关于 QuickForm：</b>它是 Flask 应用，带 9 个第三方依赖和 270 MB 运行时，与“零依赖、单进程”的目标冲突。方案把它降级为<b>可选插件</b>：默认不启动；教师端在“活动”页点击启用后，由主进程以子进程拉起，并通过 <code>/activity/*</code> 同端口反代，学生端只经主进程访问、不直连 5055。长期看应把“收集表”能力重写进 <code>/api/v2</code>，彻底去掉这个依赖。</div>
+  <div class="note"><b>关于早期的表单服务：</b>它是 Flask 应用，带 9 个第三方依赖和 270 MB 运行时，与“零依赖、单进程”的目标冲突。方案曾把它降级为<b>可选插件</b>；后来课堂活动能力已重写进 <code>/api/v2</code>，彻底去掉了这个依赖。</div>
 </section>
 
 <!-- ============================================================ -->
@@ -397,7 +397,7 @@ LS.set('wb-db-' + k, DATA_KEY_SET ? encStr(json) : json);</code></pre>
 │   ├── <span class="path">德育</span>　　　加减分 · 流水 → <span class="dim">默认不向学生展示扣分原因</span>
 │   ├── <span class="path">分组</span>　　　分组方案 · 角色
 │   ├── <span class="path">进度</span>　　　课程进度表
-│   └── <span class="path">活动</span>　　　任务 · 大屏 · <span class="dim">QuickForm 入口（可选插件）</span>
+│   └── <span class="path">活动</span>　　　任务 · 大屏 · <span class="dim">活动管理面板</span>
 ├── 班务
 │   ├── <span class="path">值日</span>　　　轮值表 · 区域 · 岗位
 │   ├── <span class="path">学生</span>　　　名册 · 档案 · 家长联系方式
@@ -726,7 +726,7 @@ LS.set('wb-db-' + k, DATA_KEY_SET ? encStr(json) : json);</code></pre>
   服务运行中，关闭本窗口即停止。按 Ctrl+C 可安全退出。
 ════════════════════════════════════════════════════════════</code></pre>
 
-  <div class="note"><b>二维码怎么来的：</b>不引第三方库。包内带一个约 300 行的纯标准库 QR 编码器（<code>qrgen.py</code>，字节模式 + Reed-Solomon），终端用半块字符渲染，同时输出 <code>data/qr.png</code> 供投影。若在 QuickForm 运行时里检测到 <code>qrcode</code> 库，则优先用它生成更精细的图。</div>
+  <div class="note"><b>二维码怎么来的：</b>不引第三方库。包内带一个约 300 行的纯标准库 QR 编码器（<code>qrgen.py</code>，字节模式 + Reed-Solomon），终端用半块字符渲染，同时输出 <code>data/qr.png</code> 供投影。</div>
 
   <h3>6.4 启动参数</h3>
   <table>
@@ -915,9 +915,9 @@ LS.set('wb-db-' + k, DATA_KEY_SET ? encStr(json) : json);</code></pre>
         <td><code>data/</code> 支持软链接/配置到非还原盘；每日自动快照；首次启动检测“上次数据比今天新”时警告</td>
       </tr>
       <tr>
-        <td><b>QuickForm 依赖拖累打包体积</b></td>
+        <td><b>外部表单服务依赖拖累打包体积</b></td>
         <td><span class="tag t-ro">低</span></td>
-        <td>降级为可选插件，默认不启动；通用包不再强制捆绑 270 MB 运行时</td>
+        <td>课堂活动能力已重写进主服务，通用包不再捆绑 270 MB 运行时</td>
       </tr>
     </tbody>
   </table>

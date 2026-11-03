@@ -704,15 +704,22 @@ def archive_items(course, activity, base, items):
             skipped.append({"name": nm, "msg": "没有文件地址"})
             continue
         blob = None
-        # ① 服务器本地文件系统直读（QuickForm 的 /static/... 就在隔壁，最快最稳）
+        # ① 服务器本地文件系统直读（活动附件就在 <数据目录>/activity/ 下，最快最稳）
         #    必须做 commonpath 校验：url 是前端传来的，`/../../etc/passwd`、
         #    `/../../data/config.json` 这种能顺着拼出程序目录外的任意文件，
         #    读出来再落到课件库里就能被下载走（任意文件读取）。
         if url.startswith("/"):
             rel = url.lstrip("/").replace("\\", "/")
             if ".." not in rel.split("/"):
-                for base_dir in (os.path.join(WB_ROOT, "quickform", "app"),
-                                 os.path.join(WB_ROOT, "quickform-server"),
+                # 兼容旧前缀：历史备份里的附件地址可能带 /qf/static/uploads/，
+                # 统一剥成 static/uploads/<活动>/<文件> 再到活动附件目录找。
+                for pre in ("qf/static/uploads/", "static/uploads/"):
+                    if rel.startswith(pre):
+                        rel = "activity/" + rel[len(pre):]
+                        break
+                for base_dir in (os.path.join((os.environ.get("WB_DATA_DIR")
+                                               or os.path.join(WB_ROOT, "data")),
+                                              "activity"),
                                  WB_ROOT):
                     c = os.path.normpath(os.path.join(base_dir, rel))
                     try:
@@ -727,7 +734,7 @@ def archive_items(course, activity, base, items):
                             break
                         except Exception:
                             blob = None
-        # ② 退回 HTTP 拉取（QuickForm 目录不在默认位置、或换了端口）
+        # ② 退回 HTTP 拉取（附件不在本机数据目录时兜底）
         if blob is None and base:
             try:
                 req = urllib.request.Request(base + (url if url.startswith("/") else "/" + url),
@@ -760,48 +767,42 @@ def archive_items(course, activity, base, items):
 
 
 def fetch_remote(base, url, timeout=20):
-    """把「活动」里学生提交的文件取回来（QuickForm 的 /static/...）。
+    """把「活动」里学生提交的文件取回来（/static/uploads/... 或绝对地址）。
 
-    优先直接读服务器本地文件（QuickForm 就在隔壁，省一次网络往返），读不到再走 HTTP。
-    安全：只接受以 / 开头的相对地址，且 base 必须是站点内部地址，
-    避免被人拿来当跳板访问外网（SSRF）。允许的范围：
-      · 回环 / 私网 IP；
-      · compose 里的服务名（quickform），或 WB_QUICKFORM_URL 里配置的主机名。
+    优先直接读服务器本地文件（附件就在 <数据目录>/activity/ 下，省一次网络往返），
+    读不到再走 HTTP。安全：相对地址只接受以 / 开头的站内路径；
+    绝对地址的 base 必须是站点内部地址，避免被人拿来当跳板访问外网（SSRF）。
+    允许的范围：回环 / 私网 IP。
     """
     url = str(url or "").strip()
     if not url.startswith("/"):
         raise ValueError("只接受以 / 开头的站内地址")
     base = str(base or "").rstrip("/")
-    # 前端现在交来的是同源相对地址（/qf）：服务端自己按容器服务名去取。
-    # 这样网关换了端口、换了域名都不用改前端代码。
+    # 前端交来的是同源相对地址（/api/act）：服务端自己走回环取，端口跟本进程一致。
     if not base.startswith("http"):
-        base = (os.environ.get("WB_QUICKFORM_URL") or "").rstrip("/")
+        base = "http://127.0.0.1:%s" % (os.environ.get("PORT") or "20020")
     rel = url.lstrip("/")
     if ".." not in rel.split("/"):
-        for root in (os.path.join(WB_ROOT, "quickform", "app"),
-                     os.path.join(WB_ROOT, "quickform-server")):
-            local = os.path.normpath(os.path.join(root, rel))
-            try:
-                if os.path.commonpath([os.path.normpath(root), local]) != os.path.normpath(root):
-                    continue
-            except ValueError:
-                continue
-            if os.path.isfile(local):
+        for pre in ("qf/static/uploads/", "static/uploads/"):
+            if rel.startswith(pre):
+                rel = "activity/" + rel[len(pre):]
+                break
+        root = os.path.join((os.environ.get("WB_DATA_DIR")
+                             or os.path.join(WB_ROOT, "data")), "activity")
+        local = os.path.normpath(os.path.join(root, rel))
+        try:
+            if os.path.commonpath([os.path.normpath(root), local]) == os.path.normpath(root) \
+                    and os.path.isfile(local):
                 with open(local, "rb") as f:
                     return f.read()
-    if not base:
-        raise ValueError("缺少 QuickForm 服务地址，无法取回文件")
+        except ValueError:
+            pass
     parsed = urllib.parse.urlparse(base)
     host = (parsed.hostname or "").lower()
-    try:
-        qf_host = (urllib.parse.urlparse(os.environ.get("WB_QUICKFORM_URL") or "").hostname or "").lower()
-    except Exception:
-        qf_host = ""
     private = host in ("localhost", "127.0.0.1", "::1") or \
         bool(re.match(r"^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)", host))
-    service = host in ("quickform", "quickform-server") or (qf_host and host == qf_host)
-    if not (private or service):
-        raise ValueError("QuickForm 服务地址必须是站内地址（回环 / 私网 / compose 服务名）")
+    if not private:
+        raise ValueError("活动附件地址必须是站内地址（回环 / 私网）")
     req = urllib.request.Request(base + url, headers={"User-Agent": "class-workbench"})
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return r.read()

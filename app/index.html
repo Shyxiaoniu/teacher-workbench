@@ -5316,7 +5316,7 @@ body:has(.mini-bar) .corner-credit { display:none; }
 .cwl-list td.ic .ftico { margin:0 auto; }
 .cwl-rail .it .ic2 .ftico { margin:0 auto; }
 .cwv-fallback .big .ftico,
-.qf-stage-ph .big .ftico,
+.act-stage-ph .big .ftico,
 .cwl-stage-body .fb .ftico { margin:0 auto 8px; }
 
 /* ============================================================
@@ -6463,122 +6463,122 @@ body:has(.mini-bar) .corner-credit { display:none; }
 .cw-role-diff td:first-child{white-space:nowrap;color:var(--text-secondary);background:var(--bg-page)}
 
 /* ===== 活动数据大屏 · 学生作品查看 ===== */
-.qf-works{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
-.qf-work{border:1px solid var(--border);border-radius:11px;overflow:hidden;background:var(--bg-surface);
+.act-works{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.act-work{border:1px solid var(--border);border-radius:11px;overflow:hidden;background:var(--bg-surface);
   cursor:pointer;position:relative;transition:.15s}
-.qf-work:hover{border-color:var(--brand-primary);box-shadow:var(--shadow);transform:translateY(-2px)}
-.qf-work .th{height:96px;background:var(--brand-soft);display:flex;align-items:center;justify-content:center;
+.act-work:hover{border-color:var(--brand-primary);box-shadow:var(--shadow);transform:translateY(-2px)}
+.act-work .th{height:96px;background:var(--brand-soft);display:flex;align-items:center;justify-content:center;
   font-size:30px;overflow:hidden;color:var(--brand-primary)}
-.qf-work .th img{width:100%;height:100%;object-fit:cover;display:block}
-.qf-work .th video{width:100%;height:100%;object-fit:cover;background:#000}
-.qf-work .meta{padding:7px 9px 9px}
-.qf-work .who{font-size:12.5px;font-weight:600;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.qf-wgrp{display:inline-block;margin-left:6px;padding:0 6px;border-radius:999px;background:var(--brand-soft);
+.act-work .th img{width:100%;height:100%;object-fit:cover;display:block}
+.act-work .th video{width:100%;height:100%;object-fit:cover;background:#000}
+.act-work .meta{padding:7px 9px 9px}
+.act-work .who{font-size:12.5px;font-weight:600;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.act-wgrp{display:inline-block;margin-left:6px;padding:0 6px;border-radius:999px;background:var(--brand-soft);
   color:var(--brand-primary);font-size:10.5px;font-weight:600;vertical-align:1px;
   max-width:96px;overflow:hidden;text-overflow:ellipsis}
-.qf-stage-bar .qf-wgrp{margin-left:8px}
-.qf-work .fn2{font-size:11px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
-.qf-work .kbadge{position:absolute;left:6px;top:6px;font-size:10.5px;padding:1px 7px;border-radius:999px;
+.act-stage-bar .act-wgrp{margin-left:8px}
+.act-work .fn2{font-size:11px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.act-work .kbadge{position:absolute;left:6px;top:6px;font-size:10.5px;padding:1px 7px;border-radius:999px;
   background:rgba(15,110,86,.9);color:#fff}
-.qf-ktabs{display:flex;gap:6px;flex-wrap:wrap}
-.qf-ktab{padding:5px 12px;border:1px solid var(--border);border-radius:999px;background:var(--bg-surface);
+.act-ktabs{display:flex;gap:6px;flex-wrap:wrap}
+.act-ktab{padding:5px 12px;border:1px solid var(--border);border-radius:999px;background:var(--bg-surface);
   color:var(--text-secondary);font-size:12.5px;cursor:pointer}
-.qf-ktab.on{border-color:var(--brand-primary);background:var(--brand-soft);color:var(--brand-primary);font-weight:600}
+.act-ktab.on{border-color:var(--brand-primary);background:var(--brand-soft);color:var(--brand-primary);font-weight:600}
 
 /* 作品视图切换（网格 / 列表 / 大图） */
 .act-rt-sp{flex:1;min-width:8px}
-.qf-vtabs{display:flex;gap:3px;background:var(--bg-page);border:1px solid var(--border);border-radius:10px;padding:3px}
-.qf-vtab{border:0;background:transparent;color:var(--text-secondary);font-size:12.5px;
+.act-vtabs{display:flex;gap:3px;background:var(--bg-page);border:1px solid var(--border);border-radius:10px;padding:3px}
+.act-vtab{border:0;background:transparent;color:var(--text-secondary);font-size:12.5px;
   padding:5px 11px;border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap;transition:.14s}
-.qf-vtab:hover{color:var(--brand-primary)}
-.qf-vtab.on{background:var(--bg-surface);color:var(--brand-primary);font-weight:700;box-shadow:0 1px 3px rgba(0,0,0,.1)}
-.qf-wbox{animation:qfFade .18s ease-out}
-@keyframes qfFade{from{opacity:.35}to{opacity:1}}
+.act-vtab:hover{color:var(--brand-primary)}
+.act-vtab.on{background:var(--bg-surface);color:var(--brand-primary);font-weight:700;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.act-wbox{animation:actFade .18s ease-out}
+@keyframes actFade{from{opacity:.35}to{opacity:1}}
 
 /* ===== 作品浏览页签（2026-10-29）===== */
-.qf-wtools{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
-.qf-wrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
-.qf-winp{flex:1 1 190px;min-width:150px;padding:7px 11px;border:1px solid var(--border);border-radius:9px;
+.act-wtools{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+.act-wrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+.act-winp{flex:1 1 190px;min-width:150px;padding:7px 11px;border:1px solid var(--border);border-radius:9px;
   background:var(--bg-surface);color:var(--text-primary);font-family:inherit;font-size:12.5px;box-sizing:border-box}
-.qf-winp:focus{outline:none;border-color:var(--brand-primary);box-shadow:0 0 0 3px var(--brand-soft)}
-.qf-wsel{padding:6px 9px;border:1px solid var(--border);border-radius:9px;background:var(--bg-surface);
+.act-winp:focus{outline:none;border-color:var(--brand-primary);box-shadow:0 0 0 3px var(--brand-soft)}
+.act-wsel{padding:6px 9px;border:1px solid var(--border);border-radius:9px;background:var(--bg-surface);
   color:var(--text-primary);font-family:inherit;font-size:12.5px;cursor:pointer}
-.qf-wt-hint{font-size:12px;color:var(--text-secondary);white-space:nowrap}
+.act-wt-hint{font-size:12px;color:var(--text-secondary);white-space:nowrap}
 /* 缩略图墙：图片优先，一眼看全 */
-.qf-wall{display:grid;grid-template-columns:repeat(auto-fill,minmax(216px,1fr));gap:12px}
-.qf-wall .qf-work .th{height:150px;font-size:36px}
-.qf-wall .qf-work .who{font-size:13px}
-.qf-work .th img{transition:transform .28s ease-out}
-.qf-work:hover .th img{transform:scale(1.045)}
-.qf-wgroup{margin-top:16px}
-.qf-wgroup:first-child{margin-top:0}
-.qf-wgroup-h{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--text-secondary);margin:0 0 8px}
-.qf-wgroup-h::before{content:'';width:4px;height:13px;background:var(--brand-primary);border-radius:3px}
-.qf-wgroup-h .n{font-weight:400;color:var(--text-secondary)}
-.qf-wgroup-h .go{margin-left:auto;font-weight:400;font-size:12px;color:var(--brand-primary);cursor:pointer}
-.qf-wgroup-h .go:hover{text-decoration:underline}
+.act-wall{display:grid;grid-template-columns:repeat(auto-fill,minmax(216px,1fr));gap:12px}
+.act-wall .act-work .th{height:150px;font-size:36px}
+.act-wall .act-work .who{font-size:13px}
+.act-work .th img{transition:transform .28s ease-out}
+.act-work:hover .th img{transform:scale(1.045)}
+.act-wgroup{margin-top:16px}
+.act-wgroup:first-child{margin-top:0}
+.act-wgroup-h{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--text-secondary);margin:0 0 8px}
+.act-wgroup-h::before{content:'';width:4px;height:13px;background:var(--brand-primary);border-radius:3px}
+.act-wgroup-h .n{font-weight:400;color:var(--text-secondary)}
+.act-wgroup-h .go{margin-left:auto;font-weight:400;font-size:12px;color:var(--brand-primary);cursor:pointer}
+.act-wgroup-h .go:hover{text-decoration:underline}
 /* 按学生分组：一人一行横向铺开，44 人也不会拉成一长条 */
-.qf-wgroup-strip{display:flex;gap:9px;overflow-x:auto;padding:2px 2px 6px}
-.qf-wgroup-strip .qf-work{flex:0 0 132px;width:132px}
-.qf-wgroup-strip .qf-work .th{height:92px;font-size:26px}
-.qf-wgroup-strip .qf-work .meta{padding:6px 8px 8px}
-.qf-wgroup-strip .qf-work .who{font-size:11.5px}
-.qf-wgroup-strip .qf-work .fn2{font-size:11px}
+.act-wgroup-strip{display:flex;gap:9px;overflow-x:auto;padding:2px 2px 6px}
+.act-wgroup-strip .act-work{flex:0 0 132px;width:132px}
+.act-wgroup-strip .act-work .th{height:92px;font-size:26px}
+.act-wgroup-strip .act-work .meta{padding:6px 8px 8px}
+.act-wgroup-strip .act-work .who{font-size:11.5px}
+.act-wgroup-strip .act-work .fn2{font-size:11px}
 /* 大屏里的「最近作品」小条 */
-.qf-recent{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:9px}
-.qf-recent .qf-work .th{height:76px;font-size:24px}
-.qf-recent .qf-work .meta{padding:5px 7px 6px}
-.qf-recent .qf-work .who{font-size:11.5px}
-.qf-recent .qf-work .fn2{display:none}
+.act-recent{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:9px}
+.act-recent .act-work .th{height:76px;font-size:24px}
+.act-recent .act-work .meta{padding:5px 7px 6px}
+.act-recent .act-work .who{font-size:11.5px}
+.act-recent .act-work .fn2{display:none}
 
 /* 列表视图 */
-.qf-wlist-wrap{max-height:min(58vh,620px);overflow:auto;border:1px solid var(--border);border-radius:11px}
-.qf-wlist{width:100%;border-collapse:collapse;font-size:13px}
-.qf-wlist th{position:sticky;top:0;z-index:1;background:var(--brand-soft);color:var(--brand-primary);
+.act-wlist-wrap{max-height:min(58vh,620px);overflow:auto;border:1px solid var(--border);border-radius:11px}
+.act-wlist{width:100%;border-collapse:collapse;font-size:13px}
+.act-wlist th{position:sticky;top:0;z-index:1;background:var(--brand-soft);color:var(--brand-primary);
   font-weight:700;text-align:left;padding:9px 12px;white-space:nowrap;border-bottom:1px solid var(--border)}
-.qf-wlist td{padding:8px 12px;border-bottom:1px solid var(--border);color:var(--text-primary);vertical-align:middle}
-.qf-wlist tr:last-child td{border-bottom:0}
-.qf-wlist tbody tr{cursor:pointer;transition:.12s}
-.qf-wlist tbody tr:hover{background:var(--brand-soft)}
-.qf-wlist .wico{width:34px;height:26px;border-radius:6px;object-fit:cover;display:block;border:1px solid var(--border)}
-.qf-wlist .wname{max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.qf-wlist .wgo{color:var(--brand-primary);font-weight:600;white-space:nowrap}
+.act-wlist td{padding:8px 12px;border-bottom:1px solid var(--border);color:var(--text-primary);vertical-align:middle}
+.act-wlist tr:last-child td{border-bottom:0}
+.act-wlist tbody tr{cursor:pointer;transition:.12s}
+.act-wlist tbody tr:hover{background:var(--brand-soft)}
+.act-wlist .wico{width:34px;height:26px;border-radius:6px;object-fit:cover;display:block;border:1px solid var(--border)}
+.act-wlist .wname{max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.act-wlist .wgo{color:var(--brand-primary);font-weight:600;white-space:nowrap}
 
 /* 大图（课堂展示）视图 */
-.qf-stage{position:relative;border-radius:14px;overflow:hidden;background:#0B1210;
+.act-stage{position:relative;border-radius:14px;overflow:hidden;background:#0B1210;
   border:1px solid var(--border);display:flex;flex-direction:column}
-.qf-stage-main{position:relative;height:min(60vh,560px);display:flex;align-items:center;justify-content:center;
+.act-stage-main{position:relative;height:min(60vh,560px);display:flex;align-items:center;justify-content:center;
   background:#0B1210;overflow:hidden}
-.qf-stage-main img{max-width:100%;max-height:100%;object-fit:contain;display:block}
-.qf-stage-main video{max-width:100%;max-height:100%;background:#000}
-.qf-stage-main audio{width:min(520px,86%)}
-.qf-stage-main iframe{width:100%;height:100%;border:0;background:#fff}
-.qf-stage-ph{color:#C9D8D2;text-align:center;font-size:15px;line-height:2}
-.qf-stage-ph .big{font-size:52px}
-.qf-stage-nav{position:absolute;top:50%;transform:translateY(-50%);width:46px;height:70px;border:0;
+.act-stage-main img{max-width:100%;max-height:100%;object-fit:contain;display:block}
+.act-stage-main video{max-width:100%;max-height:100%;background:#000}
+.act-stage-main audio{width:min(520px,86%)}
+.act-stage-main iframe{width:100%;height:100%;border:0;background:#fff}
+.act-stage-ph{color:#C9D8D2;text-align:center;font-size:15px;line-height:2}
+.act-stage-ph .big{font-size:52px}
+.act-stage-nav{position:absolute;top:50%;transform:translateY(-50%);width:46px;height:70px;border:0;
   background:rgba(0,0,0,.42);color:#fff;font-size:25px;cursor:pointer;border-radius:10px;z-index:2;transition:.14s}
-.qf-stage-nav:hover{background:rgba(0,0,0,.7)}
-.qf-stage-nav:disabled{opacity:.25;cursor:default}
-.qf-stage-nav.l{left:10px} .qf-stage-nav.r{right:10px}
-.qf-stage-bar{display:flex;align-items:center;gap:10px;padding:9px 14px;background:#111A16;color:#E9F1ED;
+.act-stage-nav:hover{background:rgba(0,0,0,.7)}
+.act-stage-nav:disabled{opacity:.25;cursor:default}
+.act-stage-nav.l{left:10px} .act-stage-nav.r{right:10px}
+.act-stage-bar{display:flex;align-items:center;gap:10px;padding:9px 14px;background:#111A16;color:#E9F1ED;
   font-size:13px;flex-wrap:wrap;border-top:1px solid rgba(255,255,255,.08)}
-.qf-stage-bar .who{font-weight:700}
-.qf-stage-bar .fn{color:#9FB3AA;max-width:38vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.qf-stage-bar .idx{color:#7FD9B8;font-variant-numeric:tabular-nums}
-.qf-stage-bar .sp{flex:1}
-.qf-stage-bar button{border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.08);color:#E9F1ED;
+.act-stage-bar .who{font-weight:700}
+.act-stage-bar .fn{color:#9FB3AA;max-width:38vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.act-stage-bar .idx{color:#7FD9B8;font-variant-numeric:tabular-nums}
+.act-stage-bar .sp{flex:1}
+.act-stage-bar button{border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.08);color:#E9F1ED;
   border-radius:8px;padding:4px 11px;font-size:12.5px;cursor:pointer;font-family:inherit}
-.qf-stage-bar button:hover{background:rgba(255,255,255,.2)}
-.qf-stage-strip{display:flex;gap:7px;padding:8px 12px 11px;overflow-x:auto;background:#0E1714}
-.qf-stage-th{flex:0 0 auto;width:70px;height:50px;border-radius:7px;overflow:hidden;cursor:pointer;
+.act-stage-bar button:hover{background:rgba(255,255,255,.2)}
+.act-stage-strip{display:flex;gap:7px;padding:8px 12px 11px;overflow-x:auto;background:#0E1714}
+.act-stage-th{flex:0 0 auto;width:70px;height:50px;border-radius:7px;overflow:hidden;cursor:pointer;
   border:2px solid transparent;background:#16241F;display:flex;align-items:center;justify-content:center;
   font-size:17px;color:#B9CEC5}
-.qf-stage-th img{width:100%;height:100%;object-fit:cover}
-.qf-stage-th.on{border-color:#1D9E75}
+.act-stage-th img{width:100%;height:100%;object-fit:cover}
+.act-stage-th.on{border-color:#1D9E75}
 @media (max-width:760px){
-  .qf-stage-main{height:44vh}
-  .qf-vtab{padding:5px 8px;font-size:12px}
-  .qf-wlist .wname{max-width:120px}
+  .act-stage-main{height:44vh}
+  .act-vtab{padding:5px 8px;font-size:12px}
+  .act-wlist .wname{max-width:120px}
 }
 
 /* ===== 通用预览器 ===== */
@@ -6989,7 +6989,7 @@ const DARK_BASE  = { forest:'#0B1210', mist:'#0F0D17', sky:'#090F17', deep:'#0A0
 
 /* 导航按用途分组（2026-11-01 二次精简）：
    · 进度 / 值日 / 分组 / 德育 四页并入「班级」页做页内页签，侧栏不再单列；
-   · 「活动」整页删除，QuickForm 活动收集与数据大屏并入「上课」页（原导学单页）；
+   · 「活动」整页删除，课堂活动收集与数据大屏并入「上课」页（原导学单页）；
    旧链接 / 旧书签由 renderPage 里的 ROUTE_REDIRECT 统一 302。 */
 const NAV_GROUPS = [
   { name:'常用', items:['home','seats','timetable'] },   // 考勤并入座位表（v2）
@@ -10409,9 +10409,6 @@ async function goToApp(returnTo) {
   /* 业务数据：纯本地模式，只读回本机那份（秒开、断网也在）。无云端拉取。 */
   dbLoadLocal();
   todoLoadLocal();
-  /* 活动数据服务地址以服务端为准：换电脑、清缓存后自动恢复，
-     也保证学生端 /g/ 闸门拿到的是同一份配置。失败不阻塞（离线照常用）。 */
-  qfSyncApiFromServer();
   dbEnsureEncrypted();         // 有密码却还是明文（老数据 / 明文备份导入）→ 当场重加密
   fixSept30Dates();            // 自愈：9-30 错记的考勤/德育记录迁到今天（只做一次）
   /* 登录后不再自动铺示例数据（老师要求：示例数据一律不显示）。
@@ -11218,10 +11215,10 @@ function renderContent(opts = {}) {
   if (state.route === 'home') {
     c.innerHTML = renderHome();
   } else if (state.route === 'guide') {
-    /* 活动页已删除（2026-11-01）：QuickForm 课堂活动（选择活动 / 设计学习单 /
-       数据大屏 / 学生作品）整块在「上课」页，qfInit 随之挂在这里。 */
+    /* 活动页已删除（2026-11-01）：课堂活动（选择活动 / 设计学习单 /
+       数据大屏 / 学生作品）整块在「上课」页，actInit 随之挂在这里。 */
     c.innerHTML = DEMO_RENDER.guide();
-    qfInit();
+    actInit();
   } else if (state.route === 'courseware') {
     c.innerHTML = renderCourseware();
     cwInit();
@@ -15280,10 +15277,10 @@ window.delStudentsMulti = delStudentsMulti;
    上课（原「导学单」页 · 2026-11-02 改版）
    ------------------------------------------------------------
    教师端不再编辑导学单内容：
-   · 课堂活动列表直接来自 QuickForm 后台「数据设置」的任务（/api/tasks）；
-   · 交互式学习单由教师用 QuickForm 活动提交 API 自行设计（自定义网页
+   · 课堂活动列表来自「⚙ 活动管理」（/api/act/tasks）；
+   · 交互式学习单由教师用活动提交 API 自行设计（自定义网页
      注入登录 / 逐题提交后部署），选好活动即自动发放给学生；
-   · 学生端「今日」对应课程里出现「进入课堂活动」，提交直达活动数据服务；
+   · 学生端「今日」对应课程里出现「进入课堂活动」，提交直达活动接口；
    · 发放记录走 activity_pushes 表，与其它业务表同一条同步链路；
    · 学生提交的数据 / 作品由工作台自动归档到课件库对应课程目录。
    ============================================================ */
@@ -15291,7 +15288,7 @@ function renderGuidePage() {
   return `
   <div class="notice">
     选好班级与活动即完成发放：学生打开「今日」，在对应课程里进入课堂活动
-    （QuickForm 交互式学习单），提交直达活动数据服务。
+    （交互式学习单），提交直达活动接口。
     下方可实时查看<b>数据大屏</b>与<b>学生作品</b>；
     学生提交的数据与作品会自动归档到课件库对应课程目录。
   </div>
@@ -15337,44 +15334,27 @@ function renderPlaceholder(nav) {
    活动菜单 · 活动数据服务 集成
    功能：① 绑定活动任务表单 ② 采集学生数据/作品产物
         ③ 数据大屏（参考官方样式 + 支持上传自定义大屏部署）
-   活动数据服务 公开接口（已开启 CORS *）：
-     GET  <api>/api/<taskId>/all      取全部提交
-     POST <api>/api/<taskId>          提交数据（表单/JSON/文件）
+   活动接口 公开（已开启 CORS *）：
+     GET  <api>/<taskId>/all      取全部提交
+     POST <api>/<taskId>          提交数据（表单/JSON/文件）
    ============================================================ */
-let qfActiveId = null;
-let qfCustomIframeTask = null;   // 当前已构建自定义大屏 iframe 对应的活动任务（用于跨渲染保留状态）
-let qfCustomIframeHash = null;   // 当前自定义大屏 HTML 的内容指纹（上传/删除后变化需重建）
+let actActiveId = null;
+let actCustomIframeTask = null;   // 当前已构建自定义大屏 iframe 对应的活动任务（用于跨渲染保留状态）
+let actCustomIframeHash = null;   // 当前自定义大屏 HTML 的内容指纹（上传/删除后变化需重建）
 /* 大屏「提交名单」的搜索/排序状态（轮询重渲染时保持） */
-let qfRosterKw = '';
-let qfRosterSort = 'time-asc';
-let qfLastMatched = [];          // 当前大屏的本班匹配结果（供搜索/排序/导出复用）
-const qfApiKey = () => 'wb-qf-api';
-/* 后端类型：builtin=工作台内置（默认）/ qf=回退到 QuickForm。
-   页面初始化时以 /api/v2/state 的返回为准；这里先给默认值，避免第一帧就判错。 */
-window.WB_ACT_BACKEND = window.WB_ACT_BACKEND || 'builtin';
-function qfLsGet(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }
-function qfLsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
-function qfApiBase() {
-  /* 自研后端（2026-11-03 起默认）：接口就在本机 /qf 下。
-     此时忽略 localStorage 里历史保存的「外部 QuickForm 地址」——
-     那台机器可能早就关了，留着只会让整页连不上。 */
-  if (window.WB_ACT_BACKEND !== 'qf') return '/qf';
-  try {
-    const v = localStorage.getItem(qfApiKey());
-    /* 老版本存的是 http://127.0.0.1:5055 这类「本机地址」：换到 Docker 部署后
-       它必然连不上，还会绕过同源入口。遇到回环地址就当没配。 */
-    if (v && v.trim() && !/^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(:|\/|$)/i.test(v.trim())) {
-      return v.trim().replace(/\/+$/, '');
-    }
-  } catch (e) {}
-  /* 默认走同源 /qf：网关把工作台和 QuickForm 放在同一个入口，
-     相对路径天然跟着「老师当前打开的地址」走，学生手机也能直接访问。 */
-  return '/qf';
+let actRosterKw = '';
+let actRosterSort = 'time-asc';
+let actLastMatched = [];          // 当前大屏的本班匹配结果（供搜索/排序/导出复用）
+function actLsGet(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }
+function actLsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+function actApiBase() {
+  /* 活动接口就在本机 /api/act 下（工作台自研），相对路径跟随当前访问地址。 */
+  return '/api/act';
 }
 /* 需要「绝对地址」的场合（iframe 大屏、传给服务端做中转的 base）：
-   /qf 在 blob: / iframe 里无法解析，必须先补成完整 URL。 */
-function qfAbsBase() {
-  const b = qfApiBase();
+   相对前缀在 blob: / iframe 里无法解析，必须先补成完整 URL。 */
+function actAbsBase() {
+  const b = actApiBase();
   if (/^https?:\/\//i.test(b)) return b;
   return location.origin + (b.charAt(0) === '/' ? b : '/' + b);
 }
@@ -15382,31 +15362,31 @@ function qfAbsBase() {
 /* ---------- 学生链接基地址：本机地址自动换成局域网地址 ----------
    2026-10-28 走查：老师在本机打开工作台时，给学生的链接是 http://127.0.0.1:8080/…，
    学生手机必然打不开。这里从本地服务 /api/net 取本机局域网 IP 来拼链接。 */
-let qfNetInfo = null;
+let actNetInfo = null;
 function isLoopbackHost(h) {
   h = String(h || '').toLowerCase();
   return !h || h === 'localhost' || h === '127.0.0.1' || h === '::1'
     || h === '[::1]' || h === '0.0.0.0';
 }
-async function qfLoadNet(force) {
-  if (qfNetInfo && !force) return qfNetInfo;
+async function actLoadNet(force) {
+  if (actNetInfo && !force) return actNetInfo;
   try {
     const r = await fetch('/api/net', { cache: 'no-store' });
-    if (r.ok) qfNetInfo = await r.json();
-  } catch (e) { qfNetInfo = null; }
-  return qfNetInfo;
+    if (r.ok) actNetInfo = await r.json();
+  } catch (e) { actNetInfo = null; }
+  return actNetInfo;
 }
-function qfStudentBase() {
+function actStudentBase() {
   if (!isLoopbackHost(location.hostname)) return location.origin;
-  const ip = qfNetInfo && Array.isArray(qfNetInfo.ips) ? qfNetInfo.ips[0] : '';
-  if (ip) return 'http://' + ip + ':' + (qfNetInfo.port || location.port || 8080);
+  const ip = actNetInfo && Array.isArray(actNetInfo.ips) ? actNetInfo.ips[0] : '';
+  if (ip) return 'http://' + ip + ':' + (actNetInfo.port || location.port || 8080);
   return location.origin;   // 取不到就退回本机地址，界面上会明确提示
 }
 /** 学生链接里带的「提交接口地址」也要换掉本机 IP：
     学生页是直接 POST 到这个地址的，127.0.0.1 到了学生手机上就是学生自己的手机。 */
-function qfLanApi(apiUrl) {
+function actLanApi(apiUrl) {
   if (!isLoopbackHost(location.hostname)) return apiUrl;
-  const ip = qfNetInfo && Array.isArray(qfNetInfo.ips) ? qfNetInfo.ips[0] : '';
+  const ip = actNetInfo && Array.isArray(actNetInfo.ips) ? actNetInfo.ips[0] : '';
   if (!ip) return apiUrl;
   try {
     const u = new URL(apiUrl);
@@ -15415,133 +15395,108 @@ function qfLanApi(apiUrl) {
     return u.toString();
   } catch (e) { return apiUrl; }
 }
-function qfSetApi(v) {
-  const base = (v || '').trim().replace(/\/+$/, '');
-  try { localStorage.setItem(qfApiKey(), base); } catch (e) {}
-  /* 同时写进服务端配置：学生端的 /g/ 闸门与提交中转都在服务端跑，
-     它们不读教师的 localStorage —— 只存本机的话，学生那边就找不到服务。
-     失败不阻塞（离线也能先配本地，联网后下次保存补上）。 */
-  fetch('/api/v2/teacher/activity', {
-    method: 'POST',
-    credentials: 'same-origin',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ api_base: base })
-  }).catch(function () {});
-}
-/** 教师端启动时把服务端的活动服务地址拉回本地（换电脑/清缓存后自动恢复） */
-async function qfSyncApiFromServer() {
-  try {
-    const r = await fetch('/api/v2/teacher/activity', { credentials: 'same-origin', cache: 'no-store' });
-    if (!r.ok) return;
-    const j = await r.json();
-    if (j && j.ok && j.api_base) {
-      try { localStorage.setItem(qfApiKey(), String(j.api_base).replace(/\/+$/, '')); } catch (e) {}
-    }
-  } catch (e) {}
-}
-window.qfSyncApiFromServer = qfSyncApiFromServer;
-function qfActs() { return qfLsGet('wb-qf-acts', []); }
-function qfSaveActs(a) { qfLsSet('wb-qf-acts', a); }
-function qfDashHtml(id) { return qfLsGet('wb-qf-dash-' + id, ''); }
-function qfSaveDash(id, html) { qfLsSet('wb-qf-dash-' + id, html); }
+function actActs() { return actLsGet('wb-act-acts', []); }
+function actSaveActs(a) { actLsSet('wb-act-acts', a); }
+function actDashHtml(id) { return actLsGet('wb-act-dash-' + id, ''); }
+function actSaveDash(id, html) { actLsSet('wb-act-dash-' + id, html); }
 
 /* （renderActivityBlock 已随 2026-11-02 上课页改版移除：页面直接渲染 renderActivity） */
 
 function renderActivity() {
   return `
-  <style id="qfStyle">
+  <style id="actStyle">
   /* ===== 主题状态色补充（兼容全部主题） ===== */
   :root,[data-theme]{--status-warning:#E0A21A;--status-success:#1D9E75}
 
-  .qf-wrap{width:100%}
-  .qf-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--bg-surface);border:1px solid var(--border);border-radius:12px;padding:10px 14px;margin-bottom:14px;font-size:13px}
-  .qf-dot{width:10px;height:10px;border-radius:50%;background:var(--status-muted,#9CA3AF)}
-  .qf-dot.on{background:var(--chart-1,#1D9E75);box-shadow:0 0 0 3px var(--ok-soft,rgba(29,158,117,.15))}
-  .qf-dot.off{background:var(--status-error,#E24B4A);box-shadow:0 0 0 3px rgba(226,75,74,.15)}
-  .qf-api{color:var(--text-secondary);font-size:12px}
-  .qf-api code{background:var(--brand-soft);color:var(--brand-primary);padding:1px 6px;border-radius:5px;word-break:break-all}
-  .qf-card{background:var(--bg-surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:14px}
-  .qf-card-h{font-weight:600;margin-bottom:10px;font-size:14px;color:var(--text-primary)}
-  .qf-acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
-  .qf-act{display:flex;align-items:center;gap:8px;border:1px solid var(--border);border-radius:999px;padding:5px 10px;font-size:13px;cursor:pointer;background:var(--bg-surface);color:var(--text-primary)}
-  .qf-act.on{border-color:var(--brand-primary);background:var(--brand-soft);color:var(--brand-primary)}
-  .qf-act .x{cursor:pointer;color:var(--text-secondary);font-weight:700;margin-left:2px}
-  .qf-tabs{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
-  .qf-tab{border:1px solid var(--border);background:var(--bg-surface);border-radius:9px 9px 0 0;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--text-secondary)}
-  .qf-tab.on{background:var(--brand-primary);color:var(--bg-surface);border-color:var(--brand-primary)}
-  .qf-pane{background:var(--bg-surface);border:1px solid var(--border);border-radius:0 0 12px 12px;padding:16px;min-height:200px}
+  .act-wrap{width:100%}
+  .act-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--bg-surface);border:1px solid var(--border);border-radius:12px;padding:10px 14px;margin-bottom:14px;font-size:13px}
+  .act-dot{width:10px;height:10px;border-radius:50%;background:var(--status-muted,#9CA3AF)}
+  .act-dot.on{background:var(--chart-1,#1D9E75);box-shadow:0 0 0 3px var(--ok-soft,rgba(29,158,117,.15))}
+  .act-dot.off{background:var(--status-error,#E24B4A);box-shadow:0 0 0 3px rgba(226,75,74,.15)}
+  .act-api{color:var(--text-secondary);font-size:12px}
+  .act-api code{background:var(--brand-soft);color:var(--brand-primary);padding:1px 6px;border-radius:5px;word-break:break-all}
+  .act-card{background:var(--bg-surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:14px}
+  .act-card-h{font-weight:600;margin-bottom:10px;font-size:14px;color:var(--text-primary)}
+  .act-acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .act-act{display:flex;align-items:center;gap:8px;border:1px solid var(--border);border-radius:999px;padding:5px 10px;font-size:13px;cursor:pointer;background:var(--bg-surface);color:var(--text-primary)}
+  .act-act.on{border-color:var(--brand-primary);background:var(--brand-soft);color:var(--brand-primary)}
+  .act-act .x{cursor:pointer;color:var(--text-secondary);font-weight:700;margin-left:2px}
+  .act-tabs{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+  .act-tab{border:1px solid var(--border);background:var(--bg-surface);border-radius:9px 9px 0 0;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--text-secondary)}
+  .act-tab.on{background:var(--brand-primary);color:var(--bg-surface);border-color:var(--brand-primary)}
+  .act-pane{background:var(--bg-surface);border:1px solid var(--border);border-radius:0 0 12px 12px;padding:16px;min-height:200px}
   /* ===== 两栏布局：左 学生提交 / 右 数据大屏 ===== */
-  .qf-two-col{display:grid;grid-template-columns:400px 1fr;gap:14px;align-items:start}
-  @media(max-width:960px){.qf-two-col{grid-template-columns:1fr}}
-  .qf-col{min-width:0}
-  .qf-link-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
-  .qf-link-row>span.lab{width:84px;font-weight:600;color:var(--text-primary);flex:0 0 auto}
-  .qf-link-row code{flex:1;min-width:200px;background:var(--brand-soft);color:var(--brand-primary);padding:6px 10px;border-radius:8px;word-break:break-all;font-size:12px}
-  .qf-roster-hint{font-size:12px;color:var(--text-secondary);margin-top:10px;line-height:1.6;padding:8px 12px;background:var(--brand-soft);border:1px solid var(--border);border-radius:9px}
-  .qf-roster-hint b{color:var(--brand-primary)}
-  .qf-sel{flex:1;min-width:220px;padding:9px 12px;border:1px solid var(--border);border-radius:9px;background:var(--bg-surface);color:var(--text-primary);font-family:inherit;font-size:14px}
-  .qf-sel:focus{outline:none;border-color:var(--brand-primary);box-shadow:0 0 0 3px var(--brand-soft)}
-  .qf-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
-  .qf-stat{background:linear-gradient(135deg,var(--brand-soft),var(--bg-surface));border:1px solid var(--border);border-radius:12px;padding:14px}
-  .qf-stat b{font-size:26px;display:block;color:var(--brand-primary)}
-  .qf-stat span{font-size:12px;color:var(--text-secondary)}
-  .qf-charts{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-  @media(max-width:760px){.qf-charts{grid-template-columns:1fr}}
-  .qf-chart{border:1px solid var(--border);border-radius:12px;padding:12px;background:var(--bg-surface)}
-  .qf-chart h4{margin:0 0 8px;font-size:13px;color:var(--text-primary)}
-  .qf-tb{width:100%;border-collapse:collapse;font-size:12px}
-  .qf-tb th,.qf-tb td{border-bottom:1px solid var(--border);padding:6px 8px;text-align:left;vertical-align:top;color:var(--text-primary)}
-  .qf-tb th{color:var(--text-secondary);font-weight:600}
-  .qf-thumb{width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--border)}
-  .qf-gallery{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
-  .qf-muted{color:var(--text-secondary);font-size:13px}
-  .qf-hr{height:1px;background:var(--border);margin:16px 0;border:0}
-  .qf-field-err{color:var(--status-error,#E24B4A);font-size:12px;margin-top:3px;display:none}
-  .qf-field-err.show{display:block}
-  input.qf-inp,textarea.qf-inp,select.qf-inp{width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:9px;background:var(--bg-surface);color:var(--text-primary);font-family:inherit;font-size:14px;box-sizing:border-box}
-  input.qf-inp:focus,textarea.qf-inp:focus,select.qf-inp:focus{outline:none;border-color:var(--brand-primary);box-shadow:0 0 0 3px var(--brand-soft)}
-  .qf-fld{margin-bottom:14px}
-  .qf-fld>label{display:block;font-size:13px;color:var(--text-primary);margin-bottom:5px;font-weight:600}
-  .qf-req{color:var(--status-error,#E24B4A);margin-left:3px}
-  .qf-hint{font-size:12px;color:var(--text-secondary);margin-top:3px}
+  .act-two-col{display:grid;grid-template-columns:400px 1fr;gap:14px;align-items:start}
+  @media(max-width:960px){.act-two-col{grid-template-columns:1fr}}
+  .act-col{min-width:0}
+  .act-link-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+  .act-link-row>span.lab{width:84px;font-weight:600;color:var(--text-primary);flex:0 0 auto}
+  .act-link-row code{flex:1;min-width:200px;background:var(--brand-soft);color:var(--brand-primary);padding:6px 10px;border-radius:8px;word-break:break-all;font-size:12px}
+  .act-roster-hint{font-size:12px;color:var(--text-secondary);margin-top:10px;line-height:1.6;padding:8px 12px;background:var(--brand-soft);border:1px solid var(--border);border-radius:9px}
+  .act-roster-hint b{color:var(--brand-primary)}
+  .act-sel{flex:1;min-width:220px;padding:9px 12px;border:1px solid var(--border);border-radius:9px;background:var(--bg-surface);color:var(--text-primary);font-family:inherit;font-size:14px}
+  .act-sel:focus{outline:none;border-color:var(--brand-primary);box-shadow:0 0 0 3px var(--brand-soft)}
+  .act-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+  .act-stat{background:linear-gradient(135deg,var(--brand-soft),var(--bg-surface));border:1px solid var(--border);border-radius:12px;padding:14px}
+  .act-stat b{font-size:26px;display:block;color:var(--brand-primary)}
+  .act-stat span{font-size:12px;color:var(--text-secondary)}
+  .act-charts{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:760px){.act-charts{grid-template-columns:1fr}}
+  .act-chart{border:1px solid var(--border);border-radius:12px;padding:12px;background:var(--bg-surface)}
+  .act-chart h4{margin:0 0 8px;font-size:13px;color:var(--text-primary)}
+  .act-tb{width:100%;border-collapse:collapse;font-size:12px}
+  .act-tb th,.act-tb td{border-bottom:1px solid var(--border);padding:6px 8px;text-align:left;vertical-align:top;color:var(--text-primary)}
+  .act-tb th{color:var(--text-secondary);font-weight:600}
+  .act-thumb{width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--border)}
+  .act-gallery{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
+  .act-muted{color:var(--text-secondary);font-size:13px}
+  .act-hr{height:1px;background:var(--border);margin:16px 0;border:0}
+  .act-field-err{color:var(--status-error,#E24B4A);font-size:12px;margin-top:3px;display:none}
+  .act-field-err.show{display:block}
+  input.act-inp,textarea.act-inp,select.act-inp{width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:9px;background:var(--bg-surface);color:var(--text-primary);font-family:inherit;font-size:14px;box-sizing:border-box}
+  input.act-inp:focus,textarea.act-inp:focus,select.act-inp:focus{outline:none;border-color:var(--brand-primary);box-shadow:0 0 0 3px var(--brand-soft)}
+  .act-fld{margin-bottom:14px}
+  .act-fld>label{display:block;font-size:13px;color:var(--text-primary);margin-bottom:5px;font-weight:600}
+  .act-req{color:var(--status-error,#E24B4A);margin-left:3px}
+  .act-hint{font-size:12px;color:var(--text-secondary);margin-top:3px}
 
   /* ① 选择活动：下拉框在左、API 链接在右（需求一） */
-  .qf-task-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-  .qf-task-row .qf-sel{flex:0 1 auto;min-width:220px}
-  .qf-task-row .qf-api{margin-left:auto;color:var(--text-secondary);font-size:13px;text-align:right}
-  .qf-task-row .qf-api code{background:var(--brand-soft);color:var(--brand-primary);padding:3px 8px;border-radius:6px;font-size:12px;word-break:break-all}
-  /* ① 选择活动：提交作品 API / 数据大屏 API 双行展示 + 一键复制（需求：QuickForm 官方格式） */
-  .qf-api-box{margin-top:12px;display:flex;flex-direction:column;gap:8px}
-  .qf-api-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--brand-soft);border:1px solid var(--border);border-radius:9px;padding:8px 10px}
-  .qf-api-tag{font-size:12px;font-weight:700;color:var(--brand-primary);white-space:nowrap;flex:0 0 auto}
-  .qf-api-code{flex:1;min-width:200px;background:var(--bg-surface);color:var(--text-primary);padding:5px 9px;border-radius:7px;font-size:12px;word-break:break-all;border:1px solid var(--border)}
-  .qf-api-copy{flex:0 0 auto}
-  .qf-api-note{font-size:12px;color:var(--text-secondary);line-height:1.5}
+  .act-task-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .act-task-row .act-sel{flex:0 1 auto;min-width:220px}
+  .act-task-row .act-api{margin-left:auto;color:var(--text-secondary);font-size:13px;text-align:right}
+  .act-task-row .act-api code{background:var(--brand-soft);color:var(--brand-primary);padding:3px 8px;border-radius:6px;font-size:12px;word-break:break-all}
+  /* ① 选择活动：提交作品 API / 数据大屏 API 双行展示 + 一键复制（官方格式） */
+  .act-api-box{margin-top:12px;display:flex;flex-direction:column;gap:8px}
+  .act-api-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--brand-soft);border:1px solid var(--border);border-radius:9px;padding:8px 10px}
+  .act-api-tag{font-size:12px;font-weight:700;color:var(--brand-primary);white-space:nowrap;flex:0 0 auto}
+  .act-api-code{flex:1;min-width:200px;background:var(--bg-surface);color:var(--text-primary);padding:5px 9px;border-radius:7px;font-size:12px;word-break:break-all;border:1px solid var(--border)}
+  .act-api-copy{flex:0 0 auto}
+  .act-api-note{font-size:12px;color:var(--text-secondary);line-height:1.5}
   /* 自定义大屏工具栏（上传/查看/删除常驻，避免重建外壳时丢失） */
-  .qf-cust-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px}
+  .act-cust-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px}
   /* 学生提交 / 数据大屏 切换标签页（需求三） */
-  .qf-tabs{display:flex;gap:6px;margin:14px 0 10px;flex-wrap:wrap}
-  .qf-tab{padding:9px 20px;border:1px solid var(--border);background:var(--bg-surface);color:var(--text-secondary);border-radius:10px;cursor:pointer;font-size:14px;font-weight:600;transition:.15s}
-  .qf-tab:hover{border-color:var(--brand-primary)}
-  .qf-tab.active{color:var(--brand-primary);background:var(--brand-soft);border-color:var(--brand-primary)}
-  .qf-pane{display:block}
+  .act-tabs{display:flex;gap:6px;margin:14px 0 10px;flex-wrap:wrap}
+  .act-tab{padding:9px 20px;border:1px solid var(--border);background:var(--bg-surface);color:var(--text-secondary);border-radius:10px;cursor:pointer;font-size:14px;font-weight:600;transition:.15s}
+  .act-tab:hover{border-color:var(--brand-primary)}
+  .act-tab.active{color:var(--brand-primary);background:var(--brand-soft);border-color:var(--brand-primary)}
+  .act-pane{display:block}
 
   /* 技术信息折叠块：接口地址默认收起，老师不用看 */
-  .qf-tech{margin-top:10px;border-top:1px dashed var(--border);padding-top:8px}
-  .qf-tech>summary{cursor:pointer;font-size:12px;color:var(--text-secondary);list-style:none}
-  .qf-tech>summary::-webkit-details-marker{display:none}
-  .qf-tech>summary::before{content:'▸ ';color:var(--brand-primary)}
-  .qf-tech[open]>summary::before{content:'▾ '}
-  .qf-tech-row{font-size:12px;color:var(--text-secondary);margin-bottom:8px}
-  .qf-tech-row code{background:var(--brand-soft);color:var(--brand-primary);padding:2px 7px;border-radius:5px;word-break:break-all}
+  .act-tech{margin-top:10px;border-top:1px dashed var(--border);padding-top:8px}
+  .act-tech>summary{cursor:pointer;font-size:12px;color:var(--text-secondary);list-style:none}
+  .act-tech>summary::-webkit-details-marker{display:none}
+  .act-tech>summary::before{content:'▸ ';color:var(--brand-primary)}
+  .act-tech[open]>summary::before{content:'▾ '}
+  .act-tech-row{font-size:12px;color:var(--text-secondary);margin-bottom:8px}
+  .act-tech-row code{background:var(--brand-soft);color:var(--brand-primary);padding:2px 7px;border-radius:5px;word-break:break-all}
 
   /* 学生提交入口：链接可用性提示 */
-  .qf-link-warn{background:#FFF6E9;border:1px solid #F0C36D;color:#8A5A10;
+  .act-link-warn{background:#FFF6E9;border:1px solid #F0C36D;color:#8A5A10;
     border-radius:9px;padding:9px 12px;font-size:12.5px;line-height:1.7;margin-top:10px}
-  .qf-link-warn b{color:#B45309}
-  .qf-link-ok{background:var(--brand-soft);border:1px solid var(--border);color:var(--text-secondary);
+  .act-link-warn b{color:#B45309}
+  .act-link-ok{background:var(--brand-soft);border:1px solid var(--border);color:var(--text-secondary);
     border-radius:9px;padding:9px 12px;font-size:12.5px;line-height:1.7;margin-top:10px}
-  .qf-link-ok b{color:var(--brand-primary)}
+  .act-link-ok b{color:var(--brand-primary)}
 
   /* ===== 提交顺序名单 ===== */
   .act-order{list-style:none;margin:0;padding:0}
@@ -15617,50 +15572,50 @@ function renderActivity() {
   .act-allsubs[open] summary{margin-bottom:12px}
 
   /* ===== ④ 自定义上传（教师自制网页模板） ===== */
-  .qf-cust-edit{width:100%;min-height:210px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--bg-surface);color:var(--text-primary);font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;line-height:1.5;box-sizing:border-box}
-  .qf-cust-edit:focus{outline:none;border-color:var(--brand-primary);box-shadow:0 0 0 3px var(--brand-soft)}
-  .qf-cust-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px}
-  .qf-cust-tip{font-size:12px;color:var(--text-secondary);line-height:1.7;margin-top:10px}
-  .qf-cust-tip code{background:var(--brand-soft);color:var(--brand-primary);padding:1px 6px;border-radius:5px;word-break:break-all}
+  .act-cust-edit{width:100%;min-height:210px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--bg-surface);color:var(--text-primary);font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;line-height:1.5;box-sizing:border-box}
+  .act-cust-edit:focus{outline:none;border-color:var(--brand-primary);box-shadow:0 0 0 3px var(--brand-soft)}
+  .act-cust-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px}
+  .act-cust-tip{font-size:12px;color:var(--text-secondary);line-height:1.7;margin-top:10px}
+  .act-cust-tip code{background:var(--brand-soft);color:var(--brand-primary);padding:1px 6px;border-radius:5px;word-break:break-all}
   /* ===== ③ 下发到班级：班级多选 chip + 已下发/未下发徽标 ===== */
-  .qf-pub-chips{display:flex;flex-wrap:wrap;gap:8px}
-  .qf-pub-chip{display:flex;align-items:center;gap:6px;border:1px solid var(--border);border-radius:999px;
+  .act-pub-chips{display:flex;flex-wrap:wrap;gap:8px}
+  .act-pub-chip{display:flex;align-items:center;gap:6px;border:1px solid var(--border);border-radius:999px;
     padding:6px 13px;font-size:13px;cursor:pointer;background:var(--bg-surface);color:var(--text-primary);user-select:none}
-  .qf-pub-chip:hover{border-color:var(--brand-primary)}
-  .qf-pub-chip.sel{border-color:var(--brand-primary);background:var(--brand-soft)}
-  .qf-pub-badge{font-size:11px;padding:1px 8px;border-radius:999px;background:var(--brand-primary);color:#fff;font-weight:600}
-  .qf-pub-badge.off{background:var(--border);color:var(--text-secondary);font-weight:400}
-  .qf-pub-tip{font-size:12px;color:var(--text-secondary);line-height:1.7;margin-top:10px}
-  .qf-del-btn{font-size:12px;padding:3px 9px;border:1px solid var(--status-error,#E24B4A);color:var(--status-error,#E24B4A);background:var(--bg-surface);border-radius:8px;cursor:pointer;white-space:nowrap}
-  .qf-del-btn:hover{background:var(--status-error,#E24B4A);color:#fff}
+  .act-pub-chip:hover{border-color:var(--brand-primary)}
+  .act-pub-chip.sel{border-color:var(--brand-primary);background:var(--brand-soft)}
+  .act-pub-badge{font-size:11px;padding:1px 8px;border-radius:999px;background:var(--brand-primary);color:#fff;font-weight:600}
+  .act-pub-badge.off{background:var(--border);color:var(--text-secondary);font-weight:400}
+  .act-pub-tip{font-size:12px;color:var(--text-secondary);line-height:1.7;margin-top:10px}
+  .act-del-btn{font-size:12px;padding:3px 9px;border:1px solid var(--status-error,#E24B4A);color:var(--status-error,#E24B4A);background:var(--bg-surface);border-radius:8px;cursor:pointer;white-space:nowrap}
+  .act-del-btn:hover{background:var(--status-error,#E24B4A);color:#fff}
   .act-del{margin-left:auto}
   /* ===== ③ 下发到班级：改为「下发」按钮 + 弹窗（复用上面 chip 样式） ===== */
-  .qf-pub-check{color:var(--brand-primary);font-weight:700;margin-left:2px}
-  .qf-pub-x{border:0;background:transparent;color:var(--text-secondary);font-size:18px;line-height:1;
+  .act-pub-check{color:var(--brand-primary);font-weight:700;margin-left:2px}
+  .act-pub-x{border:0;background:transparent;color:var(--text-secondary);font-size:18px;line-height:1;
     cursor:pointer;padding:2px 8px;border-radius:8px}
-  .qf-pub-x:hover{background:var(--bg-page);color:var(--text-primary)}
-  .qf-pub-acts{flex-wrap:wrap}
-  .qf-pub-acts .btn{white-space:nowrap;flex:1 1 auto;min-width:96px;justify-content:center}
-  .qf-pub-acts .btn-ghost{flex:0 1 auto}
+  .act-pub-x:hover{background:var(--bg-page);color:var(--text-primary)}
+  .act-pub-acts{flex-wrap:wrap}
+  .act-pub-acts .btn{white-space:nowrap;flex:1 1 auto;min-width:96px;justify-content:center}
+  .act-pub-acts .btn-ghost{flex:0 1 auto}
   @media (max-width:480px){
-    .qf-pub-acts .btn{min-width:0}
-    .qf-pub-acts{padding:12px 14px;gap:8px}
-    .qf-pub-modal .modal-sec{padding:12px 14px}
-    .qf-pub-modal .modal-head{padding:14px 14px 12px}
+    .act-pub-acts .btn{min-width:0}
+    .act-pub-acts{padding:12px 14px;gap:8px}
+    .act-pub-modal .modal-sec{padding:12px 14px}
+    .act-pub-modal .modal-head{padding:14px 14px 12px}
   }
   /* ===== 文件题设置：仅含文件输入的题目显示「允许空文件提交」 ===== */
-  .qf-filecfg{margin:10px 0 2px;padding:10px 12px;border:1px solid var(--border,#DDE5E1);border-radius:12px;background:var(--bg-surface,#fff)}
-  .qf-filecfg:empty{display:none}
-  .qf-filecfg-h{font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:8px}
-  .qf-filecfg-row{display:flex;align-items:center;gap:8px;font-size:13px;padding:5px 0;cursor:pointer;flex-wrap:wrap}
-  .qf-filecfg-row input{margin:0;flex:none}
-  .qf-filecfg-nm{font-weight:500}
-  .qf-filecfg-tip{color:var(--text-secondary);font-size:12px;margin-left:auto}
+  .act-filecfg{margin:10px 0 2px;padding:10px 12px;border:1px solid var(--border,#DDE5E1);border-radius:12px;background:var(--bg-surface,#fff)}
+  .act-filecfg:empty{display:none}
+  .act-filecfg-h{font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:8px}
+  .act-filecfg-row{display:flex;align-items:center;gap:8px;font-size:13px;padding:5px 0;cursor:pointer;flex-wrap:wrap}
+  .act-filecfg-row input{margin:0;flex:none}
+  .act-filecfg-nm{font-weight:500}
+  .act-filecfg-tip{color:var(--text-secondary);font-size:12px;margin-left:auto}
   /* 提交按钮设置（可自定义文字 + 指定题目） */
-  .qf-subcfg{max-height:42vh;overflow:auto}
-  .qf-subcfg-row{display:flex;align-items:center;gap:8px;font-size:13px;padding:5px 0}
-  .qf-subcfg-nm{flex:0 0 auto;max-width:42%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
-  .qf-subcfg-inp{flex:1 1 auto;min-width:120px;padding:6px 9px;border:1px solid var(--border,#DDE5E1);border-radius:8px;font-size:13px;background:var(--bg-surface,#fff);color:var(--text-primary);box-sizing:border-box}
+  .act-subcfg{max-height:42vh;overflow:auto}
+  .act-subcfg-row{display:flex;align-items:center;gap:8px;font-size:13px;padding:5px 0}
+  .act-subcfg-nm{flex:0 0 auto;max-width:42%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
+  .act-subcfg-inp{flex:1 1 auto;min-width:120px;padding:6px 9px;border:1px solid var(--border,#DDE5E1);border-radius:8px;font-size:13px;background:var(--bg-surface,#fff);color:var(--text-primary);box-sizing:border-box}
   /* ⚙ 活动管理弹窗（2026-11-03 · 自研后端） */
   .act-admin{width:min(860px,94vw);max-width:none}
   .act-form{display:grid;grid-template-columns:1fr 1fr;gap:10px 12px}
@@ -15679,76 +15634,76 @@ function renderActivity() {
   .act-file-row{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-secondary);margin-top:4px}
 </style>
   <div class="notice" data-foldable data-fold-title="活动说明">
-    课堂活动<b>已由工作台自己托管</b>（2026-11-03 起，不再依赖 QuickForm 服务）：
+    课堂活动<b>已由工作台自己托管</b>：
     点上方<b>「⚙ 活动管理」</b>新建 / 改名 / 删除活动、上传教学资料、导出提交数据。
     交互式学习单由教师自行设计——写一份网页，系统自动注入学号 / 姓名登录与逐题提交，
     数据直接进工作台的活动库。选好活动即完成发放：学生端「今日」对应课程里出现
     「进入课堂活动」。学生提交的数据与作品由工作台自动归档到课件库对应课程目录。
   </div>
   ${actClassBarHtml()}
-  <div class="qf-wrap">
-    <div class="qf-bar">
-      <span class="qf-dot" id="qfDot"></span>
-      <b id="qfStatusText">检测中…</b>
+  <div class="act-wrap">
+    <div class="act-bar">
+      <span class="act-dot" id="actDot"></span>
+      <b id="actStatusText">检测中…</b>
       <span style="flex:1"></span>
       <button class="btn btn-primary btn-sm" onclick="actAdminOpen()">⚙ 活动管理</button>
-      <button class="btn btn-ghost btn-sm" onclick="qfInit()">刷新</button>
+      <button class="btn btn-ghost btn-sm" onclick="actInit()">刷新</button>
     </div>
 
-    <div class="qf-card">
-      <div class="qf-card-h">① 选择活动（列表来自「活动管理」）</div>
-      <div class="qf-task-row">
-        <select id="qfTaskSel" class="qf-sel" onchange="qfSelectTask()" style="max-width:480px"><option value="">加载中…</option></select>
-        <span class="qf-api" id="qfTaskApi"></span>
+    <div class="act-card">
+      <div class="act-card-h">① 选择活动（列表来自「活动管理」）</div>
+      <div class="act-task-row">
+        <select id="actTaskSel" class="act-sel" onchange="actSelectTask()" style="max-width:480px"><option value="">加载中…</option></select>
+        <span class="act-api" id="actTaskApi"></span>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px">
-        <span class="qf-muted" style="font-size:12px">选好活动即自动发放给当前班级；也可在下方自己写交互式学习单页面</span>
+        <span class="act-muted" style="font-size:12px">选好活动即自动发放给当前班级；也可在下方自己写交互式学习单页面</span>
       </div>
-      <div id="qfPubHint" class="qf-roster-hint" style="display:none"></div>
-      <details class="qf-tech">
+      <div id="actPubHint" class="act-roster-hint" style="display:none"></div>
+      <details class="act-tech">
         <summary>技术信息（接口地址，一般不用看）</summary>
-        <div class="qf-tech-row">活动数据服务：<code id="qfApiText"></code></div>
-        <div class="qf-api-box" id="qfApiBox"></div>
+        <div class="act-tech-row">活动数据服务：<code id="actApiText"></code></div>
+        <div class="act-api-box" id="actApiBox"></div>
       </details>
     </div>
 
-    <div class="qf-card">
-      <div class="qf-card-h">② 设计交互式学习单（活动提交 API）</div>
-      <div class="qf-muted" style="margin-bottom:10px">上传一份网页文件（.html）或用默认模板，系统自动注入<b>学号 / 姓名 / 班级</b>登录、匹配本班花名册、并接入活动提交接口。每道标了 <code>q-block</code> 的题目都会自动长出独立提交按钮，每个按钮会在数据大屏开一个专属数据显示窗口。部署后点①里的活动即可发放给学生。</div>
-      <div class="qf-cust-row">
-        <label class="btn btn-ghost btn-sm" style="cursor:pointer">📤 上传网页文件<input id="qfCustFile" type="file" accept=".html,.htm" style="display:none" onchange="qfCustomLoadFile(event)"></label>
-        <button class="btn btn-ghost btn-sm" onclick="qfCustomUseDefault()">📝 用默认模板</button>
-        <label class="qf-act" style="cursor:pointer"><input id="qfCustPerQ" type="checkbox" checked style="margin:0" onchange="qfRenderFileCfg()"> 每题单独提交按钮</label>
+    <div class="act-card">
+      <div class="act-card-h">② 设计交互式学习单（活动提交 API）</div>
+      <div class="act-muted" style="margin-bottom:10px">上传一份网页文件（.html）或用默认模板，系统自动注入<b>学号 / 姓名 / 班级</b>登录、匹配本班花名册、并接入活动提交接口。每道标了 <code>q-block</code> 的题目都会自动长出独立提交按钮，每个按钮会在数据大屏开一个专属数据显示窗口。部署后点①里的活动即可发放给学生。</div>
+      <div class="act-cust-row">
+        <label class="btn btn-ghost btn-sm" style="cursor:pointer">📤 上传网页文件<input id="actCustFile" type="file" accept=".html,.htm" style="display:none" onchange="actCustomLoadFile(event)"></label>
+        <button class="btn btn-ghost btn-sm" onclick="actCustomUseDefault()">📝 用默认模板</button>
+        <label class="act-act" style="cursor:pointer"><input id="actCustPerQ" type="checkbox" checked style="margin:0" onchange="actRenderFileCfg()"> 每题单独提交按钮</label>
       </div>
-      <div class="qf-cust-tip">约定：把每道题包进 <code>&lt;div class="q-block" data-btn="第1题"&gt;…题目与输入框…&lt;/div&gt;</code>；要让学生一键跳转外链，加 <code>&lt;div data-ext-url="https://…"&gt;链接说明&lt;/div&gt;</code>。不带 <code>q-block</code> 或取消勾选时，整页一个提交按钮。</div>
-      <textarea id="qfCustHtml" class="qf-cust-edit" spellcheck="false" placeholder="在此粘贴/编辑网页 HTML，或点「上传网页文件」「用默认模板」" oninput="qfFileCfgDebounced()"></textarea>
-      <div id="qfFileCfg" class="qf-filecfg"></div>
-      <div id="qfSubmitCfg" class="qf-filecfg qf-subcfg"></div>
-      <div class="qf-cust-row">
-        <button class="btn btn-primary btn-sm" id="qfCustGen" onclick="qfCustomGenerate()">⚙ 生成页面</button>
-        <button class="btn btn-ghost btn-sm" id="qfCustView" onclick="qfCustomView()" title="把生成的页面临时部署并打开真实预览（含测试提交能力，可验证与数据大屏同步）">👁 查看</button>
-        <button class="btn btn-ghost btn-sm" id="qfCustSaveLib" onclick="qfCustomSaveLib()" title="把当前设计的 HTML 原稿存进课件库课程目录（_学习单 子文件夹），同名覆盖更新">💾 保存到课件库</button>
-        <button class="btn btn-ghost btn-sm" id="qfCustClear" onclick="qfCustomClear()">清空</button>
-        <button class="btn btn-primary btn-sm" id="qfPubOpenBtn" onclick="qfOpenPublishDialog()" title="选择班级并下发到学生端「今日」（可一次发多个班）">📤 下发</button>
-        <span id="qfCustStatus" class="qf-muted"></span>
+      <div class="act-cust-tip">约定：把每道题包进 <code>&lt;div class="q-block" data-btn="第1题"&gt;…题目与输入框…&lt;/div&gt;</code>；要让学生一键跳转外链，加 <code>&lt;div data-ext-url="https://…"&gt;链接说明&lt;/div&gt;</code>。不带 <code>q-block</code> 或取消勾选时，整页一个提交按钮。</div>
+      <textarea id="actCustHtml" class="act-cust-edit" spellcheck="false" placeholder="在此粘贴/编辑网页 HTML，或点「上传网页文件」「用默认模板」" oninput="actFileCfgDebounced()"></textarea>
+      <div id="actFileCfg" class="act-filecfg"></div>
+      <div id="actSubmitCfg" class="act-filecfg act-subcfg"></div>
+      <div class="act-cust-row">
+        <button class="btn btn-primary btn-sm" id="actCustGen" onclick="actCustomGenerate()">⚙ 生成页面</button>
+        <button class="btn btn-ghost btn-sm" id="actCustView" onclick="actCustomView()" title="把生成的页面临时部署并打开真实预览（含测试提交能力，可验证与数据大屏同步）">👁 查看</button>
+        <button class="btn btn-ghost btn-sm" id="actCustSaveLib" onclick="actCustomSaveLib()" title="把当前设计的 HTML 原稿存进课件库课程目录（_学习单 子文件夹），同名覆盖更新">💾 保存到课件库</button>
+        <button class="btn btn-ghost btn-sm" id="actCustClear" onclick="actCustomClear()">清空</button>
+        <button class="btn btn-primary btn-sm" id="actPubOpenBtn" onclick="actOpenPublishDialog()" title="选择班级并下发到学生端「今日」（可一次发多个班）">📤 下发</button>
+        <span id="actCustStatus" class="act-muted"></span>
       </div>
-      <div id="qfCustLinkBox" style="display:none;margin-top:12px">
-        <div class="qf-link-row">
+      <div id="actCustLinkBox" style="display:none;margin-top:12px">
+        <div class="act-link-row">
           <span class="lab">🔗 学生链接</span>
-          <code id="qfCustLink">—</code>
-          <button class="btn btn-ghost btn-sm" id="qfCustCopy" onclick="qfCopyCustomLink()">复制</button>
+          <code id="actCustLink">—</code>
+          <button class="btn btn-ghost btn-sm" id="actCustCopy" onclick="actCopyCustomLink()">复制</button>
         </div>
-        <div class="qf-roster-hint" id="qfCustHint"></div>
+        <div class="act-roster-hint" id="actCustHint"></div>
       </div>
     </div>
 
-    <div class="qf-tabs">
-      <button type="button" class="qf-tab active" id="qfTabDash" onclick="qfSwitchTab('dash')">📊 数据大屏</button>
-      <button type="button" class="qf-tab" id="qfTabWorks" onclick="qfSwitchTab('works')">🖼 学生作品</button>
+    <div class="act-tabs">
+      <button type="button" class="act-tab active" id="actTabDash" onclick="actSwitchTab('dash')">📊 数据大屏</button>
+      <button type="button" class="act-tab" id="actTabWorks" onclick="actSwitchTab('works')">🖼 学生作品</button>
     </div>
 
-    <div class="qf-pane" id="qfPaneDash"></div>
-    <div class="qf-pane" id="qfPaneWorks" style="display:none"></div>
+    <div class="act-pane" id="actPaneDash"></div>
+    <div class="act-pane" id="actPaneWorks" style="display:none"></div>
   </div>`;
 }
 window.renderActivity = renderActivity;
@@ -15777,23 +15732,23 @@ function actSubMatchClass(sub, clsStus) {
 function actClassBarHtml() {
   const classes = dbT('classes') || [];
   if (!classes.length) {
-    return `<div class="qf-card" style="border-color:var(--status-warning,#E0A900)">
-      <div class="qf-card-h">班级</div>
-      <div class="qf-muted">还没有创建班级。请先在「班级」中添加班级与学生，再来收集活动数据。</div>
+    return `<div class="act-card" style="border-color:var(--status-warning,#E0A900)">
+      <div class="act-card-h">班级</div>
+      <div class="act-muted">还没有创建班级。请先在「班级」中添加班级与学生，再来收集活动数据。</div>
       <div style="margin-top:10px"><button class="btn btn-primary" onclick="goClasses()">去创建班级</button></div>
     </div>`;
   }
   const cur = actCurClass();
   if (cur == null) {
-    return `<div class="qf-card">
-      <div class="qf-card-h">当前活动班级</div>
-      <div class="qf-muted">本页「班级」下拉当前为「全部班级」。请选择一个具体班级，活动数据将按该班级匹配学生提交。</div>
+    return `<div class="act-card">
+      <div class="act-card-h">当前活动班级</div>
+      <div class="act-muted">本页「班级」下拉当前为「全部班级」。请选择一个具体班级，活动数据将按该班级匹配学生提交。</div>
     </div>`;
   }
   const cls = classes.find(c => Number(c.id) === Number(cur));
   const stuN = actClassStudents(cur).length;
-  return `<div class="qf-card act-cls-bar">
-      <div class="qf-card-h" style="margin:0">当前活动班级：<b>${esc(cls ? cls.name : '')}</b> · ${stuN} 名学生（用本页上方「班级」下拉切换）</div>
+  return `<div class="act-card act-cls-bar">
+      <div class="act-card-h" style="margin:0">当前活动班级：<b>${esc(cls ? cls.name : '')}</b> · ${stuN} 名学生（用本页上方「班级」下拉切换）</div>
     </div>`;
 }
 function renderActClassInfo() {
@@ -15806,46 +15761,46 @@ function renderActClassInfo() {
 }
 window.renderActClassInfo = renderActClassInfo;
 
-// 工作台启动后自动获取 QuickForm 任务活动列表
-let qfTaskList = [];
-async function qfLoadTaskList() {
-  const sel = document.getElementById('qfTaskSel');
+// 工作台启动后自动获取活动列表
+let actTaskList = [];
+async function actLoadTaskList() {
+  const sel = document.getElementById('actTaskSel');
   if (!sel) return;
   sel.innerHTML = '<option value="">加载中…</option>';
   try {
-    const r = await fetch(qfApiBase() + '/api/tasks', { mode: 'cors' });
+    const r = await fetch(actApiBase() + '/tasks', { mode: 'cors' });
     if (!r.ok) throw new Error('读取活动列表失败（' + r.status + '）');
     const j = await r.json();
     const tasks = (j && j.tasks) || [];
-    qfTaskList = tasks;
-    if (!tasks.length) { sel.innerHTML = '<option value="">（无可用活动）</option>'; qfActiveId = null; qfRenderDash(); qfPubRepaint(); return; }
+    actTaskList = tasks;
+    if (!tasks.length) { sel.innerHTML = '<option value="">（无可用活动）</option>'; actActiveId = null; actRenderDash(); actPubRepaint(); return; }
     sel.innerHTML = tasks.map(t => '<option value="' + esc(t.task_id) + '">' + esc(t.title || t.task_id) + '</option>').join('');
-    const def = qfActiveId || (tasks[0] && tasks[0].task_id);
+    const def = actActiveId || (tasks[0] && tasks[0].task_id);
     if (def) sel.value = def;
-    qfSelectTask(true);   // 程序性选中：不触发发放，只有老师主动换选才发放
+    actSelectTask(true);   // 程序性选中：不触发发放，只有老师主动换选才发放
   } catch (e) {
     /* 数据服务没启动时浏览器只会给一句 "Failed to fetch"，
        老师看不出是网线、代理还是服务没开 */
     const raw = String((e && e.message) || e);
     const msg = /Failed to fetch|NetworkError|Load failed|fetch/i.test(raw)
-      ? '连不上活动数据服务（' + qfApiBase() + '），请确认它已启动，或点右上「设置服务地址」'
+      ? '连不上活动接口（' + actApiBase() + '），请刷新页面重试'
       : raw;
     sel.innerHTML = '<option value="">加载失败：' + esc(msg) + '</option>';
-    qfActiveId = null; qfRenderDash(); qfPubRepaint();
+    actActiveId = null; actRenderDash(); actPubRepaint();
   }
 }
-window.qfLoadTaskList = qfLoadTaskList;
+window.actLoadTaskList = actLoadTaskList;
 
-function qfSelectTask(silent) {
-  const sel = document.getElementById('qfTaskSel');
+function actSelectTask(silent) {
+  const sel = document.getElementById('actTaskSel');
   if (!sel) return;
   const id = sel.value;
-  const t = qfTaskList.find(x => x.task_id === id);
-  qfActiveId = id || null;
-  const apiEl = document.getElementById('qfTaskApi');
+  const t = actTaskList.find(x => x.task_id === id);
+  actActiveId = id || null;
+  const apiEl = document.getElementById('actTaskApi');
   if (apiEl) apiEl.innerHTML = '';   // 接口地址统一收在「技术信息」里，不再重复显示
-  // 展示「提交作品 API」与「数据大屏 API」（QuickForm 官方格式）并支持一键复制
-  const box = document.getElementById('qfApiBox');
+  // 展示「提交作品 API」与「数据大屏 API」（官方格式）并支持一键复制
+  const box = document.getElementById('actApiBox');
   if (box) {
     if (!t || !t.api) { box.innerHTML = ''; }
     else {
@@ -15853,48 +15808,48 @@ function qfSelectTask(silent) {
       const dataApi = t.api.replace(/\/+$/, '') + '/all';
       const safe = u => String(u).replace(/'/g, "\\'");
       const row = (tag, method, url) =>
-        '<div class="qf-api-row"><span class="qf-api-tag">' + esc(tag) + ' · ' + method + '</span>'
-        + '<code class="qf-api-code">' + esc(url) + '</code>'
-        + '<button class="btn btn-ghost btn-sm qf-api-copy" onclick="copyText(\'' + safe(url) + '\',\'' + esc(tag) + ' 已复制\')">复制</button></div>';
+        '<div class="act-api-row"><span class="act-api-tag">' + esc(tag) + ' · ' + method + '</span>'
+        + '<code class="act-api-code">' + esc(url) + '</code>'
+        + '<button class="btn btn-ghost btn-sm act-api-copy" onclick="copyText(\'' + safe(url) + '\',\'' + esc(tag) + ' 已复制\')">复制</button></div>';
       box.innerHTML = row('提交作品 API', 'POST', submitApi)
         + row('数据大屏 API', 'GET', dataApi)
-        + '<div class="qf-api-note">按 QuickForm 官方格式：提交作品用 POST 写入，数据大屏用 GET 读取全部提交。</div>';
+        + '<div class="act-api-note">提交作品用 POST 写入，数据大屏用 GET 读取全部提交。</div>';
     }
   }
-  qfUpdateCustomLink();
-  qfRenderDash();
-  if (silent) qfPubRepaint();
-  else qfPublishCurrent();   // 选好活动即发放：写入 activity_pushes，学生端今日可见
+  actUpdateCustomLink();
+  actRenderDash();
+  if (silent) actPubRepaint();
+  else actPublishCurrent();   // 选好活动即发放：写入 activity_pushes，学生端今日可见
 }
-window.qfSelectTask = qfSelectTask;
+window.actSelectTask = actSelectTask;
 
 /* ===================== 发放 / 收回（activity_pushes → 学生端「今日」） =====================
    选好活动即发放：写入 activity_pushes 表（与业务表同一条同步链路），
    学生端「今日」对应课程里出现「进入课堂活动」，打开即教师设计的交互式学习单
-   （/submit/custom.html 外壳 + QuickForm 活动提交 API）。
+   （/submit/custom.html 外壳 + 活动提交 API）。
    未自定义页面时用默认模板自动部署一份，保证学生打开就有可用的提交页。 */
 function actPushes() { return dbT('activity_pushes') || []; }
 function actPushOf(cls, taskId) {
   return actPushes().find(p => !p.deleted
     && Number(p.class_id) === Number(cls) && String(p.task_id) === String(taskId)) || null;
 }
-/** 学生打开的学习单地址：相对路径优先（同源 /qf 代理在网关与直连两种部署下都通） */
-function qfStudentSheetUrl(t, clsName) {
-  const apiPath = (qfApiBase() || '/qf') + '/api/' + encodeURIComponent(t.task_id);
+/** 学生打开的学习单地址：同源相对路径，网关与直连两种部署下都通 */
+function actStudentSheetUrl(t, clsName) {
+  const apiPath = (actApiBase() || '/api/act') + '/' + encodeURIComponent(t.task_id);
   return '/submit/custom.html?api=' + encodeURIComponent(apiPath)
     + '&class=' + encodeURIComponent(clsName || '')
     + '&task=' + encodeURIComponent(t.task_id)
     + '&title=' + encodeURIComponent(t.title || t.task_id || '课堂活动');
 }
-let qfPublishing = false;
-async function qfPublishCurrent() {
+let actPublishing = false;
+async function actPublishCurrent() {
   const cls = actCurClass();
-  const t = qfTaskList.find(x => x.task_id === qfActiveId);
-  if (cls == null || !t) { qfPaintPubHint(); return; }
+  const t = actTaskList.find(x => x.task_id === actActiveId);
+  if (cls == null || !t) { actPaintPubHint(); return; }
   const cur = actPushOf(cls, t.task_id);
-  if (cur && cur.status !== 'draft') { qfPaintPubHint(); return; }   // 已发放
-  if (qfPublishing) return;
-  qfPublishing = true;
+  if (cur && cur.status !== 'draft') { actPaintPubHint(); return; }   // 已发放
+  if (actPublishing) return;
+  actPublishing = true;
   try {
     const clsObj = (dbT('classes') || []).find(c => Number(c.id) === Number(cls));
     const clsName = clsObj ? clsObj.name : '';
@@ -15927,7 +15882,7 @@ async function qfPublishCurrent() {
       if (!curHtml.trim() || curHtml.indexOf('老师还没有配置自定义提交页') !== -1) {
         const dep = await fetch('/api/custom', { method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ task: t.task_id, html: qfBuildCustomPage(qfCustomDefaultTpl()) }) });
+          body: JSON.stringify({ task: t.task_id, html: actBuildCustomPage(actCustomDefaultTpl()) }) });
         const dj = await dep.json().catch(() => ({}));
         if (dep.ok && dj.ok) toast('已为该活动自动部署默认学习单模板（可在下方自定义设计后重新生成）');
       }
@@ -15936,14 +15891,14 @@ async function qfPublishCurrent() {
     let row;
     if (cur) {   // 收回后重新发放
       row = Object.assign({}, cur, { status: 'published', date: today(),
-        url: qfStudentSheetUrl(t, clsName), course: course || '', updated_at: now });
+        url: actStudentSheetUrl(t, clsName), course: course || '', updated_at: now });
       dbSet('activity_pushes', actPushes().map(p => (p.id === cur.id ? row : p)));
     } else {
       row = {
         id: 'ap' + Date.now() + Math.floor(Math.random() * 1000),
         class_id: Number(cls), course: course || '',
         task_id: String(t.task_id), task_title: String(t.title || t.task_id || ''),
-        url: qfStudentSheetUrl(t, clsName),
+        url: actStudentSheetUrl(t, clsName),
         date: today(), status: 'published', updated_at: now
       };
       dbSet('activity_pushes', actPushes().concat([row]));
@@ -15951,13 +15906,13 @@ async function qfPublishCurrent() {
     try { syncMark('activity_pushes', row); } catch (e) {}
     toast('已发放「' + row.task_title + '」' + (row.course ? '（' + row.course + '）' : '') + '：学生端今日可见');
   } finally {
-    qfPublishing = false;
-    qfPubRepaint();
+    actPublishing = false;
+    actPubRepaint();
   }
 }
-window.qfPublishCurrent = qfPublishCurrent;
+window.actPublishCurrent = actPublishCurrent;
 /** 收回：学生端立即不可见（SSE 实时推送）。cls 缺省 = 顶部当前班级；多班 chip 传入具体班 */
-function qfUnpublish(taskId, cls) {
+function actUnpublish(taskId, cls) {
   if (cls == null) cls = actCurClass();
   if (cls == null || !taskId) return;
   const now = new Date().toISOString().slice(0, 16).replace('T', ' ');
@@ -15973,15 +15928,15 @@ function qfUnpublish(taskId, cls) {
   dbSet('activity_pushes', arr);
   try { syncMark('activity_pushes', hit); } catch (e) {}
   toast('已收回：学生端不再显示这个活动');
-  qfPubRepaint();
+  actPubRepaint();
 }
-window.qfUnpublish = qfUnpublish;
+window.actUnpublish = actUnpublish;
 
 /** 启动 / 关闭某个已下发的学习单：
     · published = 启动：学生端可正常打开查看；
     · closed    = 关闭：学生端仍能看到条目，但点不开（服务端也会拦直接 URL）。
     收回（draft）仍然整条不可见，与本开关互不影响。 */
-function qfSetPushOpen(taskId, cls, open) {
+function actSetPushOpen(taskId, cls, open) {
   if (cls == null) cls = actCurClass();
   if (cls == null || !taskId) return;
   const now = new Date().toISOString().slice(0, 16).replace('T', ' ');
@@ -15997,24 +15952,24 @@ function qfSetPushOpen(taskId, cls, open) {
   dbSet('activity_pushes', arr);
   try { syncMark('activity_pushes', hit); } catch (e) {}
   toast(open ? '已启动：学生端可以打开这份学习单' : '已关闭：学生端仍能看到条目，但暂时打不开');
-  qfPubRepaint();
+  actPubRepaint();
 }
-window.qfSetPushOpen = qfSetPushOpen;
+window.actSetPushOpen = actSetPushOpen;
 /** 在「已启动 / 已关闭」之间切换（按钮用） */
-function qfTogglePushOpen(taskId, cls) {
+function actTogglePushOpen(taskId, cls) {
   if (cls == null) cls = actCurClass();
   const cur = actPushOf(cls, taskId);
   if (!cur) return;
-  qfSetPushOpen(taskId, cls, String(cur.status) === 'closed');
+  actSetPushOpen(taskId, cls, String(cur.status) === 'closed');
 }
-window.qfTogglePushOpen = qfTogglePushOpen;
+window.actTogglePushOpen = actTogglePushOpen;
 
 /** ①卡片下的发放状态提示 */
-function qfPaintPubHint() {
-  const hint = document.getElementById('qfPubHint');
+function actPaintPubHint() {
+  const hint = document.getElementById('actPubHint');
   if (!hint) return;
   const cls = actCurClass();
-  const t = qfTaskList.find(x => x.task_id === qfActiveId);
+  const t = actTaskList.find(x => x.task_id === actActiveId);
   if (cls == null || !t) { hint.style.display = 'none'; hint.innerHTML = ''; return; }
   const row = actPushOf(cls, t.task_id);
   const clsName = ((dbT('classes') || []).find(c => Number(c.id) === Number(cls)) || {}).name || '';
@@ -16028,20 +15983,20 @@ function qfPaintPubHint() {
           ? '<b style="color:var(--status-error,#E24B4A)">已关闭</b>：学生端能看到条目，但打不开'
           : '<b style="color:var(--status-success,#1D9E75)">已启动</b>：学生端可正常打开')
       + '　<button type="button" class="btn btn-ghost btn-sm" style="width:auto;padding:2px 9px;font-size:11.5px"'
-      + ' onclick="qfTogglePushOpen(\'' + esc(String(t.task_id)) + '\')">' + (closed ? '启动' : '关闭') + '</button>'
+      + ' onclick="actTogglePushOpen(\'' + esc(String(t.task_id)) + '\')">' + (closed ? '启动' : '关闭') + '</button>'
       + ' <button type="button" class="btn btn-ghost btn-sm" style="width:auto;padding:2px 9px;font-size:11.5px"'
-      + ' onclick="qfUnpublish(\'' + esc(String(t.task_id)) + '\')">收回</button>';
+      + ' onclick="actUnpublish(\'' + esc(String(t.task_id)) + '\')">收回</button>';
   } else {
     hint.innerHTML = '⚠ 尚未发放：选好班级与活动后自动发放；也可先在下方设计好学习单再选活动。';
   }
 }
-window.qfPaintPubHint = qfPaintPubHint;
+window.actPaintPubHint = actPaintPubHint;
 
 /* ===================== ③ 下发到班级（多选 / 状态跟踪 / 批量发放） =====================
    每个班一条 activity_pushes 行（url 里带本班班级名），走同一条同步链路；
    服务端 projection 按 class_id 下发 published（可打开）与 closed（可见但打不开），
    draft 不下发；学生端 SSE 实时收到。 */
-let qfPubSel = {};   // 班级勾选状态（String(clsId) -> true）
+let actPubSel = {};   // 班级勾选状态（String(clsId) -> true）
 function actPushByCls(taskId) {
   const m = {};
   actPushes().forEach(p => {
@@ -16049,57 +16004,57 @@ function actPushByCls(taskId) {
   });
   return m;
 }
-function qfPubChipsHtml() {
+function actPubChipsHtml() {
   const classes = dbT('classes') || [];
-  if (!classes.length) return '<div class="qf-muted">还没有班级，请先到「班级」创建。</div>';
-  const t = qfTaskList.find(x => x.task_id === qfActiveId);
-  if (!t) return '<div class="qf-muted">请先在 ① 选择活动，这里显示各班下发状态。</div>';
+  if (!classes.length) return '<div class="act-muted">还没有班级，请先到「班级」创建。</div>';
+  const t = actTaskList.find(x => x.task_id === actActiveId);
+  if (!t) return '<div class="act-muted">请先在 ① 选择活动，这里显示各班下发状态。</div>';
   const byCls = actPushByCls(t.task_id);
   return classes.map(c => {
     const row = byCls[String(c.id)];
     const st = row ? String(row.status || 'published') : '';
     const pub = row && st !== 'draft';
     const closed = pub && st === 'closed';
-    const on = !!qfPubSel[String(c.id)];
-    return '<label class="qf-pub-chip' + (on ? ' sel' : '') + '">'
+    const on = !!actPubSel[String(c.id)];
+    return '<label class="act-pub-chip' + (on ? ' sel' : '') + '">'
       + '<input type="checkbox" style="margin:0;accent-color:var(--brand-primary)" ' + (on ? 'checked' : '')
-      + ' onchange="qfPubToggle(\'' + esc(String(c.id)) + '\', this.checked)">'
+      + ' onchange="actPubToggle(\'' + esc(String(c.id)) + '\', this.checked)">'
       + esc(c.name)
-      + (on ? ' <span class="qf-pub-check">✓</span>' : '')
+      + (on ? ' <span class="act-pub-check">✓</span>' : '')
       + (pub
-        ? ' <span class="qf-pub-badge' + (closed ? ' off' : '') + '">' + (closed ? '已关闭' : '已启动') + ' ' + esc(String(row.date || '').slice(5)) + '</span>'
+        ? ' <span class="act-pub-badge' + (closed ? ' off' : '') + '">' + (closed ? '已关闭' : '已启动') + ' ' + esc(String(row.date || '').slice(5)) + '</span>'
           + ' <button type="button" class="btn btn-ghost btn-sm" style="width:auto;padding:0 7px;font-size:11px;line-height:18px"'
-          + ' onclick="event.preventDefault();event.stopPropagation();qfTogglePushOpen(\'' + esc(String(t.task_id)) + '\',\'' + esc(String(c.id)) + '\')">' + (closed ? '启动' : '关闭') + '</button>'
+          + ' onclick="event.preventDefault();event.stopPropagation();actTogglePushOpen(\'' + esc(String(t.task_id)) + '\',\'' + esc(String(c.id)) + '\')">' + (closed ? '启动' : '关闭') + '</button>'
           + ' <button type="button" class="btn btn-ghost btn-sm" style="width:auto;padding:0 7px;font-size:11px;line-height:18px"'
-          + ' onclick="event.preventDefault();event.stopPropagation();qfPubChipRevoke(\'' + esc(String(c.id)) + '\',\'' + esc(String(t.task_id)) + '\')">✕</button>'
-        : ' <span class="qf-pub-badge off">未下发</span>')
+          + ' onclick="event.preventDefault();event.stopPropagation();actPubChipRevoke(\'' + esc(String(c.id)) + '\',\'' + esc(String(t.task_id)) + '\')">✕</button>'
+        : ' <span class="act-pub-badge off">未下发</span>')
       + '</label>';
   }).join('');
 }
-function qfPubRepaint() {
-  const box = document.getElementById('qfPubChips');
-  if (box) box.innerHTML = qfPubChipsHtml();
-  qfPaintPubHint();
+function actPubRepaint() {
+  const box = document.getElementById('actPubChips');
+  if (box) box.innerHTML = actPubChipsHtml();
+  actPaintPubHint();
 }
-window.qfPubRepaint = qfPubRepaint;
-function qfPubToggle(clsId, on) {
-  qfPubSel[String(clsId)] = !!on;
-  const box = document.getElementById('qfPubChips');
+window.actPubRepaint = actPubRepaint;
+function actPubToggle(clsId, on) {
+  actPubSel[String(clsId)] = !!on;
+  const box = document.getElementById('actPubChips');
   if (box) {   // 只改样式不整块重绘，避免复选框失焦
     const chip = box.querySelector('input[onchange*="\'' + clsId + '\'"]');
-    if (chip) chip.closest('.qf-pub-chip').classList.toggle('sel', !!on);
+    if (chip) chip.closest('.act-pub-chip').classList.toggle('sel', !!on);
   }
 }
-window.qfPubToggle = qfPubToggle;
+window.actPubToggle = actPubToggle;
 
 /** 批量下发：先确保页面已部署（一次），再逐班写 activity_pushes + 推花名册 */
-async function qfPublishBatch() {
-  const t = qfTaskList.find(x => x.task_id === qfActiveId);
+async function actPublishBatch() {
+  const t = actTaskList.find(x => x.task_id === actActiveId);
   if (!t) { toast('请先在 ① 选择活动'); return; }
-  const sel = Object.keys(qfPubSel).filter(k => qfPubSel[k]);
+  const sel = Object.keys(actPubSel).filter(k => actPubSel[k]);
   if (!sel.length) { toast('请先勾选要下发的班级'); return; }
   const classes = dbT('classes') || [];
-  const msgEl = document.getElementById('qfPubBatchMsg');
+  const msgEl = document.getElementById('actPubBatchMsg');
   const say = s => { if (msgEl) msgEl.textContent = s; };
   say('正在下发 ' + sel.length + ' 个班级…');
   // ① 页面部署探测（整批一次）：无自定义页时自动部署默认模板，绝不覆盖教师设计页
@@ -16108,7 +16063,7 @@ async function qfPublishBatch() {
     const curHtml = probe.ok ? await probe.text() : '';
     if (!curHtml.trim() || curHtml.indexOf('老师还没有配置自定义提交页') !== -1) {
       const dep = await fetch('/api/custom', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ task: t.task_id, html: qfBuildCustomPage(qfCustomDefaultTpl()) }) });
+        body: JSON.stringify({ task: t.task_id, html: actBuildCustomPage(actCustomDefaultTpl()) }) });
       const dj = await dep.json().catch(() => ({}));
       if (!dep.ok || !dj.ok) { toast('✗ 学习单页面部署失败：' + (dj.msg || dep.status)); say(''); return; }
     }
@@ -16136,7 +16091,7 @@ async function qfPublishBatch() {
           body: JSON.stringify({ cls: clsObj.name, students }) }).catch(() => {});
       } catch (e) {}
       const cur = actPushOf(clsObj.id, t.task_id);
-      const url = qfStudentSheetUrl(t, clsObj.name);
+      const url = actStudentSheetUrl(t, clsObj.name);
       let row;
       if (cur) {
         row = Object.assign({}, cur, { status: 'published', date: today(), url, course: course || '', updated_at: now });
@@ -16154,8 +16109,8 @@ async function qfPublishBatch() {
       ok.push(clsObj.name);
     } catch (e) { fail.push(clsObj.name + '（' + (e.message || e) + '）'); }
   }
-  qfPubSel = {};
-  qfPubRepaint();
+  actPubSel = {};
+  actPubRepaint();
   const title = '「' + (t.title || t.task_id) + '」';
   if (ok.length && !fail.length) {
     toast('✓ 已下发 ' + title + ' 到 ' + ok.length + ' 个班级（' + ok.join('、') + '），学生端今日可见');
@@ -16168,14 +16123,14 @@ async function qfPublishBatch() {
     say('✗ 全部失败');
   }
 }
-window.qfPublishBatch = qfPublishBatch;
+window.actPublishBatch = actPublishBatch;
 
-/** 下发 chip 里按班收回（复用 qfUnpublish，传具体班级） */
-function qfPubChipRevoke(clsId, taskId) { qfUnpublish(taskId, clsId); }
-window.qfPubChipRevoke = qfPubChipRevoke;
+/** 下发 chip 里按班收回（复用 actUnpublish，传具体班级） */
+function actPubChipRevoke(clsId, taskId) { actUnpublish(taskId, clsId); }
+window.actPubChipRevoke = actPubChipRevoke;
 
 /* ===================== ⚙ 活动管理（2026-11-03 · 自研后端） =====================
-   以前这些事都得去 QuickForm 后台做：另一个网址、另一套账号、另一套密码。
+   新建 / 改名 / 导出 / 清空都在这里完成，不用再去别的后台。
    现在收进教师端一个弹窗，身份直接用工作台会话：
      列表 / 新建 / 改名 / 删除 / 清空提交 / 导出 CSV·JSON / 上传教学资料 / 导入旧数据。
    后端：/api/v2/teacher/activity/*
@@ -16201,9 +16156,9 @@ function actAdminOpen() {
       <div class="modal-head">
         <div>
           <div class="modal-title">⚙ 活动管理</div>
-          <div class="modal-sub">课堂活动现在由工作台自己托管 · 不用再登录 QuickForm 后台</div>
+          <div class="modal-sub">课堂活动由工作台自己托管 · 一个账号全搞定</div>
         </div>
-        <button type="button" class="qf-pub-x" id="actAdminX" aria-label="关闭" title="关闭">✕</button>
+        <button type="button" class="act-pub-x" id="actAdminX" aria-label="关闭" title="关闭">✕</button>
       </div>
 
       <div class="modal-sec">
@@ -16230,7 +16185,7 @@ function actAdminOpen() {
           <button class="btn btn-primary btn-sm" id="actSaveBtn" style="width:auto">保存</button>
           <button class="btn btn-ghost btn-sm" id="actNewBtn" style="width:auto">清空表单</button>
           <span style="flex:1"></span>
-          <span class="qf-muted" id="actFormMsg" style="font-size:12px"></span>
+          <span class="act-muted" id="actFormMsg" style="font-size:12px"></span>
         </div>
       </div>
 
@@ -16240,7 +16195,6 @@ function actAdminOpen() {
       </div>
 
       <div class="modal-acts">
-        <button class="btn btn-ghost btn-sm" id="actMigrateBtn" style="width:auto">导入旧 QuickForm 数据</button>
         <span style="flex:1"></span>
         <button class="btn btn-ghost" id="actAdminClose" style="width:auto">关闭</button>
       </div>
@@ -16257,7 +16211,6 @@ function actAdminOpen() {
   document.getElementById('actAdminClose').onclick = () => { document.removeEventListener('keydown', onKey, true); close(); };
   document.getElementById('actSaveBtn').onclick = actAdminSave;
   document.getElementById('actNewBtn').onclick = actAdminNew;
-  document.getElementById('actMigrateBtn').onclick = actAdminMigrate;
   document.getElementById('actAdminList').addEventListener('click', actAdminOps);
   actAdminLoad();
 }
@@ -16286,7 +16239,7 @@ async function actAdminLoad() {
     actAdminTasks = j.tasks || [];
     actAdminRender();
   } catch (e) {
-    if (box) box.innerHTML = '<div class="qf-muted">读取失败：' + esc(e.message || e) + '</div>';
+    if (box) box.innerHTML = '<div class="act-muted">读取失败：' + esc(e.message || e) + '</div>';
   }
 }
 
@@ -16294,7 +16247,7 @@ function actAdminRender() {
   const box = document.getElementById('actAdminList');
   if (!box) return;
   if (!actAdminTasks.length) {
-    box.innerHTML = '<div class="qf-muted">还没有活动，先在上方新建一个。</div>';
+    box.innerHTML = '<div class="act-muted">还没有活动，先在上方新建一个。</div>';
     return;
   }
   box.innerHTML = actAdminTasks.map(t => {
@@ -16332,11 +16285,11 @@ async function actAdminOps(e) {
   if (!t) return;
   if (op === 'view') {
     const ov = document.getElementById('actAdminOv'); if (ov) ov.remove();
-    const sel = document.getElementById('qfTaskSel');
+    const sel = document.getElementById('actTaskSel');
     if (sel) sel.value = id;
-    qfActiveId = id;
-    qfRenderDash();
-    const dash = document.getElementById('qfDash');
+    actActiveId = id;
+    actRenderDash();
+    const dash = document.getElementById('actDash');
     if (dash) dash.scrollIntoView({ behavior: 'smooth', block: 'start' });
     return;
   }
@@ -16419,7 +16372,7 @@ async function actAdminSave() {
     toast(actAdminEditId ? '已保存' : '活动已创建');
     actAdminNew();
     actAdminLoad();
-    qfLoadTaskList();          // 主页面下拉框同步
+    actLoadTaskList();          // 主页面下拉框同步
   } catch (e) {
     actAdminFormMsg('✗ ' + (e.message || e));
   } finally {
@@ -16451,43 +16404,13 @@ function actAdminUpload(taskId) {
   inp.click();
 }
 
-async function actAdminMigrate() {
-  const ok = await uiConfirm('把旧 QuickForm 里的活动、提交记录和作品文件导入本系统？<br>先做一次<b>预演</b>，只看数量不写库，确认后再真正导入。', { title: '导入旧数据', okText: '开始预演', danger: false });
-  if (!ok) return;
-  const call = body => fetch('/api/v2/teacher/activity/migrate', {
-    method: 'POST', credentials: 'same-origin',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  }).then(r => r.json());
-  try {
-    const dry = await call({ apply: false });
-    if (!dry.ok && !dry.stat) throw new Error(dry.msg || '预演失败');
-    const s = dry.stat || {};
-    const okGo = await uiConfirm(
-      '预演结果：活动 <b>' + (s.tasks || 0) + '</b> 个、提交 <b>' + (s.submissions || 0) +
-      '</b> 条、附件 <b>' + (s.files || 0) + '</b> 个，跳过 ' + (s.skipped || 0) +
-      ' 个已存在的活动。' + ((s.missing_files || []).length ? '<br>缺文件 ' + s.missing_files.length + ' 个（记录保留）。' : '') +
-      '<br><br>现在真正写入本系统？', { title: '确认导入', okText: '写入', danger: false });
-    if (!okGo) return;
-    const real = await call({ apply: true });
-    if (!real.ok) throw new Error((real.stat && real.stat.errors || []).join('；') || real.msg || '导入失败');
-    const r2 = real.stat || {};
-    uiAlert('导入完成：活动 ' + (r2.tasks || 0) + ' 个、提交 ' + (r2.submissions || 0) + ' 条、附件 ' + (r2.files || 0) + ' 个。', { title: '导入完成' });
-    actAdminLoad();
-    qfLoadTaskList();
-  } catch (e) {
-    uiAlert('导入失败：' + esc(e.message || e), { title: '导入失败' });
-  }
-}
-
-
 /* ===================== ③ 下发到班级 · 入口：改为「下发」按钮 + 弹窗 =====================
    整块下发逻辑（多选 / 状态跟踪 / 批量发放 / 单班收回）与原来完全一致，
    只是把原来页面上的 ③ 卡片收进一个弹窗：点「📤 下发」按钮 → 弹出班级列表，
    多选、明确展示已选状态、已下发的班标注日期且可单独收回；
-   确认 → 执行 qfPublishBatch（逻辑零改动）；取消 / Esc / 点遮罩 → 不产生任何变更。 */
-function qfOpenPublishDialog() {
-  const t = qfTaskList.find(x => x.task_id === qfActiveId);
+   确认 → 执行 actPublishBatch（逻辑零改动）；取消 / Esc / 点遮罩 → 不产生任何变更。 */
+function actOpenPublishDialog() {
+  const t = actTaskList.find(x => x.task_id === actActiveId);
   if (!t) { toast('请先在 ① 选择活动'); return; }
   const classes = dbT('classes') || [];
   if (!classes.length) { toast('还没有班级，请先到「班级」创建'); return; }
@@ -16496,26 +16419,26 @@ function qfOpenPublishDialog() {
   ov.className = 'modal-ov';
   ov.style.zIndex = 4100;          // 高于普通弹窗(1000)与 uiDialog(4000)
   ov.innerHTML = `
-    <div class="modal qf-pub-modal" role="dialog" aria-modal="true">
+    <div class="modal act-pub-modal" role="dialog" aria-modal="true">
       <div class="modal-head">
         <div>
           <div class="modal-title">📤 下发到班级</div>
           <div class="modal-sub">活动「${esc(t.title || t.task_id)}」· 学生端「今日」即时可见 · 可一次发多个班</div>
         </div>
-        <button type="button" class="qf-pub-x" aria-label="关闭" title="关闭">✕</button>
+        <button type="button" class="act-pub-x" aria-label="关闭" title="关闭">✕</button>
       </div>
       <div class="modal-sec">
         <div class="modal-lb">选择班级（点选切换 · 已选班级高亮显示 ✓ · 已下发的班标注日期，可单独收回）</div>
-        <div class="qf-pub-chips" id="qfPubChips">加载中…</div>
+        <div class="act-pub-chips" id="actPubChips">加载中…</div>
       </div>
       <div class="modal-sec" style="border-bottom:none;padding-top:0">
-        <span class="qf-muted" id="qfPubBatchMsg" style="font-size:12px"></span>
+        <span class="act-muted" id="actPubBatchMsg" style="font-size:12px"></span>
       </div>
-      <div class="modal-acts qf-pub-acts">
-        <button type="button" class="btn btn-ghost" id="qfPubRefresh" style="width:auto">🔄 刷新状态</button>
+      <div class="modal-acts act-pub-acts">
+        <button type="button" class="btn btn-ghost" id="actPubRefresh" style="width:auto">🔄 刷新状态</button>
         <span style="flex:1"></span>
-        <button type="button" class="btn btn-ghost" id="qfPubCancel" style="width:auto">取消</button>
-        <button type="button" class="btn btn-primary" id="qfPubGo" style="width:auto">📤 下发所选班级</button>
+        <button type="button" class="btn btn-ghost" id="actPubCancel" style="width:auto">取消</button>
+        <button type="button" class="btn btn-primary" id="actPubGo" style="width:auto">📤 下发所选班级</button>
       </div>
     </div>`;
   document.body.appendChild(ov);
@@ -16528,29 +16451,29 @@ function qfOpenPublishDialog() {
     document.removeEventListener('keydown', onKey, true);
     ov.remove();
   };
-  // 渲染班级 chips（完全复用既有 qfPubChipsHtml / qfPubToggle）
-  qfPubRepaint();
+  // 渲染班级 chips（完全复用既有 actPubChipsHtml / actPubToggle）
+  actPubRepaint();
   // 绑定弹窗内事件
-  ov.querySelector('#qfPubRefresh').addEventListener('click', () => qfPubRepaint());
-  ov.querySelector('.qf-pub-x').addEventListener('click', closeDialog);
-  ov.querySelector('#qfPubCancel').addEventListener('click', closeDialog);
-  ov.querySelector('#qfPubGo').addEventListener('click', async () => {
-    await qfPublishBatch();         // 内部已含校验、toast 与 qfPubRepaint，逻辑零改动
+  ov.querySelector('#actPubRefresh').addEventListener('click', () => actPubRepaint());
+  ov.querySelector('.act-pub-x').addEventListener('click', closeDialog);
+  ov.querySelector('#actPubCancel').addEventListener('click', closeDialog);
+  ov.querySelector('#actPubGo').addEventListener('click', async () => {
+    await actPublishBatch();         // 内部已含校验、toast 与 actPubRepaint，逻辑零改动
     closeDialog();
   });
   ov.addEventListener('pointerdown', e => { if (e.target === ov) closeDialog(); });
   document.addEventListener('keydown', onKey, true);
   // 初始聚焦「下发所选班级」
-  ov.querySelector('#qfPubGo').focus();
+  ov.querySelector('#actPubGo').focus();
 }
-window.qfOpenPublishDialog = qfOpenPublishDialog;
+window.actOpenPublishDialog = actOpenPublishDialog;
 
 /* ===================== ②·保存到课件库：设计的 HTML 原稿落到课程目录 =====================
    走 /api/cw/save_text（纯文本直存，无需 base64）：<课程>/_学习单/<活动名>-学习单.html，
    同名直接覆盖为最新；课程归属优先用活动↔课程自动匹配，匹配不上才弹窗问。 */
-async function qfCustomSaveLib() {
-  const t = qfTaskList.find(x => x.task_id === qfActiveId);
-  const htmlEl = document.getElementById('qfCustHtml');
+async function actCustomSaveLib() {
+  const t = actTaskList.find(x => x.task_id === actActiveId);
+  const htmlEl = document.getElementById('actCustHtml');
   const raw = (htmlEl && htmlEl.value || '').trim();
   if (!raw) { toast('请先上传网页文件或点「用默认模板」'); return; }
   let course = (t && cwLinkOf(t.task_id) || {}).course || '';
@@ -16566,23 +16489,23 @@ async function qfCustomSaveLib() {
     if (!course || !course.trim()) return;
     course = course.trim();
   }
-  qfCustStatus('正在保存到课件库…');
+  actCustStatus('正在保存到课件库…');
   const name = (((t && t.title) || '课堂学习单') + '-学习单.html').replace(/[\\/:*?"<>|]/g, '-');
   try {
     const r = await cwReq('save_text', { course: course, subdir: '_学习单', name: name, text: raw });
-    if (!r.ok) { qfCustStatus('✗ 保存失败：' + (r.msg || ''), 'err'); return; }
-    qfCustStatus('✓ 已保存到课件库「' + course + ' / _学习单 / ' + name + '」（同名覆盖更新）', 'ok');
+    if (!r.ok) { actCustStatus('✗ 保存失败：' + (r.msg || ''), 'err'); return; }
+    actCustStatus('✓ 已保存到课件库「' + course + ' / _学习单 / ' + name + '」（同名覆盖更新）', 'ok');
     toast('学习单已保存到课件库课程「' + course + '」');
     if (t) { try { cwSaveLink(t.task_id, t.title, course, 'manual'); } catch (e) {} }
-  } catch (e) { qfCustStatus('✗ ' + (e.message || e), 'err'); }
+  } catch (e) { actCustStatus('✗ ' + (e.message || e), 'err'); }
 }
-window.qfCustomSaveLib = qfCustomSaveLib;
+window.actCustomSaveLib = actCustomSaveLib;
 
 /* ===================== ④ 自定义上传：教师自制网页 → 注入登录/提交/大屏 ===================== */
-let qfCustLinkVal = '';   // 完整学生链接（含 task/class/api），仅用于复制
+let actCustLinkVal = '';   // 完整学生链接（含 task/class/api），仅用于复制
 
 // 默认模板：自带「每题提交按钮」示例 + 外链跳转（被「用默认模板」使用）
-function qfCustomDefaultTpl() {
+function actCustomDefaultTpl() {
   return [
 '<!doctype html>',
 '<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">',
@@ -16604,19 +16527,19 @@ function qfCustomDefaultTpl() {
   ].join('\n');
 }
 
-function qfCustomLoadFile(e) {
+function actCustomLoadFile(e) {
   const f = e.target.files && e.target.files[0]; if (!f) return;
-  f.text().then(t => { const el = document.getElementById('qfCustHtml'); if (el) el.value = t; qfCustStatus('已载入：' + f.name); qfRenderFileCfg(); });
+  f.text().then(t => { const el = document.getElementById('actCustHtml'); if (el) el.value = t; actCustStatus('已载入：' + f.name); actRenderFileCfg(); });
 }
-function qfCustomUseDefault() { const el = document.getElementById('qfCustHtml'); if (el) el.value = qfCustomDefaultTpl(); qfCustStatus('已载入默认模板（含每题提交按钮）；下方「文件题设置」可配置是否允许空文件提交'); qfRenderFileCfg(); }
-function qfCustStatus(t, cls) { const el = document.getElementById('qfCustStatus'); if (el) { el.textContent = t || ''; el.className = 'qf-muted' + (cls ? (' ' + cls) : ''); } }
-function qfCustomClear() { const el = document.getElementById('qfCustHtml'); if (el) el.value = ''; qfCustStatus('已清空'); qfUpdateCustomLink(true); qfRenderFileCfg(); }
+function actCustomUseDefault() { const el = document.getElementById('actCustHtml'); if (el) el.value = actCustomDefaultTpl(); actCustStatus('已载入默认模板（含每题提交按钮）；下方「文件题设置」可配置是否允许空文件提交'); actRenderFileCfg(); }
+function actCustStatus(t, cls) { const el = document.getElementById('actCustStatus'); if (el) { el.textContent = t || ''; el.className = 'act-muted' + (cls ? (' ' + cls) : ''); } }
+function actCustomClear() { const el = document.getElementById('actCustHtml'); if (el) el.value = ''; actCustStatus('已清空'); actUpdateCustomLink(true); actRenderFileCfg(); }
 
 /* ===== 文件题设置：只在含 <input type="file"> 的 .q-block 上显示「允许空文件提交」 =====
    存储：勾选后在该 .q-block 的起始标签写入 data-allow-empty="1"，取消则移除。
    配置随 HTML 一起保存 / 生成 / 下发（课件库、学习单快照都带着它），不依赖额外文件。 */
-function qfFileBlocks() {
-  const el = document.getElementById('qfCustHtml');
+function actFileBlocks() {
+  const el = document.getElementById('actCustHtml');
   const html = (el && el.value || '').trim();
   if (!html) return { html: '', doc: null, fileBlocks: [] };
   let doc;
@@ -16632,34 +16555,34 @@ function qfFileBlocks() {
   });
   return { html: html, doc: doc, fileBlocks: fileBlocks };
 }
-function qfRenderFileCfg() {
-  qfRenderSubmitCfg();   // 设计面板一起刷新（两者都依赖当前文本框 HTML）
-  const box = document.getElementById('qfFileCfg'); if (!box) return;
-  const r = qfFileBlocks();
+function actRenderFileCfg() {
+  actRenderSubmitCfg();   // 设计面板一起刷新（两者都依赖当前文本框 HTML）
+  const box = document.getElementById('actFileCfg'); if (!box) return;
+  const r = actFileBlocks();
   if (!r.html) { box.innerHTML = ''; return; }
   if (!r.fileBlocks.length) {
-    box.innerHTML = '<div class="qf-filecfg-h">⚙ 文件题设置（仅文件提交类题目）</div>'
-      + '<div class="qf-muted" style="font-size:12px">当前页面没有「文件提交」类题目，无需设置。</div>';
+    box.innerHTML = '<div class="act-filecfg-h">⚙ 文件题设置（仅文件提交类题目）</div>'
+      + '<div class="act-muted" style="font-size:12px">当前页面没有「文件提交」类题目，无需设置。</div>';
     return;
   }
-  box.innerHTML = '<div class="qf-filecfg-h">⚙ 文件题设置（仅文件提交类题目）</div>'
+  box.innerHTML = '<div class="act-filecfg-h">⚙ 文件题设置（仅文件提交类题目）</div>'
     + r.fileBlocks.map(function (f) {
-        return '<label class="qf-filecfg-row"><input type="checkbox" ' + (f.allow ? 'checked ' : '')
-          + 'onchange="qfToggleFileAllow(' + f.idx + ',this.checked)">'
-          + '<span class="qf-filecfg-nm">' + esc(f.label) + '</span>'
-          + '<span class="qf-filecfg-tip">允许不上传文件直接提交</span></label>';
+        return '<label class="act-filecfg-row"><input type="checkbox" ' + (f.allow ? 'checked ' : '')
+          + 'onchange="actToggleFileAllow(' + f.idx + ',this.checked)">'
+          + '<span class="act-filecfg-nm">' + esc(f.label) + '</span>'
+          + '<span class="act-filecfg-tip">允许不上传文件直接提交</span></label>';
       }).join('')
-    + '<div class="qf-muted" style="font-size:12px;margin-top:6px">'
-    + ((document.getElementById('qfCustPerQ') && !document.getElementById('qfCustPerQ').checked)
+    + '<div class="act-muted" style="font-size:12px;margin-top:6px">'
+    + ((document.getElementById('actCustPerQ') && !document.getElementById('actCustPerQ').checked)
         ? '当前为「整页一个提交」模式；文件题设置仅在勾选「每题单独提交按钮」后生效。'
         : '不勾选：学生必须选择文件才能提交本题；勾选：允许空文件提交。')
     + '</div>';
 }
 let _qfFileCfgTimer = null;
-function qfFileCfgDebounced() { if (_qfFileCfgTimer) clearTimeout(_qfFileCfgTimer); _qfFileCfgTimer = setTimeout(qfRenderFileCfg, 350); }
+function actFileCfgDebounced() { if (_qfFileCfgTimer) clearTimeout(_qfFileCfgTimer); _qfFileCfgTimer = setTimeout(actRenderFileCfg, 350); }
 /* 把某个 .q-block 的某个属性写入文本框 HTML（DOM 解析 → 改 → 整文档序列化） */
-function qfWriteBlockAttr(idx, attr, value) {
-  const el = document.getElementById('qfCustHtml'); if (!el) return false;
+function actWriteBlockAttr(idx, attr, value) {
+  const el = document.getElementById('actCustHtml'); if (!el) return false;
   const html = el.value;
   let doc;
   try { doc = new DOMParser().parseFromString(html, 'text/html'); } catch (e) { return false; }
@@ -16669,16 +16592,16 @@ function qfWriteBlockAttr(idx, attr, value) {
   el.value = (hasDoctype ? '<!doctype html>\n' : '') + doc.documentElement.outerHTML;
   return true;
 }
-function qfToggleFileAllow(idx, checked) {
-  if (!qfWriteBlockAttr(idx, 'data-allow-empty', checked ? '1' : '')) return;
-  qfRenderFileCfg();
-  qfCustStatus('已更新文件题设置（记得点「生成页面」重新生成）');
+function actToggleFileAllow(idx, checked) {
+  if (!actWriteBlockAttr(idx, 'data-allow-empty', checked ? '1' : '')) return;
+  actRenderFileCfg();
+  actCustStatus('已更新文件题设置（记得点「生成页面」重新生成）');
 }
 
 /* ===== 提交按钮设置：给某道题自定义提交按钮（留空=该题不显示按钮；全空=每题自动一个） ===== */
-function qfRenderSubmitCfg() {
-  const box = document.getElementById('qfSubmitCfg'); if (!box) return;
-  const el = document.getElementById('qfCustHtml');
+function actRenderSubmitCfg() {
+  const box = document.getElementById('actSubmitCfg'); if (!box) return;
+  const el = document.getElementById('actCustHtml');
   const html = (el && el.value || '').trim();
   if (!html) { box.innerHTML = ''; return; }
   let doc;
@@ -16690,34 +16613,34 @@ function qfRenderSubmitCfg() {
     const nm = (b.getAttribute('data-btn') || '').trim()
       || (h && h.textContent || '').trim() || ('第' + (i + 1) + '题');
     const lbl = (b.getAttribute('data-submit-label') || '').trim();
-    return '<label class="qf-subcfg-row"><span class="qf-subcfg-nm">' + esc(nm) + '</span>'
-      + '<input class="qf-subcfg-inp" data-qidx="' + i + '" value="' + esc(lbl) + '"'
-      + ' placeholder="留空=不显示提交按钮" onchange="qfOnSubmitLabel(this)"></label>';
+    return '<label class="act-subcfg-row"><span class="act-subcfg-nm">' + esc(nm) + '</span>'
+      + '<input class="act-subcfg-inp" data-qidx="' + i + '" value="' + esc(lbl) + '"'
+      + ' placeholder="留空=不显示提交按钮" onchange="actOnSubmitLabel(this)"></label>';
   }).join('');
   const any = blocks.some(function (b) { return (b.getAttribute('data-submit-label') || '').trim(); });
-  box.innerHTML = '<div class="qf-filecfg-h">🔘 提交按钮设置（可指定绑定题目）</div>'
+  box.innerHTML = '<div class="act-filecfg-h">🔘 提交按钮设置（可指定绑定题目）</div>'
     + rows
-    + '<div class="qf-muted" style="font-size:12px;margin-top:6px">'
+    + '<div class="act-muted" style="font-size:12px;margin-top:6px">'
     + (any
         ? '已启用自定义按钮：学生页只在你填了文字的题目下显示按钮（文字即按钮名称）。全部留空则恢复每题自动一个按钮。'
         : '全部留空：按上方「每题单独提交按钮」自动生成；填了文字：只给填写的题目显示按钮，可自定义按钮名称（如「提交作品」）。')
     + '</div>';
 }
-function qfOnSubmitLabel(inp) {
+function actOnSubmitLabel(inp) {
   const idx = Number(inp && inp.dataset ? inp.dataset.qidx : NaN);
   if (!isFinite(idx)) return;
   const v = String(inp.value || '').trim();
-  if (qfWriteBlockAttr(idx, 'data-submit-label', v)) qfCustStatus('已更新提交按钮设置（记得点「生成页面」重新生成）');
+  if (actWriteBlockAttr(idx, 'data-submit-label', v)) actCustStatus('已更新提交按钮设置（记得点「生成页面」重新生成）');
 }
-window.qfRenderSubmitCfg = qfRenderSubmitCfg;
-window.qfOnSubmitLabel = qfOnSubmitLabel;
-window.qfWriteBlockAttr = qfWriteBlockAttr;
-window.qfRenderFileCfg = qfRenderFileCfg;
-window.qfFileCfgDebounced = qfFileCfgDebounced;
-window.qfToggleFileAllow = qfToggleFileAllow;
+window.actRenderSubmitCfg = actRenderSubmitCfg;
+window.actOnSubmitLabel = actOnSubmitLabel;
+window.actWriteBlockAttr = actWriteBlockAttr;
+window.actRenderFileCfg = actRenderFileCfg;
+window.actFileCfgDebounced = actFileCfgDebounced;
+window.actToggleFileAllow = actToggleFileAllow;
 
 // 把教师网页 + 注入运行时，组装成完整学生页（注入：登录 / 每题提交按钮 / 外链跳转 / 提交到活动数据服务）
-function qfBuildCustomPage(html, opts) {
+function actBuildCustomPage(html, opts) {
   opts = opts || {};
   const perQ = opts.perQ !== false;   // 默认每题单独提交按钮
   const teacher = String(html || '');
@@ -16728,28 +16651,28 @@ function qfBuildCustomPage(html, opts) {
   if (hm) { head = hm[1]; body = bm ? bm[1] : teacher.replace(/<head[^>]*>[\s\S]*?<\/head>/i, ''); }
   else if (bm) { body = bm[1]; }
 
-  const styleInject = '<style>#qfHi{font-size:13px;color:#0F6E56;font-weight:600;margin:10px 0}'
-    + '.qf-submit-btn{background:#0F6E56;color:#fff;border:0;padding:10px 18px;border-radius:10px;font-size:14px;cursor:pointer}'
-    + '.qf-submit-btn:disabled{opacity:.55;cursor:not-allowed}'
-    + '.qf-st{font-size:12px;margin-left:10px}.qf-st.ok{color:#1D9E75}.qf-st.err{color:#E24B4A}</style>';
+  const styleInject = '<style>#actHi{font-size:13px;color:#0F6E56;font-weight:600;margin:10px 0}'
+    + '.act-submit-btn{background:#0F6E56;color:#fff;border:0;padding:10px 18px;border-radius:10px;font-size:14px;cursor:pointer}'
+    + '.act-submit-btn:disabled{opacity:.55;cursor:not-allowed}'
+    + '.act-st{font-size:12px;margin-left:10px}.act-st.ok{color:#1D9E75}.act-st.err{color:#E24B4A}</style>';
 
   // 登录浮层（固定全屏，未登录不能提交）
-  const login = '<div id="qfLogin" style="position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(15,46,40,.55)">'
+  const login = '<div id="actLogin" style="position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(15,46,40,.55)">'
     + '<div style="background:#fff;border-radius:16px;padding:22px 24px;width:min(92vw,380px);box-shadow:0 12px 40px rgba(0,0,0,.25)">'
     + '<h2 style="margin:0 0 4px;color:#0F6E56;font-size:19px">进入活动页面</h2>'
-    + '<p id="qfLoginMsg" style="font-size:13px;color:#5F6E68;margin:0 0 14px">请输入学号，系统将自动匹配你的姓名与班级。</p>'
+    + '<p id="actLoginMsg" style="font-size:13px;color:#5F6E68;margin:0 0 14px">请输入学号，系统将自动匹配你的姓名与班级。</p>'
     + '<label style="font-size:13px;font-weight:600">学号 *</label>'
-    + '<input id="qfSid" inputmode="numeric" placeholder="例如 20250301" style="width:100%;padding:10px 12px;border:1px solid #cfe3dc;border-radius:10px;font-size:15px;box-sizing:border-box">'
-    + '<div id="qfLoginHint" style="font-size:12px;min-height:16px;margin-top:6px"></div>'
-    + '<button id="qfLoginBtn" style="margin-top:14px;width:100%;background:#0F6E56;color:#fff;border:0;padding:11px;border-radius:10px;font-size:15px;cursor:pointer" onclick="qfDoLogin()">进入页面</button>'
+    + '<input id="actSid" inputmode="numeric" placeholder="例如 20250301" style="width:100%;padding:10px 12px;border:1px solid #cfe3dc;border-radius:10px;font-size:15px;box-sizing:border-box">'
+    + '<div id="actLoginHint" style="font-size:12px;min-height:16px;margin-top:6px"></div>'
+    + '<button id="actLoginBtn" style="margin-top:14px;width:100%;background:#0F6E56;color:#fff;border:0;padding:11px;border-radius:10px;font-size:15px;cursor:pointer" onclick="actDoLogin()">进入页面</button>'
     + '</div></div>';
 
   const R = [];
   R.push('// ===== 注入运行时：登录 + 每题提交 + 外链跳转 + 提交到活动数据服务 =====');
-  R.push('var QF_API=new URLSearchParams(location.search).get("api")||"";');   // 提交地址由链接携带；缺了就在提交时明确报错，不猜一个写死的地址
-  R.push('var QF_CLASS=new URLSearchParams(location.search).get("class")||"";');
-  R.push('var QF_TEST=(new URLSearchParams(location.search).get("test")==="1");');
-  R.push('var QF_TASK=new URLSearchParams(location.search).get("task")||"";');
+  R.push('var ACT_API=new URLSearchParams(location.search).get("api")||"";');   // 提交地址由链接携带；缺了就在提交时明确报错，不猜一个写死的地址
+  R.push('var ACT_CLASS=new URLSearchParams(location.search).get("class")||"";');
+  R.push('var ACT_TEST=(new URLSearchParams(location.search).get("test")==="1");');
+  R.push('var ACT_TASK=new URLSearchParams(location.search).get("task")||"";');
   /* --- 学生身份由工作台带来（/g/<导学单>/<条目> 跳转时拼在 URL 上） ---------
      学生已经在学生端登录过，这一页就不该再让他输学号：
        · wbSid / wbName / wbCls：给人看的（页面上显示"你是某某"）
@@ -16764,50 +16687,50 @@ function qfBuildCustomPage(html, opts) {
   R.push('var WB_BASE=(WQ.get("wbBase")||"").replace(/[/]+$/,"");');
   R.push('var WB_SUBMIT=WB_T?((WB_BASE||location.origin)+"/api/v2/student/submit?t="+encodeURIComponent(WB_T)):"";');
   R.push('/* 提交地址自动解析（渲染时 + 提交前兜底）：');
-  R.push('   优先级 WB_SUBMIT（学生端带票）> URL 上的 api > 服务端按 task 拉取 QuickForm 提交 API。');
-  R.push('   服务端拉取失败时（网络抖动 / 服务暂不可达）退化为同源 /qf/api/<task>（workbench 恒代理到 QuickForm）；');
+  R.push('   优先级 WB_SUBMIT（学生端带票）> URL 上的 api > 服务端按 task 拉取活动提交 API。');
+  R.push('   服务端拉取失败时（网络抖动 / 服务暂不可达）退化为同源 /api/act/<task>；');
   R.push('   再不行（连 task 都没有）返回空，提交按钮会给出「未接上提交地址」的友好提示，不会崩。 */');
-  R.push('function qfResolveApi(){');
+  R.push('function actResolveApi(){');
   R.push('if(WB_SUBMIT)return Promise.resolve(WB_SUBMIT);');
-  R.push('if(QF_API)return Promise.resolve(QF_API);');
-  R.push('if(!QF_TASK)return Promise.resolve("");');
-  R.push('return fetch("/api/v2/qf-api?task="+encodeURIComponent(QF_TASK),{cache:"no-store"})');
+  R.push('if(ACT_API)return Promise.resolve(ACT_API);');
+  R.push('if(!ACT_TASK)return Promise.resolve("");');
+  R.push('return fetch("/api/v2/act-api?task="+encodeURIComponent(ACT_TASK),{cache:"no-store"})');
   R.push('.then(function(r){return r.json().catch(function(){return{}})})');
-  R.push('.then(function(j){return (j&&j.ok&&j.api)?j.api:("/qf/api/"+encodeURIComponent(QF_TASK));})');
-  R.push('.catch(function(){return ("/qf/api/"+encodeURIComponent(QF_TASK));});');
+  R.push('.then(function(j){return (j&&j.ok&&j.api)?j.api:("/api/act/"+encodeURIComponent(ACT_TASK));})');
+  R.push('.catch(function(){return ("/api/act/"+encodeURIComponent(ACT_TASK));});');
   R.push('}');
-  R.push('var QF_ROSTER=null,QF_MAP={},QF_USER=null;');
+  R.push('var ACT_ROSTER=null,ACT_MAP={},ACT_USER=null;');
   R.push('var BLOCKS_PER_Q=' + (perQ ? 'true' : 'false') + ';');
-  R.push('function qfRoster(){if(!QF_CLASS)return Promise.resolve(false);return fetch(location.origin+"/api/roster?class="+encodeURIComponent(QF_CLASS),{cache:"no-store"}).then(function(r){return r.ok?r.json():null}).then(function(j){var a=(j&&j.students)||[];if(!a.length)return false;QF_ROSTER={c:j.cls||QF_CLASS,s:a.map(function(x){return [String(x.sid||"").trim(),String(x.name||"").trim()]}).filter(function(x){return x[0]})};QF_ROSTER.s.forEach(function(p){QF_MAP[p[0]]=p[1]});return true}).catch(function(){return false})}');
-  R.push('function qfShowLogin(){var no=(document.getElementById("qfSid")||{}).value;var h=document.getElementById("qfLoginHint");if(!no){if(h)h.textContent="";return}if(!QF_ROSTER){if(h)h.textContent="（未取到花名册，将以你填写的为准）";return}var nm=QF_MAP[no.trim()];if(nm){if(h){h.style.color="#1D9E75";h.textContent="匹配到："+nm}}else{if(h){h.style.color="#E24B4A";h.textContent="学号不在本班名单"}}}');
-  R.push('function qfDoLogin(){var no=(document.getElementById("qfSid")||{}).value;no=(no||"").trim();if(!no){var h=document.getElementById("qfLoginHint");if(h){h.style.color="#E24B4A";h.textContent="请填写学号"}return}var nm="",cls="";if(QF_ROSTER){nm=QF_MAP[no]||"";cls=QF_ROSTER.c||"";if(!nm){var m=document.getElementById("qfLoginMsg");if(m)m.textContent="该学号不在本班名单，请核对。";var h=document.getElementById("qfLoginHint");if(h){h.style.color="#E24B4A";h.textContent="学号不在本班名单"}return}}QF_USER={sid:no,name:nm,cls:cls};var lg=document.getElementById("qfLogin");if(lg)lg.style.display="none";document.querySelectorAll("[data-qf-needlogin]").forEach(function(b){b.disabled=false})}');
-  R.push('function qfGather(c){var fd=new FormData();var els=c.querySelectorAll("input[name],textarea[name],select[name],input[data-f],textarea[data-f],select[data-f]");els.forEach(function(e){var k=e.getAttribute("name")||e.getAttribute("data-f");if(!k)return;if(e.type==="file"){for(var i=0;i<e.files.length;i++)fd.append(k,e.files[i],e.files[i].name)}else if(e.type==="radio"||e.type==="checkbox"){if(e.checked)fd.append(k,e.value)}else{fd.append(k,e.value)}});return fd}');
-  R.push('function qfSubmitBlock(btn,container,label){if(!QF_USER){var s9=container.querySelector("[data-qf-status]");if(s9){s9.textContent="请先在上面填写学号登录";s9.className="qf-st err"}return}var _fi=(container!==document.body&&container.querySelectorAll)?container.querySelectorAll("input[type=file]"):[];if(_fi&&_fi.length){var _has=false;for(var _i=0;_i<_fi.length;_i++){var _fl=_fi[_i].files;if(_fl){for(var _j=0;_j<_fl.length;_j++){if(_fl[_j]&&_fl[_j].size>0){_has=true}}}}var _allow=(container.getAttribute&&container.getAttribute("data-allow-empty")==="1");if(!_has&&!_allow){var _s0=container.querySelector("[data-qf-status]");if(_s0){_s0.textContent="本题要求上传文件，请选择文件后再提交（老师未开启「允许空文件提交」）。";_s0.className="qf-st err"}return}}var _ti=container.querySelectorAll?container.querySelectorAll("input,textarea,select"):[];var _hasTextField=false,_filled=false,_fileSel=false;for(var _a=0;_a<_ti.length;_a++){var _e2=_ti[_a],_tp2=(_e2.type||"").toLowerCase();if(_e2.disabled||_tp2==="hidden")continue;if(_e2.id==="qfSid"||(_e2.closest&&_e2.closest("#qfLogin")))continue;if(_tp2==="file"){if(_e2.files){for(var _b=0;_b<_e2.files.length;_b++){if(_e2.files[_b]&&_e2.files[_b].size>0)_fileSel=true}}continue}_hasTextField=true;if(_tp2==="checkbox"||_tp2==="radio"){if(_e2.checked)_filled=true}else if(String(_e2.value||"").trim()!==""){_filled=true}}if(_hasTextField&&!_filled&&!_fileSel){var _sc2=container.querySelector("[data-qf-status]");if(_sc2){_sc2.textContent="请先填写内容再提交";_sc2.className="qf-st err"}return}btn.disabled=true;var st=container.querySelector("[data-qf-status]");if(st){st.textContent="准备提交…";st.className="qf-st"}qfResolveApi().then(function(tgt){if(!tgt){if(st){st.textContent="这一页还没接上提交地址，请让老师检查活动绑定";st.className="qf-st err"}btn.disabled=false;return}var fd=qfGather(container);if(WB_SUBMIT){fd.append("按钮",label)}else{fd.append("学号",QF_USER.sid);fd.append("姓名",QF_USER.name);fd.append("班级",QF_USER.cls);fd.append("按钮",label)}if(st){st.textContent="提交中…";st.className="qf-st"}fetch(tgt,{method:"POST",body:fd,mode:"cors"}).then(function(r){return r.json().catch(function(){return{}}).then(function(j){return {ok:r.ok,j:j}})}).then(function(o){var ok=o.ok||(o.j&&(o.j.ok||o.j.success));if(st){st.textContent=ok?"提交成功":"提交失败";st.className="qf-st "+(ok?"ok":"err")}btn.disabled=false}).catch(function(e){if(st){st.textContent="网络错误：连不上提交服务，请确认与老师在同一局域网";st.className="qf-st err"}btn.disabled=false})})}');
-  R.push('function qfTestSubmit(){qfResolveApi().then(function(tgt){if(!tgt){alert("未接上提交地址，请确认活动已绑定");return}var fd=new FormData();fd.append("学号","TEST"+Date.now().toString().slice(-6));fd.append("姓名","测试同学");fd.append("班级",QF_CLASS||"测试班");fd.append("按钮","测试提交");fd.append("测试内容","「查看-测试提交」模拟数据 "+new Date().toLocaleTimeString());fetch(tgt,{method:"POST",body:fd,mode:"cors"}).then(function(r){return r.json().catch(function(){return{}}).then(function(j){return{ok:r.ok,j:j}})}).then(function(o){var ok=o.ok||(o.j&&(o.j.ok||o.j.success));alert(ok?"✅ 测试提交成功，请切到数据大屏查看":"❌ 提交失败："+(o.j&&o.j.msg||r.status))}).catch(function(e){alert("网络错误："+e.message)})})}');
-  R.push('function qfInitCustom(){');
-  R.push('if(QF_TEST){var lg0=document.getElementById("qfLogin");if(lg0&&lg0.parentNode)lg0.parentNode.removeChild(lg0);QF_USER={sid:"TEST"+(Date.now()+"").slice(-6),name:"测试同学",cls:QF_CLASS||"测试班"};}');
-  R.push('qfResolveApi();');
-  R.push('qfRoster().then(function(){');
-  R.push('var need=document.querySelectorAll("[data-qf-needlogin]");if(!QF_TEST){need.forEach(function(b){b.disabled=true})}');
+  R.push('function actRoster(){if(!ACT_CLASS)return Promise.resolve(false);return fetch(location.origin+"/api/roster?class="+encodeURIComponent(ACT_CLASS),{cache:"no-store"}).then(function(r){return r.ok?r.json():null}).then(function(j){var a=(j&&j.students)||[];if(!a.length)return false;ACT_ROSTER={c:j.cls||ACT_CLASS,s:a.map(function(x){return [String(x.sid||"").trim(),String(x.name||"").trim()]}).filter(function(x){return x[0]})};ACT_ROSTER.s.forEach(function(p){ACT_MAP[p[0]]=p[1]});return true}).catch(function(){return false})}');
+  R.push('function actShowLogin(){var no=(document.getElementById("actSid")||{}).value;var h=document.getElementById("actLoginHint");if(!no){if(h)h.textContent="";return}if(!ACT_ROSTER){if(h)h.textContent="（未取到花名册，将以你填写的为准）";return}var nm=ACT_MAP[no.trim()];if(nm){if(h){h.style.color="#1D9E75";h.textContent="匹配到："+nm}}else{if(h){h.style.color="#E24B4A";h.textContent="学号不在本班名单"}}}');
+  R.push('function actDoLogin(){var no=(document.getElementById("actSid")||{}).value;no=(no||"").trim();if(!no){var h=document.getElementById("actLoginHint");if(h){h.style.color="#E24B4A";h.textContent="请填写学号"}return}var nm="",cls="";if(ACT_ROSTER){nm=ACT_MAP[no]||"";cls=ACT_ROSTER.c||"";if(!nm){var m=document.getElementById("actLoginMsg");if(m)m.textContent="该学号不在本班名单，请核对。";var h=document.getElementById("actLoginHint");if(h){h.style.color="#E24B4A";h.textContent="学号不在本班名单"}return}}ACT_USER={sid:no,name:nm,cls:cls};var lg=document.getElementById("actLogin");if(lg)lg.style.display="none";document.querySelectorAll("[data-act-needlogin]").forEach(function(b){b.disabled=false})}');
+  R.push('function actGather(c){var fd=new FormData();var els=c.querySelectorAll("input[name],textarea[name],select[name],input[data-f],textarea[data-f],select[data-f]");els.forEach(function(e){var k=e.getAttribute("name")||e.getAttribute("data-f");if(!k)return;if(e.type==="file"){for(var i=0;i<e.files.length;i++)fd.append(k,e.files[i],e.files[i].name)}else if(e.type==="radio"||e.type==="checkbox"){if(e.checked)fd.append(k,e.value)}else{fd.append(k,e.value)}});return fd}');
+  R.push('function actSubmitBlock(btn,container,label){if(!ACT_USER){var s9=container.querySelector("[data-act-status]");if(s9){s9.textContent="请先在上面填写学号登录";s9.className="act-st err"}return}var _fi=(container!==document.body&&container.querySelectorAll)?container.querySelectorAll("input[type=file]"):[];if(_fi&&_fi.length){var _has=false;for(var _i=0;_i<_fi.length;_i++){var _fl=_fi[_i].files;if(_fl){for(var _j=0;_j<_fl.length;_j++){if(_fl[_j]&&_fl[_j].size>0){_has=true}}}}var _allow=(container.getAttribute&&container.getAttribute("data-allow-empty")==="1");if(!_has&&!_allow){var _s0=container.querySelector("[data-act-status]");if(_s0){_s0.textContent="本题要求上传文件，请选择文件后再提交（老师未开启「允许空文件提交」）。";_s0.className="act-st err"}return}}var _ti=container.querySelectorAll?container.querySelectorAll("input,textarea,select"):[];var _hasTextField=false,_filled=false,_fileSel=false;for(var _a=0;_a<_ti.length;_a++){var _e2=_ti[_a],_tp2=(_e2.type||"").toLowerCase();if(_e2.disabled||_tp2==="hidden")continue;if(_e2.id==="actSid"||(_e2.closest&&_e2.closest("#actLogin")))continue;if(_tp2==="file"){if(_e2.files){for(var _b=0;_b<_e2.files.length;_b++){if(_e2.files[_b]&&_e2.files[_b].size>0)_fileSel=true}}continue}_hasTextField=true;if(_tp2==="checkbox"||_tp2==="radio"){if(_e2.checked)_filled=true}else if(String(_e2.value||"").trim()!==""){_filled=true}}if(_hasTextField&&!_filled&&!_fileSel){var _sc2=container.querySelector("[data-act-status]");if(_sc2){_sc2.textContent="请先填写内容再提交";_sc2.className="act-st err"}return}btn.disabled=true;var st=container.querySelector("[data-act-status]");if(st){st.textContent="准备提交…";st.className="act-st"}actResolveApi().then(function(tgt){if(!tgt){if(st){st.textContent="这一页还没接上提交地址，请让老师检查活动绑定";st.className="act-st err"}btn.disabled=false;return}var fd=actGather(container);if(WB_SUBMIT){fd.append("按钮",label)}else{fd.append("学号",ACT_USER.sid);fd.append("姓名",ACT_USER.name);fd.append("班级",ACT_USER.cls);fd.append("按钮",label)}if(st){st.textContent="提交中…";st.className="act-st"}fetch(tgt,{method:"POST",body:fd,mode:"cors"}).then(function(r){return r.json().catch(function(){return{}}).then(function(j){return {ok:r.ok,j:j}})}).then(function(o){var ok=o.ok||(o.j&&(o.j.ok||o.j.success));if(st){st.textContent=ok?"提交成功":"提交失败";st.className="act-st "+(ok?"ok":"err")}btn.disabled=false}).catch(function(e){if(st){st.textContent="网络错误：连不上提交服务，请确认与老师在同一局域网";st.className="act-st err"}btn.disabled=false})})}');
+  R.push('function actTestSubmit(){actResolveApi().then(function(tgt){if(!tgt){alert("未接上提交地址，请确认活动已绑定");return}var fd=new FormData();fd.append("学号","TEST"+Date.now().toString().slice(-6));fd.append("姓名","测试同学");fd.append("班级",ACT_CLASS||"测试班");fd.append("按钮","测试提交");fd.append("测试内容","「查看-测试提交」模拟数据 "+new Date().toLocaleTimeString());fetch(tgt,{method:"POST",body:fd,mode:"cors"}).then(function(r){return r.json().catch(function(){return{}}).then(function(j){return{ok:r.ok,j:j}})}).then(function(o){var ok=o.ok||(o.j&&(o.j.ok||o.j.success));alert(ok?"✅ 测试提交成功，请切到数据大屏查看":"❌ 提交失败："+(o.j&&o.j.msg||r.status))}).catch(function(e){alert("网络错误："+e.message)})})}');
+  R.push('function actInitCustom(){');
+  R.push('if(ACT_TEST){var lg0=document.getElementById("actLogin");if(lg0&&lg0.parentNode)lg0.parentNode.removeChild(lg0);ACT_USER={sid:"TEST"+(Date.now()+"").slice(-6),name:"测试同学",cls:ACT_CLASS||"测试班"};}');
+  R.push('actResolveApi();');
+  R.push('actRoster().then(function(){');
+  R.push('var need=document.querySelectorAll("[data-act-needlogin]");if(!ACT_TEST){need.forEach(function(b){b.disabled=true})}');
   R.push('var blocks=document.querySelectorAll(".q-block");');
   R.push('var _customBtns=[];for(var _ci=0;_ci<blocks.length;_ci++){var _cl=(blocks[_ci].getAttribute("data-submit-label")||"").trim();if(_cl)_customBtns.push([blocks[_ci],_cl])}');
-  R.push('if(_customBtns.length){_customBtns.forEach(function(_p){var b=_p[0],lbl=_p[1];var foot=document.createElement("div");foot.style.marginTop="12px";var btn=document.createElement("button");btn.className="qf-submit-btn";btn.setAttribute("data-qf-needlogin","");btn.textContent=lbl;btn.onclick=function(){qfSubmitBlock(btn,b,lbl)};var st=document.createElement("span");st.setAttribute("data-qf-status","");st.className="qf-st";foot.appendChild(btn);foot.appendChild(st);b.appendChild(foot)})}');
-  R.push('else if(BLOCKS_PER_Q&&blocks.length){blocks.forEach(function(b,idx){var lbl=b.getAttribute("data-btn")||((b.querySelector("h2,h3,h4")||{}).textContent)||("第"+(idx+1)+"题");var foot=document.createElement("div");foot.style.marginTop="12px";var btn=document.createElement("button");btn.className="qf-submit-btn";btn.setAttribute("data-qf-needlogin","");btn.textContent="提交："+lbl;btn.onclick=function(){qfSubmitBlock(btn,b,lbl)};var st=document.createElement("span");st.setAttribute("data-qf-status","");st.className="qf-st";foot.appendChild(btn);foot.appendChild(st);b.appendChild(foot)})}');
-  R.push('else{var all=document.createElement("div");all.style.marginTop="16px";var ab=document.createElement("button");ab.className="qf-submit-btn";ab.setAttribute("data-qf-needlogin","");ab.textContent="提交整个页面";ab.onclick=function(){qfSubmitBlock(ab,document.body,"整页提交")};var ast=document.createElement("span");ast.setAttribute("data-qf-status","");ast.className="qf-st";all.appendChild(ab);all.appendChild(ast);document.body.appendChild(all)}');
-  R.push('if(QF_TEST){var tb=document.createElement("button");tb.className="qf-submit-btn";tb.style.cssText="position:fixed;right:16px;bottom:16px;z-index:9999;box-shadow:0 6px 20px rgba(0,0,0,.25)";tb.textContent="🧪 模拟一条测试提交";tb.onclick=qfTestSubmit;document.body.appendChild(tb);}');
-  R.push('function qfExtUrl(u){u=String(u||"").trim();if(!u)return "";if(/^https?:\\/\\//i.test(u))return u;if(u.indexOf("//")===0)return "https:"+u;if(u.charAt(0)==="/")return location.origin+u;return "https://"+u}');
-  R.push('document.querySelectorAll("[data-ext-url]").forEach(function(el){var url=qfExtUrl(el.getAttribute("data-ext-url"));if(!url)return;var b=document.createElement("a");b.href=url;b.target="_blank";b.rel="noopener noreferrer";b.textContent="点击跳转外部链接";b.style.cssText="display:inline-block;margin-top:10px;background:#0F6E56;color:#fff;padding:9px 16px;border-radius:10px;text-decoration:none;font-size:14px";b.onclick=function(ev){try{var w=window.open(url,"_blank");if(w){ev.preventDefault()}}catch(e){}return true};el.appendChild(b)});');
-  R.push('var lg=document.getElementById("qfLogin");if(lg){var s=document.getElementById("qfSid");if(s){s.addEventListener("input",qfShowLogin);s.focus()}}');
+  R.push('if(_customBtns.length){_customBtns.forEach(function(_p){var b=_p[0],lbl=_p[1];var foot=document.createElement("div");foot.style.marginTop="12px";var btn=document.createElement("button");btn.className="act-submit-btn";btn.setAttribute("data-act-needlogin","");btn.textContent=lbl;btn.onclick=function(){actSubmitBlock(btn,b,lbl)};var st=document.createElement("span");st.setAttribute("data-act-status","");st.className="act-st";foot.appendChild(btn);foot.appendChild(st);b.appendChild(foot)})}');
+  R.push('else if(BLOCKS_PER_Q&&blocks.length){blocks.forEach(function(b,idx){var lbl=b.getAttribute("data-btn")||((b.querySelector("h2,h3,h4")||{}).textContent)||("第"+(idx+1)+"题");var foot=document.createElement("div");foot.style.marginTop="12px";var btn=document.createElement("button");btn.className="act-submit-btn";btn.setAttribute("data-act-needlogin","");btn.textContent="提交："+lbl;btn.onclick=function(){actSubmitBlock(btn,b,lbl)};var st=document.createElement("span");st.setAttribute("data-act-status","");st.className="act-st";foot.appendChild(btn);foot.appendChild(st);b.appendChild(foot)})}');
+  R.push('else{var all=document.createElement("div");all.style.marginTop="16px";var ab=document.createElement("button");ab.className="act-submit-btn";ab.setAttribute("data-act-needlogin","");ab.textContent="提交整个页面";ab.onclick=function(){actSubmitBlock(ab,document.body,"整页提交")};var ast=document.createElement("span");ast.setAttribute("data-act-status","");ast.className="act-st";all.appendChild(ab);all.appendChild(ast);document.body.appendChild(all)}');
+  R.push('if(ACT_TEST){var tb=document.createElement("button");tb.className="act-submit-btn";tb.style.cssText="position:fixed;right:16px;bottom:16px;z-index:9999;box-shadow:0 6px 20px rgba(0,0,0,.25)";tb.textContent="🧪 模拟一条测试提交";tb.onclick=actTestSubmit;document.body.appendChild(tb);}');
+  R.push('function actExtUrl(u){u=String(u||"").trim();if(!u)return "";if(/^https?:\\/\\//i.test(u))return u;if(u.indexOf("//")===0)return "https:"+u;if(u.charAt(0)==="/")return location.origin+u;return "https://"+u}');
+  R.push('document.querySelectorAll("[data-ext-url]").forEach(function(el){var url=actExtUrl(el.getAttribute("data-ext-url"));if(!url)return;var b=document.createElement("a");b.href=url;b.target="_blank";b.rel="noopener noreferrer";b.textContent="点击跳转外部链接";b.style.cssText="display:inline-block;margin-top:10px;background:#0F6E56;color:#fff;padding:9px 16px;border-radius:10px;text-decoration:none;font-size:14px";b.onclick=function(ev){try{var w=window.open(url,"_blank");if(w){ev.preventDefault()}}catch(e){}return true};el.appendChild(b)});');
+  R.push('var lg=document.getElementById("actLogin");if(lg){var s=document.getElementById("actSid");if(s){s.addEventListener("input",actShowLogin);s.focus()}}');
   R.push('});');
   R.push('}');
-  R.push('window.addEventListener("DOMContentLoaded",qfInitCustom);');
+  R.push('window.addEventListener("DOMContentLoaded",actInitCustom);');
   /* 带票进来 = 学生身份已经确定：立刻摘掉登录浮层，别让他再输一遍学号。
      这段脚本在 </body> 前执行，浮层元素此时已经解析出来了。 */
-  R.push('if(WB_SID){QF_USER={sid:WB_SID,name:WB_NAME,cls:WB_CLS};'
-    + 'var lg0=document.getElementById("qfLogin");if(lg0&&lg0.parentNode){lg0.parentNode.removeChild(lg0)}'
-    + 'var hi=document.getElementById("qfHi");'
+  R.push('if(WB_SID){ACT_USER={sid:WB_SID,name:WB_NAME,cls:WB_CLS};'
+    + 'var lg0=document.getElementById("actLogin");if(lg0&&lg0.parentNode){lg0.parentNode.removeChild(lg0)}'
+    + 'var hi=document.getElementById("actHi");'
     + 'if(hi){hi.textContent="已识别："+(WB_CLS?WB_CLS+" · ":"")+WB_NAME+"（"+WB_SID+"）"}else{'
-    + 'var d=document.createElement("div");d.id="qfHi";'
+    + 'var d=document.createElement("div");d.id="actHi";'
     + 'd.textContent="已识别："+(WB_CLS?WB_CLS+" · ":"")+WB_NAME+"（"+WB_SID+"）";'
     + 'd.style.cssText="font-size:13px;color:#0F6E56;font-weight:600;margin:10px 0";'
     + 'document.body.insertBefore(d,document.body.firstChild)}}');
@@ -16831,79 +16754,79 @@ function qfBuildCustomPage(html, opts) {
 }
 
 // 刷新「④ 自定义上传」的学生链接（活动/班级变化或生成后调用）
-async function qfUpdateCustomLink(cleared) {
-  const box = document.getElementById('qfCustLinkBox');
-  const code = document.getElementById('qfCustLink');
-  const hint = document.getElementById('qfCustHint');
-  const btn = document.getElementById('qfCustCopy');
+async function actUpdateCustomLink(cleared) {
+  const box = document.getElementById('actCustLinkBox');
+  const code = document.getElementById('actCustLink');
+  const hint = document.getElementById('actCustHint');
+  const btn = document.getElementById('actCustCopy');
   if (!box) return;
-  const t = qfTaskList.find(x => x.task_id === qfActiveId);
+  const t = actTaskList.find(x => x.task_id === actActiveId);
   const cls = actCurClass();
-  if (!t || cls == null) { box.style.display = 'none'; qfCustLinkVal = ''; return; }
-  const api = qfLanApi(t.api);
-  const base = qfStudentBase();
+  if (!t || cls == null) { box.style.display = 'none'; actCustLinkVal = ''; return; }
+  const api = actLanApi(t.api);
+  const base = actStudentBase();
   const clsObj = (dbT('classes') || []).find(c => Number(c.id) === Number(cls));
   const clsName = clsObj ? clsObj.name : '';
   const link = base + '/submit/custom.html?api=' + encodeURIComponent(api)
-    + '&class=' + encodeURIComponent(clsName) + '&task=' + encodeURIComponent(qfActiveId);
-  qfCustLinkVal = link;
+    + '&class=' + encodeURIComponent(clsName) + '&task=' + encodeURIComponent(actActiveId);
+  actCustLinkVal = link;
   if (code) { code.textContent = base + '/submit/custom.html?api=' + api; code._link = link; }
   if (btn) btn.disabled = false;
   box.style.display = '';
-  if (hint) hint.innerHTML = '✓ 自定义页已绑定活动 <b>' + esc(t.title || qfActiveId) + '</b> 与班级 <b>' + esc(clsName) + '</b>。学生打开后先登录学号，按题目提交，每题数据会实时出现在数据大屏。';
+  if (hint) hint.innerHTML = '✓ 自定义页已绑定活动 <b>' + esc(t.title || actActiveId) + '</b> 与班级 <b>' + esc(clsName) + '</b>。学生打开后先登录学号，按题目提交，每题数据会实时出现在数据大屏。';
 }
-function qfCopyCustomLink() {
-  const code = document.getElementById('qfCustLink');
-  const link = (code && code._link) || qfCustLinkVal;
+function actCopyCustomLink() {
+  const code = document.getElementById('actCustLink');
+  const link = (code && code._link) || actCustLinkVal;
   if (!link) { toast('请先生成页面'); return; }
   copyText(link, '学生链接已复制');
 }
 
 // 生成页面（仅生成并暂存，不部署；部署由「查看」「下发」负责）
-var qfGeneratedPage = null;
-async function qfCustomGenerate() {
-  const t = qfTaskList.find(x => x.task_id === qfActiveId);
+var actGeneratedPage = null;
+async function actCustomGenerate() {
+  const t = actTaskList.find(x => x.task_id === actActiveId);
   if (!t) { toast('请先在①选择活动'); return; }
-  const htmlEl = document.getElementById('qfCustHtml');
+  const htmlEl = document.getElementById('actCustHtml');
   const raw = (htmlEl && htmlEl.value || '').trim();
   if (!raw) { toast('请先上传网页文件或点「用默认模板」'); return; }
-  const perQ = document.getElementById('qfCustPerQ') ? document.getElementById('qfCustPerQ').checked : true;
-  qfCustStatus('正在注入登录 / 提交逻辑…');
-  qfGeneratedPage = qfBuildCustomPage(raw, { perQ: perQ });
-  qfRenderFileCfg();
-  qfCustStatus('✓ 已生成页面（' + (perQ ? '每题单独提交' : '整页一个提交') + '）。点「查看」预览，确认后点「下发」发给学生。', 'ok');
+  const perQ = document.getElementById('actCustPerQ') ? document.getElementById('actCustPerQ').checked : true;
+  actCustStatus('正在注入登录 / 提交逻辑…');
+  actGeneratedPage = actBuildCustomPage(raw, { perQ: perQ });
+  actRenderFileCfg();
+  actCustStatus('✓ 已生成页面（' + (perQ ? '每题单独提交' : '整页一个提交') + '）。点「查看」预览，确认后点「下发」发给学生。', 'ok');
 }
 
 // 查看：把生成的页面临时部署后，用真实地址打开预览（带「测试提交」按钮，可验证与数据大屏同步）
-async function qfCustomView() {
-  const t = qfTaskList.find(x => x.task_id === qfActiveId);
+async function actCustomView() {
+  const t = actTaskList.find(x => x.task_id === actActiveId);
   if (!t) { toast('请先在①选择活动'); return; }
-  let page = qfGeneratedPage;
+  let page = actGeneratedPage;
   if (!page) {
-    const htmlEl = document.getElementById('qfCustHtml');
+    const htmlEl = document.getElementById('actCustHtml');
     const raw = (htmlEl && htmlEl.value || '').trim();
     if (!raw) { toast('请先点「用默认模板」或上传网页文件，再点「生成页面」'); return; }
-    const perQ = document.getElementById('qfCustPerQ') ? document.getElementById('qfCustPerQ').checked : true;
-    page = qfBuildCustomPage(raw, { perQ: perQ });
-    qfGeneratedPage = page;
+    const perQ = document.getElementById('actCustPerQ') ? document.getElementById('actCustPerQ').checked : true;
+    page = actBuildCustomPage(raw, { perQ: perQ });
+    actGeneratedPage = page;
   }
-  qfCustStatus('正在部署预览页…');
+  actCustStatus('正在部署预览页…');
   try {
-    const r = await fetch('/api/custom', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task: qfActiveId, html: page }) });
+    const r = await fetch('/api/custom', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task: actActiveId, html: page }) });
     const j = await r.json().catch(() => ({}));
-    if (!r.ok || !j.ok) { qfCustStatus('部署失败：' + (j.msg || r.status), 'err'); return; }
-    qfCustStatus('✓ 已部署预览页，正在打开（含「🧪 模拟测试提交」按钮）…', 'ok');
-    qfUpdateCustomLink();
+    if (!r.ok || !j.ok) { actCustStatus('部署失败：' + (j.msg || r.status), 'err'); return; }
+    actCustStatus('✓ 已部署预览页，正在打开（含「🧪 模拟测试提交」按钮）…', 'ok');
+    actUpdateCustomLink();
     const clsObj = (dbT('classes') || []).find(c => Number(c.id) === Number(actCurClass()));
     const clsName = clsObj ? clsObj.name : '';
-    const link = qfStudentBase() + '/submit/custom.html?task=' + encodeURIComponent(qfActiveId)
+    const link = actStudentBase() + '/submit/custom.html?task=' + encodeURIComponent(actActiveId)
       + '&class=' + encodeURIComponent(clsName) + '&test=1';
     window.open(link, '_blank');
-  } catch (e) { qfCustStatus('✗ ' + e.message, 'err'); }
+  } catch (e) { actCustStatus('✗ ' + e.message, 'err'); }
 }
 
 // 大屏：每个提交按钮一个数据显示窗口（按「按钮」字段分组）
-function qfButtonWindowsHtml(subs) {
+function actButtonWindowsHtml(subs) {
   // 只把「逐题提交」的按钮开窗口；整页/测试提交不算逐题，统一走按姓名去重的总表
   const withBtn = (subs || []).filter(s => {
     const b = String(s['按钮'] || '').trim();
@@ -16920,10 +16843,10 @@ function qfButtonWindowsHtml(subs) {
         .map(k => esc(k) + '：' + esc(String(s[k]))).join('　');
       const sid = s._submission_id != null ? s._submission_id : '';
       return '<div class="act-rst"><i class="ord">' + (i + 1) + '</i>'
-        + esc(qfRosterName(s) || '—') + '<span class="no">' + esc(qfRosterNo(s)) + '</span>'
-        + '<span class="ts">' + esc((qfRosterTs(s) || '').slice(5) || '—') + '</span>'
+        + esc(actRosterName(s) || '—') + '<span class="no">' + esc(actRosterNo(s)) + '</span>'
+        + '<span class="ts">' + esc((actRosterTs(s) || '').slice(5) || '—') + '</span>'
         + (kv ? '<div style="flex-basis:100%;font-size:12px;color:var(--text-secondary);line-height:1.5">' + kv + '</div>' : '')
-        + (sid !== '' ? '<button class="qf-del-btn act-del" onclick="qfDelSub(\'' + sid + '\')">删除</button>' : '')
+        + (sid !== '' ? '<button class="act-del-btn act-del" onclick="actDelSub(\'' + sid + '\')">删除</button>' : '')
         + '</div>';
     }).join('');
     return '<div class="act-sec"><h3>' + esc(b) + ' <span style="font-weight:400;color:var(--text-secondary);font-size:12px">· 已提交 ' + list.length + ' 份</span></h3>'
@@ -16933,14 +16856,14 @@ function qfButtonWindowsHtml(subs) {
 }
 
 /* 数据大屏 / 学生作品 两个页签的切换（提交收集已按需求移除 2026-11-02） */
-function qfSwitchTab(which) {
+function actSwitchTab(which) {
   const panes = {
-    dash: document.getElementById('qfPaneDash'),
-    works: document.getElementById('qfPaneWorks')
+    dash: document.getElementById('actPaneDash'),
+    works: document.getElementById('actPaneWorks')
   };
   const tabs = {
-    dash: document.getElementById('qfTabDash'),
-    works: document.getElementById('qfTabWorks')
+    dash: document.getElementById('actTabDash'),
+    works: document.getElementById('actTabWorks')
   };
   if (!panes[which]) which = 'dash';
   Object.keys(panes).forEach(k => {
@@ -16949,71 +16872,45 @@ function qfSwitchTab(which) {
     const t = tabs[k];
     if (t) t.classList.toggle('active', k === which);
   });
-  if (which === 'dash') qfRenderDash();          // 切到可见后再渲染，画布才能正常绘制
+  if (which === 'dash') actRenderDash();          // 切到可见后再渲染，画布才能正常绘制
   if (which === 'works') cwWorksEnter();         // 作品页签：按需拉一次数据再画
 }
-window.qfSwitchTab = qfSwitchTab;
+window.actSwitchTab = actSwitchTab;
 
-async function qfInit() {
-  /* 先问服务端用的是哪个后端：内置（默认）还是回退到 QuickForm。
-     它决定 qfApiBase() 走同源 /qf 还是外部地址。 */
-  try {
-    const st = await fetch('/api/v2/state', { cache: 'no-store' }).then(r => r.json());
-    if (st && st.activity_backend) window.WB_ACT_BACKEND = st.activity_backend;
-  } catch (e) {}
-  await qfSetApiFromConfig();
-  const ap = document.getElementById('qfApiText'); if (ap) ap.textContent = qfAbsBase();
-  qfPing();
-  qfLoadNet(true);          // 顺手探一次局域网地址，供学生链接使用
+async function actInit() {
+  const ap = document.getElementById('actApiText'); if (ap) ap.textContent = actAbsBase();
+  actPing();
+  actLoadNet(true);          // 顺手探一次局域网地址，供学生链接使用
   renderActClassInfo();
-  await qfLoadTaskList();
-  qfRenderFileCfg();
+  await actLoadTaskList();
+  actRenderFileCfg();
 }
 
-async function qfSetApiFromConfig() {
-  try {
-    const r = await fetch('quickform.config.json', { cache: 'no-store' });
-    if (r.ok) {
-      const j = await r.json();
-      if (j && j.apiBase && !localStorage.getItem(qfApiKey())) qfSetApi(j.apiBase);
-    }
-  } catch (e) {}
-}
-window.qfSetApiFromConfig = qfSetApiFromConfig;
-
-async function qfPing() {
-  const dot = document.getElementById('qfDot'), txt = document.getElementById('qfStatusText');
+async function actPing() {
+  const dot = document.getElementById('actDot'), txt = document.getElementById('actStatusText');
   if (!dot) return;
-  const builtin = window.WB_ACT_BACKEND !== 'qf';
-  dot.className = 'qf-dot'; txt.textContent = '检测中…';
+  dot.className = 'act-dot'; txt.textContent = '检测中…';
   try {
-    const r = await fetch(qfApiBase() + '/api/tasks', { cache: 'no-store' });
+    const r = await fetch(actApiBase() + '/tasks', { cache: 'no-store' });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const j = await r.json().catch(() => ({}));
     if (!j || (!j.tasks && !j.success)) throw new Error('返回格式不对');
     dot.classList.add('on');
-    txt.textContent = builtin ? '活动服务已就绪（工作台内置）' : '活动数据服务已连接';
+    txt.textContent = '活动服务已就绪（工作台内置）';
   } catch (e) {
     dot.classList.add('off');
-    txt.textContent = builtin ? '活动服务异常，请刷新页面' : '未连接到活动数据服务';
+    txt.textContent = '活动服务异常，请刷新页面';
   }
 }
-window.qfPing = qfPing;
+window.actPing = actPing;
 
 
-async function qfEditApi() {
-  const v = await uiPrompt('活动数据服务地址（API Base）', { title: '活动数据服务', value: qfApiBase(), placeholder: 'http://…' });
-  if (v != null) { qfSetApi(v); const ap = document.getElementById('qfApiText'); if (ap) ap.textContent = qfApiBase(); qfPing(); qfCustomIframeTask = null; qfRenderDash(); }
-}
-window.qfEditApi = qfEditApi;
-
-
-function qfParse(s) { if (s && typeof s === 'object') return s; try { return JSON.parse(s); } catch (e) { return null; } }
+function actParse(s) { if (s && typeof s === 'object') return s; try { return JSON.parse(s); } catch (e) { return null; } }
 
 /* 字段归一化：学生端 / 模拟脚本提交时常用英文或别名（sid/name/cls），
    而大屏各展示逻辑统一读中文标准名（学号/姓名/班级/作品标题/作品简介），
    这里在取到数据后统一补齐，避免「学号/姓名」列取不到值显示「—」。 */
-function qfNormSub(s) {
+function actNormSub(s) {
   if (!s || typeof s !== 'object') return s;
   const out = {};
   const first = (keys, dst) => { for (const k of keys) { if (s[k] != null && String(s[k]).trim() !== '') { out[dst] = s[k]; return; } } };
@@ -17030,7 +16927,7 @@ function qfNormSub(s) {
    2026-10-30 端到端走查：逐题提交模板里同一学生每题各交一份，「按钮」字段不同，
    把它并入标识 —— 同学生同题的重复提交仍去重留最新，不同题各自保留，
    这样大屏逐题窗口（每按钮一个）才不会因为按学号去重而丢掉先交的题。 */
-function qfSubId(s) {
+function actSubId(s) {
   const no = String(s['学号'] || s['student_no'] || s['sid'] || '').trim();
   const nm = String(s['姓名'] || s['name'] || '').trim();
   const btn = String(s['按钮'] || '').trim();
@@ -17041,10 +16938,10 @@ function qfSubId(s) {
   return base ? (perQ ? base + '#' + btn : base) : '';
 }
 /* 先按提交标识去重（保留提交时间更晚的一条），再按提交时间升序（提交越晚排序越靠后） */
-function qfDedupAsc(rows) {
+function actDedupAsc(rows) {
   const byId = new Map();
   (rows || []).forEach((r, i) => {
-    const id = qfSubId(r);
+    const id = actSubId(r);
     const key = id || ('_' + i);
     const t = String(r.submitted_at || '');
     const prev = byId.get(key);
@@ -17057,85 +16954,85 @@ function qfDedupAsc(rows) {
   });
   return kept;
 }
-function qfAttachments(s) { const a = s && s.attachment; if (!a) return []; if (typeof a === 'string') return [a]; if (Array.isArray(a)) return a; return []; }
-/* 附件地址补全：QuickForm 官方返回相对路径才需要拼服务地址，绝对 URL 原样使用 */
-function qfAttUrl(a) { a = String(a || ''); return /^https?:\/\//i.test(a) ? a : (qfApiBase() + a); }
+function actAttachments(s) { const a = s && s.attachment; if (!a) return []; if (typeof a === 'string') return [a]; if (Array.isArray(a)) return a; return []; }
+/* 附件地址补全：相对路径拼上接口前缀，绝对 URL 原样使用 */
+function actAttUrl(a) { a = String(a || ''); return /^https?:\/\//i.test(a) ? a : (actApiBase() + a); }
 
-async function qfRenderDash() {
+async function actRenderDash() {
   // 大屏会整块重建 innerHTML（连"加载中"占位也会先写一次），这里在函数入口就记住
   // 搜索框的焦点与光标位置，渲染完成后还原 → 轮询刷新不会打断正在输入的搜索词
   const _ae = document.activeElement;
-  const _keepSearch = !!(_ae && _ae.id === 'qfRosterSearch');
+  const _keepSearch = !!(_ae && _ae.id === 'actRosterSearch');
   const _keepPos = _keepSearch ? _ae.selectionStart : null;
-  const box = document.getElementById('qfPaneDash'); if (!box) return;
-  if (!qfActiveId) { box.removeAttribute('data-qf-shell-task'); box.innerHTML = '<div class="qf-muted">请先在上方绑定一个活动，再查看数据大屏。</div>'; qfLastCount = -1; qfStartPoll(); return; }
+  const box = document.getElementById('actPaneDash'); if (!box) return;
+  if (!actActiveId) { box.removeAttribute('data-act-shell-task'); box.innerHTML = '<div class="act-muted">请先在上方绑定一个活动，再查看数据大屏。</div>'; actLastCount = -1; actStartPoll(); return; }
   const cls = actCurClass();
-  if (cls == null) { box.removeAttribute('data-qf-shell-task'); box.innerHTML = '<div class="qf-muted">请先在上方选择班级，再查看数据大屏。</div>'; qfLastCount = -1; qfStartPoll(); return; }
+  if (cls == null) { box.removeAttribute('data-act-shell-task'); box.innerHTML = '<div class="act-muted">请先在上方选择班级，再查看数据大屏。</div>'; actLastCount = -1; actStartPoll(); return; }
   const clsStus = actClassStudents(cls);
-  if (!clsStus.length) { box.removeAttribute('data-qf-shell-task'); box.innerHTML = '<div class="qf-muted">该班级暂无学生，无法统计。请先在「班级」中添加学生。</div>'; qfLastCount = -1; qfStartPoll(); return; }
+  if (!clsStus.length) { box.removeAttribute('data-act-shell-task'); box.innerHTML = '<div class="act-muted">该班级暂无学生，无法统计。请先在「班级」中添加学生。</div>'; actLastCount = -1; actStartPoll(); return; }
   // 仅当「活动任务」发生变化时重建外壳；否则只刷新默认大屏，保留自定义大屏 iframe（避免切页/轮询丢失状态）
-  if (box.getAttribute('data-qf-shell-task') !== String(qfActiveId)) {
-    box.innerHTML = '<div id="qfCourseBar"></div>'
-      + '<div id="qfDefaultDash"></div>'
-      + '<div class="qf-cust-bar" id="qfCustomToolbar"></div>'
-      + '<div id="qfCustomDash" style="display:none;margin-top:12px"></div>';
-    box.setAttribute('data-qf-shell-task', String(qfActiveId));
-    qfCustomIframeTask = null;   // 任务变了，自定义大屏需按新任务重建
+  if (box.getAttribute('data-act-shell-task') !== String(actActiveId)) {
+    box.innerHTML = '<div id="actCourseBar"></div>'
+      + '<div id="actDefaultDash"></div>'
+      + '<div class="act-cust-bar" id="actCustomToolbar"></div>'
+      + '<div id="actCustomDash" style="display:none;margin-top:12px"></div>';
+    box.setAttribute('data-act-shell-task', String(actActiveId));
+    actCustomIframeTask = null;   // 任务变了，自定义大屏需按新任务重建
   }
-  const dd = box.querySelector('#qfDefaultDash'); if (!dd) return;
-  dd.innerHTML = '<div class="qf-muted">加载数据大屏中…</div>';
-  qfRenderCustomToolbar();
+  const dd = box.querySelector('#actDefaultDash'); if (!dd) return;
+  dd.innerHTML = '<div class="act-muted">加载数据大屏中…</div>';
+  actRenderCustomToolbar();
   let j;
   try {
-    const r = await fetch('/api/v2/qf-data?task=' + encodeURIComponent(qfActiveId), { cache: 'no-store' });
+    const r = await fetch('/api/v2/act-data?task=' + encodeURIComponent(actActiveId), { cache: 'no-store' });
     if (!r.ok) throw new Error('读取失败（' + r.status + '）');
     j = await r.json();
-  } catch (e) { dd.innerHTML = '<div class="qf-muted" style="color:var(--status-error)">无法读取数据：' + esc(e.message || e) + '</div>'; return; }
+  } catch (e) { dd.innerHTML = '<div class="act-muted" style="color:var(--status-error)">无法读取数据：' + esc(e.message || e) + '</div>'; return; }
   // 记录总数用于轮询比对（新提交时自动刷新）
-  qfLastCount = (j && (j.total_submissions != null)) ? j.total_submissions : (j.submissions || []).length;
-  const raw = (j.submissions || []).map(qfParse).filter(Boolean).map(qfNormSub);
+  actLastCount = (j && (j.total_submissions != null)) ? j.total_submissions : (j.submissions || []).length;
+  const raw = (j.submissions || []).map(actParse).filter(Boolean).map(actNormSub);
   // 先按提交标识去重、再按提交时间升序（提交越晚排序越靠后）
-  const subs = qfDedupAsc(raw);
+  const subs = actDedupAsc(raw);
   const matched = subs.filter(s => actSubMatchClass(s, clsStus));
-  qfLastMatched = matched;   // 供名单的搜索/排序/导出复用（轮询刷新后仍可用）
-  dd.innerHTML = qfDashboardHtml(j, subs, matched, clsStus, cls);
+  actLastMatched = matched;   // 供名单的搜索/排序/导出复用（轮询刷新后仍可用）
+  dd.innerHTML = actDashboardHtml(j, subs, matched, clsStus, cls);
   if (_keepSearch) {         // 还原搜索框焦点与光标，避免轮询刷新打断输入
-    const el = document.getElementById('qfRosterSearch');
+    const el = document.getElementById('actRosterSearch');
     if (el) { try { el.focus(); if (_keepPos != null) el.setSelectionRange(_keepPos, _keepPos); } catch (e) {} }
   }
-  qfDrawCharts(j, matched);
+  actDrawCharts(j, matched);
   cwRenderCourseBar();       // 课程归属条（静默失败，不影响大屏本身）
   cwPaintRecent(matched);    // 大屏里的「最近作品」小条
   if (cwWorksVisible()) cwPaintWorks(matched);   // 作品页签开着就一起刷新
   cwArchiveTick();           // 匹配了课程就增量归档（节流，不打扰课堂）
-  qfStartPoll();
+  actStartPoll();
 }
 
 // ---- 自动轮询：新提交到达时刷新大屏（用轻量 /count 接口比对，避免频繁拉全量）----
-let qfPollTimer = null;
-let qfLastCount = -1;
+let actPollTimer = null;
+let actLastCount = -1;
 /* 「本活动全部提交」折叠窗的展开状态：删一条记录会整块重绘，靠它保持展开不自动缩回 */
-let qfAllSubsOpen = false;
-function qfAllSubsToggle(v) { qfAllSubsOpen = !!v; }
-window.qfAllSubsToggle = qfAllSubsToggle;
-async function qfPollCount() {
-  if (!qfActiveId) return;
+let actAllSubsOpen = false;
+function actAllSubsToggle(v) { actAllSubsOpen = !!v; }
+window.actAllSubsToggle = actAllSubsToggle;
+async function actPollCount() {
+  if (!actActiveId) return;
   try {
-    const r = await fetch(qfApiBase() + '/api/' + encodeURIComponent(qfActiveId) + '/count', { mode: 'cors' });
+    const r = await fetch(actApiBase() + '/' + encodeURIComponent(actActiveId) + '/count', { mode: 'cors' });
     if (!r.ok) return;
     const j = await r.json();
     const n = (j && j.total_submissions) || 0;
-    if (qfLastCount >= 0 && n !== qfLastCount) { qfLastCount = n; qfRenderDash(); }
-    else qfLastCount = n;
+    if (actLastCount >= 0 && n !== actLastCount) { actLastCount = n; actRenderDash(); }
+    else actLastCount = n;
   } catch (e) {}
 }
-function qfStartPoll() {
-  if (qfPollTimer) clearInterval(qfPollTimer);
-  qfPollTimer = setInterval(qfPollCount, 5000);
+function actStartPoll() {
+  if (actPollTimer) clearInterval(actPollTimer);
+  actPollTimer = setInterval(actPollCount, 5000);
 }
-window.qfRenderDash = qfRenderDash;
+window.actRenderDash = actRenderDash;
 
-function qfDashboardHtml(j, subs, matched, clsStus, cls) {
+function actDashboardHtml(j, subs, matched, clsStus, cls) {
   const clsTotal = clsStus.length;
   // 已提交按「去重后的学号」统计，避免同一学生多次提交导致提交率超过 100%
   const subKeys = new Set();
@@ -17145,13 +17042,13 @@ function qfDashboardHtml(j, subs, matched, clsStus, cls) {
   const rate = clsTotal ? Math.min(100, Math.round(submitted / clsTotal * 100)) : 0;
   const today = new Date().toISOString().slice(0, 10);
   const todayN = matched.filter(s => (s.submitted_at || '').slice(0, 10) === today).length;
-  const attN = matched.filter(s => qfAttachments(s).length).length;
+  const attN = matched.filter(s => actAttachments(s).length).length;
   // 提交顺序：matched 已是「去重 + 提交时间升序」，直接复用（提交越晚排序越靠后）
   const ordered = matched;
   const matchedKeys = new Set(matched.map(s => { const no = String(s['学号']||s['student_no']||'').trim(); const nm = String(s['姓名']||s['name']||'').trim(); return no || nm; }));
   const missing = clsStus.filter(stu => { const sno = String(stu.student_no||'').trim(); const snm = String(stu.name||'').trim(); return !matchedKeys.has(sno) && !matchedKeys.has(snm); });
-  const rv = qfRosterRows(ordered);
-  const rosterHtml = qfRosterChipsHtml(rv);
+  const rv = actRosterRows(ordered);
+  const rosterHtml = actRosterChipsHtml(rv);
   const clsObj = (dbT('classes')||[]).find(c => Number(c.id) === Number(cls));
   const clsName = clsObj ? clsObj.name : cls;
   const missHtml = missing.length
@@ -17159,10 +17056,10 @@ function qfDashboardHtml(j, subs, matched, clsStus, cls) {
     : '<div class="act-miss"><div class="act-miss-t" style="color:var(--status-success,#1D9E75)">全班已交齐 ✅</div></div>';
   return ''
     + '<div class="act-dash-hd"><div class="hd-bar"></div><div><div class="hd-t">活动数据大屏</div>'
-    + '<div class="hd-s">' + esc(j.task_title || qfActiveId) + '　·　当前班级：<b>' + esc(String(clsName)) + '</b>　·　数据按本班匹配</div></div>'
-  + '<div class="hd-r"><span class="qf-dot ' + (submitted ? 'on' : 'off') + '"></span><span class="qf-muted">' + (submitted ? '实时数据' : '暂无提交') + '</span>'
-  + '<button class="btn btn-ghost btn-sm" onclick="qfRenderDash()">刷新</button>'
-  + '<button class="btn btn-ghost btn-sm" onclick="qfClearSubs()" title="清空本活动全部提交数据（不可恢复）">🗑 清空</button></div></div>'
+    + '<div class="hd-s">' + esc(j.task_title || actActiveId) + '　·　当前班级：<b>' + esc(String(clsName)) + '</b>　·　数据按本班匹配</div></div>'
+  + '<div class="hd-r"><span class="act-dot ' + (submitted ? 'on' : 'off') + '"></span><span class="act-muted">' + (submitted ? '实时数据' : '暂无提交') + '</span>'
+  + '<button class="btn btn-ghost btn-sm" onclick="actRenderDash()">刷新</button>'
+  + '<button class="btn btn-ghost btn-sm" onclick="actClearSubs()" title="清空本活动全部提交数据（不可恢复）">🗑 清空</button></div></div>'
     + '<div class="act-kpis">'
     + '<div class="act-kpi ok"><div class="lab">本班已提交</div><div class="val">' + submitted + '</div><div class="sub">提交数量</div></div>'
     + '<div class="act-kpi red"><div class="lab">未交人数</div><div class="val">' + notSub + '</div><div class="sub">尚未提交</div></div>'
@@ -17174,117 +17071,117 @@ function qfDashboardHtml(j, subs, matched, clsStus, cls) {
           + '常见原因：① 上方「选择班级」选错了；② 该班学生名单（学号 / 姓名）还没导入，或与学生填写的不一致。'
           + '可展开下方「本活动全部提交」核对原始数据。</div>'
         : '')
-    + '<div class="act-sec"><h3>本班提交趋势（按日）</h3><canvas id="qfChartTrend" width="320" height="170"></canvas></div>'
+    + '<div class="act-sec"><h3>本班提交趋势（按日）</h3><canvas id="actChartTrend" width="320" height="170"></canvas></div>'
     + '<div class="act-sec"><h3>学生作品（最近 8 个，点开即看）</h3>'
-    +   '<div id="qfRecentBox"></div></div>'
+    +   '<div id="actRecentBox"></div></div>'
     + '<div class="act-sec"><h3>提交名单（本班）</h3>'
     +   '<div class="act-rtools">'
-    +     '<input id="qfRosterSearch" class="act-rt-search" type="search" autocomplete="off" placeholder="🔍 搜索 学号 / 姓名" value="' + esc(qfRosterKw) + '" oninput="qfRosterSearch(this)">'
-    +     '<select id="qfRosterSort" class="act-rt-sel" onchange="qfRosterSortChange(this)">' + qfRosterSortOptions() + '</select>'
-    +     '<button class="btn btn-ghost btn-sm" onclick="qfExportRosterCsv()">⬇ 导出 CSV</button>'
-    +     '<span class="act-rt-hint" id="qfRosterCount">' + (rv.kw ? ('筛选出 ' + rv.rows.length + ' / ' + rv.total + ' 人') : '') + '</span>'
+    +     '<input id="actRosterSearch" class="act-rt-search" type="search" autocomplete="off" placeholder="🔍 搜索 学号 / 姓名" value="' + esc(actRosterKw) + '" oninput="actRosterSearch(this)">'
+    +     '<select id="actRosterSort" class="act-rt-sel" onchange="actRosterSortChange(this)">' + actRosterSortOptions() + '</select>'
+    +     '<button class="btn btn-ghost btn-sm" onclick="actExportRosterCsv()">⬇ 导出 CSV</button>'
+    +     '<span class="act-rt-hint" id="actRosterCount">' + (rv.kw ? ('筛选出 ' + rv.rows.length + ' / ' + rv.total + ' 人') : '') + '</span>'
     +   '</div>'
-    +   '<div class="act-roster" id="qfRosterList">' + rosterHtml + '</div>' + missHtml + '</div>'
-    + '<div class="act-sec"><h3>最近提交明细（近 12 条）</h3>' + qfTableHtml(matched, 12) + '</div>'
-    + qfButtonWindowsHtml(matched)
+    +   '<div class="act-roster" id="actRosterList">' + rosterHtml + '</div>' + missHtml + '</div>'
+    + '<div class="act-sec"><h3>最近提交明细（近 12 条）</h3>' + actTableHtml(matched, 12) + '</div>'
+    + actButtonWindowsHtml(matched)
     + (subs.length > matched.length
-        ? '<details class="act-allsubs"' + (qfAllSubsOpen ? ' open' : '') + ' ontoggle="qfAllSubsToggle(this.open)"><summary>本活动全部提交（' + subs.length + ' 份，不限班级，已去重）</summary>' + qfTableHtml(subs, 0) + '</details>'
+        ? '<details class="act-allsubs"' + (actAllSubsOpen ? ' open' : '') + ' ontoggle="actAllSubsToggle(this.open)"><summary>本活动全部提交（' + subs.length + ' 份，不限班级，已去重）</summary>' + actTableHtml(subs, 0) + '</details>'
         : '');
 }
-window.qfDashboardHtml = qfDashboardHtml;
+window.actDashboardHtml = actDashboardHtml;
 
-// 数据大屏管理：一键清空 / 删除单条提交记录（走 workbench 代理，不依赖 QuickForm 登录）
-async function qfClearSubs() {
-  if (!qfActiveId) { toast('请先选择活动'); return; }
-  const ok = await uiConfirm('确定清空本活动「' + qfActiveId + '」的全部提交数据吗？此操作不可恢复。', { title: '一键清空数据' });
+// 数据大屏管理：一键清空 / 删除单条提交记录（教师已登录即可）
+async function actClearSubs() {
+  if (!actActiveId) { toast('请先选择活动'); return; }
+  const ok = await uiConfirm('确定清空本活动「' + actActiveId + '」的全部提交数据吗？此操作不可恢复。', { title: '一键清空数据' });
   if (!ok) return;
   try {
-    const r = await fetch('/api/v2/qf-clear?task=' + encodeURIComponent(qfActiveId), { method: 'POST' });
+    const r = await fetch('/api/v2/act-clear?task=' + encodeURIComponent(actActiveId), { method: 'POST' });
     const j = await r.json().catch(() => ({}));
-    if (j && j.ok) { toast('已清空全部提交数据'); qfRenderDash(); }
+    if (j && j.ok) { toast('已清空全部提交数据'); actRenderDash(); }
     else toast('清空失败：' + ((j && j.msg) || r.status));
   } catch (e) { toast('清空失败：' + e.message); }
 }
-async function qfDelSub(id) {
-  if (!qfActiveId) { toast('请先选择活动'); return; }
+async function actDelSub(id) {
+  if (!actActiveId) { toast('请先选择活动'); return; }
   const ok = await uiConfirm('确定删除这条提交记录吗？', { title: '删除记录' });
   if (!ok) return;
   try {
-    const r = await fetch('/api/v2/qf-del-sub?task=' + encodeURIComponent(qfActiveId) + '&sub=' + encodeURIComponent(id), { method: 'POST' });
+    const r = await fetch('/api/v2/act-del-sub?task=' + encodeURIComponent(actActiveId) + '&sub=' + encodeURIComponent(id), { method: 'POST' });
     const j = await r.json().catch(() => ({}));
-    if (j && j.ok) { toast('已删除该记录'); qfRenderDash(); }
+    if (j && j.ok) { toast('已删除该记录'); actRenderDash(); }
     else toast('删除失败：' + ((j && j.msg) || r.status));
   } catch (e) { toast('删除失败：' + e.message); }
 }
-window.qfClearSubs = qfClearSubs;
-window.qfDelSub = qfDelSub;
+window.actClearSubs = actClearSubs;
+window.actDelSub = actDelSub;
 
 /* ---------- 大屏「提交名单」：搜索 / 排序 / 导出 ---------- */
-function qfRosterNo(s)   { return String((s && (s['学号'] || s['student_no'] || s['sid'])) || '').trim(); }
-function qfRosterName(s) { return String((s && (s['姓名'] || s['name'])) || '').trim(); }
-function qfRosterTs(s)   { return String((s && (s['submitted_at'] || s['ts'])) || ''); }
+function actRosterNo(s)   { return String((s && (s['学号'] || s['student_no'] || s['sid'])) || '').trim(); }
+function actRosterName(s) { return String((s && (s['姓名'] || s['name'])) || '').trim(); }
+function actRosterTs(s)   { return String((s && (s['submitted_at'] || s['ts'])) || ''); }
 
 /* 按当前搜索词 + 排序方式，返回 {kw, rows, total} */
-function qfRosterRows(list) {
+function actRosterRows(list) {
   const all = list || [];
-  const kw = String(qfRosterKw || '').trim();
+  const kw = String(actRosterKw || '').trim();
   const k = kw.toLowerCase();
   let rows = all.filter(s => {
     if (!k) return true;
-    return (qfRosterNo(s) + ' ' + qfRosterName(s)).toLowerCase().includes(k);
+    return (actRosterNo(s) + ' ' + actRosterName(s)).toLowerCase().includes(k);
   });
-  const byTime = (a, b) => { const A = qfRosterTs(a) || '\uffff', B = qfRosterTs(b) || '\uffff'; return A < B ? -1 : A > B ? 1 : 0; };
+  const byTime = (a, b) => { const A = actRosterTs(a) || '\uffff', B = actRosterTs(b) || '\uffff'; return A < B ? -1 : A > B ? 1 : 0; };
   const byNo = (a, b) => {                       // 纯数字学号按数值比，避免 25010 排在 250101 后面
-    const A = qfRosterNo(a), B = qfRosterNo(b);
+    const A = actRosterNo(a), B = actRosterNo(b);
     const nA = /^\d+$/.test(A) ? +A : null, nB = /^\d+$/.test(B) ? +B : null;
     if (nA !== null && nB !== null && nA !== nB) return nA - nB;
     return A.localeCompare(B, 'zh-CN');
   };
-  switch (qfRosterSort) {
+  switch (actRosterSort) {
     case 'time-desc': rows = rows.slice().sort((a, b) => byTime(b, a)); break;
     case 'no-asc':    rows = rows.slice().sort(byNo); break;
     case 'no-desc':   rows = rows.slice().sort((a, b) => byNo(b, a)); break;
-    case 'name-asc':  rows = rows.slice().sort((a, b) => qfRosterName(a).localeCompare(qfRosterName(b), 'zh-CN')); break;
+    case 'name-asc':  rows = rows.slice().sort((a, b) => actRosterName(a).localeCompare(actRosterName(b), 'zh-CN')); break;
     default:          rows = rows.slice().sort(byTime);   // time-asc
   }
   return { kw: kw, rows: rows, total: all.length };
 }
 
-function qfRosterChipsHtml(rv) {
+function actRosterChipsHtml(rv) {
   if (!rv.total) return '<div class="act-empty">本班暂无提交记录。</div>';
   if (!rv.rows.length) return '<div class="act-empty">没有匹配「' + esc(rv.kw) + '」的学生</div>';
   return rv.rows.map((s, i) => '<span class="act-rst"><i class="ord">' + (i + 1) + '</i>'
-    + esc(qfRosterName(s) || '—')
-    + '<span class="no">' + esc(qfRosterNo(s)) + '</span>'
-    + '<span class="ts">' + esc((qfRosterTs(s) || '').slice(5) || '—') + '</span></span>').join('');
+    + esc(actRosterName(s) || '—')
+    + '<span class="no">' + esc(actRosterNo(s)) + '</span>'
+    + '<span class="ts">' + esc((actRosterTs(s) || '').slice(5) || '—') + '</span></span>').join('');
 }
 
-function qfRosterSortOptions() {
+function actRosterSortOptions() {
   const opts = [['time-asc', '提交时间：早 → 晚'], ['time-desc', '提交时间：晚 → 早'],
                 ['no-asc', '学号：升序'], ['no-desc', '学号：降序'], ['name-asc', '姓名：A → Z']];
-  return opts.map(o => '<option value="' + o[0] + '"' + (qfRosterSort === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('');
+  return opts.map(o => '<option value="' + o[0] + '"' + (actRosterSort === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('');
 }
 
 /* 只重绘名单区（不动整个大屏），输入不丢焦点 */
-function qfPaintRoster() {
-  const box = document.getElementById('qfRosterList');
+function actPaintRoster() {
+  const box = document.getElementById('actRosterList');
   if (!box) return;
-  const rv = qfRosterRows(qfLastMatched);
-  box.innerHTML = qfRosterChipsHtml(rv);
-  const hint = document.getElementById('qfRosterCount');
+  const rv = actRosterRows(actLastMatched);
+  box.innerHTML = actRosterChipsHtml(rv);
+  const hint = document.getElementById('actRosterCount');
   if (hint) hint.textContent = rv.kw ? ('筛选出 ' + rv.rows.length + ' / ' + rv.total + ' 人') : '';
 }
-function qfRosterSearch(el) { qfRosterKw = el ? el.value : ''; qfPaintRoster(); }
-function qfRosterSortChange(el) { qfRosterSort = el ? el.value : 'time-asc'; qfPaintRoster(); }
+function actRosterSearch(el) { actRosterKw = el ? el.value : ''; actPaintRoster(); }
+function actRosterSortChange(el) { actRosterSort = el ? el.value : 'time-asc'; actPaintRoster(); }
 
 /* 导出当前筛选 + 排序结果（CSV 带 BOM，Excel / WPS 直接打开不乱码） */
-function qfExportRosterCsv() {
-  const rv = qfRosterRows(qfLastMatched);
+function actExportRosterCsv() {
+  const rv = actRosterRows(actLastMatched);
   if (!rv.rows.length) { toast('当前没有可导出的记录'); return; }
   const cell = v => { const s = String(v == null ? '' : v); return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
   const head = ['序号', '学号', '姓名', '提交时间', '作品标题', '作品简介'];
   const body = rv.rows.map((s, i) => [
-    i + 1, qfRosterNo(s), qfRosterName(s), qfRosterTs(s),
+    i + 1, actRosterNo(s), actRosterName(s), actRosterTs(s),
     s['作品标题'] || s.title || '', s['作品简介'] || s.desc || ''
   ].map(cell).join(','));
   const csv = '\ufeff' + [head.map(cell).join(',')].concat(body).join('\r\n');
@@ -17301,54 +17198,54 @@ function qfExportRosterCsv() {
   setTimeout(() => URL.revokeObjectURL(url), 3000);
   toast('已导出 ' + rv.rows.length + ' 条 → ' + fname);
 }
-window.qfRosterSearch = qfRosterSearch;
-window.qfRosterSortChange = qfRosterSortChange;
-window.qfPaintRoster = qfPaintRoster;
-window.qfExportRosterCsv = qfExportRosterCsv;
-window.qfRosterRows = qfRosterRows;
+window.actRosterSearch = actRosterSearch;
+window.actRosterSortChange = actRosterSortChange;
+window.actPaintRoster = actPaintRoster;
+window.actExportRosterCsv = actExportRosterCsv;
+window.actRosterRows = actRosterRows;
 
-function qfTableHtml(subs, limit) {
-  if (!subs.length) return '<div class="qf-muted">暂无可展示的提交。</div>';
+function actTableHtml(subs, limit) {
+  if (!subs.length) return '<div class="act-muted">暂无可展示的提交。</div>';
   // limit>0 时仅展示最近 limit 条；limit 省略/为 0 时展示全部（用于「本活动全部提交」）
   const rows = (limit && limit > 0) ? subs.slice().reverse().slice(0, limit) : subs.slice();
-  return `<div style="overflow-x:auto"><table class="qf-tb"><thead><tr><th>姓名</th><th>学号</th><th>作品标题</th><th>简介</th><th>文件</th><th>时间</th><th>操作</th></tr></thead><tbody>${
+  return `<div style="overflow-x:auto"><table class="act-tb"><thead><tr><th>姓名</th><th>学号</th><th>作品标题</th><th>简介</th><th>文件</th><th>时间</th><th>操作</th></tr></thead><tbody>${
     rows.map(s => {
-      const atts = qfAttachments(s);
+      const atts = actAttachments(s);
       const sid = s._submission_id != null ? s._submission_id : '';
       return `<tr>
         <td>${esc(s['姓名'] || s['name'] || '—')}</td>
         <td>${esc(s['学号'] || s['student_no'] || s['sid'] || '—')}</td>
         <td>${esc(s['作品标题'] || s['title'] || '—')}</td>
         <td>${esc(String(s['作品简介'] || s['desc'] || '').slice(0, 30))}</td>
-        <td>${atts.length ? atts.map(a => `<a href="${qfAttUrl(a)}" target="_blank">📎</a>`).join(' ') : '—'}</td>
-        <td class="qf-muted">${esc((s.submitted_at || '').slice(5))}</td>
-        <td>${sid !== '' ? `<button class="qf-del-btn" onclick="qfDelSub('${sid}')">删除</button>` : '—'}</td>
+        <td>${atts.length ? atts.map(a => `<a href="${actAttUrl(a)}" target="_blank">📎</a>`).join(' ') : '—'}</td>
+        <td class="act-muted">${esc((s.submitted_at || '').slice(5))}</td>
+        <td>${sid !== '' ? `<button class="act-del-btn" onclick="actDelSub('${sid}')">删除</button>` : '—'}</td>
       </tr>`;
     }).join('')
   }</tbody></table></div>`;
 }
 
-function qfGalleryHtml(subs) {
+function actGalleryHtml(subs) {
   const items = [];
-  subs.forEach(s => qfAttachments(s).forEach(a => items.push(a)));
-  if (!items.length) return '<span class="qf-muted">还没有上传的作品文件。</span>';
+  subs.forEach(s => actAttachments(s).forEach(a => items.push(a)));
+  if (!items.length) return '<span class="act-muted">还没有上传的作品文件。</span>';
   return items.slice(0, 30).map(a => {
     const ext = (a.split('.').pop() || '').toLowerCase();
-    const url = qfAttUrl(a);
+    const url = actAttUrl(a);
     const isImg = ['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext);
     return isImg
-      ? `<a href="${url}" target="_blank"><img class="qf-thumb" src="${url}" alt="作品"></a>`
-      : `<a class="qf-thumb" href="${url}" target="_blank" style="display:flex;align-items:center;justify-content:center;text-decoration:none;color:var(--brand-primary);font-size:22px">📄</a>`;
+      ? `<a href="${url}" target="_blank"><img class="act-thumb" src="${url}" alt="作品"></a>`
+      : `<a class="act-thumb" href="${url}" target="_blank" style="display:flex;align-items:center;justify-content:center;text-decoration:none;color:var(--brand-primary);font-size:22px">📄</a>`;
   }).join('');
 }
 
-function qfDrawCharts(j, subs) {
+function actDrawCharts(j, subs) {
   const byDay = {};
   subs.forEach(s => { const d = (s.submitted_at || '').slice(0, 10); if (d) byDay[d] = (byDay[d] || 0) + 1; });
   let days = Object.keys(byDay).sort();
   if (days.length > 10) days = days.slice(-10);
   const trend = days.map(d => ({ label: d.slice(5), v: byDay[d] }));
-  qfDrawBars('qfChartTrend', trend, '提交数');
+  actDrawBars('actChartTrend', trend, '提交数');
   const ignore = new Set(['_ip', 'submitted_at', 'attachment', '姓名', '学号', '作品链接', 'file']);
   const fieldCount = {};
   subs.forEach(s => Object.keys(s).forEach(k => {
@@ -17360,10 +17257,10 @@ function qfDrawCharts(j, subs) {
   Object.keys(fieldCount).forEach(k => { const n = Object.keys(fieldCount[k]).length; if (n > bestN) { bestN = n; best = k; } });
   let fieldItems = [];
   if (best) fieldItems = Object.entries(fieldCount[best]).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([k, v]) => ({ label: k.length > 6 ? k.slice(0, 6) : k, v }));
-  qfDrawBars('qfChartField', fieldItems, best ? ('「' + best + '」取值分布') : '');
+  actDrawBars('actChartField', fieldItems, best ? ('「' + best + '」取值分布') : '');
 }
 
-function qfDrawBars(canvasId, items) {
+function actDrawBars(canvasId, items) {
   const cv = document.getElementById(canvasId); if (!cv) return;
   const ctx = cv.getContext('2d'); const W = cv.width, H = cv.height; ctx.clearRect(0, 0, W, H);
   const css = getComputedStyle(document.documentElement);
@@ -17395,45 +17292,45 @@ function qfDrawBars(canvasId, items) {
     ctx.fillText(it.label, x + bw / 2, H - padB + 6);
   });
 }
-async function qfUploadDash(e) {
+async function actUploadDash(e) {
   const f = e.target.files && e.target.files[0]; if (!f) return;
   const txt = await f.text();
-  qfSaveDash(qfActiveId, txt);
+  actSaveDash(actActiveId, txt);
   toast('自定义大屏已部署');
-  qfCustomIframeTask = null;   // 内容已变，下次查看需重建 iframe
-  await qfRenderDash();        // 重建外壳（含工具栏的查看/删除按钮）
-  qfToggleCustomDash(true);    // 立即展示新上传的大屏
+  actCustomIframeTask = null;   // 内容已变，下次查看需重建 iframe
+  await actRenderDash();        // 重建外壳（含工具栏的查看/删除按钮）
+  actToggleCustomDash(true);    // 立即展示新上传的大屏
 }
-window.qfUploadDash = qfUploadDash;
+window.actUploadDash = actUploadDash;
 
 /* 自定义大屏工具栏：上传按钮常驻；有自定义大屏时显示查看/删除 */
-function qfCustomToolbarHtml(custom) {
-  return '<label class="btn btn-ghost btn-sm" style="cursor:pointer">上传自定义大屏<input type="file" accept=".html,.htm" style="display:none" onchange="qfUploadDash(event)"></label>'
-    + (custom ? '<button class="btn btn-primary btn-sm" onclick="qfToggleCustomDash()">查看自定义大屏</button><button class="btn btn-ghost btn-sm" onclick="qfDelDash()">删除自定义大屏</button>' : '');
+function actCustomToolbarHtml(custom) {
+  return '<label class="btn btn-ghost btn-sm" style="cursor:pointer">上传自定义大屏<input type="file" accept=".html,.htm" style="display:none" onchange="actUploadDash(event)"></label>'
+    + (custom ? '<button class="btn btn-primary btn-sm" onclick="actToggleCustomDash()">查看自定义大屏</button><button class="btn btn-ghost btn-sm" onclick="actDelDash()">删除自定义大屏</button>' : '');
 }
-function qfRenderCustomToolbar() {
-  const el = document.getElementById('qfCustomToolbar'); if (!el) return;
-  el.innerHTML = qfCustomToolbarHtml(!!qfDashHtml(qfActiveId));
+function actRenderCustomToolbar() {
+  const el = document.getElementById('actCustomToolbar'); if (!el) return;
+  el.innerHTML = actCustomToolbarHtml(!!actDashHtml(actActiveId));
 }
-window.qfRenderCustomToolbar = qfRenderCustomToolbar;
+window.actRenderCustomToolbar = actRenderCustomToolbar;
 
 /* 真正构建自定义大屏 iframe（仅当为当前任务尚未构建时才执行，否则保留旧 iframe 状态） */
-async function qfBuildCustomIframe() {
-  const cd = document.getElementById('qfCustomDash'); if (!cd) return false;
-  const html = qfDashHtml(qfActiveId); if (!html) { toast('还没有上传自定义大屏'); return false; }
-  const apiBase = qfAbsBase();
-  const dataApi = apiBase + '/api/' + encodeURIComponent(qfActiveId) + '/all';
-  const submitApi = apiBase + '/api/' + encodeURIComponent(qfActiveId);
-  /* 预拉取数据并注入为 window.QF_DATA，作为「直接可用数据」兜底：
-     自定义大屏优先用 QF_DATA（无需自己再 fetch，规避 CORS / 脚本时序问题）；
-     仍保留 QF_API_* 供需要实时刷新或写回的场景使用。 */
+async function actBuildCustomIframe() {
+  const cd = document.getElementById('actCustomDash'); if (!cd) return false;
+  const html = actDashHtml(actActiveId); if (!html) { toast('还没有上传自定义大屏'); return false; }
+  const apiBase = actAbsBase();
+  const dataApi = apiBase + '/api/' + encodeURIComponent(actActiveId) + '/all';
+  const submitApi = apiBase + '/api/' + encodeURIComponent(actActiveId);
+  /* 预拉取数据并注入为 window.ACT_DATA，作为「直接可用数据」兜底：
+     自定义大屏优先用 ACT_DATA（无需自己再 fetch，规避 CORS / 脚本时序问题）；
+     仍保留 ACT_API_* 供需要实时刷新或写回的场景使用。 */
   let dataJson = 'null';
   try {
     const r = await fetch(dataApi, { mode: 'cors' });
     if (r.ok) dataJson = JSON.stringify(await r.json()).replace(/</g, '\\u003c');
   } catch (e) { dataJson = 'null'; }
-  /* 注入运行环境，便于自定义大屏直接调用活动数据服务（按 QuickForm 官方格式） */
-  const inject = `<script>window.QF_API_BASE=${JSON.stringify(apiBase)};window.QF_TASK_ID=${JSON.stringify(qfActiveId)};window.QF_API_DATA=${JSON.stringify(dataApi)};window.QF_API_SUBMIT=${JSON.stringify(submitApi)};window.QF_DATA=${dataJson};<\/script>`;
+  /* 注入运行环境，便于自定义大屏直接调用活动接口（标准格式） */
+  const inject = `<script>window.ACT_API_BASE=${JSON.stringify(apiBase)};window.ACT_TASK_ID=${JSON.stringify(actActiveId)};window.ACT_API_DATA=${JSON.stringify(dataApi)};window.ACT_API_SUBMIT=${JSON.stringify(submitApi)};window.ACT_DATA=${dataJson};<\/script>`;
   /* 注入运行环境：优先放到 <head> 之后（兼容带属性的 <head lang="zh">）；
      若没有 <head> 则放到 <body> 之后；最兜底放到文档最开头，确保自定义脚本执行前变量已就绪。 */
   let finalHtml = html;
@@ -17442,20 +17339,20 @@ async function qfBuildCustomIframe() {
   else finalHtml = inject + finalHtml;
   finalHtml = finalHtml.replace(/<\/body>/i, inject + '</body>');
   const blob = new Blob([finalHtml], { type: 'text/html' }); const url = URL.createObjectURL(blob);
-  cd.innerHTML = '<div style="display:flex;justify-content:flex-end;margin-bottom:6px"><button class="btn btn-ghost btn-sm" onclick="qfToggleCustomDash(false)">返回默认大屏</button></div>'
+  cd.innerHTML = '<div style="display:flex;justify-content:flex-end;margin-bottom:6px"><button class="btn btn-ghost btn-sm" onclick="actToggleCustomDash(false)">返回默认大屏</button></div>'
     + '<iframe src="' + url + '" style="width:100%;height:520px;border:1px solid var(--border);border-radius:10px"></iframe>';
-  qfCustomIframeTask = qfActiveId;
+  actCustomIframeTask = actActiveId;
   return true;
 }
 
-async function qfToggleCustomDash(force) {
-  const cd = document.getElementById('qfCustomDash'); const dd = document.getElementById('qfDefaultDash');
+async function actToggleCustomDash(force) {
+  const cd = document.getElementById('actCustomDash'); const dd = document.getElementById('actDefaultDash');
   if (!cd) return;
   const show = (typeof force === 'boolean') ? force : (cd.style.display === 'none');
   if (show) {
     /* 仅在未为当前任务构建时才重建 iframe，否则只切换显示 → 保留已填写的 API 与已拉取的数据 */
-    if (qfCustomIframeTask !== qfActiveId) {
-      const ok = await qfBuildCustomIframe();
+    if (actCustomIframeTask !== actActiveId) {
+      const ok = await actBuildCustomIframe();
       if (!ok) return;
     }
     cd.style.display = ''; if (dd) dd.style.display = 'none';
@@ -17463,16 +17360,16 @@ async function qfToggleCustomDash(force) {
     cd.style.display = 'none'; if (dd) dd.style.display = '';
   }
 }
-window.qfToggleCustomDash = qfToggleCustomDash;
+window.actToggleCustomDash = actToggleCustomDash;
 
-function qfDelDash() {
-  qfSaveDash(qfActiveId, '');
-  qfCustomIframeTask = null;
+function actDelDash() {
+  actSaveDash(actActiveId, '');
+  actCustomIframeTask = null;
   toast('已删除自定义大屏');
-  qfRenderDash();
-  qfToggleCustomDash(false);
+  actRenderDash();
+  actToggleCustomDash(false);
 }
-window.qfDelDash = qfDelDash;
+window.actDelDash = actDelDash;
 
 /* ============================================================
    提交系统（学生作品收集 + 排行榜，集成进工作台）
@@ -28643,8 +28540,8 @@ function openScoreImport() {
     || withScores[withScores.length - 1] || exams[0];
     showFloat('导入成绩', `
     <div class="imp-tabs">
-      <button type="button" class="imp-tab on" data-tab="file" onclick="qfImpTab('file')">📄 文件批量导入</button>
-      <button type="button" class="imp-tab" data-tab="manual" onclick="qfImpTab('manual')">✍️ 单个学生录入</button>
+      <button type="button" class="imp-tab on" data-tab="file" onclick="actImpTab('file')">📄 文件批量导入</button>
+      <button type="button" class="imp-tab" data-tab="manual" onclick="actImpTab('manual')">✍️ 单个学生录入</button>
     </div>
 
     <!-- 文件批量导入 -->
@@ -28666,7 +28563,7 @@ function openScoreImport() {
         </select>
       </div>
       <div id="impExamSubjects"></div>
-      <div class="qf-card-h" style="margin-top:14px">识别到的科目（已同步至「科目设置」；改名 / 删除请在科目设置中操作）</div>
+      <div class="act-card-h" style="margin-top:14px">识别到的科目（已同步至「科目设置」；改名 / 删除请在科目设置中操作）</div>
       <div id="impSubjList" class="imp-subj-list"><div class="dim">选好文件后会自动识别并同步科目</div></div>
       <div class="hwp-acts">
         <button class="btn btn-ghost" type="button" onclick="downloadScoreTemplate('xlsx')">下载 xlsx 模板</button>
@@ -28700,7 +28597,7 @@ function openScoreImport() {
   const layer = document.getElementById('floatLayer');
   if (layer) layer.classList.add('wide');
   renderImpExamSubjects();
-  if (window.__impDefaultTab === 'manual') { qfImpTab('manual'); window.__impDefaultTab = null; }
+  if (window.__impDefaultTab === 'manual') { actImpTab('manual'); window.__impDefaultTab = null; }
 }
 window.openScoreImport = openScoreImport;
 
@@ -28777,21 +28674,21 @@ function openSubjectSettings() {
   const body = `
     <div class="imp-tip">为「<b>${esc(info.clsName)}</b>」配置考试科目。科目将自动与该班 <b>${info.stuN}</b> 名学生关联，建考试时可直接选用。</div>
 
-    <div class="qf-card-h" style="margin-top:12px">方式一 · 从成绩文件自动提取科目</div>
+    <div class="act-card-h" style="margin-top:12px">方式一 · 从成绩文件自动提取科目</div>
     <div class="hwp-row">
       <input type="file" id="subjFile" accept=".xlsx,.csv,.txt" class="fl-inp" onchange="onSubjectFilePicked()">
     </div>
     <div id="subjDetect" class="dim" style="margin:6px 0 2px"></div>
     <div id="subjChips"></div>
 
-    <div class="qf-card-h" style="margin-top:14px">方式二 · 手动添加科目</div>
+    <div class="act-card-h" style="margin-top:14px">方式二 · 手动添加科目</div>
     <div class="hwp-row" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
       <input id="subjName" class="fl-inp" placeholder="科目名称，如：数学" style="flex:1;min-width:140px">
       <input id="subjTeacher" class="fl-inp" placeholder="任课教师（选填）" style="flex:1;min-width:120px">
       <button class="btn btn-primary" type="button" onclick="addManualSubject()">添加</button>
     </div>
 
-    <div class="qf-card-h" style="margin-top:14px">当前科目（本班 ${info.subjN} 门 · 已关联 ${info.stuN} 名学生）</div>
+    <div class="act-card-h" style="margin-top:14px">当前科目（本班 ${info.subjN} 门 · 已关联 ${info.stuN} 名学生）</div>
     <div id="subjList"></div>
     <div class="hwp-acts"><button class="btn btn-ghost" type="button" onclick="closeFloat()">关闭</button></div>`;
   showFloat('科目设置', body);
@@ -29001,7 +28898,7 @@ function renderImpExamSubjects() {
 window.renderImpExamSubjects = renderImpExamSubjects;
 
 /* 导入成绩：文件 / 手动 两个标签页切换 */
-function qfImpTab(which) {
+function actImpTab(which) {
   document.querySelectorAll('.imp-tab').forEach(b =>
     b.classList.toggle('on', b.getAttribute('data-tab') === which));
   const f = document.getElementById('impTabFile');
@@ -29009,7 +28906,7 @@ function qfImpTab(which) {
   if (f) f.style.display = which === 'file' ? '' : 'none';
   if (m) m.style.display = which === 'manual' ? '' : 'none';
 }
-window.qfImpTab = qfImpTab;
+window.actImpTab = actImpTab;
 
 /* 手动录入：选择考试 */
 function onManualExamChange() {
@@ -30668,12 +30565,12 @@ const DEMO_RENDER = {
     const classesAll = dbT('classes') || [];
     const curStuN = (dbT('students') || []).filter(s => Number(s.class_id) === Number(cls)).length;
     const guardBanner = !classesAll.length
-      ? `<div class="qf-card act-note" style="border-color:var(--status-warning);margin-bottom:14px">
+      ? `<div class="act-card act-note" style="border-color:var(--status-warning);margin-bottom:14px">
            <b>还没有班级。</b>成绩导入需要先有班级与学生，请先创建班级再回来导入成绩。
            <button class="btn btn-primary btn-sm" style="margin-left:10px" onclick="goClasses()">去创建班级</button>
          </div>`
       : (!curStuN
-          ? `<div class="qf-card act-note" style="border-color:var(--status-warning);margin-bottom:14px">
+          ? `<div class="act-card act-note" style="border-color:var(--status-warning);margin-bottom:14px">
               班级「${esc(clsName)}」还没有学生。<b>请先导入学生名单（学号是匹配成绩的唯一主键）。</b>
               <button class="btn btn-primary btn-sm" style="margin-left:10px" onclick="goClasses()">去班级页导入学生</button>
             </div>`
@@ -34387,18 +34284,18 @@ window.cwGuessCourse = cwGuessCourse;
 /* ---------- 大屏上的「课程归属」条 ---------- */
 function cwEnsureMatch(taskTitle, courses) {
   // 已有手动匹配 → 尊重老师的决定，不改
-  const cur = cwLinkOf(qfActiveId);
+  const cur = cwLinkOf(actActiveId);
   if (cur && cur.course) return cur;
   const g = cwGuessCourse(taskTitle, courses);
   if (!g) return null;
-  return cwSaveLink(qfActiveId, taskTitle, g.course, 'auto');
+  return cwSaveLink(actActiveId, taskTitle, g.course, 'auto');
 }
 
 async function cwRenderCourseBar() {
-  const box = document.getElementById('qfCourseBar');
+  const box = document.getElementById('actCourseBar');
   if (!box) return;
-  if (!qfActiveId) { box.innerHTML = ''; return; }
-  const title = qfTaskTitle();
+  if (!actActiveId) { box.innerHTML = ''; return; }
+  const title = actTaskTitle();
   let courses = [];
   let cfg = null;
   try { cfg = await cwConfigCached(); courses = cfg.courses || []; }
@@ -34407,7 +34304,7 @@ async function cwRenderCourseBar() {
       + '用「启动工作台」打开本页后，这里可以把这个活动的作品自动归档到课程目录。</div>';
     return;
   }
-  const link = cwLinkOf(qfActiveId);
+  const link = cwLinkOf(actActiveId);
   const guess = cwGuessCourse(title, courses);
   const cur = link && link.course ? link.course : '';
   const opts = ['<option value="">（不归属课程）</option>']
@@ -34423,17 +34320,17 @@ async function cwRenderCourseBar() {
   } else {
     state = '<span class="cw-badge gray">未匹配到课程</span>';
   }
-  const archived = (cwLastArchive[qfActiveId] || null);
+  const archived = (cwLastArchive[actActiveId] || null);
   box.innerHTML = '<div class="cw-card" style="margin-bottom:14px">'
     + '<div class="cw-card-h">🎯 课程归属（课件自动匹配）'
     +   '<span class="sp"></span>' + state
     + '</div>'
-    + '<div class="cw-muted" style="margin-bottom:8px">当前活动：<b>' + esc(title || qfActiveId) + '</b>'
+    + '<div class="cw-muted" style="margin-bottom:8px">当前活动：<b>' + esc(title || actActiveId) + '</b>'
     +   (cur ? '' : (guess ? '　→ 依据：' + esc(guess.why) : '　→ 没有同名/同课次的课程，请手动选一门'))
     + '</div>'
     + '<div class="cw-muted" style="margin-bottom:8px;font-size:12px">资料统一存放在<b>服务器</b>（课件库），点「查看课程目录」会跳到课件页对应课程，不打开本机文件夹。</div>'
     + '<div class="cw-row">'
-    +   '<select class="cw-sel" id="qfCourseSel" onchange="cwSetCourse(this.value)">' + opts + '</select>'
+    +   '<select class="cw-sel" id="actCourseSel" onchange="cwSetCourse(this.value)">' + opts + '</select>'
     +   (guess && !cur ? '<button class="btn btn-primary btn-sm" onclick="cwSetCourse(' + JSON.stringify(guess.course).replace(/"/g, '&quot;') + ')">采用自动匹配</button>' : '')
     +   (cur ? '<button class="btn btn-ghost btn-sm" onclick="cwArchiveTask(false)">📥 立即归档作品与数据</button>' : '')
     +   (cur ? '<button class="btn btn-ghost btn-sm" onclick="cwOpenCourseFolder()" title="跳转到「课件」页并定位到本活动的课程目录（资料都在服务器上）">📂 查看课程目录</button>' : '')
@@ -34448,21 +34345,21 @@ window.cwRenderCourseBar = cwRenderCourseBar;
 const cwLastArchive = {};
 let cwArchiveTimer = null, cwArchiveStamp = {};
 
-function qfTaskTitle() {
-  const t = (qfTaskList || []).find(x => x.task_id === qfActiveId);
-  return t ? (t.title || t.task_id) : (qfActiveId || '');
+function actTaskTitle() {
+  const t = (actTaskList || []).find(x => x.task_id === actActiveId);
+  return t ? (t.title || t.task_id) : (actActiveId || '');
 }
 
 async function cwSetCourse(course) {
-  if (!qfActiveId) return;
-  const title = qfTaskTitle();
+  if (!actActiveId) return;
+  const title = actTaskTitle();
   if (course) {
-    cwSaveLink(qfActiveId, title, course, 'manual');
+    cwSaveLink(actActiveId, title, course, 'manual');
     toast('已归属课程：' + course);
     await cwRenderCourseBar();
     await cwArchiveTask(false);         // 匹配后立刻归档一次
   } else {
-    cwUnlink(qfActiveId);
+    cwUnlink(actActiveId);
     toast('已解除课程归属');
     await cwRenderCourseBar();
   }
@@ -34470,17 +34367,17 @@ async function cwSetCourse(course) {
 window.cwSetCourse = cwSetCourse;
 
 async function cwUnlinkTask() {
-  if (!qfActiveId) return;
+  if (!actActiveId) return;
   if (!(await uiConfirm('解除这个活动与课程的归属？\n\n已经归档到课程目录的文件不会被删除。', { title: '解除归属', danger: false }))) return;
-  cwUnlink(qfActiveId);
-  delete cwLastArchive[qfActiveId];
+  cwUnlink(actActiveId);
+  delete cwLastArchive[actActiveId];
   toast('已解除归属');
   cwRenderCourseBar();
 }
 window.cwUnlinkTask = cwUnlinkTask;
 
 async function cwOpenCourseFolder() {
-  const link = cwLinkOf(qfActiveId);
+  const link = cwLinkOf(actActiveId);
   if (!link || !link.course) { toast('这个活动还没有归属课程，请先选择课程'); return; }
   const course = link.course;
   /* 所有资料都在服务器（课件库）上，不再打开本机文件夹：
@@ -34501,25 +34398,25 @@ window.cwOpenCourseFolder = cwOpenCourseFolder;
 
 /** 归档：把本活动的作品文件 + 提交数据（CSV）写进课程目录 */
 async function cwArchiveTask(silent) {
-  const link = cwLinkOf(qfActiveId);
+  const link = cwLinkOf(actActiveId);
   if (!link || !link.course) { if (!silent) toast('请先选一门课程'); return; }
-  const title = qfTaskTitle();
-  const rows = (qfLastMatched || []);
+  const title = actTaskTitle();
+  const rows = (actLastMatched || []);
   const items = [];
   rows.forEach(s => {
-    qfAttachments(s).forEach(a => {
+    actAttachments(s).forEach(a => {
       const url = String(a || '');
       if (!url) return;
       items.push({
         name: url.split('?')[0].split('/').pop() || 'file',
         url: url,
-        student: qfRosterName(s)
+        student: actRosterName(s)
       });
     });
   });
   const say = (html, ok) => {
-    cwLastArchive[qfActiveId] = { ok: ok, html: html };
-    const bar = document.getElementById('qfCourseBar');
+    cwLastArchive[actActiveId] = { ok: ok, html: html };
+    const bar = document.getElementById('actCourseBar');
     if (bar) cwRenderCourseBar();
   };
   if (!items.length) {
@@ -34528,7 +34425,7 @@ async function cwArchiveTask(silent) {
     return;
   }
   try {
-    const r = await cwReq('archive', { course: link.course, activity: title, base: qfAbsBase(), items: items });
+    const r = await cwReq('archive', { course: link.course, activity: title, base: actAbsBase(), items: items });
     if (!r.ok) throw new Error(r.msg || '归档失败');
     const savedN = (r.saved || []).length, skipN = (r.skipped || []).length;
     const dataMsg = await cwArchiveDataCsv(link.course, title, rows);
@@ -34555,9 +34452,9 @@ async function cwArchiveDataCsv(course, activity, rows) {
   };
   const head = ['序号', '学号', '姓名', '提交时间', '作品标题', '作品简介', '附件数', '附件地址'];
   const body = rows.map((s, i) => [
-    i + 1, qfRosterNo(s), qfRosterName(s), qfRosterTs(s),
+    i + 1, actRosterNo(s), actRosterName(s), actRosterTs(s),
     s['作品标题'] || s.title || '', s['作品简介'] || s.desc || '',
-    qfAttachments(s).length, qfAttachments(s).map(a => qfAttUrl(a)).join(' | ')
+    actAttachments(s).length, actAttachments(s).map(a => actAttUrl(a)).join(' | ')
   ].map(cell).join(','));
   const csv = '\ufeff' + [head.map(cell).join(',')].concat(body).join('\r\n');
   try {
@@ -34573,15 +34470,15 @@ window.cwArchiveDataCsv = cwArchiveDataCsv;
 
 /** 自动归档：匹配好课程后，新提交到达时增量归档（30 秒节流，不打断课堂） */
 function cwArchiveTick() {
-  const link = cwLinkOf(qfActiveId);
+  const link = cwLinkOf(actActiveId);
   if (!link || !link.course) return;
-  if (!qfLastMatched || !qfLastMatched.length) return;
-  const stamp = qfLastMatched.length + '|' + qfLastMatched.map(s => qfSubId(s)).join(',');
-  if (cwArchiveStamp[qfActiveId] === stamp) return;   // 没变化不重复搬
+  if (!actLastMatched || !actLastMatched.length) return;
+  const stamp = actLastMatched.length + '|' + actLastMatched.map(s => actSubId(s)).join(',');
+  if (cwArchiveStamp[actActiveId] === stamp) return;   // 没变化不重复搬
   if (cwArchiveTimer) return;
   cwArchiveTimer = setTimeout(() => {
     cwArchiveTimer = null;
-    cwArchiveStamp[qfActiveId] = stamp;
+    cwArchiveStamp[actActiveId] = stamp;
     cwArchiveTask(true).catch(() => {});
   }, 3000);
 }
@@ -34590,7 +34487,7 @@ window.cwArchiveTick = cwArchiveTick;
 /* ============================================================
    数据大屏 · 学生提交作品查看
    ------------------------------------------------------------
-   数据仍然只从 QuickForm 的 GET /api/<task>/all 读（attachment 字段），
+   数据仍然只从 GET /api/act/<task>/all 读（attachment 字段），
    不额外建表、不改官方格式 —— 只是把"文件"从一行链接变成能直接看的卡片：
      图片 / 视频 / 音频 / PDF：浏览器原生打开；
      Word / Excel / PPT：交给本地服务现场解析成网页（/api/cw/remote）。
@@ -34640,15 +34537,15 @@ function cwCollectWorks(rows) {
   const out = [];
   const gcache = {};
   (rows || []).forEach(s => {
-    const who = qfRosterName(s) || '—';
-    const no = qfRosterNo(s);
-    const ts = qfRosterTs(s);
+    const who = actRosterName(s) || '—';
+    const no = actRosterNo(s);
+    const ts = actRosterTs(s);
     const gk = no + '|' + who;
     let grp = gcache[gk];
     if (grp === undefined) { grp = cwGroupLabelOf(no, who); gcache[gk] = grp; }
-    // 作品标题比 hash 文件名有意义得多（QuickForm 上传后名字会被改成 uuid）
+    // 作品标题比 hash 文件名有意义得多（上传后名字会被改成 uuid）
     const title = String(s['作品标题'] || s['作品名称'] || s.title || '').trim();
-    qfAttachments(s).forEach((a, i) => {
+    actAttachments(s).forEach((a, i) => {
       const url = String(a || '');
       if (!url) return;
       const name = decodeURIComponent(url.split('?')[0].split('/').pop() || 'file');
@@ -34656,9 +34553,9 @@ function cwCollectWorks(rows) {
         name: name, url: url, student: who, no: no, group: grp, ts: ts,
         title: title,                       // 学生填的作品标题（可能为空）
         label: title || name,               // 界面上优先显示标题
-        multi: qfAttachments(s).length > 1, // 一人多文件时标注序号
+        multi: actAttachments(s).length > 1, // 一人多文件时标注序号
         seq: i,
-        kind: cwKindOf(name), full: (url.indexOf('http') === 0 ? url : qfApiBase() + url)
+        kind: cwKindOf(name), full: (url.indexOf('http') === 0 ? url : actApiBase() + url)
       });
     });
   });
@@ -34721,9 +34618,9 @@ const CW_VIEW_TIP = {
 };
 
 function cwPaintWorks(rows) {
-  const box = document.getElementById('qfWorksBox');
-  const tabs = document.getElementById('qfWorkTabs');
-  const views = document.getElementById('qfWorkViews');
+  const box = document.getElementById('actWorksBox');
+  const tabs = document.getElementById('actWorkTabs');
+  const views = document.getElementById('actWorkViews');
   if (!box) return;
   // 传 rows = 重新采集（初次进入 / 轮询刷新）；不传 = 只按当前数据重排（切视图/排序/搜索）
   if (rows !== undefined) cwWorkList = cwCollectWorks(rows);
@@ -34731,7 +34628,7 @@ function cwPaintWorks(rows) {
   // 视图切换按钮：不管有没有文件都显示，避免布局跳动
   if (views) {
     views.innerHTML = CW_VIEWS.map(v =>
-      '<button type="button" class="qf-vtab' + (cwWorkView === v[0] ? ' on' : '') + '"'
+      '<button type="button" class="act-vtab' + (cwWorkView === v[0] ? ' on' : '') + '"'
       + ' data-v="' + v[0] + '" onclick="cwSetWorkView(\'' + v[0] + '\')"'
       + ' title="' + CW_VIEW_TIP[v[0]] + '">' + v[1] + '</button>').join('');
   }
@@ -34742,13 +34639,13 @@ function cwPaintWorks(rows) {
     const defs = [['all', '全部'], ['image', '图片'], ['video', '视频'], ['audio', '音频'],
                   ['pdf', 'PDF'], ['office', '文档'], ['legacy', '旧版文档'], ['other', '其他']];
     tabs.innerHTML = defs.filter(d => d[0] === 'all' || cnt[d[0]])
-      .map(d => '<button type="button" class="qf-ktab' + (cwWorkKind === d[0] ? ' on' : '')
+      .map(d => '<button type="button" class="act-ktab' + (cwWorkKind === d[0] ? ' on' : '')
         + '" onclick="cwWorkFilter(\'' + d[0] + '\')">' + d[1]
         + ' <span style="opacity:.7">' + (d[0] === 'all' ? cwWorkList.length : cnt[d[0]]) + '</span></button>').join('');
   }
 
   const list = cwFilteredWorks();
-  const hint = document.getElementById('qfWorkCount');
+  const hint = document.getElementById('actWorkCount');
   if (hint) {
     const people = new Set(cwWorkList.map(w => w.no || w.student)).size;
     hint.textContent = cwWorkList.length
@@ -34773,20 +34670,20 @@ function cwPaintWorks(rows) {
   if (cwWorkView === 'list') box.innerHTML = cwWorkListHtml(list);
   else if (cwWorkView === 'stage') box.innerHTML = cwStageHtml(list);
   else {
-    const cls = cwWorkView === 'wall' ? 'qf-wall' : 'qf-works';
+    const cls = cwWorkView === 'wall' ? 'act-wall' : 'act-works';
     const idx = new Map(list.map((w, i) => [w.url, i]));
     if (cwWorkGroup === 'student') {
       // 一人一行：名字 + 横向铺开的文件，44 人也只占 44 行
       box.innerHTML = cwWorkGroups(list).map(g => {
         const cards = g.items.map(w => cwWorkCardHtml(w, idx.get(w.url))).join('');
-        return '<div class="qf-wgroup">'
-          + '<div class="qf-wgroup-h">' + esc(g.label)
+        return '<div class="act-wgroup">'
+          + '<div class="act-wgroup-h">' + esc(g.label)
           +   ' <span class="n">(' + g.items.length + ' 个文件)</span>'
           +   '<span class="go" data-nm="' + esc(String(g.label).split('　')[0]) + '" onclick="cwOnlyStudent(this)">只看此人</span>'
-          + '</div><div class="qf-wgroup-strip">' + cards + '</div></div>';
+          + '</div><div class="act-wgroup-strip">' + cards + '</div></div>';
       }).join('');
     } else {
-      box.innerHTML = '<div class="' + cls + ' qf-wbox">'
+      box.innerHTML = '<div class="' + cls + ' act-wbox">'
         + list.map((w, i) => cwWorkCardHtml(w, i)).join('') + '</div>';
     }
   }
@@ -34798,8 +34695,8 @@ function cwOnlyStudent(el) {
   if (!nm) return;
   cwWorkSearch = nm;
   cwWorkGroup = 'none';
-  const q = document.getElementById('qfWSearch'); if (q) q.value = nm;
-  const g = document.getElementById('qfWGroup'); if (g) g.value = 'none';
+  const q = document.getElementById('actWSearch'); if (q) q.value = nm;
+  const g = document.getElementById('actWGroup'); if (g) g.value = 'none';
   cwWorkFp = '';
   cwPaintWorks();
 }
@@ -34810,13 +34707,13 @@ function cwWorkCardHtml(w, i) {
   if (w.kind === 'image') th = '<img src="' + esc(w.full) + '" alt="' + esc(w.student + ' ' + w.name) + '" loading="lazy">';
   else if (w.kind === 'video') th = '<video src="' + esc(w.full) + '" preload="metadata" muted></video>';
   else th = fileTypeIcon(w.name, 32);
-  return '<div class="qf-work" onclick="cwOpenWork(' + i + ')" title="' + esc(w.student + ' · ' + (w.label || w.name)) + '">'
+  return '<div class="act-work" onclick="cwOpenWork(' + i + ')" title="' + esc(w.student + ' · ' + (w.label || w.name)) + '">'
     + '<div class="th">' + th
     + (w.kind !== 'image' ? '<span class="kbadge">' + esc(CW_KIND_NAME[w.kind] || '文件') + '</span>' : '')
     + (w.multi ? '<span class="kbadge" style="left:auto;right:6px;background:rgba(0,0,0,.55)">' + (w.seq + 1) + ' / 多文件</span>' : '')
     + '</div>'
     + '<div class="meta"><div class="who">' + esc(w.student) + (w.no ? '　' + esc(w.no) : '')
-    + (w.group ? '<span class="qf-wgrp">' + esc(w.group) + '</span>' : '') + '</div>'
+    + (w.group ? '<span class="act-wgrp">' + esc(w.group) + '</span>' : '') + '</div>'
     + '<div class="fn2">' + esc(w.label || w.name) + '</div></div></div>';
 }
 
@@ -34832,11 +34729,11 @@ function cwWorkListHtml(list) {
     return '<tr onclick="cwOpenWork(' + i + ')">'
       + '<td style="width:58px">' + ico + '</td>'
       + '<td><b>' + esc(w.student) + '</b></td>'
-      + '<td class="qf-muted">' + esc(w.no || '—') + '</td>'
-      + '<td class="qf-muted">' + esc(w.group || '—') + '</td>'
+      + '<td class="act-muted">' + esc(w.no || '—') + '</td>'
+      + '<td class="act-muted">' + esc(w.group || '—') + '</td>'
       + '<td><div class="wname" title="' + esc(w.label + (w.title ? '（文件：' + w.name + '）' : '')) + '">' + esc(w.label || w.name) + '</div></td>'
       + '<td><span class="cw-badge gray">' + esc(CW_KIND_NAME[w.kind] || '文件') + '</span></td>'
-      + '<td class="qf-muted" style="white-space:nowrap">' + esc(String(w.ts || '').slice(5) || '—') + '</td>'
+      + '<td class="act-muted" style="white-space:nowrap">' + esc(String(w.ts || '').slice(5) || '—') + '</td>'
       + '<td class="wgo">查看 →</td></tr>';
   };
   const body = cwWorkGroups(list).map(g => {
@@ -34846,40 +34743,40 @@ function cwWorkListHtml(list) {
       : '';
     return head + g.items.map(rowOf).join('');
   }).join('');
-  return '<div class="qf-wlist-wrap qf-wbox"><table class="qf-wlist">'
+  return '<div class="act-wlist-wrap act-wbox"><table class="act-wlist">'
     + '<thead><tr><th></th><th>姓名</th><th>学号</th><th>组别</th><th>文件</th><th>类型</th><th>提交时间</th><th></th></tr></thead>'
     + '<tbody>' + body + '</tbody></table></div>';
 }
 
 /* 大图视图：一张一张看，适合课堂投影 */
 function cwStageHtml(list) {
-  return '<div class="qf-stage qf-wbox">'
-    + '<div class="qf-stage-main" id="qfStageMain">' + cwStageBodyHtml(list[cwStageIdx]) + '</div>'
-    + '<button class="qf-stage-nav l" id="qfStagePrev" onclick="cwStageGo(-1)" title="上一个（←）">‹</button>'
-    + '<button class="qf-stage-nav r" id="qfStageNext" onclick="cwStageGo(1)" title="下一个（→）">›</button>'
-    + '<div class="qf-stage-bar" id="qfStageBar">' + cwStageBarHtml(list) + '</div>'
-    + '<div class="qf-stage-strip" id="qfStageStrip">' + cwStageStripHtml(list) + '</div>'
+  return '<div class="act-stage act-wbox">'
+    + '<div class="act-stage-main" id="actStageMain">' + cwStageBodyHtml(list[cwStageIdx]) + '</div>'
+    + '<button class="act-stage-nav l" id="actStagePrev" onclick="cwStageGo(-1)" title="上一个（←）">‹</button>'
+    + '<button class="act-stage-nav r" id="actStageNext" onclick="cwStageGo(1)" title="下一个（→）">›</button>'
+    + '<div class="act-stage-bar" id="actStageBar">' + cwStageBarHtml(list) + '</div>'
+    + '<div class="act-stage-strip" id="actStageStrip">' + cwStageStripHtml(list) + '</div>'
     + '</div>';
 }
 function cwStageBodyHtml(w) {
-  if (!w) return '<div class="qf-stage-ph">没有可展示的文件</div>';
+  if (!w) return '<div class="act-stage-ph">没有可展示的文件</div>';
   if (w.kind === 'image') return '<img src="' + esc(w.full) + '" alt="' + esc(w.name) + '">';
   if (w.kind === 'video') return '<video src="' + esc(w.full) + '" controls playsinline preload="metadata"></video>';
   if (w.kind === 'audio') return '<div style="text-align:center"><div style="font-size:48px;margin-bottom:14px">🎵</div>'
     + '<audio src="' + esc(w.full) + '" controls autoplay preload="metadata"></audio></div>';
   if (w.kind === 'pdf') return '<iframe src="' + esc(w.full) + '" title="' + esc(w.name) + '"></iframe>';
   if ((w.kind === 'office' || w.kind === 'text') && cwAvailable()) {
-    return '<iframe src="' + esc(CW_API + 'remote?base=' + encodeURIComponent(qfAbsBase())
+    return '<iframe src="' + esc(CW_API + 'remote?base=' + encodeURIComponent(actAbsBase())
       + '&url=' + encodeURIComponent(cwRelPath(w.url)) + cwDarkQs()) + '" title="' + esc(w.name) + '"></iframe>';
   }
-  return '<div class="qf-stage-ph"><div class="big">' + fileTypeIcon(w.name, 46) + '</div>'
+  return '<div class="act-stage-ph"><div class="big">' + fileTypeIcon(w.name, 46) + '</div>'
     + esc(w.name) + '<br><span style="font-size:13px;opacity:.8">这个格式没法直接看，点下面「全屏查看」下载原件</span></div>';
 }
 function cwStageBarHtml(list) {
   const w = list[cwStageIdx] || {};
   return '<span class="who">' + esc(w.student || '—') + '</span>'
     + (w.no ? '<span style="color:#9FB3AA">' + esc(w.no) + '</span>' : '')
-    + (w.group ? '<span class="qf-wgrp">' + esc(w.group) + '</span>' : '')
+    + (w.group ? '<span class="act-wgrp">' + esc(w.group) + '</span>' : '')
     + '<span class="fn">' + esc(w.label || w.name || '') + '</span>'
     + '<span class="idx">' + (cwStageIdx + 1) + ' / ' + list.length + '</span>'
     + '<span class="sp"></span>'
@@ -34890,7 +34787,7 @@ function cwStageStripHtml(list) {
     const inner = w.kind === 'image'
       ? '<img src="' + esc(w.full) + '" alt="" loading="lazy">'
       : fileTypeIcon(w.name, 18);
-    return '<div class="qf-stage-th' + (k === cwStageIdx ? ' on' : '') + '" onclick="cwStageJump(' + k + ')"'
+    return '<div class="act-stage-th' + (k === cwStageIdx ? ' on' : '') + '" onclick="cwStageJump(' + k + ')"'
       + ' title="' + esc(w.student + ' · ' + w.name) + '">' + inner + '</div>';
   }).join('');
 }
@@ -34898,10 +34795,10 @@ function cwStageStripHtml(list) {
 /* 切到大图模式第 i 个：只换主体 + 状态，不重建整块（切得快、视频不重载） */
 function cwStageUpdate() {
   const list = cwFilteredWorks();
-  const main = document.getElementById('qfStageMain');
-  const bar = document.getElementById('qfStageBar');
-  const strip = document.getElementById('qfStageStrip');
-  if (!main) { cwWorkFp = ''; cwPaintWorks(qfLastMatched); return; }
+  const main = document.getElementById('actStageMain');
+  const bar = document.getElementById('actStageBar');
+  const strip = document.getElementById('actStageStrip');
+  if (!main) { cwWorkFp = ''; cwPaintWorks(actLastMatched); return; }
   main.innerHTML = cwStageBodyHtml(list[cwStageIdx]);
   if (bar) bar.innerHTML = cwStageBarHtml(list);
   if (strip) {
@@ -34940,62 +34837,62 @@ window.cwStageFull = cwStageFull;
    ============================================================ */
 function cwWorksPaneHtml() {
   const opt = (v, t, cur) => '<option value="' + v + '"' + (cur === v ? ' selected' : '') + '>' + t + '</option>';
-  return '<div class="qf-card">'
-    + '<div class="qf-card-h" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">🖼 学生作品浏览'
-    +   '<span style="margin-left:auto;font-weight:400;font-size:12px;color:var(--text-secondary)" id="qfWorkCount"></span>'
+  return '<div class="act-card">'
+    + '<div class="act-card-h" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">🖼 学生作品浏览'
+    +   '<span style="margin-left:auto;font-weight:400;font-size:12px;color:var(--text-secondary)" id="actWorkCount"></span>'
     + '</div>'
-    + '<div class="qf-wrow"><div class="qf-ktabs" id="qfWorkTabs"></div></div>'
-    + '<div class="qf-wrow">'
-    +   '<input id="qfWSearch" class="qf-winp" type="search" autocomplete="off"'
+    + '<div class="act-wrow"><div class="act-ktabs" id="actWorkTabs"></div></div>'
+    + '<div class="act-wrow">'
+    +   '<input id="actWSearch" class="act-winp" type="search" autocomplete="off"'
     +     ' placeholder="🔍 搜姓名 / 学号 / 文件名" value="' + esc(cwWorkSearch) + '" oninput="cwSetWorkSearch(this.value)">'
-    +   '<select id="qfWSort" class="qf-wsel" onchange="cwSetWorkSort(this.value)" title="排序方式">'
+    +   '<select id="actWSort" class="act-wsel" onchange="cwSetWorkSort(this.value)" title="排序方式">'
     +     opt('time', '最新提交在前', cwWorkSort) + opt('timeAsc', '最早提交在前', cwWorkSort)
     +     opt('name', '按姓名', cwWorkSort) + opt('kind', '按类型（图片优先）', cwWorkSort)
     +     opt('file', '按文件名', cwWorkSort)
     +   '</select>'
-    +   '<select id="qfWGroup" class="qf-wsel" onchange="cwSetWorkGroup(this.value)" title="分组方式">'
+    +   '<select id="actWGroup" class="act-wsel" onchange="cwSetWorkGroup(this.value)" title="分组方式">'
     +     opt('none', '不分组', cwWorkGroup) + opt('student', '按学生分组', cwWorkGroup)
     +   '</select>'
     +   '<span class="act-rt-sp"></span>'
-    +   '<div class="qf-vtabs" id="qfWorkViews"></div>'
+    +   '<div class="act-vtabs" id="actWorkViews"></div>'
     +   '<button class="btn btn-ghost btn-sm" onclick="cwWorksRefresh()" title="重新读取最新提交">↻ 刷新</button>'
     + '</div>'
-    + '<div id="qfWorksBox"></div>'
+    + '<div id="actWorksBox"></div>'
     + '</div>';
 }
 
 function cwWorksVisible() {
-  const p = document.getElementById('qfPaneWorks');
-  return !!p && p.style.display !== 'none' && !!document.getElementById('qfWorksBox');
+  const p = document.getElementById('actPaneWorks');
+  return !!p && p.style.display !== 'none' && !!document.getElementById('actWorksBox');
 }
 
 /** 进入作品页签：按需建壳 + 必要时先取一次数据 */
 function cwWorksEnter(force) {
-  const pane = document.getElementById('qfPaneWorks');
+  const pane = document.getElementById('actPaneWorks');
   if (!pane) return;
-  if (!qfActiveId) {
+  if (!actActiveId) {
     pane.dataset.key = '';
-    pane.innerHTML = '<div class="qf-muted">请先在上方「① 选择活动」里绑定一个活动，再浏览学生作品。</div>';
+    pane.innerHTML = '<div class="act-muted">请先在上方「① 选择活动」里绑定一个活动，再浏览学生作品。</div>';
     return;
   }
   if (actCurClass() == null) {
     pane.dataset.key = 'noclass';
-    pane.innerHTML = '<div class="qf-muted">请先在顶部「班级」里选择一个具体班级 —— 作品按班级匹配显示，选「全部班级」时无法核对是谁的作品。</div>';
+    pane.innerHTML = '<div class="act-muted">请先在顶部「班级」里选择一个具体班级 —— 作品按班级匹配显示，选「全部班级」时无法核对是谁的作品。</div>';
     return;
   }
-  const key = String(qfActiveId) + '|' + String(actCurClass());
-  const changed = pane.dataset.key !== key || !document.getElementById('qfWorksBox');
+  const key = String(actActiveId) + '|' + String(actCurClass());
+  const changed = pane.dataset.key !== key || !document.getElementById('actWorksBox');
   if (changed) {
     pane.dataset.key = key;
     pane.innerHTML = cwWorksPaneHtml();
     force = true;
   }
-  if (force || !qfLastMatched.length) {
+  if (force || !actLastMatched.length) {
     cwWorkFp = '';
-    qfRenderDash().then(() => cwPaintWorks(qfLastMatched)).catch(() => cwPaintWorks([]));
+    actRenderDash().then(() => cwPaintWorks(actLastMatched)).catch(() => cwPaintWorks([]));
   } else {
     cwWorkFp = '';
-    cwPaintWorks(qfLastMatched);
+    cwPaintWorks(actLastMatched);
   }
 }
 window.cwWorksEnter = cwWorksEnter;
@@ -35003,14 +34900,14 @@ window.cwWorksEnter = cwWorksEnter;
 function cwWorksRefresh() {
   cwWorkFp = '';
   if (cwWorksVisible()) cwWorksEnter(true);
-  else qfRenderDash();
+  else actRenderDash();
   toast('正在读取最新提交…');
 }
 window.cwWorksRefresh = cwWorksRefresh;
 
 /* 大屏里的「最近作品」小条：8 个缩略图 + 进作品页的入口 */
 function cwPaintRecent(rows) {
-  const box = document.getElementById('qfRecentBox');
+  const box = document.getElementById('actRecentBox');
   if (!box) return;
   const all = cwCollectWorks(rows || []);
   if (!all.length) {
@@ -35018,14 +34915,14 @@ function cwPaintRecent(rows) {
     return;
   }
   cwRecentList = all.slice(0, 8);
-  box.innerHTML = '<div class="qf-recent">' + cwRecentList.map((w, i) =>
-      '<div class="qf-work" onclick="cwRecentOpen(' + i + ')" title="' + esc(w.student + ' · ' + w.name) + '">'
+  box.innerHTML = '<div class="act-recent">' + cwRecentList.map((w, i) =>
+      '<div class="act-work" onclick="cwRecentOpen(' + i + ')" title="' + esc(w.student + ' · ' + w.name) + '">'
       + '<div class="th">' + (w.kind === 'image'
           ? '<img src="' + esc(w.full) + '" alt="" loading="lazy">'
           : fileTypeIcon(w.name, 26))
       + '</div><div class="meta"><div class="who">' + esc(w.student) + '</div></div></div>').join('')
     + '</div>'
-    + '<div style="margin-top:10px"><button class="btn btn-ghost btn-sm" onclick="qfSwitchTab(\'works\')">'
+    + '<div style="margin-top:10px"><button class="btn btn-ghost btn-sm" onclick="actSwitchTab(\'works\')">'
     + '查看全部 ' + all.length + ' 个作品（缩略图墙 / 列表 / 大图）→</button></div>';
 }
 window.cwPaintRecent = cwPaintRecent;
@@ -35034,7 +34931,7 @@ window.cwPaintRecent = cwPaintRecent;
 function cwRecentOpen(i) {
   const w = cwRecentList[i];
   if (!w) return;
-  qfSwitchTab('works');
+  actSwitchTab('works');
   setTimeout(() => {
     let list = cwFilteredWorks();
     let k = list.findIndex(x => x.url === w.url);
@@ -35076,7 +34973,7 @@ function cwSetWorkGroup(v) {
 function cwClearWorkFilter() {
   cwWorkKind = 'all';
   cwWorkSearch = '';
-  const el = document.getElementById('qfWSearch');
+  const el = document.getElementById('actWSearch');
   if (el) el.value = '';
   cwWorkFp = '';
   cwStageIdx = 0;
@@ -35113,11 +35010,11 @@ function cwOpenWork(i) {
     size: '',
     src: w.full,
     download: w.full,
-    doc: (cwAvailable() ? (CW_API + 'remote?base=' + encodeURIComponent(qfAbsBase())
+    doc: (cwAvailable() ? (CW_API + 'remote?base=' + encodeURIComponent(actAbsBase())
           + '&url=' + encodeURIComponent(cwRelPath(w.url)) + cwDarkQs()) : ''),
     noDoc: !cwAvailable()
   }));
-  cwOpenViewer(items, i, qfTaskTitle());
+  cwOpenViewer(items, i, actTaskTitle());
 }
 window.cwOpenWork = cwOpenWork;
 window.cwPaintWorks = cwPaintWorks;

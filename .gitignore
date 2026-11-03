@@ -38,14 +38,6 @@ workbench-*.json
 # 以下目录/文件此前未被忽略，存在误提交真实数据、大文件的风险
 # ============================================================
 
-# QuickForm 运行期数据：SQLite 库（账号 / 密码哈希 / 任务 / 提交）与上传附件
-quickform/app/data/*
-!quickform/app/data/.keep
-quickform/app/static/uploads/*
-!quickform/app/static/uploads/.keep
-quickform/app/static/assets/*
-!quickform/app/static/assets/.keep
-
 # 课件库：含大体积课件（单个 pptx >100MB，超 GitHub/Gitee 单文件限制）与课堂作品
 app/courseware/
 

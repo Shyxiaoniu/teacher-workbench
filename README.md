@@ -11,7 +11,7 @@
 http://<服务器局域网 IP>:8080/        ← Docker 部署的入口；直接运行时是 :20020
 ├── /teacher/   教师端  —— 老师用电脑打开
 ├── /s/         学生端  —— 学生用手机打开
-└── /qf/        课堂活动接口（旧地址兼容；界面在教师端「上课」页）
+└── /api/act/   课堂活动接口（工作台内置；界面在教师端「上课」页）
 ```
 
 ---
@@ -52,19 +52,18 @@ http://<服务器局域网 IP>:8080/        ← Docker 部署的入口；直接�
 座位表是唯一会下发「同班同学姓名」的接口，给姓名、学号、座位号、小组与班干部职务
 （与教师端座位卡同一套信息），**不含电话、成绩、内部 id，也不带考勤状态**。
 
-### 课堂活动 `/qf/`（工作台内置）
+### 课堂活动（工作台内置）
 
-**2026-11-03 起，课堂活动已经并进工作台自己的库**：活动、提交、附件都在
-`workbench.db` 与 `data/activity/` 里，不再需要单独的 QuickForm 容器、也不再需要
-第二套账号密码。教师端「上课」页点 **⚙ 活动管理** 即可新建活动、上传教学资料、
-导出 CSV / JSON、清空或删除；旧数据可在同一面板里一键导入。
+课堂活动已经内嵌在工作台自己的库里：活动、提交、附件都在
+`workbench.db` 与 `data/activity/` 里，不需要任何额外的容器或第二套账号密码。
+教师端「上课」页点 **⚙ 活动管理** 即可新建活动、上传教学资料、
+导出 CSV / JSON、清空或删除。
 
-`/qf/api/*` 保留为**兼容接口**（学生提交页、自定义数据大屏、课件库归档都按这个格式走），
-其余 `/qf/*` 一律 302 回到教师端上课页，所以老师存的旧书签不会 404。
+活动接口在 `/api/act/*`（学生提交页、自定义数据大屏、课件库归档都按这个格式走），
+附件在 `/static/uploads/<活动号>/<文件>`。
 
-> 旧 QuickForm 源码仍留在 `quickform/`（默认不启动），作为临时回退：
-> 设 `WB_ACTIVITY_BACKEND=qf` 就切回原来的反代模式。许可说明见
-> [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。
+> 历史：2026-11-03 之前这里曾集成第三方表单服务 QuickForm；自该日起由本项目
+> 自研实现，相关源码与许可声明已整体移除。
 
 ---
 
@@ -111,7 +110,7 @@ http://<服务器局域网 IP>:8080/        ← Docker 部署的入口；直接�
 
 <img src="docs/shots/app/04-guide.png" alt="上课与课堂活动" width="960">
 
-选一个 QuickForm 活动即完成发放，学生「今日」里对应的课立刻出现入口；
+选一个课堂活动即完成发放，学生「今日」里对应的课立刻出现入口；
 也可以在下方直接上传交互式学习单页面。课上在这里看数据大屏与学生作品。
 
 ### 6. 课件 `#courseware`
@@ -263,16 +262,12 @@ http://<服务器局域网 IP>:8080/        ← Docker 部署的入口；直接�
 与 **PC 宽屏版 10 张**（1440×900，含宽屏布局对照表），连同每页的操作流程与状态说明，
 见 **[docs/学生端界面一览.md](docs/学生端界面一览.md)**。
 
-### 16. 课堂活动（原 QuickForm 入口）
+### 16. 课堂活动
 
-<img src="docs/shots/app/24-quickform.png" alt="课堂活动" width="760">
+<img src="docs/shots/app/24-activity.png" alt="课堂活动" width="760">
 
 活动的新建、改名、资料上传、数据导出都在教师端「上课」页的 **⚙ 活动管理** 里完成，
-不再有第二套后台与第二套账号。旧 `/qf/` 地址会自动跳回「上课」页。
-
-历史说明（旧 QuickForm 容器）保留在
-**[docs/QuickForm服务一键启动与稳定运行方案.md](docs/QuickForm服务一键启动与稳定运行方案.md)**，
-仅供回退时参考，默认部署已不需要它。
+一个账号、一个入口全搞定。
 
 ---
 
@@ -315,7 +310,7 @@ http://<服务器局域网 IP>:8080/        ← Docker 部署的入口；直接�
 1. 把项目解压 / 克隆到本地目录（路径尽量不含空格与特殊符号）。
 2. Windows 双击 `app\启动教师端.bat`；macOS 双击 `app/启动教师端.command`。
 3. 脚本会自动做三件事：启动工作台（默认 `http://127.0.0.1:20020/`）、
-   尝试拉起 QuickForm（`127.0.0.1:5055`）、打开浏览器。
+   自检端口与数据目录、打开浏览器。
 4. 学生用手机访问 `http://<这台电脑的局域网 IP>:20020/s/`。
 
 **常用启动参数**（追加在启动脚本后面，例如 `启动教师端.bat --port 20021`）：
@@ -326,22 +321,10 @@ http://<服务器局域网 IP>:8080/        ← Docker 部署的入口；直接�
 | `--bind 0.0.0.0` | 监听地址，默认就是全部网卡（学生才连得上） |
 | `--no-browser` | 启动后不自动打开浏览器 |
 | `--reset-password` | 忘记教师密码时重置 |
-| `--quickform background` | QuickForm 后台常驻（默认，关掉启动窗口也不停） |
-| `--quickform foreground` | QuickForm 前台启动，日志直接打在窗口里，关窗即停 |
-| `--quickform off` | 本次不启动 QuickForm |
-| `--qf-port 5055` | 指定 QuickForm 端口（被占用会自动顺延） |
-| `--qf-status` | 只看状态：进程 / 端口 / HTTP / 代理四条线 |
-| `--qf-stop` / `--qf-restart` | 停止 / 重启后台常驻的 QuickForm |
-
-不想记参数，也可以用 `app\` 下的三个快捷入口：
-`启动教师端-QuickForm后台.bat`、`启动教师端-QuickForm前台.bat`、`QuickForm服务状态.bat`。
+| `--no-dialog` | 端口被占时不弹窗，只报错（适合脚本 / 计划任务） |
 
 **注意：**
 
-- 首次启动若 QuickForm 起不来（缺 Flask 等依赖），启动器会把缺哪个模块、装哪条命令
-  直接打出来；这只影响 `/qf/` 与「活动」模块，考勤、导学单、作业、成绩等主功能照常可用。
-  完整的环境检查、配置项、启动步骤与异常处理见
-  [docs/QuickForm服务一键启动与稳定运行方案.md](docs/QuickForm服务一键启动与稳定运行方案.md)。
 - 电脑休眠、锁屏断网都会让学生掉线，长期使用建议走方式二。
 - 首次运行时 Windows 防火墙会弹窗询问，必须允许「专用网络」。
 
@@ -381,7 +364,6 @@ docker compose up -d --build
 | 变量 | 默认值 | 是否必改 | 说明 |
 |---|---|---|---|
 | `WEB_PORT` | `8080` | 按需 | 唯一对外端口，被占用时改这里；二维码与学生链接会自动跟随 |
-| `WB_ACTIVITY_BACKEND` | `builtin` | 不要动 | 课堂活动后端：`builtin` 工作台内置（推荐）；`qf` 才回退到旧 QuickForm 容器 |
 | `TZ` | `Asia/Shanghai` | 不要动 | 考勤与每日快照按本地日期归档 |
 | `WB_PUBLIC_URL` | 空 | 一般留空 | 只有前面再套域名 / 反向代理时才填完整地址 |
 | `WORKBENCH_DEBUG_PORT` | `20020` | 一般留空 | 仅服务器本机的排障通道，不对外 |
@@ -406,7 +388,7 @@ docker compose up -d --build
 | 要做的事 | 怎么做 |
 |---|---|
 | 设教师账号和密码 | 打开 `http://<服务器IP>:8080/teacher/`，按提示创建，**同时设置密保问题**（忘记密码时靠它自助找回） |
-| 改课堂活动设置 | 教师端「上课」页 → **⚙ 活动管理**；不再有独立的 QuickForm 账号 |
+| 改课堂活动设置 | 教师端「上课」页 → **⚙ 活动管理** |
 
 到这里系统就能用了，接下来把班级建起来。
 
@@ -542,12 +524,11 @@ docker compose logs -f workbench       # 有没有 activity 相关报错
 ```
 
 教师端「上课」页右上角的状态灯应当是「活动服务已就绪（工作台内置）」。
-若显示异常，刷新页面；仍旧异常时确认 `WB_ACTIVITY_BACKEND` 没有被误设成 `qf`
-（那样会去找已经不启动的 QuickForm 容器）。
+若显示异常，刷新页面；仍旧异常时看 `docker compose logs -f workbench` 里的报错。
 
-**旧 /qf/ 地址打不开**
-属正常：旧的 QuickForm 后台已经下线，访问 `/qf/` 会自动跳回教师端「上课」页，
-活动管理在页面右上角的 **⚙ 活动管理** 里。
+**课堂活动接口怎么访问**
+活动接口在 `/api/act/<活动号>`（列表 `/api/act/tasks`），附件在
+`/static/uploads/<活动号>/<文件>`；管理界面在教师端「上课」页右上角 **⚙ 活动管理**。
 
 **时区不对 / 考勤日期错位**
 Docker 部署确认 `.env` 里 `TZ=Asia/Shanghai` 没有被覆盖，改完重启容器；直接运行则跟随系统时区。
@@ -571,40 +552,25 @@ git pull && docker compose up -d --build
 任何人都可以免费使用、修改、再发布本项目，唯一义务是保留版权与许可声明。
 仓库中**不含任何真实班级、学生或成绩数据**，克隆下来是一个空工作台，首次访问会让你设置自己的账号密码。
 
-### 许可范围（重要：两套 MIT，两个版权人）
+### 许可范围
 
-本仓库里**不是所有代码都属于本项目**，按目录划分：
+本仓库的代码**全部属于本项目原创**（`app/`、`docker/`、`tools/`、`docs/`、根目录各文档），
+以 MIT 许可证发布，版权人 Copyright (c) 2026 Shyxiaoniu。
+第三方组件清单（如 Docker 基础镜像）见 **[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)**。
 
-| 目录 | 归属 | 许可证 | 版权人 |
-|---|---|---|---|
-| `app/`、`docker/`、`tools/`、`docs/`、根目录各文档 | 本项目原创 | MIT | Copyright (c) 2026 Shyxiaoniu |
-| `quickform/app/` | **QuickForm 教师版 2.5 官方源码，零改动** | MIT | **Copyright (c) 2026 xiezuoru（版权所有 (c) 2026 谢作如）** |
-| `quickform/` 下除 `app/` 之外（`serve.py` / `init_admin.py` / `Dockerfile` / `docker-entrypoint.sh`） | 本项目原创的适配层 | MIT | Copyright (c) 2026 Shyxiaoniu |
-
-**QuickForm** 是温州科技高级中学 AI 科创中心联合温州大学开发的智能表单管理服务，
-上游仓库 <https://gitee.com/wstlab/quickform>，以 MIT 许可证开源。
-本项目把它整体放进 `quickform/app/` 作为 `/qf/` 独立容器运行，**没有改动其源码**，
-其许可全文与版权声明随源码保留在 [quickform/app/LICENSE](quickform/app/LICENSE)。
-MIT 的义务只有一条：再分发时保留版权声明与许可全文——所以**转发本项目或发行包时，
-请不要删掉 `quickform/app/LICENSE`**。
-
-QuickForm 前端还带了一批第三方库（Bootstrap 5.1.3 / Bootstrap Icons 1.10.5 均 MIT、
-highlight.js 11.7.0 为 **BSD-3-Clause**、marked 15.0.12 MIT、qrcodejs MIT），
-完整清单、版本、位置与 Python 依赖许可见 **[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)**。
+> 历史：2026-11-03 之前仓库曾集成第三方表单服务 QuickForm（MIT，© 谢作如）；
+> 自该日起课堂活动由本项目自研，QuickForm 源码已整体移除，相应许可义务终止。
 
 ### 你可以做什么
 
 - 免费用于个人教学、学校内部部署、商业或非商业用途；
 - 修改源码、改界面、加功能，改成自己学校的样子；
 - 复制、分发、放进自己的发行版，甚至收费分发；
-- 唯一要求：**保留 `LICENSE`、`quickform/app/LICENSE` 与 `THIRD-PARTY-NOTICES.md`**，不要把别人的版权声明删掉或改成自己的。
+- 唯一要求：**保留 `LICENSE` 与 `THIRD-PARTY-NOTICES.md`**，不要把版权声明删掉或改成自己的。
 
 ### 你不可以做什么（限制）
 
-- **不得用原作者名义背书**：不能用「Shyxiaoniu」「谢作如」或「QuickForm 官方」的名义推广你的衍生版本，
-  也不能暗示本项目获得了 QuickForm 上游的官方认证；
-- **不得去掉 QuickForm 页面里的免责声明与来源链接**（页脚的「免责声明」「访问 QF 在线版」「联系我们」）；
-- **不得违反 BSD-3-Clause 的禁止背书条款**：使用 highlight.js 时不得以其贡献者名义为衍生产品背书；
+- **不得用原作者名义背书**：不能用「Shyxiaoniu」或「官方」的名义推广你的衍生版本；
 - **不得把本项目用于违法用途**，包括但不限于未经授权收集、买卖学生个人信息；
 - 本项目**不含任何真实数据**。若你在自己的部署里录入学生信息，那是你的数据处理行为，
   **相关合规责任（告知、同意、最小必要、安全保管）由部署者承担**，与代码作者无关。
@@ -616,11 +582,9 @@ highlight.js 11.7.0 为 **BSD-3-Clause**、marked 15.0.12 MIT、qrcodejs MIT）�
 2. 签到、考勤、成绩、德育等记录属于**日常教学记录，不构成法律意义上的证明**。
    涉及学生权益的重要结论，请以学校正式流程与纸质材料为准，并另行备份。
 3. **请勿存储身份证号、家庭住址、健康状况等敏感个人信息**；姓名、学号等必要信息请在取得学校许可、
-   并告知学生与家长的前提下使用。QuickForm 侧的官方提醒保持原样未改动，详见其
-   [免责声明](https://my.feishu.cn/docx/KYlJdyq3wojmwox8KJTcnKORnob)。
-4. 部署到公网或校园网前请自行加固（改默认口令、换 `QF_SECRET_KEY`、限访问范围、上 HTTPS、定期备份），
+   并告知学生与家长的前提下使用。
+4. 部署到公网或校园网前请自行加固（改默认口令、限访问范围、上 HTTPS、定期备份），
    **未加固导致的风险由部署者承担**。
-5. 本项目与 QuickForm 上游作者**无隶属或背书关系**。
 
 
 ---
@@ -659,24 +623,22 @@ python tools/make_release.py --out D:\dist    # 指定输出目录（默认 dist
 |---|---|
 | `启动工作台.bat` / `.command` | 双击启动（Windows / macOS），参数原样传给 `app/launch.py` |
 | `发行说明.md` | 版本、日期、启动方式、数据位置、重新构建方法 |
-| `app/` | 主程序：服务端、教师端页面、学生端（含网页图标）、打字练习、提交系统、图标 |
-| `quickform/` | 旧 QuickForm 源码（默认不启动，仅作临时回退；自带 `LICENSE`） |
+| `app/` | 主程序：服务端、教师端页面、学生端（含网页图标）、打字练习、提交系统、图标（课堂活动已内嵌） |
 | `docker/` + `Dockerfile` + `docker-compose.yml` + `.env.example` | 容器化部署所需全部文件 |
-| `docs/` | 9 份使用与设计文档 + `docs/shots/` 下的功能截图（教师端 / 学生端手机版 / 学生端 PC 版 / QuickForm），README 离线也能正常显示 |
+| `docs/` | 使用与设计文档 + `docs/shots/` 下的功能截图（教师端 / 学生端手机版 / 学生端 PC 版），README 离线也能正常显示 |
 | `README.md` / `LICENSE` | 使用说明与本项目的 MIT 许可证 |
-| `THIRD-PARTY-NOTICES.md` | 第三方组件清单（QuickForm 的 MIT 与版权、前端库版本、依赖许可） |
-| `quickform/app/LICENSE` | **QuickForm 上游 MIT 全文**，Copyright (c) 2026 xiezuoru，再分发时不可删除 |
+| `THIRD-PARTY-NOTICES.md` | 第三方组件清单与免责声明 |
 
 **不含**：任何真实班级 / 学生 / 家长 / 成绩数据、数据库文件、日志、上传附件、课件库、`.git`。
 解压出来是一套空白工作台，首次打开会让你设置自己的账号密码。
 
-当前这一版（`2.0` / `261103`）：201 个文件，解压后约 18.1 MB，压缩包约 14.5 MB
-（含 63 张功能截图：教师端 25、学生端手机版 18、学生端 PC 版 10、QuickForm 10）。
+当前这一版（`2.0` / `261103`）：190 个文件左右，解压后约 17 MB，压缩包约 14 MB
+（含 53 张功能截图：教师端 25、学生端手机版 18、学生端 PC 版 10）。
 解压后直接启动做过冒烟校验：首页、教师登录、学生端、`/favicon.ico`、`/s/favicon.ico`、
 `/s/manifest.webmanifest` 均正常返回。
 
-> 想要「内置 Python 运行时、连 Python 都不用装」的版本，在联网机器上先跑
-> `quickform/app/scripts/_build_win_runtime.sh` 生成 `runtime/`，再把整个目录打包即可。
+> 想要「内置 Python 运行时、连 Python 都不用装」的版本，在联网机器上准备好
+> `runtime/` 目录后，把整个目录一起打包即可（启动脚本会优先使用随包运行时）。
 
 ---
 
@@ -688,9 +650,8 @@ python tools/make_release.py --out D:\dist    # 指定输出目录（默认 dist
 | [docs/课堂系统工作流程-v2-学生机可联网-2026-11-01.md](docs/课堂系统工作流程-v2-学生机可联网-2026-11-01.md) | 考勤、导学单、提交统计三大环节的处理流程 |
 | [docs/使用场景与三端架构-2026-11-01.md](docs/使用场景与三端架构-2026-11-01.md) | 教师端、学生端、服务端的协作方式 |
 | [docs/导学单数据流设计.md](docs/导学单数据流设计.md) | 导学单从创建到学生端展示的数据流转 |
-| [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) | 第三方组件清单：QuickForm 的 MIT 与版权、前端库版本、Python 依赖许可、免责声明 |
+| [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) | 第三方组件清单、许可条件与免责声明 |
 
 ---
 
 <p align="center">班级工作台 2.0 · MIT License · Copyright (c) 2026 Shyxiaoniu</p>
-<p align="center">内含 QuickForm 教师版（MIT License · Copyright (c) 2026 谢作如），见 <code>quickform/app/LICENSE</code></p>

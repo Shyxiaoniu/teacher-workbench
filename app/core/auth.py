@@ -29,9 +29,8 @@ DEFAULT_CONFIG = {
                    "leave_reason": False},
     "sync": {"poll_seconds": 5, "tombstone_days": 90, "page_size": 800},
     "backup": {"auto_daily": True, "keep": 14},
-    # 课堂活动数据服务（QuickForm 一类的外部提交服务）。
-    # 只在教师端配一次；学生端和导学单页面都从服务端读，学生不再手填地址。
-    "activity": {"api_base": "", "submit_hours": 12},
+    # 课堂活动（自研内嵌）：活动 / 提交 / 附件都在工作台自己的库里。
+    "activity": {"submit_hours": 12},
 }
 
 _LOCK = threading.RLock()

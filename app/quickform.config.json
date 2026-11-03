@@ -1,4 +1,0 @@
-{
-  "apiBase": "/qf",
-  "note": "QuickForm 服务的地址。Docker / NAS 部署下它和教师端、学生端共用同一个网页入口：网关把 /qf/ 反代到 QuickForm 容器，所以这里用同源的相对路径 /qf，换 IP、换端口都不用改。只有把 QuickForm 单独跑在别的机器/端口时，才需要改成 http://<主机>:<端口>。"
-}

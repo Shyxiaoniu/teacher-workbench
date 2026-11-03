@@ -15,10 +15,6 @@ app/data
 app/submission-system/data
 # 课件库在容器里也走数据卷（WB_COURSEWARE_DIR），不进镜像
 app/courseware
-# QuickForm 的运行期文件：数据库 / 学生提交附件 / 任务附件
-quickform/app/data
-quickform/app/static/uploads
-quickform/app/static/assets
 **/__pycache__
 **/*.pyc
 **/.DS_Store

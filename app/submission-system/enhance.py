@@ -21,8 +21,8 @@
   subs_files/         已提交作品落盘（按 task/sid/版本 归档）
   materials/          素材副本（copy 模式）
 
-与 QuickForm 的关系：本模块自管存储与统计，门户 / 我的提交 / 核对大屏都读这里。
-（符合「门户与旧链接并行」策略；旧 class-activity 链接仍走 QuickForm，互不干扰。）
+本模块自管存储与统计：门户 / 我的提交 / 核对大屏都读这里，
+与课堂活动（app/activity.py）互不干扰、各用各的库。
 """
 
 import os
@@ -367,7 +367,7 @@ def task_get(key):
 
 
 def ensure_task(key, api="", class_names=None):
-    """取任务；不存在则用合理默认值创建（复用 QuickForm 的 task_id 作为 key）。"""
+    """取任务；不存在则用合理默认值创建（沿用历史 task_id 风格作为 key）。"""
     tasks = _load(TASKS_PATH, {})
     t = tasks.get(key)
     if not t:
@@ -460,8 +460,8 @@ def task_save(data):
     return {"ok": True, "task": task_public(t)}
 
 
-def qf_base(task):
-    """从 task.api 反推 QuickForm 的站点根（拼 /static/... 附件地址时用）。"""
+def api_origin(task):
+    """从 task.api 反推外部站点根（拼 /static/... 附件地址时用；相对路径返回空）。"""
     api = str((task or {}).get("api") or "")
     m = re.match(r"^(https?://[^/]+)", api)
     return m.group(1) if m else ""
@@ -1379,7 +1379,7 @@ def get_json(path, qs, host="", client_ip="", auth=None):
             return bad
         t = task_get(arg("task")) or {}
         rec = my_record(arg("task"), arg("sid")) or {}
-        return {"ok": True, "record": rec, "qf_base": qf_base(t)}
+        return {"ok": True, "record": rec, "api_origin": api_origin(t)}
 
     if path == "/api/enh/my":
         bad = _self_only(auth, arg("sid"), "查看别人的记录")

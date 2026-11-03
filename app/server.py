@@ -46,7 +46,7 @@ import pages as P                      # noqa: E402
 import projection as PJ                # noqa: E402
 import ports as PORTX                  # noqa: E402
 from store import Store, TABLES, ImportRefused   # noqa: E402
-from activity import ActivityStore, parse_multipart   # noqa: E402  课堂活动（自研，替代 QuickForm）
+from activity import ActivityStore, parse_multipart   # noqa: E402  课堂活动（自研）
 from typing_store import TypingStore   # noqa: E402
 import ooxml_preview as OOX            # noqa: E402  课件在线预览（纯 Python 解析 OOXML）
 
@@ -72,9 +72,9 @@ LEG.STATIC_ROOT = ROOT
 
 PORT = PORTX.DEFAULT_PORT
 STORE = Store(DB_PATH)
-# 课堂活动（2026-11-03 · 方案 B）：活动/提交/附件落自己的表，附件落
-# <数据目录>/activity/<活动号>/，附件 URL 沿用 /static/uploads/…（与 QuickForm 同构，
-# 前端大屏、课件库归档、自定义页面都不用改）。
+# 课堂活动（自研）：活动/提交/附件落自己的表，附件落
+# <数据目录>/activity/<活动号>/，附件 URL 用 /static/uploads/…，
+# 前端大屏、课件库归档、自定义页面都按这个前缀取。
 ACT = ActivityStore(DB_PATH, os.path.join(DATA_DIR, "activity"))
 CFG = A.load_config(CONFIG_PATH)
 SESS = A.Sessions()
@@ -84,10 +84,9 @@ if not isinstance(CFG.get("typing"), dict):
     CFG["typing"] = {}
 CFG["typing"].setdefault("enabled", False)
 CFG["typing"].setdefault("grades", [])
-# 课堂活动后端：builtin=自研（默认，2026-11-03 起）/ qf=仍转发给 QuickForm（回退用）
+# 课堂活动配置（提交有效时长等；后端只有自研一种，不再有开关）
 if not isinstance(CFG.get("activity"), dict):
     CFG["activity"] = {}
-CFG["activity"].setdefault("backend", "builtin")
 PET_IDS = ["cat", "dog", "rabbit", "penguin", "panda", "dino", "unicorn", "dragon"]
 COND = threading.Condition()
 STARTED = time.time()
@@ -371,49 +370,6 @@ def get_gticket(tok):
     return v
 
 
-def activity_base():
-    """课堂活动数据服务地址（教师端配置，去掉末尾斜杠）"""
-    v = str((CFG.get("activity") or {}).get("api_base") or "").strip()
-    return v.rstrip("/")
-
-
-def activity_backend():
-    """课堂活动后端：builtin（自研，默认）或 qf（回退到 QuickForm）。
-
-    优先级：环境变量 > 教师端设置 > 默认 builtin。
-    环境变量放最高，是因为容器/计划任务里改一行就能整体切回去，不用开页面。
-    """
-    v = (os.environ.get("WB_ACTIVITY_BACKEND")
-         or (CFG.get("activity") or {}).get("backend") or "builtin")
-    return "qf" if str(v).strip().lower() == "qf" else "builtin"
-
-
-def _mp_append(raw, ctype, fields):
-    """往 multipart 请求体末尾追加几个文本字段，保留原有文件与全部内容。
-
-    不解析重组：文件段是二进制，重组容易把编码弄坏。这里找到结束边界
-    （`--boundary--` 只会出现在最后），在它前面插几段 part 就行。
-    返回 (新 body, 原 content-type) 或 None（看不懂就交给调用方报错）。
-    """
-    import re as _re
-    m = _re.search(r'boundary=([^;]+)', ctype or "", _re.I)
-    if not m:
-        return None
-    b = m.group(1).strip().strip('"')
-    if not b:
-        return None
-    tail = ("--" + b + "--").encode("latin-1", "ignore")
-    idx = raw.rfind(tail)
-    if idx < 0:
-        return None
-    extra = b""
-    for k, v in (fields or {}).items():
-        extra += ("--" + b + "\r\n"
-                  "Content-Disposition: form-data; name=\"" + str(k) + "\"\r\n\r\n").encode("utf-8")
-        extra += str(v if v is not None else "").encode("utf-8") + b"\r\n"
-    return raw[:idx] + extra + raw[idx:], ctype
-
-
 # ---------------------------------------------------------------------------
 # 课件在线预览：Office 文档（PPT/Word/Excel）在服务端渲染成 HTML 后内联
 # ---------------------------------------------------------------------------
@@ -691,164 +647,41 @@ class Handler(LEG.Handler):
                        "请用同一内网的电脑或手机打开页面创建账号。")
 
     # ------------------------------------------------------------------
-    # GET
+    # 课堂活动接口：/api/act/*（自研）
     # ------------------------------------------------------------------
-    def _qf_proxy(self, path, query="", body=None):
-        """把 /qf/* 反向代理给 QuickForm 服务（2026-11-01 深夜新增）。
+    # 形状沿用原来的活动数据服务契约，前端与自定义页面不用改：
+    #   GET  /api/act/tasks            活动列表
+    #   GET  /api/act/<活动号>[/all]    全量提交（带 学号/姓名/班级/附件）
+    #   GET  /api/act/<活动号>/count    提交条数
+    #   POST /api/act/<活动号>         匿名提交（老师自设计页面直连用）
+    #   GET  /api/act/static/uploads/…  附件（也可直接用同源的 /static/uploads/…）
+    def _act_api(self, path, query="", body=None):
+        # 统一入口：do_GET / do_POST 都把 /api/act* 交给这里
+        return self._act_local(path, query, body)
 
-        为什么：Docker 部署时 /qf 由 nginx 网关转发；但老师直连工作台端口
-        （127.0.0.1:20020，排障/单机跑）时没有网关，/qf/dashboard 会掉进
-        旧静态服务返回「禁止访问」。这里在工作台进程内补一条同款转发：
-        直连、容器两种场景都可用（容器里 WB_QUICKFORM_URL 指向 quickform 容器）。
-        """
-        base = (os.environ.get("WB_QUICKFORM_URL") or "http://127.0.0.1:5055").rstrip("/")
-        # 不跟随重定向：urlopen 默认会在代理内部私吞 302 并按上游地址拼接
-        # Location，而适配层生成的 Location 带 /qf 前缀，拼到上游就成了
-        # /qf/profile 这种 404 路径。必须把 302 原样交回浏览器（2026-11-02）。
-        global _QF_OPENER
-        try:
-            opener = _QF_OPENER
-        except NameError:
-            class _NoRedirect(urllib.request.HTTPRedirectHandler):
-                def redirect_request(self, req, fp, code, msg, headers, newurl):
-                    return None
-            _QF_OPENER = opener = urllib.request.build_opener(_NoRedirect)
-        sub = path[len("/qf"):] or "/"
-        url = base + sub + (("?" + query) if query else "")
-        req = urllib.request.Request(url, data=body,
-                                     method="POST" if body is not None else "GET")
-        for h in ("Cookie", "Content-Type", "Accept", "Accept-Language", "User-Agent"):
-            v = self.headers.get(h)
-            if v:
-                req.add_header(h, v)
-        req.add_header("X-Forwarded-Prefix", "/qf")     # QuickForm 适配层靠它补前缀
-        req.add_header("X-Forwarded-Proto", "http")
-        try:
-            ip = A.client_ip(self)
-        except Exception:
-            ip = ""
-        if ip:
-            req.add_header("X-Forwarded-For", ip)
-        try:
-            with opener.open(req, timeout=30) as r:
-                data, status = r.read(), r.status
-                ctype = r.headers.get("Content-Type", "text/html; charset=utf-8")
-                loc = r.headers.get("Location")
-                setc = r.headers.get("Set-Cookie")
-        except urllib.error.HTTPError as e:
-            data, status = e.read(), e.code
-            ctype = e.headers.get("Content-Type", "text/html; charset=utf-8")
-            loc = e.headers.get("Location")
-            setc = e.headers.get("Set-Cookie")
-        except Exception:
-            msg = ("QuickForm 服务未启动或不可达（%s）。"
-                   "可在服务器上单独启动 QuickForm 后刷新，"
-                   "或改用统一入口（nginx 网关）访问。" % base)
-            body = msg.encode("utf-8")
-            self.send_response(502)
-            self.send_header("Content-Type", "text/plain; charset=utf-8")
-            self.send_header("Content-Length", str(len(body)))
-            self.send_header("Cache-Control", "no-store")
-            self.end_headers()
-            try:
-                self.wfile.write(body)
-            except (BrokenPipeError, ConnectionResetError):
-                pass
-            return
-        # 上游 302 → /dashboard 之类，补回 /qf 前缀再交给浏览器。
-        # 注意：QuickForm 适配层（serve.py 的 ProxyFix）可能已生成带前缀的
-        # Location（如 /qf/profile），此时不能再补，否则浏览器拿到 /qf/qf/…
-        # 双前缀，剥回上游变成 /qf/profile 直接 404（2026-11-02 登录踩坑）。
-        if loc and status in (301, 302, 303, 307, 308) and loc.startswith("/") \
-                and not loc.startswith("//") and not loc.startswith("/qf/"):
-            loc = "/qf" + loc
-            self.send_response(status)
-            self.send_header("Location", loc)
-            if setc:
-                self.send_header("Set-Cookie", setc)
-            self.send_header("Content-Length", "0")
-            self.send_header("Cache-Control", "no-store")
-            self.end_headers()
-            return
-        self.send_response(status)
-        self.send_header("Content-Type", ctype)
-        self.send_header("Content-Length", str(len(data)))
-        self.send_header("Cache-Control", "no-store")
-        if setc:
-            self.send_header("Set-Cookie", setc)
-        self.end_headers()
-        try:
-            self.wfile.write(data)
-        except (BrokenPipeError, ConnectionResetError):
-            pass
-
-    def _qf_internal_call(self, sub_path, method="POST"):
-        """工作台 → QuickForm 的内部可信调用（需求 5：读数据 / 清空 / 删除）。
-
-        QuickForm 自带的删除/清空接口挂在 @login_required + 所有者校验后面，
-        但教师端不登录 QuickForm。适配层 serve.py 新增了 /_wb_internal/* 端点：
-        同机回环直接放行，跨容器则校验 X-WB-Internal 共享密钥。这里负责调用它。
-        """
-        base = (os.environ.get("WB_QUICKFORM_URL") or "http://127.0.0.1:5055").rstrip("/")
-        url = base + sub_path
-        req = urllib.request.Request(
-            url, data=(b"" if method == "POST" else None), method=method)
-        secret = os.environ.get("WB_INTERNAL_SECRET") or ""
-        if secret:
-            req.add_header("X-WB-Internal", secret)
-        try:
-            with urllib.request.urlopen(req, timeout=30) as r:
-                txt, code = r.read().decode("utf-8", "ignore"), r.status
-        except urllib.error.HTTPError as e:
-            txt, code = e.read().decode("utf-8", "ignore"), e.code
-        except Exception as e:
-            sys.stderr.write("[qf-internal] %s -> %r\n" % (url, e))
-            return {"ok": False, "msg": "QuickForm 内部调用失败：%s" % e}, 502
-        try:
-            out = json.loads(txt) if txt.strip() else {}
-        except Exception:
-            out = {"raw": txt[:200]}
-        if not isinstance(out, dict):
-            out = {"raw": txt[:200]}
-        ok = out.get("success") if "success" in out else (200 <= code < 300)
-        out["ok"] = bool(ok)
-        return out, (200 if 200 <= code < 300 else code)
-
-    # ------------------------------------------------------------------
-    # 课堂活动：自研后端（2026-11-03 · 方案 B）
-    # ------------------------------------------------------------------
-    # 前端 2 万行代码原来直连 /qf/api/*，这里在同一个 URL 上换实现，
-    # 前端一行不用改：接口形状、字段名、附件 URL 全部按 QuickForm 的来。
-    # 想退回旧的 QuickForm：设置 activity.backend=qf 或环境变量
-    # WB_ACTIVITY_BACKEND=qf，本函数自动改回反代。
-    def _qf_dispatch(self, path, query="", body=None):
-        if activity_backend() == "qf":
-            return self._qf_proxy(path, query, body)
-        return self._qf_local(path, query, body)
-
-    def _qf_task_json(self, t):
-        """把内部活动行翻译成 QuickForm /api/tasks 的形状（api 给相对路径）。"""
+    def _act_task_json(self, t):
+        """把内部活动行翻译成 /api/act/tasks 的形状（api 给相对路径）。"""
         return {"task_id": t["task_id"], "title": t["title"],
                 "description": t.get("description") or "",
                 "count": t.get("count", 0),
                 "created_at": t.get("created_at") or "",
-                "api": "/qf/api/" + urllib.parse.quote(t["task_id"], safe="")}
+                "api": "/api/act/" + urllib.parse.quote(t["task_id"], safe="")}
 
-    def _qf_local(self, path, query="", body=None):
-        sub = path[len("/qf"):] or "/"
+    def _act_local(self, path, query="", body=None):
+        sub = path[len("/api/act"):] or "/"
         method_post = body is not None
 
-        # 附件：/qf/static/uploads/<活动>/<文件>（QuickForm 模板里的绝对路径）
+        # 附件：/api/act/static/uploads/<活动>/<文件>（也可直接用 /static/uploads/…）
         if sub.startswith("/static/uploads/"):
             return self._act_file(path)
 
         # 活动列表
-        if sub == "/api/tasks":
-            tasks = [self._qf_task_json(t) for t in ACT.tasks()]
+        if sub == "/tasks":
+            tasks = [self._act_task_json(t) for t in ACT.tasks()]
             return self._json_cors_success({"success": True, "tasks": tasks})
 
-        if sub.startswith("/api/"):
-            rest = sub[len("/api/"):].strip("/")
+        if sub.startswith("/"):
+            rest = sub[1:].strip("/")
             if not rest:
                 return self._json_cors({"ok": False, "msg": "缺少活动号"}, 400)
             parts = rest.split("/")
@@ -872,41 +705,10 @@ class Handler(LEG.Handler):
                 return self._act_api_submit(quoted, task, body)
             return self._json_cors({"ok": False, "msg": "不支持的接口"}, 404)
 
-        # 工作台内部端点（数据大屏的读 / 清空 / 删单条）
-        if sub.startswith("/_wb_internal/"):
-            if not self._is_teacher():
-                return self._json_cors({"success": False, "ok": False,
-                                        "message": "未登录"}, 401)
-            rest = sub[len("/_wb_internal/"):].strip("/")
-            head, _, arg = rest.partition("/")
-            arg = urllib.parse.unquote(arg)
-            if head == "list":
-                t = ACT.get_task(arg)
-                if not t:
-                    return self._json_cors({"ok": False, "msg": "任务不存在"}, 404)
-                subs = ACT.submissions(arg)
-                return self._json_cors_success({
-                    "submissions": subs, "task_id": arg, "task_title": t["title"],
-                    "total_submissions": len(subs)})
-            if head == "clear":
-                n, _ids = ACT.clear(arg)
-                return self._json_cors_success({"success": True, "deleted": n,
-                                                "message": "已清空所有提交数据"})
-            if head == "delete":
-                if not arg.isdigit():
-                    return self._json_cors({"success": False, "message": "提交号不合法"}, 400)
-                ok = ACT.delete_submission(int(arg))
-                return self._json_cors_success(
-                    {"success": ok, "message": "提交数据已删除" if ok else "提交数据不存在"},
-                    200 if ok else 404)
-            return self._json_cors({"ok": False, "msg": "不支持的内部接口"}, 404)
-
-        # QuickForm 自己的页面（dashboard / login / profile）已下线：
-        # 老师存的书签不能变 404，统一送回教师端「上课 · 课堂活动」。
-        return self._redirect("/teacher/#guide")
+        return self._json_cors({"ok": False, "msg": "不支持的接口"}, 404)
 
     def _act_api_submit(self, task_key, task, raw):
-        """兼容 QuickForm 的匿名提交口（/qf/api/<task> POST）。
+        """匿名提交口（/api/act/<活动号> POST）。
 
         学生正常走 /api/v2/student/submit（带票、身份由服务端补）；
         这个口留给老师自己设计的页面直连，身份就按提交里带的学号/姓名认。
@@ -1065,12 +867,11 @@ class Handler(LEG.Handler):
                 return self._redirect("/typing/")
             if path.startswith("/typing/"):
                 return self._typing_static(path[len("/typing/"):])
-            if path == "/qf":
-                return self._redirect("/qf/")
-            if path.startswith("/qf/"):
-                return self._qf_dispatch(path, u.query)
-            # 课堂活动附件：QuickForm 时代的 URL 就是 /static/uploads/<活动>/<文件>，
-            # 大屏、课件库归档、自定义页面都按这个前缀取，所以必须照旧可访问。
+            # 课堂活动接口：/api/act/*（自研）
+            if path.startswith("/api/act/") or path == "/api/act":
+                return self._act_api(path, u.query)
+            # 课堂活动附件：URL 就是 /static/uploads/<活动>/<文件>，
+            # 大屏、课件库归档、自定义页面都按这个前缀取，所以必须可访问。
             if path.startswith("/static/uploads/"):
                 return self._act_file(path)
             if path.startswith("/teacher/"):
@@ -1445,57 +1246,15 @@ class Handler(LEG.Handler):
         who = {"学号": gt.get("no") or "", "姓名": gt.get("name") or "",
                "班级": gt.get("cls") or ""}
 
-        # 自研后端：不再需要「活动数据服务地址」，也不跨进程转发，直接落本地库
-        if activity_backend() == "builtin":
-            return self._student_submit_local(task, gt, raw, ctype, who)
-
-        base = activity_base()
-        if not base:
-            return self._json_cors({"ok": False,
-                                    "msg": "老师还没有在教师端配置「活动数据服务」地址"}, 503)
-
-        if ctype.lower().startswith("multipart/form-data"):
-            out = _mp_append(raw, ctype, who)
-            if out is None:
-                return self._json_cors({"ok": False, "msg": "提交内容格式无法解析"}, 400)
-            body, ctype = out
-        else:
-            # 非表单（JSON）：身份字段直接覆盖进去
-            try:
-                obj = json.loads(raw.decode("utf-8") or "{}")
-                if not isinstance(obj, dict):
-                    obj = {"答案": raw.decode("utf-8", "ignore")[:5000]}
-            except Exception:
-                obj = {"答案": raw.decode("utf-8", "ignore")[:5000]}
-            obj.update(who)
-            body = json.dumps(obj, ensure_ascii=False).encode("utf-8")
-            ctype = "application/json"
-
-        url = base + "/api/" + urllib.parse.quote(task)
-        req = urllib.request.Request(url, data=body, method="POST")
-        req.add_header("Content-Type", ctype)
-        try:
-            with urllib.request.urlopen(req, timeout=30) as resp:
-                txt = resp.read().decode("utf-8", "ignore")
-                code = resp.status
-        except Exception as e:
-            sys.stderr.write("[submit] %s -> %r\n" % (url, e))
-            return self._json_cors({"ok": False,
-                                    "msg": "连不上活动数据服务（%s），请让老师在教师端检查地址" % base}, 502)
-        try:
-            out = json.loads(txt) if txt.strip() else {"ok": True}
-        except Exception:
-            out = {"ok": True, "raw": txt[:200]}
-        if isinstance(out, dict) and "ok" not in out:
-            out["ok"] = 200 <= code < 300
-        return self._json_cors(out, 200 if 200 <= code < 300 else code)
+        # 提交直接落本地活动库（自研后端），不再有跨进程转发
+        return self._student_submit_local(task, gt, raw, ctype, who)
 
     def _student_submit_local(self, task, gt, raw, ctype, who):
         """学生提交（自研后端）：解析 → 补身份 → 落库，全程本进程内完成。
 
         比转发版本多做了两件事：
           · 文件确实落到 <数据目录>/activity/<活动>/，并回填 /static/uploads/… 路径；
-          · 同一学生重复提交时给出「已覆盖」提示（QuickForm 只会追加一条，
+          · 同一学生重复提交时给出「已覆盖」提示（旧的转发模式只会追加一条，
             数据大屏上同一人出现两行，老师要自己认哪条是新的）。
         """
         if not ACT.get_task(task):
@@ -1583,10 +1342,10 @@ class Handler(LEG.Handler):
                 if not self._same_origin():
                     return self._json({"ok": False, "msg": "跨站请求被拒绝"}, 403)
                 return self._v2_post(path)
-            if path == "/qf" or path.startswith("/qf/"):
+            if path.startswith("/api/act/") or path == "/api/act":
                 n = int(self.headers.get("Content-Length") or 0)
                 body = self.rfile.read(n) if n > 0 else b""
-                return self._qf_dispatch(path, u.query, body=body)
+                return self._act_api(path, u.query, body=body)
             return super().do_POST()
         except (BrokenPipeError, ConnectionResetError):
             pass
@@ -1619,7 +1378,6 @@ class Handler(LEG.Handler):
                                "has_password": bool(CFG["teacher"].get("password_hash")),
                                "has_qa": has_qa(), "config_rev": CFG_VER[0],
                                "port": _port(), "version": VERSION,
-                               "activity_backend": activity_backend(),
                                "activity_tasks": len(ACT.tasks())})
         if path == "/api/v2/auth/session":
             s = self._session()
@@ -1644,35 +1402,29 @@ class Handler(LEG.Handler):
             return self._public_classes(qs)
         if path == "/api/v2/public/students":
             return self._public_students(qs)
-        if path == "/api/v2/qf-api":
-            # 学生交互式学习单页在「页面加载时」自动拉取 QuickForm 提交地址，
+        if path == "/api/v2/act-api":
+            # 学生交互式学习单页在「页面加载时」自动拉取本活动的提交地址，
             # 这样老师分享的裸链接（只带 task、不带 api）也能直接提交。
-            # 地址走工作台的 /qf 前缀（网关与直连部署都由 workbench 代理到 QuickForm，
-            # 浏览器永远同源可达），不暴露后端容器地址。
+            # 地址是同源相对路径（浏览器必然可达），不暴露后端部署细节。
             task = (qs.get("task") or [""])[0].strip()
             if not task:
                 return self._json({"ok": False, "msg": "缺少 task"}, 400)
-            api = "/qf/api/" + urllib.parse.quote(task, safe="")
+            api = "/api/act/" + urllib.parse.quote(task, safe="")
             return self._json({"ok": True, "task": task, "api": api})
-        if path == "/api/v2/qf-data":
+        if path == "/api/v2/act-data":
             # 数据大屏读取提交（带 _submission_id，供「删除」定位单条记录）。
-            # QuickForm 官方 /api/<task>/all 不带主键，这里走内部端点补齐，只有教师能读。
             if not self._is_teacher():
                 return self._json({"ok": False, "msg": "未登录"}, 401)
             task = (qs.get("task") or [""])[0].strip()
             if not task:
                 return self._json({"ok": False, "msg": "缺少 task"}, 400)
-            if activity_backend() == "builtin":
-                t = ACT.get_task(task)
-                if not t:
-                    return self._json({"ok": False, "msg": "活动不存在"}, 404)
-                subs = ACT.submissions(task)
-                return self._json({"ok": True, "submissions": subs, "task_id": task,
-                                   "task_title": t["title"],
-                                   "total_submissions": len(subs)})
-            out, code = self._qf_internal_call(
-                "/_wb_internal/list/" + urllib.parse.quote(task, safe=""), method="GET")
-            return self._json(out, code)
+            t = ACT.get_task(task)
+            if not t:
+                return self._json({"ok": False, "msg": "活动不存在"}, 404)
+            subs = ACT.submissions(task)
+            return self._json({"ok": True, "submissions": subs, "task_id": task,
+                               "task_title": t["title"],
+                               "total_submissions": len(subs)})
         if path == "/api/v2/teacher/activity/list":
             # 活动管理页：活动列表 + 每条的提交数 + 教学资料附件
             if not self._is_teacher():
@@ -1680,7 +1432,7 @@ class Handler(LEG.Handler):
             tasks = ACT.tasks(include_archived=True)
             for t in tasks:
                 t["attachments"] = ACT.attachments(t["task_id"])
-            return self._json({"ok": True, "backend": activity_backend(), "tasks": tasks})
+            return self._json({"ok": True, "tasks": tasks})
         if path == "/api/v2/teacher/activity/data":
             if not self._is_teacher():
                 return self._json({"ok": False, "msg": "未登录"}, 401)
@@ -1745,7 +1497,7 @@ class Handler(LEG.Handler):
         if path == "/api/v2/teacher/activity":
             if not self._is_teacher():
                 return self._json({"ok": False, "msg": "未登录"}, 401)
-            return self._json({"ok": True, "api_base": activity_base(),
+            return self._json({"ok": True,
                                "submit_hours": (CFG.get("activity") or {}).get("submit_hours", 12)})
         if path == "/api/v2/teacher/security":
             return self._security_status()
@@ -2215,7 +1967,6 @@ class Handler(LEG.Handler):
             "cls": cls_name, "gid": gid, "idx": idx,
             "task": task, "ticket": tok,
             "submit": "/api/v2/student/submit?t=" + tok,
-            "api_base": activity_base(),
         })
 
     def _security_status(self):
@@ -2353,7 +2104,7 @@ class Handler(LEG.Handler):
             # 以前不打包 —— 换机后「打字进度金币装扮全归零」「提交记录在、作品文件没了」。
             data["typing"] = _typing_snapshot()
             # 课堂活动（2026-11-03 方案 B）：活动/提交/附件已并入工作台自己的库，
-            # 备份口径随之合一——不再需要单独打包 QuickForm 的数据卷。
+            # 备份口径随之合一——活动数据也在本库里，导出导入一并处理。
             data["activity"] = _act_snapshot()
             files, meta = _sub_files_snapshot()
             if files:
@@ -2532,31 +2283,24 @@ class Handler(LEG.Handler):
         # 数据大屏：清空本活动全部提交 / 删除单条提交（需求 5，2026-11-02）
         # 参数走查询串（前端 fetch 只带 URL），body 为空时用 body 兜底。
         # 必须教师登录：学生页与教师页同源，只靠同源校验拦不住学生乱调。
-        if path in ("/api/v2/qf-clear", "/api/v2/qf-del-sub"):
+        if path in ("/api/v2/act-clear", "/api/v2/act-del-sub"):
             if not self._is_teacher():
                 return self._json({"ok": False, "msg": "未登录"}, 401)
             q2 = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
             task = str((q2.get("task") or [body.get("task") or ""])[0] or "").strip()
-            if path == "/api/v2/qf-clear":
+            if path == "/api/v2/act-clear":
                 if not task:
                     return self._json({"ok": False, "msg": "缺少 task"}, 400)
-                if activity_backend() == "builtin":
-                    n, _ids = ACT.clear(task)
-                    STORE.audit("teacher", "activity-clear", "%s 清空 %d 条" % (task, n))
-                    return self._json({"ok": True, "deleted": n,
-                                       "message": "已清空所有提交数据"})
-                out, code = self._qf_internal_call(
-                    "/_wb_internal/clear/" + urllib.parse.quote(task, safe=""))
-                return self._json(out, code)
+                n, _ids = ACT.clear(task)
+                STORE.audit("teacher", "activity-clear", "%s 清空 %d 条" % (task, n))
+                return self._json({"ok": True, "deleted": n,
+                                   "message": "已清空所有提交数据"})
             sub = str((q2.get("sub") or [body.get("sub") or ""])[0] or "").strip()
             if not sub.isdigit():
                 return self._json({"ok": False, "msg": "缺少或非法的 sub"}, 400)
-            if activity_backend() == "builtin":
-                ok = ACT.delete_submission(int(sub))
-                return self._json({"ok": ok, "message": "提交数据已删除" if ok else "提交数据不存在"},
-                                  200 if ok else 404)
-            out, code = self._qf_internal_call("/_wb_internal/delete/%s" % sub)
-            return self._json(out, code)
+            ok = ACT.delete_submission(int(sub))
+            return self._json({"ok": ok, "message": "提交数据已删除" if ok else "提交数据不存在"},
+                              200 if ok else 404)
         # ------------------------------------------------------------------
         # 活动管理（2026-11-03 · 方案 B）：新建/改名/删除/清空/删单条
         # ------------------------------------------------------------------
@@ -2621,33 +2365,6 @@ class Handler(LEG.Handler):
             url = str(body.get("url") or "").strip()
             ok = ACT.delete_attachment(task, url)
             return self._json({"ok": ok}, 200 if ok else 404)
-        if path == "/api/v2/teacher/activity/migrate":
-            # 一键导入旧 QuickForm 数据（默认预演，apply=true 才写库）
-            if not self._is_teacher():
-                return self._json({"ok": False, "msg": "未登录"}, 401)
-            try:
-                sys.path.insert(0, os.path.join(os.path.dirname(ROOT), "tools"))
-                import qfmigrate
-            except Exception as e:
-                return self._json({"ok": False, "msg": "迁移模块不可用：%s" % e}, 500)
-            qf_db, uploads = qfmigrate.default_paths()
-            if not os.path.isfile(qf_db):
-                return self._json({"ok": False,
-                                   "msg": "没找到 QuickForm 数据库（%s）。"
-                                          "如果旧数据在容器卷里，请先拷到该路径。" % qf_db}, 404)
-            lines = []
-            try:
-                stat = qfmigrate.migrate(qf_db, uploads, ACT,
-                                         dry_run=not bool(body.get("apply")),
-                                         replace=bool(body.get("replace")),
-                                         log=lambda s: lines.append(str(s)))
-            except Exception as e:
-                return self._json({"ok": False, "msg": "导入失败：%s" % e}, 500)
-            if body.get("apply"):
-                STORE.audit("teacher", "activity-migrate",
-                            "活动 %d / 提交 %d / 附件 %d"
-                            % (stat["tasks"], stat["submissions"], stat["files"]))
-            return self._json({"ok": not stat["errors"], "stat": stat, "log": lines})
         if path == "/api/v2/auth/setup":
             if CFG["teacher"].get("password_hash"):
                 return self._json({"ok": False, "msg": "账号已设置"}, 400)
@@ -3063,13 +2780,7 @@ class Handler(LEG.Handler):
         if path == "/api/v2/teacher/activity":
             if not self._is_teacher():
                 return self._json({"ok": False, "msg": "未登录"}, 401)
-            base = str(body.get("api_base") or "").strip().rstrip("/")
-            # 同源相对路径（如 /qf）也算合法：Docker/内置模式下接口就和网页同入口
-            if base and not (base.startswith("http://") or base.startswith("https://")
-                             or base.startswith("/")):
-                return self._json({"ok": False, "msg": "地址要以 http:// 或 https:// 开头"}, 400)
             act = CFG.setdefault("activity", {})
-            act["api_base"] = base
             try:
                 h = float(body.get("submit_hours") or 12)
             except Exception:
@@ -3077,9 +2788,9 @@ class Handler(LEG.Handler):
             act["submit_hours"] = max(1, min(h, 72))
             cfg_save()
             notify_cfg()
-            STORE.audit("teacher", "activity-cfg", base or "(清空)")
-            return self._json({"ok": True, "api_base": activity_base(),
-                               "submit_hours": act["submit_hours"]})
+            STORE.audit("teacher", "activity-cfg",
+                        "提交有效时长 %s 小时" % act["submit_hours"])
+            return self._json({"ok": True, "submit_hours": act["submit_hours"]})
         if path == "/api/v2/teacher/visibility":
             return self._teacher_toggle("visibility", body)
         if path == "/api/v2/teacher/code":

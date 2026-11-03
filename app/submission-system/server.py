@@ -86,7 +86,7 @@ def _now_iso():
 # 而且静态根就是程序根，`/data/config.json`（教师口令哈希）、
 # `/data/submissions/uploads_index.json`（token→文件路径）都能匿名下载。
 # 现在改成白名单：只放行页面真正会引用的这几个顶层条目，其余一律 404。
-_ALLOW_ROOT_FILES = ("index.html", "manifest.json", "quickform.config.json",
+_ALLOW_ROOT_FILES = ("index.html", "manifest.json",
                      "submit-enh.js", "submit-enh.css", "sw.js",
                      # 2.0.4 修复：教师端页面引用的这两个顶层脚本此前不在白名单里，
                      # 一直 403，导致服务端同步（netsync）与备份模块（backup.js）加载失败
@@ -1077,7 +1077,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._send_text(page, "text/html; charset=utf-8")
         # ---- 本地资料夹（mounts）已于 2026-11-01 下线：资料统一上传到服务器课件库 ----
         if path == "/api/cw/remote":
-            # 学生提交的作品在 QuickForm 里，浏览器没法直接渲染 docx/xlsx/pptx，
+            # 学生提交的作品文件在服务器数据目录里，浏览器没法直接渲染 docx/xlsx/pptx，
             # 这里取回来现场解析成 HTML（图片/音视频/PDF 前端直接连原地址，不绕这一道）
             try:
                 page, name, kind = CW.remote_preview_html(arg("base"), arg("url"),

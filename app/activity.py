@@ -1,27 +1,23 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""课堂活动数据仓（方案 B：内嵌自研，替代 QuickForm 的存储与后台）
+"""课堂活动数据仓（自研内嵌）
 
 职责边界
 --------
 只做「活动 + 提交 + 附件」三件事，**不做登录**：
 教师身份来自工作台的会话（wb_sid），学生身份来自服务端签发的票（wbT），
-两者都在 server.py 里判定完再调用这里。这跟 QuickForm 时代最大的区别是
-数据模型终于认识「班级 / 学号」了——不再把身份当字符串塞进 JSON，而是
-落成列（sid / name / cls），提交率、缺交名单、按班统计可以直接查。
+两者都在 server.py 里判定完再调用这里。数据模型认识「班级 / 学号」——
+身份落成列（sid / name / cls），提交率、缺交名单、按班统计可以直接查。
 
-与 QuickForm 的兼容契约（前端 2 万行代码不用改）
-------------------------------------------------
-  GET  /api/tasks               → {success, tasks:[{task_id,title,api}]}
-  GET  /api/<task>              → 等同 /all（QuickForm 的 GET 就是全量）
-  GET  /api/<task>/all          → {submissions, total_submissions, task_id, task_title}
-  GET  /api/<task>/count        → {total_submissions}
-  POST /api/<task>              → 收提交（JSON / 表单 / multipart 文件）
-  POST /_wb_internal/clear/<t>  → 清空
-  GET  /_wb_internal/list/<t>   → 带 _submission_id 的全量
-  POST /_wb_internal/delete/<id>→ 删单条
-附件 URL 沿用 `/static/uploads/<task>/<file>`，课件库归档、自定义大屏
-（window.QF_DATA）都按这个格式解析，所以格式不能改。
+对外契约（前端与自定义页面按此解析）
+------------------------------------
+  GET  /api/act/tasks            → {success, tasks:[{task_id,title,api}]}
+  GET  /api/act/<task>           → 等同 /all
+  GET  /api/act/<task>/all       → {submissions, total_submissions, task_id, task_title}
+  GET  /api/act/<task>/count     → {total_submissions}
+  POST /api/act/<task>           → 收提交（JSON / 表单 / multipart 文件）
+附件 URL 用 `/static/uploads/<task>/<file>`，课件库归档、自定义大屏
+（window.ACT_DATA）都按这个格式解析，所以格式不能改。
 
 仅标准库：sqlite3 + email（解析 multipart）+ csv。
 """
@@ -51,7 +47,7 @@ def _now():
 
 
 def gen_task_id(n=11):
-    """11 位活动号，字符集与 QuickForm 一致（避免旧链接/日志对不上）。"""
+    """11 位活动号（小写字母 + 数字，与历史活动号风格一致）。"""
     alpha = string.ascii_lowercase + string.digits
     return "".join(random.choice(alpha) for _ in range(n))
 
@@ -301,6 +297,8 @@ class ActivityStore(object):
         """把 `/static/uploads/<task>/<file>` 还原成本机路径（严格校验，防穿越）。"""
         u = str(url or "").strip()
         for pre in ("/qf/static/uploads/", "/static/uploads/"):
+            # /qf/ 前缀只是历史数据兼容：旧备份里可能存有带前缀的附件地址，
+            # 对外路由已不再提供 /qf/*，这里识别后按同一条本机路径还原。
             if u.startswith(pre):
                 u = u[len(pre):]
                 break
@@ -365,7 +363,7 @@ class ActivityStore(object):
         return {"id": sub_id, "attachment": data.get("attachment"), "submitted_at": ts}
 
     def submissions(self, task_key):
-        """全量提交（QuickForm `/all` 的同构返回）。"""
+        """全量提交（`/all` 的标准返回）。"""
         with self.lock:
             rows = self.conn.execute(
                 "SELECT * FROM act_submission WHERE task_key=? ORDER BY id ASC",
