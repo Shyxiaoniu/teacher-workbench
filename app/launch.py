@@ -26,6 +26,9 @@ import webbrowser
 import urllib.request
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
+# 项目根：QuickForm 源码（quickform/app）与随包运行时（runtime/）都挂在这一层，
+# 不是 app/ 里面。qfctl 的目录探测与解释器选择都以项目根为基准。
+PROJ = os.path.dirname(ROOT)
 # 与 server.py 保持同一套数据目录规则：容器/自定义部署时用 WB_DATA_DIR。
 # 以前启动器写死 ROOT/data，于是 `WB_DATA_DIR=/data python launch.py --reset-password`
 # 清的是另一份 config（用户以为密码清掉了，实际没有）。
@@ -33,8 +36,25 @@ DATA = os.environ.get("WB_DATA_DIR") or os.path.join(ROOT, "data")
 CONFIG = os.path.join(DATA, "config.json")
 sys.path.insert(0, os.path.join(ROOT, "core"))
 import ports as PORTX                                    # noqa: E402
+import qfctl                                             # noqa: E402
 
 DEFAULT_PORT = PORTX.DEFAULT_PORT
+QF_DEFAULT_PORT = qfctl.DEFAULT_PORT
+
+
+def qf_cfg(cfg):
+    """读 data/config.json 里的 quickform 段（缺省时给一套保守默认值）。"""
+    q = cfg.get("quickform")
+    if not isinstance(q, dict):
+        q = {}
+    try:
+        port = int(q.get("port") or QF_DEFAULT_PORT)
+    except Exception:
+        port = QF_DEFAULT_PORT
+    mode = str(q.get("mode") or "background").lower()
+    if mode not in ("background", "foreground", "off"):
+        mode = "background"
+    return {"port": port, "mode": mode, "secret": q.get("secret") or ""}
 
 
 def log(msg=""):
@@ -109,82 +129,135 @@ def read_cfg():
         return {}
 
 
-def ping_qf(base="http://127.0.0.1:5055"):
-    """探测 QuickForm 服务是否在线。"""
-    try:
-        with urllib.request.urlopen(base + "/api/tasks", timeout=1.2) as r:
-            return r.status < 500
-    except Exception:
-        try:
-            with urllib.request.urlopen(base + "/", timeout=1.2) as r:
-                return r.status < 500
-        except Exception:
-            return False
+def qf_external():
+    return (os.environ.get("WB_QUICKFORM_URL") or "").rstrip("/")
 
 
-def maybe_start_quickform(log=log):
-    """自动拉起 QuickForm（可选配套服务，默认 127.0.0.1:5055）。
+def precheck_quickform(cfgq):
+    """[1/6] 启动前检查：源码 / 解释器 / 依赖 / 端口，逐项给出结论。
 
-    Docker / NAS 部署下 QuickForm 是独立容器，由 docker-compose 的
-    depends_on 与工作台一起启动，这里探测到已在线就直接跳过；
-    只有「桌面双击启动」这种非容器场景才需要本函数去拉起本地进程。
-
-    源码位置：项目根目录的 quickform/app/（与容器用的是同一份），
-    兼容老部署的 app/quickform-server/。
+    只警告不阻断：QuickForm 是可替换外挂，缺了它工作台其它功能照常可用，
+    但老师需要当场知道「哪一项没过、该怎么补」，而不是等页面报错。
     """
-    if os.environ.get("WB_QUICKFORM_URL"):
-        base = os.environ["WB_QUICKFORM_URL"].rstrip("/")
-        log("[3/5] QuickForm（外部服务）：%s%s"
-            % (base, " ✓" if ping_qf(base) else "（暂未就绪，稍后自动重连）"))
-        return
-    candidates = [
-        os.path.join(os.path.dirname(ROOT), "quickform", "app"),
-        os.path.join(ROOT, "quickform-server"),
-        os.path.join(os.path.dirname(ROOT), "quickform-server"),
-    ]
-    qf_dir = next((d for d in candidates if os.path.isdir(d)), None)
-    if not qf_dir:
-        log("[3/5] QuickForm：未安装，跳过（可选功能，不影响其它功能；"
-            "源码放到项目根目录 quickform/app/ 即可自动启动）")
-        return
-    if ping_qf():
-        log("[3/5] QuickForm：已在运行（127.0.0.1:5055）✓")
-        return
-    # 常见入口：启动脚本优先，其次 Python 入口
-    entries = [
-        ("start.bat", ["cmd", "/c", "start.bat"]),
-        ("start.sh", ["bash", "start.sh"]),
-        ("main.py", [sys.executable, "main.py"]),
-        ("app.py", [sys.executable, "app.py"]),
-        ("server.py", [sys.executable, "server.py"]),
-    ]
-    for name, cmd in entries:
-        if not os.path.isfile(os.path.join(qf_dir, name)):
-            continue
-        try:
-            env = dict(os.environ)
-            # 官方 app.py 默认监听 5001（QUICKFORM_PORT/PORT 才会改），
-            # 而工作台的探测与 /qf 代理都约定 5055 —— 不钉住就会
-            # 「启动成功了但一直报未就绪」。这里显式对齐。
-            env.setdefault("QUICKFORM_PORT", "5055")
-            kwargs = dict(cwd=qf_dir, stdout=subprocess.DEVNULL,
-                          stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL,
-                          env=env)
-            if os.name == "nt":
-                kwargs["creationflags"] = 0x08000000   # CREATE_NO_WINDOW，不闪黑框
-            subprocess.Popen(cmd, **kwargs)
-        except Exception as e:
-            log("[3/5] QuickForm 自动启动失败：%s（可手动启动它）" % e)
-            return
-        for _ in range(20):
-            if ping_qf():
-                log("[3/5] QuickForm：已自动启动 ✓（127.0.0.1:5055）")
-                return
-            time.sleep(0.4)
-        log("[3/5] QuickForm 已尝试启动但暂未就绪，可稍后在活动页点「刷新」")
-        return
-    log("[3/5] QuickForm：目录存在但没找到启动入口"
-        "（start.bat / main.py / app.py / server.py），请手动启动")
+    ext = qf_external()
+    log("[1/6] QuickForm 启动前检查")
+    if ext:
+        h = qfctl.probe_base(ext)
+        log("  服务来源  外部服务 %s" % ext)
+        log("  连通性    %s" % ("可达 ✓" if h["ok"] else "暂不可达（稍后自动重连）"))
+        return True
+    if cfgq["mode"] == "off":
+        log("  启动方式  已关闭（quickform.mode=off），本次不启动 QuickForm")
+        return True
+
+    ok_all = True
+    app_dir = qfctl.find_app_dir(PROJ)
+    if app_dir:
+        log("  源码目录  %s  ✓" % app_dir)
+    else:
+        log("  源码目录  缺失 ✗（应在 quickform/app/）")
+        log("            处置：解压官方源码到 quickform/app/，或设置 "
+            "WB_QUICKFORM_URL 指向已有服务")
+        return False
+
+    entry = qfctl.find_entry(app_dir)
+    log("  启动入口  %s  %s" % (os.path.basename(entry) if entry else "无",
+                               "✓" if entry else "✗"))
+    ok_all = ok_all and bool(entry)
+
+    py = qfctl.runtime_python(PROJ)
+    log("  解释器    %s" % py)
+    dep = qfctl.check_deps(py)
+    if dep["ok"]:
+        log("  依赖      Flask 全家桶齐全  ✓")
+    else:
+        ok_all = False
+        log("  依赖      缺少 %s  ✗" % ("、".join(dep["missing"]) or dep["error"]))
+        log("            处置：\"%s\" -m pip install -r \"%s\""
+            % (py, os.path.join(app_dir, "requirements.txt")))
+
+    s = qfctl.status(DATA, port=cfgq["port"])
+    if s["running"]:
+        log("  端口      %d 上已有实例在跑（PID %d）→ 将直接复用"
+            % (s["port"], s["pid"]))
+    elif qfctl.port_open(cfgq["port"]):
+        pid = qfctl.find_pid_by_port(cfgq["port"])
+        log("  端口      %d 被占用（PID %s），将接管或自动顺延"
+            % (cfgq["port"], pid or "未知"))
+    else:
+        log("  端口      %d 空闲  ✓" % cfgq["port"])
+    return ok_all
+
+
+def show_qf_block(port, action=""):
+    """打印 QuickForm 状态块（启动成功 / 已在运行 / 接管 共用）。"""
+    lines, s = qfctl.status_lines(DATA, workbench_port=port)
+    if action == "started":
+        head = "QuickForm 服务已启动"
+    elif action == "adopted":
+        head = "QuickForm 服务已在运行（非本启动器拉起，已接管）"
+    else:
+        head = "QuickForm 服务已在运行 —— 直接复用，不再启动第二个实例"
+    log("\n  " + "=" * 58)
+    log("  " + head)
+    log("  " + "=" * 58)
+    for ln in lines:
+        log(ln)
+    log("  " + "-" * 58)
+    if port:
+        log("  下一步：浏览器打开上面的「工作台入口」→ 上课 → 课堂活动，")
+        log("          活动列表能列出来，即说明 QuickForm 与 /qf 代理链路都正常。")
+    log("  重启 / 停止：launch.py --qf-restart  |  launch.py --qf-stop")
+    log("")
+    return s
+
+
+def ensure_quickform(port, cfgq):
+    """[4/6] 拉起或复用 QuickForm，返回 (ok, s)。
+
+    重复触发是这里的核心场景：已经在跑就只打印状态和入口，绝不起第二个进程。
+    """
+    log("[4/6] QuickForm 服务")
+    ext = qf_external()
+    if ext:
+        h = qfctl.probe_base(ext)
+        log("  外部服务  %s  %s" % (ext, "可达 ✓" if h["ok"] else "暂不可达"))
+        return h["ok"], None, None
+    if cfgq["mode"] == "off":
+        log("  已关闭（配置 quickform.mode=off），跳过")
+        return True, None, None
+
+    if port and qfctl.status(DATA, workbench_port=port, port=cfgq["port"])["running"]:
+        s = show_qf_block(port, "running")
+        return s["http"]["ok"], s, None
+
+    res = qfctl.ensure(PROJ, DATA, preferred_port=cfgq["port"],
+                       mode=cfgq["mode"], secret=cfgq["secret"], log=log)
+    a = res.get("action")
+    if a in ("running", "adopted"):
+        port_used = res["status"]["port"]
+        s = show_qf_block(port, a if a == "adopted" else "running")
+        if port_used != cfgq["port"]:
+            log("  注意：实际端口是 %d（配置里写的是 %d），以这里显示为准。"
+                % (port_used, cfgq["port"]))
+        return True, s, None
+    if a == "degraded":
+        log("  ▲ 进程还在（PID %d），但 HTTP 探活不通 —— 属于僵死状态。"
+            % res["status"]["pid"])
+        log("    处置：launch.py --qf-restart（会先结束旧进程再拉起）")
+        return False, res["status"], None
+    if a == "failed":
+        log("  ✗ 启动失败：%s" % res.get("error"))
+        if res.get("hint"):
+            for line in str(res["hint"]).splitlines():
+                log("    " + line)
+        return False, None, None
+    # started
+    s = show_qf_block(port, "started")
+    if cfgq["mode"] == "foreground":
+        log("  前台模式：本窗口会持续显示 QuickForm 日志，关窗即停。")
+    return True, s, res.get("proc")
+
 
 
 def _needs_port_migration(cfg):
@@ -221,7 +294,7 @@ def check_env():
         die("数据目录不可写：%s" % e, "把整个文件夹放到「文档 / 桌面 / D 盘」再试。")
 
 
-def banner(port, cfg):
+def banner(port, cfg, qf_state=None):
     ips = lan_ips()
     ip = ips[0] if ips else "127.0.0.1"
     code = cfg.get("class_code") or "----"
@@ -233,6 +306,8 @@ def banner(port, cfg):
     log("  教师端    http://127.0.0.1:%d/teacher/" % port)
     log("  学生端    http://%s:%d/s/  （局域网）" % (ip, port))
     log("  学生端控制台  http://127.0.0.1:%d/teacher/console" % port)
+    log("  QuickForm http://127.0.0.1:%d/qf/  %s"
+        % (port, "（同一入口）" if (qf_state or {}).get("running") else "（未运行）"))
     log("")
     log("  班级码  %s" % code)
     if len(ips) > 1:
@@ -243,7 +318,14 @@ def banner(port, cfg):
     log("  提示：正式部署请用 docker compose 启动，师生从统一入口（默认 :8080）访问。")
     log("")
     hr("-")
-    log("  服务运行中，关闭本窗口即停止。Ctrl+C 安全退出。")
+    qf_mode = (qf_state or {}).get("mode") or ""
+    if qf_mode == "background":
+        log("  工作台服务运行中，关闭本窗口即停止工作台。")
+        log("  QuickForm 为后台常驻，关窗不影响；停止用 launch.py --qf-stop。")
+    elif qf_mode == "foreground":
+        log("  工作台 + QuickForm（前台）运行中，关闭本窗口两者一起停止。")
+    else:
+        log("  服务运行中，关闭本窗口即停止。Ctrl+C 安全退出。")
     hr("-")
 
 
@@ -254,6 +336,15 @@ def main():
     ap.add_argument("--no-browser", action="store_true")
     ap.add_argument("--no-dialog", action="store_true", help="端口被占时不弹窗，只报错")
     ap.add_argument("--reset-password", action="store_true")
+    # ---- QuickForm 服务 ----
+    ap.add_argument("--quickform", choices=("auto", "background", "foreground", "off"),
+                    default="", help="QuickForm 启动方式：background 后台常驻（默认）、"
+                                     "foreground 前台随窗口、off 不启动")
+    ap.add_argument("--qf-port", type=int, default=0, help="QuickForm 端口（默认 5055）")
+    ap.add_argument("--qf-status", action="store_true", help="只看状态，不启动任何服务")
+    ap.add_argument("--qf-stop", action="store_true", help="停止后台常驻的 QuickForm")
+    ap.add_argument("--qf-restart", action="store_true", help="重启 QuickForm")
+    ap.add_argument("--no-pause", action="store_true", help="结束时不再等待回车")
     args = ap.parse_args()
 
     hr()
@@ -271,8 +362,51 @@ def main():
             json.dump(cfg, f, ensure_ascii=False, indent=2)
         log("  已清除教师口令，下次打开 /teacher/ 会重新设置（密保问题也要重设）。")
 
-    # ---- 端口：命令行 > 配置 > 默认 ----
     cfg = read_cfg()
+    qcfg = qf_cfg(cfg)
+    if args.quickform and args.quickform != "auto":
+        qcfg["mode"] = args.quickform
+    if args.qf_port:
+        qcfg["port"] = args.qf_port
+    wb_port = args.port or PORTX.config_port(CONFIG, DEFAULT_PORT)
+
+    # ---- 只针对 QuickForm 的运维命令：不启动工作台，直接做完退出 ----
+    if args.qf_status:
+        lines, s = qfctl.status_lines(DATA, workbench_port=wb_port, port=qcfg["port"])
+        hr("-")
+        log("  QuickForm 服务状态")
+        hr("-")
+        for ln in lines:
+            log(ln)
+        hr("-")
+        if s["running"]:
+            log("  结论：服务正常。工作台入口 http://127.0.0.1:%d/teacher/#guide" % wb_port)
+            return 0
+        if s["stale"]:
+            log("  结论：状态文件残留 / 进程已死 → launch.py --qf-restart")
+            return 2
+        log("  结论：未运行 → 启动教师端即会自动拉起，或 launch.py --quickform background")
+        return 1
+    if args.qf_stop:
+        r = qfctl.stop(DATA)
+        log("  %s" % r["msg"])
+        return 0 if r["ok"] else 2
+    if args.qf_restart:
+        log("  正在重启 QuickForm（端口 %d，方式 %s）…" % (qcfg["port"], qcfg["mode"]))
+        r = qfctl.restart(PROJ, DATA, preferred_port=qcfg["port"],
+                          mode=qcfg["mode"], secret=qcfg["secret"], log=log)
+        if not r.get("ok"):
+            log("  ✗ %s" % r.get("error"))
+            if r.get("hint"):
+                for line in str(r["hint"]).splitlines():
+                    log("    " + line)
+            return 2
+        show_qf_block(wb_port, "started")
+        return 0
+
+    qf_ready = precheck_quickform(qcfg)
+
+    # ---- 端口：命令行 > 配置 > 默认 ----
     saved = PORTX.config_port(CONFIG, DEFAULT_PORT)
     if not args.port and _needs_port_migration(cfg):
         log("  端口默认值已从 8080 改为 %d（8080 太容易被别的软件占用）" % DEFAULT_PORT)
@@ -286,7 +420,7 @@ def main():
         cfg = read_cfg()
         saved = DEFAULT_PORT
     want = args.port or saved
-    log("[1/4] 检查端口 %d" % want)
+    log("[2/6] 检查端口 %d" % want)
 
     def mine(p):
         info = ping(p)
@@ -300,6 +434,8 @@ def main():
         log("  端口上已有本工作台在运行 → 直接复用（不会起第二个实例）")
         log("")
         log("  教师端：%s" % url)
+        log("[3/6] 工作台服务：已在运行，跳过启动")
+        ensure_quickform(port, qcfg)
         if not args.no_browser:
             try:
                 webbrowser.open(url)
@@ -307,7 +443,7 @@ def main():
                 pass
         log("")
         log("  如果要重启，请先关掉原来那个窗口。")
-        return
+        return 0
     if state == "cancelled":
         die("已取消：没有选择新端口。",
             "下次启动会自动再问你一次；也可以直接改 data/config.json 里的 \"port\"。")
@@ -320,7 +456,7 @@ def main():
         log("  已记住新端口 %d（下次启动直接用它）" % port)
     log("  端口可用  ✓")
 
-    log("[2/5] 启动服务")
+    log("[3/6] 启动工作台服务")
     env = dict(os.environ)
     env["PYTHONUTF8"] = "1"
     env["PYTHONUNBUFFERED"] = "1"
@@ -350,16 +486,20 @@ def main():
         die("服务启动失败。", (out or "")[-1200:] + "\n\n可手动运行看完整报错：\n"
             "  %s server.py --port %d" % (sys.executable, port))
     log("  服务已就绪  ✓")
-    maybe_start_quickform(log)
 
-    log("[4/5] 读取配置")
+    qf_ok, qf_state, qf_proc = ensure_quickform(port, qcfg)
+    if not qf_ready and not qf_ok:
+        log("  ▲ QuickForm 未就绪：工作台其它功能不受影响，修好后可 "
+            "launch.py --qf-restart")
+
+    log("[5/6] 读取配置")
     cfg = read_cfg()
     log("  班级码 %s  %s" % (cfg.get("class_code", "----"),
                             "（已设教师口令）" if (cfg.get("teacher") or {}).get("password_hash")
                             else "（首次启动需设置教师口令）"))
 
-    log("[5/5] 打开浏览器")
-    banner(port, cfg)
+    log("[6/6] 打开浏览器")
+    banner(port, cfg, qf_state)
     url = "http://127.0.0.1:%d/teacher/" % port
     if not args.no_browser:
         try:
@@ -374,6 +514,10 @@ def main():
                 log("! 服务已退出（代码 %s）" % proc.returncode)
                 code = 1
                 break
+            if qf_proc is not None and qf_proc.poll() is not None:
+                log("! QuickForm（前台模式）已退出，代码 %s；"
+                    "可 launch.py --qf-restart 重新拉起" % qf_proc.returncode)
+                qf_proc = None
             time.sleep(1)
     except KeyboardInterrupt:
         log("")
@@ -387,9 +531,24 @@ def main():
                 proc.kill()
             except Exception:
                 pass
+        if qf_proc is not None:
+            try:
+                qf_proc.terminate()
+                qf_proc.wait(timeout=6)
+            except Exception:
+                try:
+                    qf_proc.kill()
+                except Exception:
+                    pass
+            try:
+                qfctl.clear_state(DATA)
+            except Exception:
+                pass
+            log("QuickForm（前台模式）已随窗口停止。")
         log("已停止。")
     sys.exit(code)
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
+

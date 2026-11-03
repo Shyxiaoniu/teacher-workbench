@@ -16,6 +16,7 @@ import os
 import re
 import sys
 import json
+import base64
 import time
 import shutil
 import zipfile
@@ -36,7 +37,7 @@ import auth as A                       # noqa: E402
 import pages as P                      # noqa: E402
 import projection as PJ                # noqa: E402
 import ports as PORTX                  # noqa: E402
-from store import Store, TABLES        # noqa: E402
+from store import Store, TABLES, ImportRefused   # noqa: E402
 from typing_store import TypingStore   # noqa: E402
 import ooxml_preview as OOX            # noqa: E402  课件在线预览（纯 Python 解析 OOXML）
 
@@ -214,6 +215,48 @@ def student_row(sid):
         if str(r.get("id")) == str(sid):
             return r
     return None
+
+
+# ----------------------------------------------------------------------
+# 座位表配置（2026-11-03）
+# 教师端的「行列数 / 排布方式 / 起点 / 方向 / 讲台方位」原本只落在浏览器
+# localStorage（键 wb-seat-cfg-<班>），学生端一行都读不到，座位表就无从
+# 「同步老师那张图」。这里按班级存进服务端设置（config.json 的 seatmap），
+# 教师端保存时推上来，学生端只读。
+# ----------------------------------------------------------------------
+SEAT_CFG_KEYS = ("rows", "cols", "order", "start", "snakeDir", "stage")
+
+
+def _seat_i(v, default=0):
+    """座位/行列相关的数字：脏数据（''、None、'7排'）一律退回 default"""
+    try:
+        return int(float(v))
+    except (TypeError, ValueError):
+        return default
+
+
+def _seat_cfg_norm(raw):
+    """把外部传进来的配置收敛成合法值（越界/乱码一律不落盘）"""
+    if not isinstance(raw, dict):
+        return {}
+    out = {}
+    n = _seat_i(raw.get("rows"))
+    if n > 0:
+        out["rows"] = max(1, min(16, n))
+    n = _seat_i(raw.get("cols"))
+    if n > 0:
+        out["cols"] = max(1, min(16, n))
+    if raw.get("order") in ("row", "col", "snake"):
+        out["order"] = raw["order"]
+    if raw.get("start") in ("front", "back"):
+        out["start"] = raw["start"]
+    if raw.get("snakeDir") in ("left", "right"):
+        out["snakeDir"] = raw["snakeDir"]
+    if raw.get("stage") in ("top", "bottom", "left", "right"):
+        out["stage"] = raw["stage"]
+    if raw.get("updated"):
+        out["updated"] = str(raw["updated"])[:32]
+    return out
 
 
 def _tip_page(title, msg):
@@ -492,6 +535,35 @@ class Handler(LEG.Handler):
         self.end_headers()
         self.wfile.write(body)
 
+    # 全量恢复的请求体要带学生作品附件（base64），远大于通用 JSON 上限
+    MAX_IMPORT_BODY = 96 * 1024 * 1024
+
+    def _read_json(self):
+        """按路径决定请求体上限：导入接口放宽，其余沿用通用限制。
+
+        通用上限是 32MB，而全量备份里的附件 base64 后很容易超过它——
+        不放开的话「一键恢复」会在带附件时莫名 413，用户只看到「失败」。
+        """
+        path = urllib.parse.urlparse(self.path).path
+        if path != "/api/v2/admin/import":
+            return LEG.Handler._read_json(self)
+        try:
+            raw = self._read_body(self.MAX_IMPORT_BODY)
+        except ValueError as e:
+            self._json({"ok": False, "code": "too_large",
+                        "msg": "备份文件太大，服务端装不下这次恢复（%s）。"
+                               "可先清理过大的学生作品附件后重新导出。" % e}, 413)
+            return None
+        if not raw:
+            return {}
+        try:
+            d = json.loads(raw.decode("utf-8"))
+            return d if isinstance(d, dict) else {}
+        except Exception:
+            self._json({"ok": False, "code": "bad_json",
+                        "msg": "备份内容不是有效的 JSON（文件可能损坏或没下载完整）。"}, 400)
+            return None
+
     def _html(self, html, code=200, csp=True):
         self._sec_sent = False
         body = html.encode("utf-8")
@@ -706,6 +778,11 @@ class Handler(LEG.Handler):
                 return self._v2_get(path, qs)
             if path in ("/", "/index.html"):
                 return self._entry()
+            # 站点图标：Windows「新建 → 快捷方式」填网址后，系统只会去取根目录的
+            # /favicon.ico；没有它，桌面上就是一个白纸图标。学生端页面另有自己的
+            # /s/favicon.ico（_student_static 直接发），两边互不影响。
+            if path in ("/favicon.ico", "/apple-touch-icon.png"):
+                return self._site_icon(path)
             if path in ("/teacher", "/teacher/"):
                 return self._teacher_page()
             if path == "/teacher/login":
@@ -836,6 +913,22 @@ class Handler(LEG.Handler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _site_icon(self, path):
+        """根路径图标：快捷方式 / 添加到主屏时系统来取的那两个文件。"""
+        name = "favicon.ico" if path == "/favicon.ico" else "apple-touch-icon-180.png"
+        full = os.path.join(ROOT, "icons", name)
+        if not os.path.isfile(full):
+            return self._html("<h1>页面不存在</h1>", 404)
+        with open(full, "rb") as f:
+            body = f.read()
+        self.send_response(200)
+        self.send_header("Content-Type",
+                         "image/x-icon" if name.endswith(".ico") else "image/png")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "public, max-age=3600")
+        self.end_headers()
+        self.wfile.write(body)
+
     def _student_static(self, rel):
         rel = (rel or "").replace("\\", "/").lstrip("/")
         if not rel:
@@ -858,7 +951,12 @@ class Handler(LEG.Handler):
             return self._html("<h1>页面不存在</h1>", 404)
         import mimetypes
         ctype = mimetypes.guess_type(full)[0] or "application/octet-stream"
-        if ctype.startswith("text/") or ctype in ("application/javascript",):
+        if full.lower().endswith(".webmanifest"):
+            # Windows 的 mimetypes 不认 .webmanifest，会退成 octet-stream，
+            # 浏览器据此直接忽略清单文件（图标就丢了），这里显式给对类型。
+            ctype = "application/manifest+json"
+        if ctype.startswith("text/") or ctype in ("application/javascript",
+                                                  "application/manifest+json"):
             ctype += "; charset=utf-8"
         with open(full, "rb") as f:
             body = f.read()
@@ -1271,6 +1369,18 @@ class Handler(LEG.Handler):
             return self._sse(qs)
         if path == "/api/v2/student/me":
             return self._student_me()
+        if path == "/api/v2/student/seatmap":
+            # 学生端座位表（2026-11-03）：姓名/学号/座位号/小组/班干部，不带考勤，
+            # 见 _student_seatmap
+            return self._student_seatmap(qs)
+        if path == "/api/v2/teacher/seat-config":
+            # 教师端读回某班已同步的座位表配置（换设备 / 清缓存后本地丢了能补回来）
+            if not self._is_teacher():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            cid = _seat_i((qs.get("class_id") or ["0"])[0])
+            if cid <= 0:
+                return self._json({"ok": False, "msg": "缺少 class_id"}, 400)
+            return self._json({"ok": True, "class_id": cid, "cfg": self._seat_cfg_of(cid)})
         if path == "/api/v2/student/guide-ctx":
             return self._guide_ctx(qs)
         if path == "/api/v2/teacher/entry":
@@ -1527,6 +1637,191 @@ class Handler(LEG.Handler):
                 return c.get("name", "")
         return ""
 
+    # ------------------------------------------------------------------
+    # 座位表（2026-11-03）
+    # ------------------------------------------------------------------
+    def _seat_cfg_of(self, cid):
+        """取某班已同步的座位表配置（没有就返回空字典）"""
+        raw = (CFG.get("seatmap") or {}).get(str(cid))
+        return _seat_cfg_norm(raw) if isinstance(raw, dict) else {}
+
+    def _student_seatmap(self, qs):
+        """学生端座位表：整间教室的网格 + 我的座位。
+
+        与 /api/v2/sync 的裁剪口径不同（同步只下发本人那一行座位，防爬名单），
+        座位表必须能看到"整间教室"才有意义，所以单独开一个只读接口：
+          · 每格给 姓名 / 学号 / 座位号 / 小组（组长·组员号）/ 班干部职务，
+            与教师端座位卡同一套信息；**不带考勤状态**（学生端不显示），
+            也不含电话 / 成绩 / 内部 id；
+          · 只有本班已登录学生能读自己班，教师可带 class_id 读任意班；
+          · 行列与讲台方位取自教师端同步上来的配置，没同步过就按座位数据推断。
+        客户端负责把「讲台永远朝上」的翻转换算好（见 app/student/app.js vSeat）。
+        """
+        s = self._session()
+        if not s:
+            return self._json({"ok": False, "msg": "未登录"}, 401)
+        if s["role"] == "teacher":
+            cid = _seat_i((qs.get("class_id") or ["0"])[0])
+        else:
+            r = student_row(s.get("student_id"))
+            if not r:
+                return self._json({"ok": False, "msg": "学生档案不存在"}, 404)
+            cid = _seat_i(r.get("class_id"))
+        if cid <= 0:
+            return self._json({"ok": False, "msg": "没有对应的班级"}, 400)
+
+        me_id = "" if s["role"] == "teacher" else str(s.get("student_id") or "")
+        cfg = self._seat_cfg_of(cid)
+
+        names, nos, deleted = {}, {}, set()
+        for x in STORE.table_rows("students"):
+            if _seat_i(x.get("class_id")) != cid:
+                continue
+            if x.get("deleted"):
+                deleted.add(str(x.get("id")))
+                continue
+            names[str(x.get("id"))] = str(x.get("name") or "")
+            nos[str(x.get("id"))] = str(x.get("student_no") or "")
+
+        # 班干部职务（duty_positions，与教师端 dutyPosNameOf 同源同口径）
+        pos_of = {}
+        for p in STORE.table_rows("duty_positions"):
+            if p.get("enabled") is False:
+                continue
+            sid = str(p.get("student_id") or "")
+            nm = str(p.get("name") or "").strip()
+            if not sid or not nm:
+                continue
+            pos_of.setdefault(sid, []).append((_seat_i(p.get("sort_order")), nm))
+        for sid in list(pos_of):
+            pos_of[sid] = " · ".join(nm for _, nm in sorted(pos_of[sid]))
+
+        # 小组：seat_id → {组名, 颜色, 组长?, 组员号}。
+        # 角色判定与教师端 roleOf() 完全同源：显式 roles 优先，
+        # 没有显式组长才允许 0 号位兜底成组长（防止一个组冒出两个组长）。
+        GROUP_COLORS = ["#1D9E75", "#378ADD", "#EF9F27", "#D4537E",
+                        "#7F77DD", "#0EA5E9", "#E24B4A", "#1089C9"]
+        grp_of = {}
+        gs = [g for g in STORE.table_rows("groups")
+              if _seat_i(g.get("class_id")) == cid and not g.get("deleted")]
+        gs.sort(key=lambda g: _seat_i(g.get("id")))
+        for gi, g in enumerate(gs):
+            gname = str(g.get("name") or "").strip()
+            seat_ids = [str(x) for x in (g.get("seat_ids") or [])]
+            if not gname or not seat_ids:
+                continue
+            roles = g.get("roles") or {}
+            has_leader = any(str(roles.get(sid2) or "") == "leader"
+                             for sid2 in seat_ids)
+            gc = GROUP_COLORS[gi % len(GROUP_COLORS)]
+
+            def role_of(sid2):
+                rv = str(roles.get(sid2) or "")
+                if rv:
+                    return rv
+                i = seat_ids.index(sid2)
+                if has_leader:
+                    return "member" + (str(i) if i > 0 else "1")
+                return "leader" if i == 0 else "member" + (str(i) if i > 0 else "1")
+
+            for sid2 in seat_ids:
+                rv = role_of(sid2)
+                if rv == "leader":
+                    grp_of[sid2] = {"name": gname, "color": gc,
+                                    "lead": True, "mem": ""}
+                else:
+                    m = re.match(r"member(\d+)", rv)
+                    n = int(m.group(1)) if m else max(1, seat_ids.index(sid2))
+                    grp_of[sid2] = {"name": gname, "color": gc,
+                                    "lead": False, "mem": "组员 " + str(n).zfill(2)}
+
+        cells = []          # 有座位记录的位置（可能坐着人，也可能是空位）
+        max_r = max_c = 0
+        seat_rows = []
+        for x in STORE.table_rows("seats"):
+            if _seat_i(x.get("class_id")) != cid or x.get("deleted"):
+                continue
+            r_, c_ = _seat_i(x.get("row")), _seat_i(x.get("col"))
+            if r_ <= 0 or c_ <= 0:
+                continue
+            max_r, max_c = max(max_r, r_), max(max_c, c_)
+            seat_rows.append(x)
+            sid = str(x.get("student_id") or "")
+            nm = names.get(sid, "") if sid and sid not in deleted else ""
+            item = {"r": r_, "c": c_, "name": nm}
+            if sid and sid == me_id:
+                item["me"] = True
+            cells.append((x, item))
+
+        # 座位号（序号）：教师端「固定过」的 seq 优先；
+        # 老班没固定过 → 按教师端 seatSeqMap() 同一套规则现算（order/start/snakeDir）。
+        fixed = {str(x.get("id")): _seat_i(x.get("seq"))
+                 for x in seat_rows if _seat_i(x.get("seq")) > 0}
+        if len(fixed) < len(seat_rows) and seat_rows:
+            order = cfg.get("order") or "snake"
+            dir_left = (cfg.get("snakeDir") or "right") == "left"
+            from_back = (((cfg.get("start") or "front") == "back")
+                         != ((cfg.get("stage") or "top") == "bottom"))
+            rmin = min(_seat_i(x.get("row")) for x in seat_rows)
+            rmax = max(_seat_i(x.get("row")) for x in seat_rows)
+
+            def rank(r):
+                return (rmax - r) if from_back else (r - rmin)
+
+            def sort_key(x):
+                r_, c_ = _seat_i(x.get("row")), _seat_i(x.get("col"))
+                if order == "col":                      # 逐列
+                    return (c_ if dir_left else -c_,
+                            r_ if from_back else -r_)
+                ka = rank(r_)
+                if order == "snake":                    # 蛇形：相邻两排方向相反
+                    want_left = (not dir_left) if (ka % 2 == 1) else dir_left
+                    return (ka, c_ if want_left else -c_)
+                return (ka, c_ if dir_left else -c_)    # 横排：每行同向
+
+            for i, x in enumerate(sorted(seat_rows, key=sort_key)):
+                fixed.setdefault(str(x.get("id")), i + 1)
+
+        out_cells = []
+        for x, item in cells:
+            sid = str(x.get("id") or "")
+            stu = str(x.get("student_id") or "")
+            seq = fixed.get(sid, 0)
+            if item.get("name"):
+                item["no"] = nos.get(stu, "")
+                if seq:
+                    item["seq"] = seq
+                g = grp_of.get(sid)
+                if g:
+                    item["g"] = g
+                if stu and pos_of.get(stu):
+                    item["pos"] = pos_of[stu]
+            out_cells.append(item)
+
+        rows = cfg.get("rows") or max_r
+        cols = cfg.get("cols") or max_c
+        # 配置里的行列不能把已排好的座位裁掉（老师改了行数但没重排的过渡态）
+        rows, cols = max(rows, max_r), max(cols, max_c)
+
+        me = None
+        if me_id:
+            for _, it in cells:
+                if it.get("me"):
+                    me = {"r": it["r"], "c": it["c"]}
+                    break
+
+        return self._json({
+            "ok": True, "class_id": cid, "class_name": self._class_name(cid),
+            "rows": rows, "cols": cols,
+            "stage": cfg.get("stage") or "top",
+            "order": cfg.get("order") or "snake",
+            "start": cfg.get("start") or "front",
+            "seats": out_cells,
+            "placed": sum(1 for x in out_cells if x.get("name")),
+            "total": len(names), "me": me,
+            "updated": cfg.get("updated") or "",
+        })
+
     def _guide_ctx(self, qs):
         """同源页面问"我是谁、这一条交到哪"。
 
@@ -1710,6 +2005,13 @@ class Handler(LEG.Handler):
             data["config"] = json.loads(json.dumps(CFG))     # 含 teacher（口令是哈希，不是明文）
             data["creds"] = STORE.export_creds()
             data["sub"] = _sub_snapshot()                    # 提交系统：题目/花名册/提交记录
+            # 2026-11-03（换机测试 F3/F4）：打字练习成绩与提交附件都不在 29 表里，
+            # 以前不打包 —— 换机后「打字进度金币装扮全归零」「提交记录在、作品文件没了」。
+            data["typing"] = _typing_snapshot()
+            files, meta = _sub_files_snapshot()
+            if files:
+                data["files"] = files
+            data["files_meta"] = meta
         body = json.dumps(data, ensure_ascii=False).encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -2219,6 +2521,23 @@ class Handler(LEG.Handler):
             STORE.set_cred(r.get("id"), A.hash_password(new), 0)
             STORE.audit("student:%s" % r.get("name"), "change-password", "")
             return self._json({"ok": True})
+        if path == "/api/v2/teacher/seat-config":
+            # 教师端保存排座配置时同步一份上来，供学生端座位表使用（2026-11-03）
+            if not self._is_teacher():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            cid = _seat_i(body.get("class_id"))
+            if cid <= 0:
+                return self._json({"ok": False, "msg": "缺少 class_id"}, 400)
+            cur = dict(self._seat_cfg_of(cid))
+            for k in SEAT_CFG_KEYS:
+                if k in (body.get("cfg") or {}):
+                    cur[k] = body["cfg"][k]
+            cur = _seat_cfg_norm(cur)
+            cur["updated"] = now_str()
+            CFG.setdefault("seatmap", {})[str(cid)] = cur
+            cfg_save()
+            notify_cfg()
+            return self._json({"ok": True, "cfg": cur})
         if path == "/api/v2/teacher/student-auth":
             if not self._is_teacher():
                 return self._json({"ok": False, "msg": "未登录"}, 401)
@@ -2242,13 +2561,32 @@ class Handler(LEG.Handler):
             if body.get("all"):
                 STORE.clear_creds()
                 STORE.audit("teacher", "reset-all-passwords", "")
-            else:
-                sid = body.get("student_id")
-                if sid in (None, ""):
-                    return self._json({"ok": False, "msg": "缺少 student_id"}, 400)
-                STORE.clear_creds([sid])
-                STORE.audit("teacher", "reset-password", str(sid))
-            return self._json({"ok": True})
+                return self._json({"ok": True, "mode": "uniform"})
+            sid = body.get("student_id")
+            if sid in (None, ""):
+                return self._json({"ok": False, "msg": "缺少 student_id"}, 400)
+            row = student_row(sid)
+            if not row:
+                return self._json({"ok": False, "msg": "找不到这名学生（可能已转班或删除）"}, 404)
+            who = str(row.get("name") or sid)
+            # 2026-11-03：教师可以「直接指定一个新密码」给单个学生。
+            # 原来这里只能清掉独立密码、回落到全班初始密码——一旦班级处在
+            # 「独立密码模式」，清掉就等于这名学生再也登不进来。
+            pwd = str(body.get("password") or "").strip()
+            if pwd:
+                if len(pwd) < 4:
+                    return self._json({"ok": False, "msg": "新密码至少 4 位"}, 400)
+                if pwd.lower() in A.WEAK_PASSWORDS:
+                    return self._json({"ok": False, "msg": "这个密码太常见了，换一个"}, 400)
+                must = 1 if body.get("must_change", True) else 0
+                STORE.set_cred(row.get("id"), A.hash_password(pwd), must)
+                STORE.audit("teacher", "reset-password",
+                            "%s（指定新密码%s）" % (who, "，首次登录须修改" if must else ""))
+                return self._json({"ok": True, "mode": "password", "name": who,
+                                   "must_change": bool(must)})
+            STORE.clear_creds([row.get("id")])
+            STORE.audit("teacher", "reset-password", "%s（回落班级初始密码）" % who)
+            return self._json({"ok": True, "mode": "uniform", "name": who})
         if path == "/api/v2/teacher/account":
             if not self._is_teacher():
                 return self._json({"ok": False, "msg": "未登录"}, 401)
@@ -2594,12 +2932,37 @@ class Handler(LEG.Handler):
         return self._json({"ok": True})
 
     def _import(self, body):
+        """全量恢复的唯一入口（教师端「从备份一键恢复」）。
+
+        2026-11-03 加固（换机测试 F1/F2/F5）：
+          · F1 先校验后落库 —— 空表 / 缺表 / 数据量骤减一律在删数据之前拒绝；
+            需要强导时前端会带 force=1 再提交一次。拒绝时本机数据零改动。
+          · F2 学生口令表改成「整体替换」：带了 creds 字段就先清空再写，
+            不再出现「备份 2 条、目标机剩 3 条」的残留。
+          · F5 未知表名不再静默丢弃，回包告诉调用方跳过了哪些。
+        """
         if not self._is_teacher():
             return self._json({"ok": False, "msg": "只有教师端可以导入"}, 403)
-        tables = body.get("tables") or {}
+        tables = body.get("tables")
+        if tables is None:
+            return self._json({
+                "ok": False, "code": "bad_format",
+                "msg": "这不是一份完整备份：缺少数据表段。请在原设备用「一键导出」重新导出后再导入。"}, 400)
         if not isinstance(tables, dict):
-            return self._json({"ok": False, "msg": "格式不对"}, 400)
-        counts = STORE.import_snapshot(tables, replace=True)
+            return self._json({"ok": False, "code": "bad_format",
+                               "msg": "备份格式不对（数据表段不是键值结构），文件可能已损坏。"}, 400)
+
+        force = bool(body.get("force"))
+        try:
+            res = STORE.import_snapshot(tables, replace=True, force=force)
+        except ImportRefused as e:
+            # 409 只用于「需要用户再确认一次」，前端据此弹二次确认后带 force 重试
+            return self._json({"ok": False, "code": e.code, "msg": e.msg,
+                               "detail": e.detail}, 409 if e.code == "needs_force" else 400)
+
+        counts = res.get("counts") or {}
+        warnings = []
+
         # 全量备份（v2.0.4）还带服务端配置与学生口令哈希：
         # 换机导入后登录账号、初始密码、模块开关都跟原机一致，才叫「一键可用」。
         # 端口 / 绑定地址是「这台机器」的属性，不跟着数据走。
@@ -2611,17 +2974,47 @@ class Handler(LEG.Handler):
                 CFG[k] = v
             cfg_save()
             notify_cfg()
+
         creds = body.get("creds")
-        if isinstance(creds, list):
+        if "creds" in body and isinstance(creds, list):
+            # 整体替换：只做 import_creds（纯新增）会留下目标机独有的旧密码
+            STORE.clear_creds()
             counts["student_creds"] = STORE.import_creds(creds)
+
+        # 打字冒险岛（独立 typing.json，不进 29 表）
+        if "typing" in body:
+            n = _typing_restore(body.get("typing"))
+            if n:
+                counts["typing_students"] = n
+
         # 全量备份还带提交系统（随堂测 / 作品收集）的自有数据：
         # 题目配置、花名册、提交记录都在 submissions/ 下的独立 JSON 里，
         # 不随 STORE 表走——漏了它们，恢复完随堂测就变回默认题库。
         sub = body.get("sub")
         if isinstance(sub, dict) and sub:
             counts["submission_data"] = _sub_restore(sub)
+
+        # 学生作品附件：换机后记录在、文件不在就等于没交
+        files = body.get("files")
+        if isinstance(files, dict) and files:
+            r = _sub_files_restore(files)
+            if r.get("written"):
+                counts["submission_files"] = r["written"]
+            if not r.get("ok"):
+                warnings.append("学生作品附件没有还原成功：%s" % (r.get("msg") or "未知原因"))
+
+        if res.get("skipped_tables"):
+            warnings.append("以下表名本机不认识，已跳过：%s" % "、".join(res["skipped_tables"][:8]))
+        if res.get("kept_tables"):
+            warnings.append("备份里没有这些表，本机原有数据已保留：%s"
+                            % "、".join(res["kept_tables"][:8]))
+
         notify()
-        return self._json({"ok": True, "counts": counts, "rev": STORE.rev()})
+        return self._json({"ok": True, "counts": counts, "rev": STORE.rev(),
+                           "rows": res.get("rows", 0),
+                           "skipped_tables": res.get("skipped_tables") or [],
+                           "kept_tables": res.get("kept_tables") or [],
+                           "warnings": warnings})
 
 def _sub_snapshot():
     """提交系统（随堂测 / 作品收集）自有数据：配置 / 花名册 / 提交记录。
@@ -2650,14 +3043,181 @@ def _sub_restore(sub):
                       ("roster", getattr(LEG, "ROSTER_PATH", None)),
                       ("submissions", getattr(LEG, "SUB_PATH", None))):
         if key in sub and path:
+            val = sub[key]
+            # 保存目录是「这台机器」的属性：旧机器的绝对路径在新机器上多半不存在，
+            # 照搬会让上传直接失败。指不到就清空，回落到本机默认目录。
+            if key == "config" and isinstance(val, dict):
+                sd = str(val.get("save_dir") or "")
+                if sd and not os.path.isdir(sd):
+                    val = dict(val)
+                    val["save_dir"] = ""
             try:
                 os.makedirs(os.path.dirname(path), exist_ok=True)
                 with open(path, "w", encoding="utf-8") as f:
-                    json.dump(sub[key], f, ensure_ascii=False)
+                    json.dump(val, f, ensure_ascii=False)
                 n += 1
             except Exception:
                 pass
     return n
+
+
+# ---------------------------------------------------------------------------
+# 打字练习数据：独立 typing.json，不进 29 表体系，必须单独搬
+# ---------------------------------------------------------------------------
+def _typing_snapshot():
+    try:
+        d = TYPING.data
+        if isinstance(d, dict) and isinstance(d.get("students"), dict):
+            return json.loads(json.dumps(d, ensure_ascii=False))
+    except Exception:
+        pass
+    return {}
+
+
+def _typing_restore(data):
+    """整份替换打字成绩，返回恢复的学生数（0 表示没恢复）。"""
+    if not isinstance(data, dict) or not isinstance(data.get("students"), dict):
+        return 0
+    try:
+        blank = {"students": {}}
+        if not data.get("students"):
+            data = blank
+        TYPING.data = json.loads(json.dumps(data, ensure_ascii=False))
+        TYPING._save()
+        return len(TYPING.data.get("students") or {})
+    except Exception:
+        return 0
+
+
+# ---------------------------------------------------------------------------
+# 学生作品附件：提交记录指向 uploads/ 下的真实文件，换机必须一起搬
+# ---------------------------------------------------------------------------
+# 上限 40MB 原始体积：base64 进 JSON 先涨 4/3，整体再 AES 加密 + base64 又涨一次，
+# 教室里的老机器扛不住更大的包。超限的单文件跳过并在回包里点名，不静默丢。
+SUB_FILES_CAP = 40 * 1024 * 1024
+SUB_FILE_MAX = 10 * 1024 * 1024
+_SUB_FILE_SKIP_DIRS = {"_rwcache"}
+# 这三个已由 _sub_snapshot 单独带，不重复打包
+_SUB_FILE_DUP = {"config.json", "roster.json", "submissions.json"}
+
+
+def _sub_files_snapshot():
+    """收集提交系统的附件与增强模块数据 → ({相对路径: base64}, meta)。"""
+    root = getattr(LEG, "DATA", "") or ""
+    files, skipped, total = {}, [], 0
+    if not root or not os.path.isdir(root):
+        return files, {"included": 0, "bytes": 0, "skipped": [],
+                       "note": "提交系统数据目录不可用", "cap": SUB_FILES_CAP}
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames
+                       if d not in _SUB_FILE_SKIP_DIRS and not d.startswith(".")]
+        for fn in filenames:
+            if fn.startswith(".") or fn.endswith(".tmp"):
+                continue
+            full = os.path.join(dirpath, fn)
+            rel = os.path.relpath(full, root).replace(os.sep, "/")
+            if rel in _SUB_FILE_DUP:
+                continue
+            try:
+                size = os.path.getsize(full)
+            except OSError:
+                continue
+            if size > SUB_FILE_MAX:
+                skipped.append({"name": rel, "size": size, "why": "single"})
+                continue
+            if total + size > SUB_FILES_CAP:
+                skipped.append({"name": rel, "size": size, "why": "cap"})
+                continue
+            try:
+                with open(full, "rb") as f:
+                    files[rel] = base64.b64encode(f.read()).decode("ascii")
+                total += size
+            except Exception:
+                skipped.append({"name": rel, "size": size, "why": "read"})
+    meta = {"included": len(files), "bytes": total, "skipped": skipped,
+            "cap": SUB_FILES_CAP, "single_max": SUB_FILE_MAX}
+    return files, meta
+
+
+def _sub_files_restore(files):
+    """把备份里的附件写回本机，并按文件名修好 uploads_index 里的绝对路径。"""
+    root = getattr(LEG, "DATA", "") or ""
+    if not root:
+        return {"ok": False, "msg": "提交系统数据目录不可用"}
+    written = 0
+    restored = {}          # 文件名 → 本机绝对路径（本次真正写回来的那些）
+    for rel, b64 in (files or {}).items():
+        if not isinstance(rel, str) or not isinstance(b64, str):
+            continue
+        rel = rel.replace("\\", "/").lstrip("/")
+        parts = [p for p in rel.split("/") if p not in ("", ".")]
+        if not parts or ".." in parts or parts[0] in _SUB_FILE_SKIP_DIRS:
+            continue
+        try:
+            blob = base64.b64decode(b64)
+        except Exception:
+            continue
+        target = os.path.join(root, *parts)
+        try:
+            os.makedirs(os.path.dirname(target) or root, exist_ok=True)
+            with open(target, "wb") as f:
+                f.write(blob)
+            written += 1
+            restored[os.path.basename(target)] = os.path.abspath(target)
+        except Exception:
+            pass
+    return {"ok": True, "written": written,
+            "index_fixed": _fix_upload_index(root, restored)}
+
+
+def _fix_upload_index(root, restored=None):
+    """uploads_index.json 存的是旧机器的绝对路径，换机后按文件名重新指回本机。
+
+    以前判断「旧路径还在就跳过」是错的：在同一台机器上换数据目录（或重新恢复）
+    时，旧路径可能依然存在，于是一整份备份恢复完，索引还指向旧目录里的文件。
+    现在优先用「本次刚写回来的那份」——它才是这次恢复的真相。
+    """
+    path = getattr(LEG, "UPLOAD_INDEX", "")
+    if not path or not os.path.isfile(path):
+        return 0
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            idx = json.load(f)
+    except Exception:
+        return 0
+    if not isinstance(idx, dict):
+        return 0
+    restored = restored or {}
+    by_name = {}
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in _SUB_FILE_SKIP_DIRS]
+        for fn in filenames:
+            by_name.setdefault(fn, os.path.join(dirpath, fn))
+    fixed = 0
+    for token, rec in list(idx.items()):
+        old = rec.get("path") if isinstance(rec, dict) else rec
+        base = os.path.basename(str(old or ""))
+        if not base:
+            continue
+        new = restored.get(base)
+        if not new:
+            if old and os.path.isfile(str(old)):
+                continue
+            new = by_name.get(base)
+        if not new:
+            continue
+        if isinstance(rec, dict):
+            rec["path"] = os.path.abspath(new)
+        else:
+            idx[token] = os.path.abspath(new)
+        fixed += 1
+    if fixed:
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(idx, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+    return fixed
 
 
 def _port():

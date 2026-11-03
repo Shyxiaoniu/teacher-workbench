@@ -154,3 +154,41 @@ nginx 的 `client_max_body_size` 已放到 320m；如果自己又套了一层反
   官方更新时不需要 rebase、不需要解冲突。
 - 官方默认端口 5001，这里用 5055（避开开发机上的常用端口），
   由 `QUICKFORM_PORT` 环境变量控制，与官方 `app.run()` 读取的变量同名。
+
+## 八、许可与版权
+
+QuickForm 以 **MIT 许可证**开源，这是**很宽松但仍有义务**的许可，需要说清楚：
+
+| 项目 | 内容 |
+|---|---|
+| 许可证 | **MIT License** |
+| 版权人 | **Copyright (c) 2026 xiezuoru（版权所有 (c) 2026 谢作如）** |
+| 许可全文 | [`app/LICENSE`](app/LICENSE)（中英双语，随上游原样保留） |
+| 上游仓库 | <https://gitee.com/wstlab/quickform> · <https://github.com/wstlab/quickform> |
+| 上游文档 | <https://quickform.readthedocs.io/zh-cn/latest/> |
+
+### 义务与履行方式
+
+MIT 唯一的实质义务是「版权声明和许可声明应包含在本软件的所有副本或重要部分中」。本模块的做法：
+
+1. `app/LICENSE` 保留上游 MIT 全文与 `Copyright (c) 2026 xiezuoru`；
+2. 本文件与根目录 [THIRD-PARTY-NOTICES.md](../THIRD-PARTY-NOTICES.md) 双重说明来源与归属；
+3. 发行包和 Docker 镜像都带上上述文件；
+4. QuickForm 页面页脚的「免责声明 / 访问 QF 在线版 / 联系我们」链接**保持原样**，未做删改。
+
+### 可以做什么 / 不可以做什么
+
+- ✅ 免费用于教学、商用；修改源码、改主题、加功能；再分发甚至收费分发
+- ❌ 不能删掉或替换 `app/LICENSE` 里的版权人与许可声明
+- ❌ 不能用「谢作如」「QuickForm 官方」的名义给你的衍生版本背书
+- ❌ 不能拿去存储身份证号等敏感数据（见上游页脚「免责声明」：
+  <https://my.feishu.cn/docx/KYlJdyq3wojmwox8KJTcnKORnob>）
+
+### 升级时要注意
+
+替换 `app/` 为新版官方源码时，**必须一起检查新的 LICENSE**——万一上游换了许可证
+（例如改成 AGPL），本项目的整体分发策略要跟着复核。切勿直接把新版 `app/` 覆盖进来就发布。
+
+`app/static/vendor/` 下还有一批前端库（Bootstrap 5.1.3 / Bootstrap Icons 1.10.5 均 MIT、
+highlight.js 11.7.0 为 **BSD-3-Clause**、marked 15.0.12 MIT、qrcodejs MIT），
+清单与许可见根目录 [THIRD-PARTY-NOTICES.md](../THIRD-PARTY-NOTICES.md)。

@@ -17,7 +17,8 @@
 (function () {
   'use strict';
 
-  var S = { me: null, rev: 0, T: {}, flags: {}, vis: {}, view: 'today', es: null, loading: true };
+  var S = { me: null, rev: 0, T: {}, flags: {}, vis: {}, view: 'today', es: null,
+            loading: true, seatmap: null };
   var WD = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 
   /* ---------------- 工具 ---------------- */
@@ -82,6 +83,9 @@
         S.T[t] = merge(S.T[t] || [], tables[t]);
       });
     }
+    /* 座位表是单独接口取的（整间教室的网格，同步接口只下发本人那一行），
+       座位一有变动就作废缓存，下次进「座位」页重新拉（2026-11-03）。 */
+    if (tables && tables.seats) S.seatmap = null;
   }
 
   function pull(since, snapshot) {
@@ -131,6 +135,21 @@
   function T(name) { return S.T[name] || []; }
   function myClass() { return T('classes').filter(function (c) { return c.id === S.me.class_id; })[0] || {}; }
   function mySeat() { return T('seats').filter(function (s) { return s.student_id === S.me.id; })[0] || null; }
+  /** 我的座位「在座位表上」的排/列（2026-11-03）。
+      讲台在下方时，排号要从最靠近讲台的一排数起，才和老师那张表、
+      以及老师嘴里说的「你坐第 3 排」一致。座位表接口没拿到时退回原始行列。 */
+  function mySeatPos() {
+    var m = S.seatmap;
+    if (m && m.ok && m.me) {
+      var R = Number(m.rows) || 0;
+      return {
+        r: String(m.stage) === 'bottom' ? R - Number(m.me.r) + 1 : Number(m.me.r),
+        c: Number(m.me.c)
+      };
+    }
+    var s = mySeat();
+    return s ? { r: Number(s.row), c: Number(s.col) } : null;
+  }
   /* 我所在的小组（服务端投影已按“我是组员”过滤，每人最多命中自己那一行）。
      _members 是服务端算好的名单：[{name, role}]，role 为「组长」或「组员」。 */
   function myGroup() { return T('groups')[0] || null; }
@@ -277,6 +296,7 @@
     var ls = lessonsOf(todayIdx());
     var now = d.getHours() * 60 + d.getMinutes();
     var seat = mySeat();
+    var sp = mySeatPos();
     var duty = myDutyToday();
     var hwTodo = todoHomeworks();
 
@@ -374,8 +394,12 @@
       '<div class="stat-label">今日课程</div></div>' +
       '<div class="stat"><div class="stat-num">' + hwTodo.length + '<small>项</small></div>' +
       '<div class="stat-label">待交作业</div></div>' +
-      (seat ? '<div class="stat"><div class="stat-num" style="font-size:17px">' +
-        esc(seat.row) + ' 排 ' + esc(seat.col) + ' 座</div><div class="stat-label">我的座位</div></div>' : '') +
+      /* 座位卡点一下直接进座位表（2026-11-03）；排号用座位表的显示排，
+         老师那边讲台在下方时也和他嘴里说的「第几排」对得上 */
+      (seat && sp ? '<div class="stat stat-go" data-go="seat" title="点一下看整间教室的座位表">' +
+        '<div class="stat-num" style="font-size:17px">' +
+        esc(sp.r) + ' 排 ' + esc(sp.c) + ' 列</div>' +
+        '<div class="stat-label">我的座位 ›</div></div>' : '') +
       '</div>' +
       ckHtml +
       typingHtml +
@@ -512,14 +536,17 @@
     { id: 'today', name: '今日', ic: '☀' },
     { id: 'homework', name: '作业', ic: '✎', flag: 'homework' },
     { id: 'courses', name: '课程', ic: '📚' },
+    /* 座位表（2026-11-03）：与教师端同一张图，讲台固定朝上，自己高亮 */
+    { id: 'seat', name: '座位', ic: '🪑' },
     /* 打字冒险岛：老师开放后显示，站内 iframe 内嵌（2026-11-02） */
     { id: 'typing', name: '打字', ic: '⌨️' }
   ];
-  var VIEWS = ['today', 'homework', 'courses', 'typing'];
+  var VIEWS = ['today', 'homework', 'courses', 'seat', 'typing'];
   var TITLES = {
     today: ['今日', '签到 · 课堂学习单 · 要交的作业'],
     homework: ['我的作业', '全部作业与提交状态 · 点一条查看详情'],
     courses: ['我的课程', '老师发布的课程与资源 · 点击即可在线预览'],
+    seat: ['我的座位', '座位表 · 讲台固定在上方 · 高亮你自己的位置'],
     typing: ['打字冒险岛', '闯关练打字 · 赢星星 · 孵宠物 · 上排行榜']
   };
 
@@ -564,7 +591,11 @@
       return;
     }
     if (VIEWS.indexOf(S.view) < 0) S.view = 'today';
-    var map = { today: vToday, homework: vHwAll, courses: vCourses, typing: vTyping };
+    /* 座位表走独立接口（整间教室的网格），首次进页面时拉一次；
+       拿到数据后 loadSeatmap 自己再 render 一遍（2026-11-03）。 */
+    if (S.view === 'seat' && !S.seatmap) loadSeatmap();
+    var map = { today: vToday, homework: vHwAll, courses: vCourses, seat: vSeat,
+                typing: vTyping };
     var t = TITLES[S.view] || TITLES.today;
     app.innerHTML =
       '<aside class="sidebar">' + sideHtml() + '</aside>' +
@@ -659,6 +690,113 @@
       'style="width:100%;height:calc(100vh - 150px);min-height:460px;' +
       'border:1.5px solid var(--line,#eee);border-radius:16px;background:#F8F2E4;' +
       'box-shadow:0 6px 20px rgba(60,30,10,.06)"></iframe>';
+  }
+
+  /* ---------------- 视图：座位表（2026-11-03 新增） ----------------
+     整间教室的座位网格由服务端算好（/api/v2/student/seatmap），
+     这里只负责「画」：讲台永远摆最上方；老师那边讲台在下方时，
+     行序整体倒转，让最靠近讲台的那一排（老师口中的「第 1 排」）落到最上面。
+     列序不动 —— 两端都按「第 1 列在最左」数，学生照号找位才不会左右反。 */
+  function loadSeatmap() {
+    if (S.seatmap && S.seatmap._loading) return;
+    S.seatmap = { _loading: true };
+    var redo = function () { if (S.view === 'seat' || S.view === 'today') render(); };
+    api('/api/v2/student/seatmap').then(function (j) {
+      S.seatmap = (j && j.ok) ? j : { ok: false, msg: (j && j.msg) || '读不到座位表' };
+      redo();
+    }).catch(function () {
+      S.seatmap = { ok: false, msg: '连不上服务端，稍后再试' };
+      redo();
+    });
+  }
+
+  function vSeat() {
+    var m = S.seatmap;
+    if (!m || m._loading) {
+      return '<div class="card"><div class="skel" style="height:180px"></div></div>';
+    }
+    if (!m.ok) {
+      return '<div class="card">' + emptyBox('暂时读不到座位表', m.msg || '刷新页面再试一次') + '</div>';
+    }
+    var R = Number(m.rows) || 0, C = Number(m.cols) || 0;
+    if (!R || !C || !m.seats || !m.seats.length) {
+      return '<div class="card">' +
+        emptyBox('老师还没有排座位', '排好之后，这里会显示整间教室的座位表，并高亮你自己的位置') +
+        '</div>';
+    }
+    var flip = String(m.stage) === 'bottom';
+    /* 数据行 → 屏幕第几行（也就是「第几排」） */
+    function srow(r) { return flip ? R - Number(r) + 1 : Number(r); }
+    var map = {}, placed = 0;
+    m.seats.forEach(function (s) {
+      var r = Number(s.r), c = Number(s.c);
+      if (!r || !c || r > R || c > C) return;
+      map[srow(r) + '-' + c] = s;
+      if (s.name) placed++;
+    });
+    var cells = '';
+    /* 轴标注：第一行 = 左上角「排╲列」+ 各列号；之后每行开头 = 排号。
+       无论讲台翻不翻转，屏幕上看到的排号就是「第几排」，与老师那张表一致。 */
+    cells += '<div class="smap-ax corner"><i>排</i><i>╲</i><i>列</i></div>';
+    for (var c0 = 1; c0 <= C; c0++) cells += '<div class="smap-ax axc">' + c0 + '</div>';
+    /* 手机上格子只有 37px 宽：列多时组条右侧只放「★ / 组员号」，
+       组名才挤得下；格子宽（列少或宽屏）时与教师端一样写全「组长 / 组员 01」 */
+    var cellW = (document.body.clientWidth - 64 - 20 - (C - 1) * 6) / C;
+    var compact = cellW < 58;
+    for (var r = 1; r <= R; r++) {
+      cells += '<div class="smap-ax axr">' + r + '</div>';
+      for (var c = 1; c <= C; c++) {
+        var s = map[r + '-' + c];
+        if (!s) { cells += '<div class="smap-cell empty"></div>'; continue; }
+        if (!s.name) { cells += '<div class="smap-cell blank"></div>'; continue; }
+        var g = s.g || null;
+        var roleTxt = '';
+        if (g) {
+          if (g.lead) roleTxt = compact ? '★' : '组长';
+          else {
+            var mm = String(g.mem || '').replace(/[^\d]/g, '');
+            roleTxt = compact ? (mm || '组') : ('组员 ' + (mm ? String(mm).padStart(2, '0') : ''));
+          }
+        }
+        cells += '<div class="smap-cell' + (s.me ? ' me' : '') + '"' +
+          (s.me ? ' title="这就是你的座位"' : '') +
+          (g ? ' style="--gc:' + esc(g.color || '') + '"' : '') + '>' +
+          (g ? '<span class="smap-g"><b class="gn-t">' + esc(g.name) + '</b>' +
+              '<i class="' + (g.lead ? 'lead' : '') + '">' + esc(roleTxt) + '</i></span>' : '') +
+          '<span class="smap-nm">' + esc(s.name) + '</span>' +
+          '<span class="smap-no">' + esc(s.no || '') + '</span>' +
+          (s.seq ? '<i class="smap-seq">' + Number(s.seq) + '</i>' : '') +
+          (s.pos ? '<i class="smap-pos" title="班干部职务：' + esc(s.pos) + '">' +
+            esc(s.pos) + '</i>' : '') +
+          '</div>';
+      }
+    }
+    var stageCn = { top: '上方', bottom: '下方', left: '左侧', right: '右侧' }[m.stage] || '上方';
+    var turned = String(m.stage) !== 'top';
+    var mine = m.me
+      ? '<div class="smap-mine"><span class="pin">📍</span>你的座位：<b>第 ' +
+        srow(m.me.r) + ' 排第 ' + Number(m.me.c) + ' 列</b></div>'
+      : '<div class="smap-mine none"><span class="pin">📍</span>老师还没有把你排到座位上</div>';
+    return '<div class="card smap-card">' +
+      '<h3>座位表<span class="more">共 ' + R + ' 排 ' + C + ' 列</span></h3>' +
+      '<div class="smap-stage">讲 台</div>' +
+      (turned ? '<div class="smap-note">老师设置的讲台在' + stageCn +
+        '，这里统一翻到上方显示，座位号与老师那张表一致</div>' : '') +
+      '<div class="smap-scroll"><div class="smap-grid" style="--c:' + (C + 1) +
+        ';--fs:' + (C <= 5 ? 13 : C <= 7 ? 11.5 : C <= 9 ? 10 : 9) + 'px">' +
+        cells + '</div></div>' +
+      '<div class="smap-note smap-axis-note">左侧数字是第几排 · 顶部数字是第几列' +
+        ' · 格子左下角是座位号</div>' +
+      mine +
+      '<div class="smap-foot">' +
+        '<span class="sk"><i class="me"></i>我的座位</span>' +
+        '<span class="sk"><i></i>同学</span>' +
+        '<span class="sk"><i class="blank"></i>空位</span>' +
+        '<span class="sk"><i class="pos"></i>班干部</span>' +
+        '<span class="sk">组条右上 <b class="smap-lg-lead">★</b> = 组长</span>' +
+        '<span class="smap-cnt">已排 ' + placed + ' / ' + (Number(m.total) || placed) + ' 人</span>' +
+      '</div>' +
+      '</div>';
   }
 
   /* ---------------- 明细行 / 小工具（页面与弹层共用，v2.1.0） ---------------- */
@@ -1081,6 +1219,7 @@
       考勤、德育等明细弹层入口。fixed 定位停靠左下角。 */
   function suPopHtml() {
     var seat = mySeat();
+    var sp = mySeatPos();
     var hwTodo = todoHomeworks().length;
     var atts = attMine(), ck = 0;
     atts.forEach(function (a) { if (a.status === 'checked' || a.status === 'present') ck++; });
@@ -1107,7 +1246,7 @@
       '<div style="min-width:0"><b>' + esc(S.me.name) + '</b>' +
       '<i>' + esc(myClass().name || '') + ' · 学号 ' + esc(S.me.student_no || '—') + '</i></div></div>' +
       '<div class="sup-info">' +
-      '<span>座位 <b>' + esc(seat ? (seat.row + ' 排 ' + seat.col + ' 座') : '未排座') + '</b></span>' +
+      '<span>座位 <b>' + esc(sp ? (sp.r + ' 排 ' + sp.c + ' 列') : '未排座') + '</b></span>' +
       '<span>待交作业 <b>' + hwTodo + '</b></span>' +
       '<span>已到课 <b>' + ck + '</b>/' + atts.length + '</span>' +
       '<span>课堂评价 <b>' + (mSum > 0 ? '+' : '') + mSum + '</b></span></div>' +
@@ -1116,6 +1255,8 @@
       '<button type="button" class="sup-q" data-mode="light">☀ 浅色</button>' +
       '<button type="button" class="sup-q" data-mode="dark">🌙 夜间</button></div>' +
       (S.flags.scores !== false ? '<button type="button" class="sup-item" id="mScore">📊 我的成绩<span class="si-n">' + sc.length + ' 次</span></button>' : '') +
+      '<button type="button" class="sup-item" id="mSeat">🪑 座位表<span class="si-n">' +
+        (sp ? ('第 ' + sp.r + ' 排 ' + sp.c + ' 列') : '未排座') + '</span></button>' +
       '<button type="button" class="sup-item" id="mAtt">🕗 考勤记录<span class="si-n">' + atts.length + ' 条</span></button>' +
       '<button type="button" class="sup-item" id="mAvatar">🖼 头像样式</button>' +
       '<button type="button" class="sup-item" id="mReport">📋 我的学习报告</button>' +
@@ -1154,6 +1295,8 @@
       b.onclick = function () { setMode(b.getAttribute('data-mode')); };
     });
     var ms = $('#mScore'); if (ms) ms.onclick = function () { pop.hidden = true; openScoreSheet(); };
+    var mseat = $('#mSeat');
+    if (mseat) mseat.onclick = function () { pop.hidden = true; go('seat'); };
     var ma = $('#mAtt'); if (ma) ma.onclick = function () { pop.hidden = true; openAttSheet(); };
     var mav = $('#mAvatar'); if (mav) mav.onclick = function () { pop.hidden = true; openAvatarSheet(); };
     var mr = $('#mReport'); if (mr) mr.onclick = function () { pop.hidden = true; openReportSheet(); };
@@ -1498,6 +1641,9 @@
         var h = (location.hash || '').replace('#', '');
         S.view = VIEWS.indexOf(h) >= 0 ? h : 'today';
         S.loading = false;
+        /* 座位表提前取一份：今日页「我的座位」卡也要用它的行列换算排号
+           （讲台在下方时排号要倒过来数），不能等进了座位页才拉 */
+        loadSeatmap();
         render();
         watch();
       });

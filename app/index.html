@@ -842,6 +842,8 @@ body {
   gap:12px; flex-wrap:wrap; margin-bottom:11px;
 }
 .seat-sub { font-size:12px; color:var(--text-secondary); margin-top:3px; }
+/* 「共 X 排 Y 列」是老师/学生互相报位置时的口令，投屏要一眼能读到 */
+.seat-sub b { font-size:14px; color:var(--text-primary); letter-spacing:.2px; }
 .seat-tools { display:flex; gap:6px; }
 
 .seat-stage {
@@ -6170,6 +6172,102 @@ body:has(.mini-bar) .corner-credit { display:none; }
 .cw-ok b{color:var(--brand-primary)}
 .cw-sec-t{font-size:13px;font-weight:700;color:var(--text-secondary);margin:14px 0 9px;
   display:flex;align-items:center;gap:8px}
+
+/* ===== 课件页 · 浏览工具栏（2026-11-03：三视图 + 多选 + 一键下发） =====
+   三种视图共用同一份 cwState.files 与同一套操作函数（预览 / 改名 / 换课节 /
+   删除 / 下载），只是 DOM 密度不同：
+     grid    缩略图大卡片 —— 找"看封面就能认出来"的图片 / 视频 / PDF；
+     list    单行表格      —— 看大小、类型、推送状态，适合核对与批量勾选；
+     compact 紧凑双列      —— 一屏扫几十个文件，适合课件多的课节。
+   多选状态存 cwState.sel（Set<id>），切换视图 / 刷新列表都不丢。 */
+.cw-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:2px 0 10px}
+.cw-toolbar[hidden]{display:none}
+.cw-seg{display:flex;gap:2px;background:var(--bg-page);border:1px solid var(--border);border-radius:10px;padding:3px}
+.cw-seg button{border:0;background:transparent;color:var(--text-secondary);font-family:inherit;
+  font-size:12.5px;padding:5px 10px;border-radius:8px;cursor:pointer;white-space:nowrap;
+  display:flex;align-items:center;gap:4px;transition:.13s}
+.cw-seg button:hover{color:var(--brand-primary)}
+.cw-seg button.on{background:var(--bg-surface);color:var(--brand-primary);font-weight:700;
+  box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.cw-selall{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text-secondary);
+  cursor:pointer;user-select:none;white-space:nowrap}
+.cw-selall input{width:15px;height:15px;accent-color:var(--brand-primary);cursor:pointer;margin:0}
+.cw-toolbar .sp{margin-left:auto}
+.cw-selbar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;border:1px solid var(--brand-primary);
+  background:var(--brand-soft);border-radius:10px;padding:7px 11px;margin-bottom:10px;
+  font-size:12.5px;color:var(--brand-primary)}
+.cw-selbar[hidden]{display:none}
+.cw-selbar b{font-weight:800}
+.cw-selbar .cw-muted{color:var(--text-secondary);font-size:11.5px}
+.cw-selbar .sp{margin-left:auto}
+
+/* 多选框：网格视图压在缩略图左上角，列表 / 紧凑视图占最左一列 */
+.cw-pick{display:flex;align-items:center;justify-content:center;flex:none}
+.cw-pick input{width:14px;height:14px;margin:0;accent-color:var(--brand-primary);cursor:pointer}
+.cw-file>.cw-pick{position:absolute;left:6px;top:6px;z-index:4;width:22px;height:22px;
+  border-radius:6px;background:color-mix(in srgb,var(--bg-surface) 86%,transparent);
+  border:1px solid var(--border);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.cw-file>.cw-pick input{width:13px;height:13px}
+/* 选中态：统一用品牌色描边 + 淡底，三种视图表现一致 */
+.cw-file.sel{border-color:var(--brand-primary);box-shadow:0 0 0 2px var(--brand-soft)}
+.cw-lrow.sel,.cw-cmp.sel{background:var(--brand-soft);border-color:var(--brand-primary)}
+/* 「活动归档」角标右移，给左上角的多选框让位 */
+.cw-file .cw-tag{left:34px}
+
+/* 视图 2：列表（表头 + 行，列宽固定，窄屏隐藏大小列） */
+.cw-list{border:1px solid var(--border);border-radius:11px;overflow:hidden}
+.cw-list-h,.cw-lrow{display:grid;align-items:center;gap:9px;padding:8px 11px;
+  grid-template-columns:24px 30px minmax(0,1fr) 84px 96px auto}
+.cw-list-h{background:var(--brand-soft);color:var(--brand-primary);font-size:11.5px;
+  font-weight:700;border-bottom:1px solid var(--border)}
+.cw-lrow{border-bottom:1px solid var(--border);cursor:pointer;transition:background .13s}
+.cw-lrow:last-child{border-bottom:0}
+.cw-lrow:hover{background:var(--brand-soft)}
+.cw-lrow .ic{text-align:center;font-size:15px;line-height:1}
+.cw-lrow .fn{display:block;font-size:13px;color:var(--text-primary);font-weight:600;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cw-lrow .sub{display:block;font-size:11px;color:var(--text-secondary);margin-top:2px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cw-lrow .sz,.cw-lrow .st{font-size:11.5px;color:var(--text-secondary);white-space:nowrap}
+.cw-lrow .st.on{color:var(--brand-primary);font-weight:600}
+.cw-lrow .op{display:flex;gap:4px;justify-content:flex-end;white-space:nowrap}
+.cw-lrow .op button{border:1px solid var(--border);background:var(--bg-surface);color:var(--text-secondary);
+  border-radius:7px;padding:2px 7px;font-size:11.5px;cursor:pointer;font-family:inherit}
+.cw-lrow .op button:hover{border-color:var(--brand-primary);color:var(--brand-primary)}
+.cw-lrow .op button.cw-del:hover{background:var(--error-soft);border-color:var(--status-error);color:var(--status-error)}
+.cw-lrow .op button.sent{background:var(--brand-primary);border-color:var(--brand-primary);color:#fff}
+@media (max-width:760px){
+  .cw-list-h,.cw-lrow{grid-template-columns:24px 26px minmax(0,1fr) 84px auto}
+  .cw-list-h .sz,.cw-lrow .sz{display:none}
+}
+
+/* 视图 3：紧凑（双列小条目，一屏看几十个） */
+.cw-cmp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:6px}
+.cw-cmp{display:flex;align-items:center;gap:7px;padding:6px 8px;border:1px solid var(--border);
+  border-radius:9px;background:var(--bg-surface);cursor:pointer;transition:.13s;min-width:0}
+.cw-cmp:hover{border-color:var(--brand-primary)}
+.cw-cmp .ic{font-size:15px;line-height:1;flex:none}
+.cw-cmp .fn{font-size:12.5px;color:var(--text-primary);flex:1 1 auto;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cw-cmp .dot{flex:none;font-size:10.5px;color:var(--brand-primary);font-weight:700}
+.cw-cmp .ops{display:flex;gap:3px;flex:none}
+.cw-cmp .ops button{border:1px solid var(--border);background:var(--bg-surface);color:var(--text-secondary);
+  border-radius:6px;width:22px;height:22px;font-size:11px;line-height:1;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;padding:0;font-family:inherit}
+.cw-cmp .ops button:hover{border-color:var(--brand-primary);color:var(--brand-primary)}
+.cw-cmp .ops button.cw-del:hover{background:var(--error-soft);border-color:var(--status-error);color:var(--status-error)}
+
+/* 批量下发弹窗 */
+.cw-push-sum{background:var(--bg-page);border:1px solid var(--border);border-radius:10px;
+  padding:9px 11px;font-size:12.5px;color:var(--text-secondary);line-height:1.65;max-height:132px;overflow:auto}
+.cw-push-sum b{color:var(--text-primary)}
+.cw-push-sum .f{display:flex;gap:6px;align-items:center;margin-top:3px}
+.cw-push-sum .f span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cw-push-cls{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.cw-push-cls label{display:flex;align-items:center;gap:5px;font-size:12.5px;color:var(--text-primary);
+  border:1px solid var(--border);border-radius:8px;padding:5px 9px;cursor:pointer;background:var(--bg-page)}
+.cw-push-cls label.on{border-color:var(--brand-primary);background:var(--brand-soft);color:var(--brand-primary);font-weight:600}
+.cw-push-cls input{width:14px;height:14px;accent-color:var(--brand-primary);margin:0;cursor:pointer}
 .cw-sec-t::before{content:'';width:4px;height:14px;background:var(--brand-primary);border-radius:3px}
 .cw-empty{text-align:center;color:var(--text-secondary);font-size:13.5px;padding:26px 0}
 
@@ -8126,7 +8224,8 @@ window.entryOpen = entryOpen;
    首页「学生名单 / 密码」跳过来的落点：老师在这里看学生怎么登录。
    · 统一密码模式：显示初始密码（未单独设密码的学生都用它登录）；
    · 独立密码模式：显示已单独设密码的人数，学生卡片挂「独立密码」徽章；
-   · 每张学生卡带「重置密码」：清掉独立密码，回落到班级初始密码。
+   · 每张学生卡 / 每行列表都带「重置密码」：可直接指定一个新密码
+     （默认给随机建议值，可勾「首次登录须修改」），留空则回落到班级初始密码。
    数据来自 /api/v2/state（教师会话鉴权），改密走 teacher/student-auth
    与 teacher/reset-cred 两个既有接口。
    ============================================================ */
@@ -8219,19 +8318,65 @@ async function spwResetAll() {
   } catch (e) { uiAlert('重置失败：服务未响应。', { title: '网络问题' }); }
 }
 window.spwResetAll = spwResetAll;
+/* 教师给单个学生重置密码（2026-11-03）
+   以前这里只能「清掉独立密码 → 回落到班级初始密码」。可一旦班级处在
+   「独立密码模式」，清掉就等于这名学生再也登不进来（登录页只会回一句
+   「老师还没给你设密码」）。现在改成当场指定一个新密码：老师读给学生，
+   学生首次登录后自己改掉——这才是「学生忘了密码」真正能救回来的路。
+   留空仍然等同于「清掉独立密码」，给统一密码模式的班留一条快路。 */
+function spwSuggestPwd() {
+  const a = 'abcdefghjkmnpqrstuvwxyz23456789';   // 去掉 i/l/o/0/1 等易混字符
+  let s = '';
+  for (let i = 0; i < 6; i++) s += a[Math.floor(Math.random() * a.length)];
+  return 'wb' + s;
+}
+window.spwSuggestPwd = spwSuggestPwd;
 async function spwResetOne(sid, name) {
-  const yes = await uiConfirm('清掉这名学生的独立密码，之后用班级初始密码登录。',
-    { title: '重置「' + (name || '该生') + '」的密码？', okText: '重置', danger: false });
-  if (!yes) return;
+  const a = state.__stuAuth || {};
+  const init = String(a.initial_password || '');
+  const perMode = a.mode === 'per';
+  const has = stuHasCustomPwd(sid);
+  window.__spwMust = true;
+  const html = `
+    <div>给 <b>${esc(name || '该生')}</b> 设一个新密码，学生用「学号 + 新密码」登录。</div>
+    <div style="color:var(--text-secondary);margin-top:4px">当前状态：${
+      has ? '这名学生设过独立密码' : '使用班级初始密码'}${
+      perMode ? '　·　本班为<b style="color:var(--warn)">独立密码模式</b>' : ''}</div>
+    <label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:12.5px;
+      color:var(--text-secondary);cursor:pointer">
+      <input type="checkbox" id="spwMust" checked style="width:15px;height:15px;cursor:pointer"
+        onchange="window.__spwMust=this.checked"> 首次登录后要求学生自行修改
+    </label>
+    <div style="margin-top:10px;font-size:12px;color:var(--text-secondary);line-height:1.8">
+      留空 = 清掉独立密码，回落到班级初始密码${
+        init ? '（<code>' + esc(init) + '</code>）' : ''}${
+        perMode ? '<br><b style="color:var(--status-error)">注意：本班是独立密码模式，留空会让该生无法登录。</b>' : ''}
+    </div>`;
+  const pwd = await uiDialog({
+    title: '重置「' + (name || '该生') + '」的密码',
+    html, okText: '重置密码', cancelText: '取消', danger: false, escClose: true,
+    input: { value: spwSuggestPwd(), placeholder: '留空 = 回落到班级初始密码' },
+  });
+  if (pwd === null) return;                     // 取消
+  const p = String(pwd || '').trim();
+  if (p && p.length < 4) {
+    uiAlert('新密码至少 4 位（学生要能记住，但也别短到能被猜出来）。', { title: '没重置成' });
+    return;
+  }
   try {
     const r = await fetch('/api/v2/teacher/reset-cred', {
       method: 'POST', credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ student_id: sid })
+      body: JSON.stringify({ student_id: sid, password: p,
+                             must_change: !!window.__spwMust })
     });
     const j = await r.json();
     if (!j || !j.ok) { uiAlert((j && j.msg) || '重置失败', { title: '没重置成' }); return; }
-    toast('已重置，用初始密码登录即可');
+    if (j.mode === 'password') {
+      toast('已重置：新密码 ' + p + (j.must_change ? '（首次登录需改）' : ''));
+    } else {
+      toast('已重置，用班级初始密码登录即可');
+    }
     stuAuthRefresh();
   } catch (e) { uiAlert('重置失败：服务未响应。', { title: '网络问题' }); }
 }
@@ -14827,6 +14972,9 @@ function stuTableHTML(list, showAll, grpOf) {
           onclick="openStudentReport(${s.id})">📋</button>
         <button type="button" class="tl-act" title="编辑"
           onclick="openStudentDialog(${s.id})">✎</button>
+        <button type="button" class="tl-act" title="${stuHasCustomPwd(s.id)
+          ? '重置密码（这名学生设过独立密码）' : '重置密码 / 设一个新密码'}"
+          onclick="spwResetOne(${s.id}, '${esc(s.name)}')">🔑</button>
         <button type="button" class="tl-act del" title="删除"
           onclick="delStudent(${s.id})">✕</button>
       </td>
@@ -14836,7 +14984,7 @@ function stuTableHTML(list, showAll, grpOf) {
     <thead><tr>
       ${batch ? '<th style="width:34px"></th>' : ''}
       <th>姓名</th><th>学号</th><th>性别</th><th>班级</th><th>小组</th>
-      <th>座位</th><th>家长电话</th><th style="width:86px">操作</th>
+      <th>座位</th><th>家长电话</th><th style="width:112px">操作</th>
     </tr></thead>
     <tbody>${rows}</tbody>
   </table>`;
@@ -20931,6 +21079,30 @@ const SEAT_CFG_KEYS = ['seatRows','seatCols','seatOrder','seatFromRow','seatFrom
   'seatToRow','seatToCol','seatSortBy','seatStart','stageSide','snakeDir',
   'seatGap','seatColGap','seatAutoFit','seatH','seatRowHeights','seatColWidths'];
 function seatCfgKey() { return 'wb-seat-cfg-' + String(state.currentClass || 'all'); }
+/* 排座配置同时镜像一份到服务端（2026-11-03）。
+   学生端座位表要"照老师那张图"显示（行列数、讲台方位、排布顺序），
+   可这些以前只落在 localStorage 里，学生端一行都读不到。
+   拖拽调行高/列宽时会连续触发，这里 500ms 合并成一次请求。 */
+let seatSyncTimer = 0;
+function seatCfgSync() {
+  if (DEMO.on) return;                     // 预览模式没有服务端
+  const cid = curSeatClass();
+  if (!Number.isFinite(cid) || cid <= 0) return;
+  clearTimeout(seatSyncTimer);
+  seatSyncTimer = setTimeout(() => {
+    const cfg = {
+      rows: Number(state.seatRows) || 7, cols: Number(state.seatCols) || 8,
+      order: state.seatOrder, start: state.seatStart,
+      snakeDir: state.snakeDir, stage: state.stageSide,
+    };
+    fetch('/api/v2/teacher/seat-config', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ class_id: cid, cfg })
+    }).catch(() => {});
+  }, 500);
+}
+window.seatCfgSync = seatCfgSync;
 function seatCfgSave() {
   if (DEMO.on) return;                     // 预览模式本来就不保存
   try {
@@ -20938,6 +21110,7 @@ function seatCfgSave() {
     SEAT_CFG_KEYS.forEach(k => { o[k] = state[k]; });
     LS.set(seatCfgKey(), JSON.stringify(o));
   } catch (e) {}
+  seatCfgSync();                           // 同步给学生端座位表
 }
 window.seatCfgSave = seatCfgSave;
 /** 排座配置的出厂默认值（与 state 初始定义保持一致） */
@@ -20978,6 +21151,7 @@ function seatCfgLoad() {
     seatCfgDefaults();
     const g = seatCfgFromData();
     if (g) Object.assign(state, g);
+    seatCfgFetch();                        // 本地没有 → 问服务端要一份
     return false;
   }
   SEAT_CFG_KEYS.forEach(k => {
@@ -20986,6 +21160,42 @@ function seatCfgLoad() {
   return true;
 }
 window.seatCfgLoad = seatCfgLoad;
+
+/* 本地没配置时向服务端补一份（同一账号换了电脑 / 清了浏览器缓存）。
+   配置本身早就同步上去了，只是本地丢了，不补回来就会出现
+   「座位表变成 7×8、讲台回到上方」的错觉（2026-11-03）。 */
+function seatCfgFetch() {
+  if (DEMO.on) return;
+  const cid = curSeatClass();
+  if (!Number.isFinite(cid) || cid <= 0) return;
+  if (seatCfgFetch._busy === cid) return;   // 防止同一班反复请求
+  seatCfgFetch._busy = cid;
+  fetch('/api/v2/teacher/seat-config?class_id=' + cid, { credentials: 'same-origin' })
+    .then(r => r.json()).then(j => {
+      seatCfgFetch._busy = 0;
+      if (!j || !j.ok || !j.cfg) return;
+      const o = j.cfg;
+      if (!Object.keys(o).length) return;
+      if (curSeatClass() !== cid) return;   // 期间切了班，别把配置写到别的班
+      if (o.rows) state.seatRows = Number(o.rows);
+      if (o.cols) state.seatCols = Number(o.cols);
+      if (o.order) state.seatOrder = o.order;
+      if (o.start) state.seatStart = o.start;
+      if (o.snakeDir) state.snakeDir = o.snakeDir;
+      if (o.stage) state.stageSide = o.stage;
+      state.seatFromRow = 1; state.seatToRow = state.seatRows;
+      state.seatFromCol = 1; state.seatToCol = state.seatCols;
+      state.seatRowHeights = normalizeSizeArr(state.seatRowHeights, state.seatRows);
+      state.seatColWidths = normalizeSizeArr(state.seatColWidths, state.seatCols);
+      try {                              // 只写本地缓存，不再回头打服务端
+        const dump = {};
+        SEAT_CFG_KEYS.forEach(k => { dump[k] = state[k]; });
+        LS.set('wb-seat-cfg-' + cid, JSON.stringify(dump));
+      } catch (e) {}
+      if (state.route === 'seats') renderContent();
+    }).catch(() => { seatCfgFetch._busy = 0; });
+}
+window.seatCfgFetch = seatCfgFetch;
 
 /* 把「逐行/逐列尺寸」数组规整成长度 n：不足补 0、超出截断，保留已有值。
    行数/列数变化时调用，避免数组与新网格对不上（2026-10-20 牛哥：每行每列单独设高/宽）。 */
@@ -31018,9 +31228,9 @@ const DEMO_RENDER = {
       <div style="font-size:14px;font-weight:500;margin-bottom:10px">数据与备份（换设备 / 重装用）</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-primary" style="width:auto;padding:8px 16px;font-size:13px"
-          onclick="exportFullData()">全量加密导出</button>
+          onclick="exportFullData()">一键导出全量备份</button>
         <button class="btn" style="width:auto;padding:8px 16px;font-size:13px"
-          onclick="importFullData()">从备份一键恢复</button>
+          onclick="importFullData()">一键恢复</button>
         <button class="btn btn-ghost" style="width:auto;padding:8px 16px;font-size:13px"
           onclick="exportCoursewarePack()"
           title="把课件库里的文件（课程资料 / 课件 / 素材）打成一个 zip">导出课程资料包</button>
@@ -31031,17 +31241,19 @@ const DEMO_RENDER = {
           onclick="dbClearLocalAsk()">清空本机数据</button>
       </div>
       <div class="term-hint">
-        · <b>全量加密导出</b>：一个文件带走<b>服务端 + 本机</b>的全部数据 —— 班级、学生、
-        考勤、作业、成绩、课堂活动发放、教师账号与学生登录密码，加上浏览器里的界面设置与待办。
-        导出时设置一个<b>备份密码</b>，整包 AES 加密。<br>
-        · <b>课程资料包</b>：课件库里的文件本身（PDF / 图片 / 视频 / 表格…）体积大，单独打包。
-        换机器或重建容器后，先「全量恢复」把记录导回来，再「导入课程资料包」把文件放回去，
-        课件库才算完整可用。<br>
-        · <b>换机一键恢复</b>：在新环境装好工作台、登录后点「从备份一键恢复」，输入备份密码——
-        服务端数据整库替换、教师账号 / 学生密码 / 模块开关原样回来，本机设置一并还原，
-        导完刷新即用，不用重新建班、不用重发学生密码（端口等本机属性不搬运）。<br>
-        · 备份文件带条目数与校验和，不完整 / 被改过会直接中止，原数据不动。旧版纯本机备份
-        （.json / 旧 .cwbackup）仍可从这里导入。<br>
+        · <b>一键导出</b>：点一次、设一个备份密码，就把<b>服务端 + 本机</b>的全部数据打包成一个
+        <b>.cwbackup</b> 加密文件 —— 班级、学生、考勤、作业、成绩、课堂活动发放、座位、教师账号、
+        学生登录密码、打字练习成绩与金币装扮、学生作品附件，加上浏览器里的界面设置与待办。<br>
+        · <b>一键恢复</b>：新设备装好工作台并登录后，选择这个文件、输入同一个备份密码，
+        两边的数据一起还原，导完自动刷新即可继续上课，不用重新建班、不用重发学生密码
+        （端口等本机属性不搬运）。<br>
+        · <b>出错会直接说明原因</b>：文件不完整 / 密码不对 / 备份数据量明显少于本机 /
+        服务端未启动 / 登录已失效，都会弹出明确提示，并且<b>失败时不改动任何数据</b>。
+        备份数据量远小于本机时会先拦下来，确认要覆盖才继续。<br>
+        · <b>课程资料包</b>：课件库里的文件本身（PDF / 图片 / 视频 / 表格…）体积大，
+        默认目标是用「课程资料包」单独打包；单个超过 10MB 或合计超过 40MB 的学生作品附件
+        不会进全量备份，导出时会点名提示。<br>
+        · 旧版纯本机备份（.json / 旧 .cwbackup）仍可从这里恢复。<br>
         · 清空本机数据不可撤销，建议先导出留底。
       </div>
     </div>
@@ -31254,7 +31466,7 @@ const DEMO_RENDER = {
               title="改姓名 / 学号 / 性别 / 家长 / 电话">编辑</button>
             <button class="btn btn-ghost btn-sm" type="button" style="width:auto;margin-top:0;padding:4px 12px;font-size:12px"
               onclick="spwResetOne(${s.id}, '${esc(s.name)}')"
-              title="清掉这名学生的独立密码，改用班级初始密码登录">重置密码</button>
+              title="给这名学生设一个新密码（忘了密码 / 登不进来时用）">重置密码</button>
             <button class="btn btn-ghost btn-sm" type="button" style="width:auto;margin-top:0;padding:4px 12px;font-size:12px;
               color:var(--status-error)" onclick="delStudent(${s.id})"
               title="删除这名学生及其全部记录">删除</button>
@@ -31922,8 +32134,8 @@ const sid = st ? st.id : '';
       console.error('[studentPanel]', e);
     }
 
-    // 座位配置摘要
-    const cfgSummary = `${rows}排 × ${cols}列 · ${
+    // 座位配置摘要（2026-11-03：把「共 X 排 Y 列」提出来加粗，投屏时一眼能看到）
+    const cfgSummary = `<b>共 ${rows} 排 ${cols} 列</b> · ${
       {row:'横排',col:'竖排',snake:'蛇形'}[state.seatOrder]} · ${
       state.seatStart==='front'?'前排先':'后排先'}`;
 
@@ -32895,7 +33107,9 @@ async function cwReq(ep, body) {
 window.cwReq = cwReq;
 
 /* -------------------- 课件页 -------------------- */
-const cwState = { cfg: null, courses: [], files: [], course: '', pendingCourse: '', filesBy: {}, err: '', busy: false, editing: false, loadedLib: false };
+const cwState = { cfg: null, courses: [], files: [], course: '', pendingCourse: '', filesBy: {}, err: '', busy: false, editing: false, loadedLib: false,
+  /* 2026-11-03 新增：浏览视图（grid/list/compact）与多选集合 */
+  view: 'grid', sel: new Set(), selLast: -1 };
 window.cwState = cwState;
 
 /* 课程列表缓存：大屏每 5 秒轮询一次，别每次都去读磁盘 */
@@ -32910,7 +33124,7 @@ window.cwConfigCached = cwConfigCached;
 
 function cwLibPanelHtml() {
   return `
-  <div class="notice" data-fold-title="📚 课件库说明">所有资料统一<b>上传到服务器</b>存储（不再支持加载本地文件夹）。上传时把课件归到某一「课节」；教师端可随时改名、换课节、删除（增删改查）。点文件卡上的「⬇ 推送」，选择班级与课节后，学生端「今日」页的「课件库」里就能查看和使用这份资料；推送错了可在「推送记录」里一键撤回。</div>
+  <div class="notice" data-fold-title="📚 课件库说明">所有资料统一<b>上传到服务器</b>存储（不再支持加载本地文件夹）。上传时把课件归到某一「课节」；教师端可随时改名、换课节、删除（增删改查）。<b>浏览可切「缩略图 / 列表 / 紧凑」三种视图</b>：缩略图看封面、列表核对大小与推送状态、紧凑一屏扫几十个。勾选多个文件后点「一键下发」，可一次发给一个或多个班；单份文件也可以直接点卡片上的「⬇ 推送」。下发后学生端「今日」页的「课件库」里就能查看和使用，推送错了可在「推送记录」里一键撤回。</div>
   <div class="cw-wrap">
 
     <div class="cw-card">
@@ -32945,6 +33159,28 @@ function cwLibPanelHtml() {
         <button class="btn btn-ghost btn-sm" onclick="cwNewCourse()">＋ 新建空课节</button>
       </div>
       <div id="cwCourseGrid"><div class="cw-empty">读取中…</div></div>
+
+      <!-- 浏览视图 + 多选（2026-11-03）：选定课节后才出现 -->
+      <div class="cw-toolbar" id="cwToolbar" hidden>
+        <div class="cw-seg" role="group" aria-label="浏览视图">
+          <button type="button" data-view="grid" onclick="cwSetView('grid')">▦ 缩略图</button>
+          <button type="button" data-view="list" onclick="cwSetView('list')">☰ 列表</button>
+          <button type="button" data-view="compact" onclick="cwSetView('compact')">▪ 紧凑</button>
+        </div>
+        <label class="cw-selall"><input type="checkbox" id="cwSelAll" onchange="cwSelAllToggle(this.checked)"> 全选本课节</label>
+        <span class="cw-muted" id="cwToolbarHint"></span>
+        <span class="sp"></span>
+        <button class="btn btn-sm" data-batch="1" onclick="cwPushDialog(this)"
+                title="把勾选的文件一次下发给一个或多个班级">⬇ 一键下发</button>
+      </div>
+      <div class="cw-selbar" id="cwSelBar" hidden>
+        <span>已选 <b id="cwSelCount">0</b> 个文件</span>
+        <span class="cw-muted" id="cwSelNames"></span>
+        <span class="sp"></span>
+        <button class="btn btn-sm" data-batch="1" onclick="cwPushDialog(this)">⬇ 一键下发给班级</button>
+        <button class="btn btn-ghost btn-sm" onclick="cwSelClear()">清除选择</button>
+      </div>
+
       <div id="cwFileArea"></div>
     </div>
 
@@ -32982,53 +33218,103 @@ function cwSentRow(fid, cls) {
 }
 window.cwSentRow = cwSentRow;
 
-/** 推送弹窗里的临时值：uiDialog 的 html 是注入的，用内联事件往这里写 */
-let cwPushTmp = { cls: '', lesson: '' };
+/** 推送弹窗里的临时值：uiDialog 的 html 是注入的，用内联事件往这里写。
+    2026-11-03 起 cls 改成数组（可一次下发多个班）。 */
+let cwPushTmp = { cls: [], lesson: '' };
+window.cwPushTmp = cwPushTmp;
 
-/** 课件库文件卡片上的「⬇ 推送」：选班级 + 课节，把文件挂进该班学生端「课件库」 */
+/** 班级多选框 → 同步进 cwPushTmp.cls（顺手给 label 加选中态） */
+function cwPushTmpCls(cb) {
+  const v = String(cb.value);
+  cwPushTmp.cls = (cwPushTmp.cls || []).filter(x => x !== v);
+  if (cb.checked) cwPushTmp.cls.push(v);
+  const lb = cb.closest('label');
+  if (lb) lb.classList.toggle('on', cb.checked);
+}
+window.cwPushTmpCls = cwPushTmpCls;
+
+/** 下发：单个（卡片上的「⬇ 推送」）或批量（勾选后「一键下发」）
+    —— 同一个弹窗：默认已选好当前班与当前课节，直接点「下发」就是一键完成；
+    班级可多选，一次写多份 materials 记录，学生端照旧在「今日 · 课件库」看到。 */
 async function cwPushDialog(btn) {
-  const card = btn.closest('.cw-file');
-  if (!card) return;
-  const fid = card.dataset.id;
-  const name = card.querySelector('.fn') ? card.querySelector('.fn').textContent : '文件';
+  let ids = [];
+  if (btn && btn.dataset && btn.dataset.batch === '1') ids = Array.from(cwState.sel);
+  else if (btn) { const host = btn.closest('[data-id]'); if (host) ids = [host.dataset.id]; }
+  ids = ids.map(String).filter(Boolean);
+  if (!ids.length) {
+    toast('先勾选要下发的文件（卡片左上角的小方框），或直接点文件上的「⬇ 推送」');
+    return;
+  }
+  const byId = {};
+  (cwState.files || []).forEach(f => { byId[String(f.id)] = f; });
+  const picked = ids.map(id => byId[id] || { id: id, name: '文件 ' + id });
   const classes = dbT('classes') || [];
   if (!classes.length) { toast('还没有班级数据，先到「班级」页建班'); return; }
   const cur = curSeatClass();
-  cwPushTmp = { cls: String(cur || (classes[0] && classes[0].id) || ''), lesson: cwState.course || '' };
+  const defCls = String(cur || (classes[0] && classes[0].id) || '');
+  cwPushTmp = { cls: defCls ? [defCls] : [], lesson: cwState.course || '' };
   const lessonOpts = cwLessonDatalist();
-  const html = '<div class="cw-muted" style="margin-bottom:12px">把「<b>' + esc(name) + '</b>」推送到学生端：'
-    + '学生登录后，在「今日」页的「课件库」里查看并打开。随时可在「推送记录」里撤回。</div>'
-    + '<label class="fl-lbl">推送给哪个班</label>'
-    + '<select class="fl-inp" onchange="cwPushTmp.cls=this.value">'
-    + classes.map(c => '<option value="' + esc(c.id) + '"' + (Number(c.id) === Number(cur) ? ' selected' : '') + '>' + esc(c.name) + '</option>').join('')
-    + '</select>'
+  const fileLines = picked.map(f => '<div class="f">📎<span>' + esc(f.name) + '</span></div>').join('');
+  const html = '<div class="cw-muted" style="margin-bottom:9px">把 <b>' + picked.length + '</b> 个文件下发到学生端：'
+    + '学生登录后在「今日」页的「课件库」里查看、打开；随时可在「推送记录」里撤回。</div>'
+    + '<div class="cw-push-sum">' + fileLines
+    + (picked.length > 6 ? '<div style="margin-top:4px">…共 ' + picked.length + ' 个文件</div>' : '') + '</div>'
+    + '<label class="fl-lbl" style="margin-top:12px">下发给哪些班（可多选）</label>'
+    + '<div class="cw-push-cls">'
+    + classes.map(c => {
+        const on = String(c.id) === defCls;
+        return '<label class="' + (on ? 'on' : '') + '"><input type="checkbox" value="' + esc(c.id) + '"'
+          + (on ? ' checked' : '') + ' onchange="cwPushTmpCls(this)">' + esc(c.name) + '</label>';
+      }).join('')
+    + '</div>'
     + '<label class="fl-lbl" style="margin-top:12px">归属哪节课（学生端按课节展示，可改可清空）</label>'
-    + '<input class="fl-inp" list="cwPushLessonList" value="' + esc(cwPushTmp.lesson) + '"'
+    + '<input class="fl-inp" id="cwPushLesson" list="cwPushLessonList" value="' + esc(cwPushTmp.lesson) + '"'
     + ' oninput="cwPushTmp.lesson=this.value.trim()" placeholder="例如：第4课 AI听音识传说（可留空）">'
     + '<datalist id="cwPushLessonList">' + lessonOpts + '</datalist>';
-  const ok = await uiDialog({ title: '推送课件给学生', html, okText: '推送', cancelText: '取消' });
+  const ok = await uiDialog({
+    title: picked.length > 1 ? ('批量下发 ' + picked.length + ' 个文件') : '推送课件给学生',
+    html, okText: '下发', cancelText: '取消'
+  });
   if (!ok) return;
-  const cls = cwPushTmp.cls;
-  if (!cls) { toast('请选择要推送的班级'); return; }
-  if (cwSentRow(fid, cls)) { toast('这个文件已经推送给该班了，可在「推送记录」里查看'); return; }
+  const clsIds = (cwPushTmp.cls || []).filter(Boolean);
+  if (!clsIds.length) { toast('请至少选择一个班级'); return; }
   const lesson = cwPushTmp.lesson || '';
   const arr = dbT('materials') || [];
-  arr.push({
-    id: 'mat' + Date.now() + Math.floor(Math.random() * 1000),
-    class_id: cls,
-    title: name,
-    kind: 'file',
-    url: '/cw/' + encodeURIComponent(fid),
-    subject: lesson,
-    lesson: lesson,
-    note: '来自课件库' + (lesson ? ' · ' + lesson : ''),
-    from: 'courseware',
-    src_id: fid,
-    date: today(),
-    updated_at: new Date().toISOString()
+  const d = today();
+  const iso = new Date().toISOString();
+  let added = 0, skipped = 0;
+  clsIds.forEach(cid => {
+    picked.forEach(f => {
+      const dup = arr.some(m => !m.deleted && m.from === 'courseware'
+        && String(m.src_id) === String(f.id) && Number(m.class_id) === Number(cid));
+      if (dup) { skipped++; return; }
+      arr.push({
+        id: 'mat' + Date.now() + '_' + added + '_' + Math.floor(Math.random() * 1000),
+        class_id: cid,
+        title: f.name || ('文件 ' + f.id),
+        kind: 'file',
+        url: '/cw/' + encodeURIComponent(f.id),
+        subject: lesson,
+        lesson: lesson,
+        note: '来自课件库' + (lesson ? ' · ' + lesson : ''),
+        from: 'courseware',
+        src_id: f.id,
+        date: d,
+        updated_at: iso
+      });
+      added++;
+    });
   });
-  dbSet('materials', arr);
-  toast('已推送给「' + (((dbT('classes').find(c => Number(c.id) === Number(cls)) || {}).name) || '该班') + '」：学生端「今日 · 课件库」即可打开');
+  if (added) dbSet('materials', arr);
+  const clsName = id => ((dbT('classes').find(c => Number(c.id) === Number(id)) || {}).name) || '该班';
+  const clsTxt = clsIds.map(clsName).join('、');
+  if (added) {
+    toast('已下发 ' + added + ' 个文件到「' + clsTxt + '」：学生端「今日 · 课件库」即可打开'
+      + (skipped ? '（另有 ' + skipped + ' 个此前已推送，已跳过）' : ''));
+  } else {
+    toast('这些文件都已经推送给所选班级了，可在「推送记录」里查看');
+  }
+  cwSelClear();
   cwPaintPushed();
   if (cwState.course) await cwPickCourse(cwState.course, true);   // 就地刷新角标，不整页重绘
 }
@@ -33052,7 +33338,7 @@ function cwPaintPushed() {
   const cnt = document.getElementById('cwPushCount');
   if (cnt) cnt.textContent = '共 ' + arr.length + ' 条';
   if (!arr.length) {
-    box.innerHTML = '<div class="cw-empty">还没有推送记录。在上方文件卡上点「⬇ 推送」，选好班级与课节即可发给学生。</div>';
+    box.innerHTML = '<div class="cw-empty">还没有推送记录。在上方文件卡上点「⬇ 推送」，或勾选多个文件后点「一键下发」，选好班级与课节即可发给学生。</div>';
     return;
   }
   const clsName = id => ((dbT('classes').find(c => Number(c.id) === Number(id)) || {}).name) || '未知班级';
@@ -33134,6 +33420,9 @@ async function cwInit() {
   cwState.pendingCourse = '';
   cwState.files = [];
   cwState.err = '';
+  cwState.view = cwViewPref();
+  cwState.sel = new Set();
+  cwState.selLast = -1;
   cwBindLibDrop();
   await cwReload();
 }
@@ -33244,7 +33533,10 @@ function cwPaintCourses() {
 }
 
 async function cwPickCourse(name, keep) {
+  /* 换课节时勾选清空：不同课节的文件混在一份"已选"里，下发时容易发错 */
+  const changed = String(name || '') !== String(cwState.course || '');
   cwState.course = name || '';
+  if (changed) { cwState.sel = new Set(); cwState.selLast = -1; }
   document.querySelectorAll('.cw-course').forEach(el => {
     el.classList.toggle('on', el.dataset.course === cwState.course);
   });
@@ -33262,6 +33554,118 @@ async function cwPickCourse(name, keep) {
 }
 window.cwPickCourse = cwPickCourse;
 
+/* -------------------- 浏览视图：缩略图 / 列表 / 紧凑（2026-11-03） --------------------
+   三种视图共用同一份 cwState.files 与同一套操作函数，只是排版密度不同；
+   视图选择存 localStorage（wb-cw-view），下次进来还是上次那个。 */
+const CW_LIB_VIEWS = [
+  { id: 'grid', name: '缩略图' },
+  { id: 'list', name: '列表' },
+  { id: 'compact', name: '紧凑' }
+];
+function cwViewPref() {
+  try {
+    const v = localStorage.getItem('wb-cw-view');
+    if (CW_LIB_VIEWS.some(x => x.id === v)) return v;
+  } catch (e) {}
+  return 'grid';
+}
+function cwSetView(v) {
+  if (!CW_LIB_VIEWS.some(x => x.id === v)) v = 'grid';
+  cwState.view = v;
+  try { localStorage.setItem('wb-cw-view', v); } catch (e) {}
+  cwPaintFiles(cwState.files);
+}
+window.cwSetView = cwSetView;
+
+/* 可勾选的文件：活动归档的学生作品只做浏览/下载，不参与下发 */
+function cwSelectable() {
+  return (cwState.files || []).filter(f => !f.archived);
+}
+function cwSelClear() {
+  cwState.sel.clear(); cwState.selLast = -1;
+  cwSelPaint();
+}
+window.cwSelClear = cwSelClear;
+function cwSelAllToggle(on) {
+  cwState.sel = new Set(on ? cwSelectable().map(f => String(f.id)) : []);
+  cwSelPaint();
+}
+window.cwSelAllToggle = cwSelAllToggle;
+/* 勾一个：Shift 连选、Ctrl/Cmd 逐个加选由浏览器默认勾选行为 + 这里的 shift 段补齐 */
+function cwPickOne(inp) {
+  const host = inp.closest('[data-id]');
+  if (!host) return;
+  const id = String(host.dataset.id);
+  const list = cwSelectable().map(f => String(f.id));
+  const i = list.indexOf(id);
+  const ev = window.event;
+  if (inp.checked && ev && ev.shiftKey && cwState.selLast >= 0 && cwState.selLast !== i) {
+    const a = Math.min(i, cwState.selLast), b = Math.max(i, cwState.selLast);
+    for (let k = a; k <= b; k++) cwState.sel.add(list[k]);
+  } else if (inp.checked) cwState.sel.add(id);
+  else cwState.sel.delete(id);
+  cwState.selLast = i;
+  cwSelPaint();
+}
+window.cwPickOne = cwPickOne;
+
+/* 只改 DOM 的勾选态，不整块重渲染 —— 缩略图不会闪一下再加载 */
+function cwSelPaint() {
+  document.querySelectorAll('#cwFileArea [data-id]').forEach(el => {
+    const on = cwState.sel.has(String(el.dataset.id));
+    el.classList.toggle('sel', on);
+    const cb = el.querySelector('.cw-pick input');
+    if (cb) cb.checked = on;
+  });
+  cwToolbarSync();
+}
+/* 工具栏 / 选择条 / 全选框三者同步 */
+function cwToolbarSync() {
+  const bar = document.getElementById('cwToolbar');
+  const sel = cwState.sel || new Set();
+  if (bar) bar.hidden = !cwState.course;
+  document.querySelectorAll('#cwToolbar .cw-seg button').forEach(b => {
+    b.classList.toggle('on', b.dataset.view === cwState.view);
+  });
+  const files = cwSelectable();
+  const all = document.getElementById('cwSelAll');
+  if (all) {
+    const n = files.filter(f => sel.has(String(f.id))).length;
+    all.disabled = !files.length;
+    all.checked = files.length > 0 && n === files.length;
+    all.indeterminate = n > 0 && n < files.length;
+  }
+  const hint = document.getElementById('cwToolbarHint');
+  if (hint) {
+    const sent = files.filter(f => cwSentRow(f.id)).length;
+    hint.textContent = files.length
+      ? ('共 ' + files.length + ' 个文件' + (sent ? ' · 已推送 ' + sent + ' 个' : ''))
+      : '';
+  }
+  const sbar = document.getElementById('cwSelBar');
+  if (sbar) sbar.hidden = sel.size === 0;
+  const cnt = document.getElementById('cwSelCount');
+  if (cnt) cnt.textContent = String(sel.size);
+  const nms = document.getElementById('cwSelNames');
+  if (nms) {
+    if (!sel.size) nms.textContent = '';
+    else {
+      const names = files.filter(f => sel.has(String(f.id))).map(f => f.name);
+      nms.textContent = names.slice(0, 2).join('、') + (names.length > 2 ? ' 等 ' + names.length + ' 个' : '');
+    }
+  }
+}
+window.cwToolbarSync = cwToolbarSync;
+
+/* 多选框：归档作品不给勾（留同样宽度的空位，三种视图列宽才对得上） */
+function cwPickBox(f) {
+  if (f.archived) return '<span class="cw-pick"></span>';
+  const on = cwState.sel.has(String(f.id));
+  return '<span class="cw-pick"><input type="checkbox"' + (on ? ' checked' : '')
+    + ' onclick="event.stopPropagation();cwPickOne(this)" title="勾选后可批量下发"></span>';
+}
+
+/* —— 视图 1：缩略图大卡片 —— */
 function cwFileCard(f, idx) {
   const kind = f.kind || cwKindOf(f.name);
   const sent = !f.archived && cwSentRow(f.id);
@@ -33274,7 +33678,9 @@ function cwFileCard(f, idx) {
   if (kind === 'image') thumb = '<img src="' + esc(CW_API + 'file?id=' + encodeURIComponent(f.id)) + '" alt="" loading="lazy" data-name="' + esc(f.name) + '" onerror="cwImgErr(this)">';
   else if (kind === 'video') thumb = '<video src="' + esc(CW_API + 'file?id=' + encodeURIComponent(f.id)) + '" preload="metadata" muted></video>';
   else thumb = '<span class="ico">' + fileTypeIcon(f.name, 36) + '</span>';
-  return '<div class="cw-file" data-id="' + esc(f.id) + '" data-kind="' + esc(kind) + '" onclick="cwPreviewLocal(this)">'
+  const selCls = cwState.sel.has(String(f.id)) ? ' sel' : '';
+  return '<div class="cw-file' + selCls + '" data-id="' + esc(f.id) + '" data-kind="' + esc(kind) + '" onclick="cwPreviewLocal(this)">'
+    + cwPickBox(f)
     + '<div class="thumb">' + thumb
     +   (f.archived ? '<span class="cw-tag">活动归档</span>' : '')
     +   (sent ? '<span class="cw-sent-dot">已推送</span>' : '')
@@ -33294,38 +33700,97 @@ function cwFileCard(f, idx) {
     +   '</div></div></div>';
 }
 
+/* —— 视图 2：列表（一行一个，看大小 / 状态 / 批量勾选最顺） —— */
+function cwListHead() {
+  return '<div class="cw-list-h"><span></span><span></span><span>文件</span>'
+    + '<span class="sz">大小</span><span class="st">状态</span><span style="text-align:right">操作</span></div>';
+}
+function cwListRow(f, idx) {
+  const kind = f.kind || cwKindOf(f.name);
+  const sent = !f.archived && cwSentRow(f.id);
+  const selCls = cwState.sel.has(String(f.id)) ? ' sel' : '';
+  const ops = [
+    f.archived ? '' : '<button class="' + (sent ? 'sent' : '') + '" title="推送给班级"'
+      + ' onclick="event.stopPropagation();cwPushDialog(this)">' + (sent ? '✓ 已推送' : '⬇ 推送') + '</button>',
+    '<button title="重命名" onclick="event.stopPropagation();cwRenameLocal(this)">✎</button>',
+    '<button title="下载" onclick="event.stopPropagation();cwDownloadLocal(this)">⬇</button>',
+    f.archived ? '' : '<button title="换到别的课节" onclick="event.stopPropagation();cwMoveLocal(this)">➡</button>',
+    '<button class="cw-del" title="删除" onclick="event.stopPropagation();cwDeleteLocal(this)">🗑</button>'
+  ].join('');
+  return '<div class="cw-lrow' + selCls + '" data-id="' + esc(f.id) + '" data-kind="' + esc(kind) + '" onclick="cwPreviewLocal(this)">'
+    + cwPickBox(f)
+    + '<span class="ic">' + fileTypeIcon(f.name, 17) + '</span>'
+    + '<span style="min-width:0"><span class="fn">' + esc(f.name) + '</span>'
+    +   '<span class="sub">' + esc(CW_KIND_NAME[kind] || '文件')
+    +   (f.archived ? ' · 活动归档' : '') + '</span></span>'
+    + '<span class="sz">' + esc(f.size_text || '—') + '</span>'
+    + '<span class="st' + (sent ? ' on' : '') + '">' + (sent ? '已推送' : (f.archived ? '归档' : '未推送')) + '</span>'
+    + '<span class="op">' + ops + '</span></div>';
+}
+
+/* —— 视图 3：紧凑（双列小条目，一屏扫几十个） —— */
+function cwCmpRow(f, idx) {
+  const kind = f.kind || cwKindOf(f.name);
+  const sent = !f.archived && cwSentRow(f.id);
+  const selCls = cwState.sel.has(String(f.id)) ? ' sel' : '';
+  return '<div class="cw-cmp' + selCls + '" data-id="' + esc(f.id) + '" data-kind="' + esc(kind) + '"'
+    + ' onclick="cwPreviewLocal(this)" title="' + esc(f.name + (f.size_text ? ' · ' + f.size_text : '')) + '">'
+    + cwPickBox(f)
+    + '<span class="ic">' + fileTypeIcon(f.name, 15) + '</span>'
+    + '<span class="fn">' + esc(f.name) + '</span>'
+    + (sent ? '<span class="dot">✓</span>' : '')
+    + '<span class="ops">'
+    +   (f.archived ? '' : '<button title="推送" onclick="event.stopPropagation();cwPushDialog(this)">⬇</button>')
+    +   '<button class="cw-del" title="删除" onclick="event.stopPropagation();cwDeleteLocal(this)">🗑</button>'
+    + '</span></div>';
+}
+
+function cwFilesBox(list) {
+  if (!list || !list.length) return '';
+  if (cwState.view === 'list') return '<div class="cw-list">' + cwListHead() + list.map((f, i) => cwListRow(f, i)).join('') + '</div>';
+  if (cwState.view === 'compact') return '<div class="cw-cmp-grid">' + list.map((f, i) => cwCmpRow(f, i)).join('') + '</div>';
+  return '<div class="cw-files">' + list.map((f, i) => cwFileCard(f, i)).join('') + '</div>';
+}
+
 function cwPaintFiles(files) {
   const area = document.getElementById('cwFileArea');
   if (!area) return;
+  /* 选中的文件必须还在当前课节里，否则切换课节后"已选 3 个"却找不到是哪个 */
+  const alive = new Set((files || []).map(f => String(f.id)));
+  Array.from(cwState.sel).forEach(id => { if (!alive.has(String(id))) cwState.sel.delete(id); });
   if (!cwState.course) {
     area.innerHTML = cwState.courses.length
-      ? '<div class="cw-empty">选上面任意一门课程，查看里面的课件；点文件即可在线打开。</div>'
+      ? '<div class="cw-empty">选上面任意一门课程，查看里面的课件；点文件即可在线打开。' +
+        '选好后可切「列表 / 紧凑」视图，勾选多个文件一次性下发。</div>'
       : '';
+    cwToolbarSync();
     return;
   }
   if (!files || !files.length) {
     area.innerHTML = '<div class="cw-empty">「' + esc(cwState.course) + '」还没有文件。上面拖几个文件进来就存好了。</div>';
+    cwToolbarSync();
     return;
   }
   const own = files.filter(f => !f.archived);
   const arc = files.filter(f => f.archived);
   let h = '';
   if (own.length) {
-    h += '<div class="cw-sec-t">课程资料（' + own.length + '）</div><div class="cw-files">'
-      + own.map((f, i) => cwFileCard(f, i)).join('') + '</div>';
+    h += '<div class="cw-sec-t">课程资料（' + own.length + '）</div>' + cwFilesBox(own);
   }
   if (arc.length) {
     const byAct = {};
     arc.forEach(f => { const k = f.activity || '未命名活动'; (byAct[k] = byAct[k] || []).push(f); });
-    h += '<div class="cw-sec-t">活动归档作品（' + arc.length + '）</div>';
+    h += '<div class="cw-sec-t">活动归档作品（' + arc.length + '）<span class="cw-muted" style="font-weight:400">'
+      + '学生作品只作浏览 / 下载，不参与下发</span></div>';
     Object.keys(byAct).forEach(actName => {
       h += '<div class="cw-muted" style="margin:8px 0 6px">📌 ' + esc(actName)
         + ' <span class="cw-badge gray">' + byAct[actName].length + ' 个</span></div>'
-        + '<div class="cw-files">' + byAct[actName].map((f, i) => cwFileCard(f, i)).join('') + '</div>';
+        + cwFilesBox(byAct[actName]);
     });
   }
   if (!own.length && !arc.length) h = '<div class="cw-empty">这个课程下没有可显示的文件。</div>';
   area.innerHTML = h;
+  cwToolbarSync();
 }
 
 /* 预览一个课件库文件（点击卡片） */
@@ -33345,16 +33810,20 @@ function cwPreviewFilesIn(list, id, title) {
   cwOpenViewer(items, i < 0 ? 0 : i, title);
 }
 function cwDownloadLocal(btn) {
-  const id = btn.closest('.cw-file').dataset.id;
+  const host = btn.closest('[data-id]');
+  if (!host) return;
+  const id = host.dataset.id;
   const a = document.createElement('a');
   a.href = CW_API + 'file?id=' + encodeURIComponent(id) + '&dl=1';
   a.download = '';
   document.body.appendChild(a); a.click(); a.remove();
 }
 async function cwDeleteLocal(btn) {
-  const card = btn.closest('.cw-file');
+  const card = btn.closest('[data-id]');
+  if (!card) return;
   const id = card.dataset.id;
-  const name = card.querySelector('.fn').textContent;
+  const nameEl = card.querySelector('.fn');
+  const name = nameEl ? nameEl.textContent : '文件';
   const pushed = (dbT('materials') || []).filter(m => !m.deleted && m.from === 'courseware'
     && String(m.src_id) === String(id)).length;
   const tip = '删除「' + name + '」？\n\n文件会从服务器上真正删掉（不进回收站），删除后无法恢复。'
@@ -33375,9 +33844,11 @@ async function cwDeleteLocal(btn) {
   } catch (e) { toast(e.message || '删除失败'); }
 }
 async function cwMoveLocal(btn) {
-  const card = btn.closest('.cw-file');
+  const card = btn.closest('[data-id]');
+  if (!card) return;
   const id = card.dataset.id;
-  const name = card.querySelector('.fn').textContent;
+  const nameEl = card.querySelector('.fn');
+  const name = nameEl ? nameEl.textContent : '文件';
   const to = await uiPrompt('把「' + name + '」换到哪个课节？\n填课节名（不存在会自动新建）：', { title: '更换课节', value: cwState.course || '' });
   if (!to || !to.trim() || to.trim() === cwState.course) return;
   try {
@@ -33391,7 +33862,8 @@ async function cwMoveLocal(btn) {
 }
 /** 重命名：后缀自动保留；已推送的记录同步改标题与链接 */
 async function cwRenameLocal(btn) {
-  const card = btn.closest('.cw-file');
+  const card = btn.closest('[data-id]');
+  if (!card) return;
   const id = card.dataset.id;
   const oldName = card.querySelector('.fn') ? card.querySelector('.fn').textContent : '';
   const nn = await uiPrompt('把「' + oldName + '」改叫什么名字？\n（后缀名会自动保留，学生端看到的也是新名字）',

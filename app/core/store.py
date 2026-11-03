@@ -149,6 +149,20 @@ def _tomb_hash(rid):
     return _fingerprint({"__deleted__": True, "id": str(rid)})
 
 
+class ImportRefused(Exception):
+    """导入前置校验未通过。
+
+    约定：抛出它的那一刻，本机数据一个字节都没动。调用方应把 msg 原样展示给用户，
+    code == "needs_force" 表示「数据量骤减，需要用户明确确认后才能继续」。
+    """
+
+    def __init__(self, msg, code="refused", detail=None):
+        Exception.__init__(self, msg)
+        self.msg = msg
+        self.code = code
+        self.detail = detail or {}
+
+
 class Store(object):
     def __init__(self, db_path):
         self.path = db_path
@@ -640,8 +654,61 @@ class Store(object):
                     errs.append({"table": tbl, "id": row_id(tbl, row), "msg": str(e)[:120]})
         return {"rev": self.rev(), "applied": applied, "conflicts": conflicts, "errors": errs}
 
-    def import_snapshot(self, tables, replace=True, actor="teacher"):
-        """一次性导入（老数据迁移 / 备份恢复）。返回每张表写入条数。"""
+    def table_counts(self):
+        """每张表当前「活着」的行数（不含墓碑）。导入前比对数据量用。"""
+        with self.lock:
+            rows = self.conn.execute(
+                "SELECT tbl, COUNT(*) AS c FROM rows WHERE deleted=0 GROUP BY tbl").fetchall()
+        return {r["tbl"]: int(r["c"]) for r in rows}
+
+    def import_snapshot(self, tables, replace=True, actor="teacher", force=False):
+        """一次性导入（备份恢复 / 老数据迁移）。
+
+        2026-11-03 加固（换机测试 F1，高危）——
+        原实现「先删光全部行，再按传入的表写回」，于是传入空表 / 缺表的备份时
+        就是：清库成功、什么都没写、还返回成功。真实触发路径是「用旧版本备份
+        导入新版本」（旧备份里没有的新表会被清空）和手工编辑过的 JSON。
+        现在分三步，任何一步不合格都在动数据之前中止：
+
+          1. 校验：至少有一张可识别的表、且不是「本机有数据而备份 0 行」；
+             数据量骤减（不足本机四成）必须显式 force，避免拿错文件变事故。
+          2. 只替换备份里确实带了的表；备份没带的表原样保留（老备份不再误伤新表）。
+          3. 写入按 force=True 走，备份里写了什么就是什么。
+
+        返回 {"counts":{表:写入行}, "skipped_tables":[...], "kept_tables":[...],
+              "rows": 总行数}；不合格时抛 ImportRefused。
+        """
+        clean, skipped, bad = {}, [], []
+        if isinstance(tables, dict):
+            for tbl, rows in tables.items():
+                t = str(tbl or "")
+                if t not in TABLES:
+                    if t:
+                        skipped.append(t)
+                    continue
+                if not isinstance(rows, list):
+                    bad.append(t)
+                    continue
+                clean[t] = [r for r in rows if isinstance(r, dict)]
+
+        incoming = sum(len(v) for v in clean.values())
+        if not clean:
+            raise ImportRefused("备份里没有任何可识别的数据表，已中止导入，本机数据没有改动。")
+
+        live = self.table_counts()
+        alive_total = sum(int(v) for v in live.values())
+        current = sum(int(live.get(t, 0)) for t in clean)
+        if alive_total and not incoming:
+            raise ImportRefused(
+                "这份备份里一行数据都没有，导入会把本机 %d 行数据全部清空，已中止。"
+                "如果你确实想清空，请到「清空本机数据」里操作。" % alive_total)
+        if not force and current >= 5 and incoming < current * 0.4:
+            raise ImportRefused(
+                "备份里的数据量（%d 行）明显少于本机（%d 行），可能拿错了文件或备份不完整。"
+                % (incoming, current),
+                code="needs_force",
+                detail={"incoming": incoming, "current": current})
+
         counts = {}
         if replace:
             with self.lock:
@@ -649,24 +716,32 @@ class Store(object):
                 # 恢复一份旧备份后，各端还留着一堆“备份里没有”的数据。
                 # 故意不动 updated_at——紧接着的 upsert 会拿它做冲突比较，
                 # 这里若写成 now，原样恢复的行会被判成“客户端太旧”而被拒。
+                # 只删「本次要替换的表」：备份里没带的表保持原样。
                 stale = self.conn.execute(
                     "SELECT tbl, rid FROM rows WHERE deleted=0").fetchall()
                 for r in stale:
+                    if r["tbl"] not in clean:
+                        continue
                     self.conn.execute(
                         "UPDATE rows SET deleted=1, rev=? WHERE tbl=? AND rid=?",
                         (self._next_rev(), r["tbl"], r["rid"]))
                 self.conn.commit()
-        for tbl, rows in (tables or {}).items():
-            if tbl not in TABLES or not isinstance(rows, list):
-                continue
+        for tbl, rows in clean.items():
             n = 0
             for row in rows:
-                if isinstance(row, dict):
-                    _, changed, _ = self.upsert(tbl, row, actor, force=True)
-                    n += 1 if changed else 0
+                _, changed, _ = self.upsert(tbl, row, actor, force=True)
+                n += 1 if changed else 0
             counts[tbl] = n
         self.audit(actor, "import", json.dumps(counts, ensure_ascii=False))
-        return counts
+        result = {
+            "counts": counts,
+            "rows": incoming,
+            "skipped_tables": sorted(skipped),
+            "kept_tables": sorted(t for t in TABLES if t not in clean),
+        }
+        if bad:
+            result["bad_tables"] = sorted(bad)
+        return result
 
     # ------------------------------------------------------------------
     # 学生口令

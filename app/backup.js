@@ -408,6 +408,153 @@
     f.click();
   }
 
+  /* ============================================================
+     一键导出 / 一键恢复 的公共件（2026-11-03）
+     ------------------------------------------------------------
+     换机测试暴露的三类体验问题，在这里统一收口：
+     ① 失败只弹 toast，一闪而过，用户不知道为什么失败 → fail() 一律弹窗；
+     ② 导出要先后弹两次密码框 → 一个弹窗里输两遍；
+     ③ 服务端拒绝（数据量骤减）时前端无感知 → 二次确认后带 force 重试。
+     ============================================================ */
+
+  /** 按当前主题转义并把换行变成 <br>（uiAlert/uiConfirm 收的是 html） */
+  function nl2br(s) {
+    var env = E();
+    var t = String(s == null ? '' : s);
+    try { t = env.esc(t); } catch (e) {}
+    return t.replace(/\n/g, '<br>');
+  }
+
+  /** 明确的失败出口：优先弹窗，没有 uiAlert 才退回 toast */
+  function fail(title, msg, hint) {
+    var env = E();
+    var body = String(msg || '未知错误');
+    if (hint) body += '\n\n' + hint;
+    if (root.uiAlert) {
+      try { root.uiAlert(nl2br(body), { title: title || '操作失败' }); return; } catch (e) {}
+    }
+    env.toast((title || '操作失败') + '：' + body.replace(/\n+/g, ' '));
+  }
+
+  function alertBox(title, msg) {
+    var env = E();
+    if (root.uiAlert) {
+      try { return root.uiAlert(nl2br(msg), { title: title || '提示' }); } catch (e) {}
+    }
+    env.toast(String(msg || '').replace(/\n+/g, ' '));
+    return Promise.resolve();
+  }
+
+  function confirmBox(msg, title, okText, danger) {
+    var env = E();
+    if (root.uiConfirm) {
+      try {
+        return root.uiConfirm(nl2br(msg),
+          { title: title || '请确认', okText: okText || '确定', danger: danger !== false });
+      } catch (e) {}
+    }
+    return Promise.resolve(root.confirm ? root.confirm(String(msg)) : false);
+  }
+
+  function busy(msg) { try { E().toast(msg); } catch (e) {} }
+
+  function fmtSize(n) {
+    n = Number(n) || 0;
+    if (n >= 1048576) return (n / 1048576).toFixed(1) + ' MB';
+    if (n >= 1024) return Math.round(n / 1024) + ' KB';
+    return n + ' B';
+  }
+
+  /** 备份密码：一个弹窗里输两遍，输错就地提示，不再连弹两个框 */
+  function askNewBackupPassword() {
+    var env = E();
+    return new Promise(function (resolve) {
+      var ov = document.createElement('div');
+      ov.className = 'modal-ov';
+      ov.innerHTML = ''
+        + '<div class="modal" role="dialog" aria-modal="true" style="max-width:470px">'
+        + '  <div class="modal-head"><div>'
+        + '    <div class="modal-title">设置备份密码</div>'
+        + '    <div class="modal-sub">整个备份用这个密码加密，换电脑恢复时必须输入它，'
+        + '请记牢（至少 6 位）。它与本机的解锁密码互相独立。</div>'
+        + '  </div></div>'
+        + '  <div class="modal-sec">'
+        + '    <div class="modal-lb">备份密码</div>'
+        + '    <input id="bkPwd1" class="mo-input" type="password" placeholder="至少 6 位"'
+        + '      autocomplete="new-password" style="font-size:14px;padding:11px 12px">'
+        + '    <div class="modal-lb" style="margin-top:10px">再输一遍</div>'
+        + '    <input id="bkPwd2" class="mo-input" type="password" placeholder="重复输入同一个密码"'
+        + '      autocomplete="new-password" style="font-size:14px;padding:11px 12px">'
+        + '    <div id="bkPwdErr" style="margin-top:8px;font-size:12.5px;color:#d93025;min-height:16px"></div>'
+        + '  </div>'
+        + '  <div class="modal-acts">'
+        + '    <button class="btn" style="width:auto;padding:7px 16px;font-size:12.5px"'
+        + '      onclick="__bkPwdCancel()">取消</button>'
+        + '    <button class="btn btn-primary" style="width:auto;padding:7px 22px;font-size:12.5px"'
+        + '      onclick="__bkPwdOk()">开始导出</button>'
+        + '  </div>'
+        + '</div>';
+      var done = false;
+      var q = function (id) { return ov.querySelector('#' + id); };
+      var close = function () {
+        if (ov.parentNode) ov.parentNode.removeChild(ov);
+        document.removeEventListener('keydown', onKey);
+        try { delete root.__bkPwdOk; delete root.__bkPwdCancel; } catch (e) {}
+      };
+      var finish = function (v) { if (done) return; done = true; close(); resolve(v); };
+      var submit = function () {
+        var a = (q('bkPwd1') || {}).value || '';
+        var b = (q('bkPwd2') || {}).value || '';
+        var err = q('bkPwdErr');
+        if (a.length < 6) {
+          if (err) err.textContent = '备份密码至少 6 位';
+          if (q('bkPwd1')) q('bkPwd1').focus();
+          return;
+        }
+        if (a !== b) {
+          if (err) err.textContent = '两次输入的密码不一致';
+          if (q('bkPwd2')) q('bkPwd2').focus();
+          return;
+        }
+        finish(a);
+      };
+      var onKey = function (e) {
+        if (e.key === 'Escape') finish(null);
+        else if (e.key === 'Enter') submit();
+      };
+      root.__bkPwdOk = submit;
+      root.__bkPwdCancel = function () { finish(null); };
+      ov.onclick = function (e) { if (e.target === ov) finish(null); };
+      document.addEventListener('keydown', onKey);
+      document.body.appendChild(ov);
+      setTimeout(function () { var i = q('bkPwd1'); if (i) i.focus(); }, 30);
+    });
+  }
+
+  /** 提交全量恢复到服务端；返回 {ok, status, j} */
+  async function postImport(sv, force) {
+    var payload = { tables: (sv && sv.tables) || {}, config: (sv && sv.config) || {},
+                    force: !!force };
+    /* 这几个字段只在备份里确实存在时才带上：服务端「带了 creds 才整体替换口令表」，
+       盲目补一个空数组会把本机密码清空。 */
+    if (sv && 'creds' in sv) payload.creds = sv.creds || [];
+    if (sv && 'sub' in sv) payload.sub = sv.sub || {};
+    if (sv && 'typing' in sv) payload.typing = sv.typing || {};
+    if (sv && 'files' in sv) payload.files = sv.files || {};
+    try {
+      var resp = await fetch('/api/v2/admin/import', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      var j = await resp.json().catch(function () { return {}; });
+      return { ok: !!(j && j.ok), status: resp.status, j: j || {} };
+    } catch (e) {
+      return { ok: false, status: 0,
+               j: { msg: '连不上服务端：' + ((e && e.message) || e) + '。请确认工作台服务正在运行。' } };
+    }
+  }
+
   /**
    * 全量加密导出（v2.0.4 · 系统设置「数据与备份」唯一入口）
    * 服务端整库（含教师账号与学生口令哈希）+ 本机浏览器数据，一个文件带走。
@@ -417,37 +564,45 @@
   async function exportFull() {
     var env = E();
     if (!env.keySet() && env.lockActive()) {
-      env.toast('请先解锁再导出备份（当前处于锁定状态，数据还是密文）');
+      fail('无法导出', '当前处于锁定状态，本机数据还是密文，导出的会是一份解不开的文件。',
+        '请先解锁，再点「一键导出」。');
       return false;
     }
-    /* ① 取服务端全量（教师账号 / 学生口令哈希在 ?full=1 里） */
-    var server = null;
+    /* ① 取服务端全量（教师账号 / 学生口令哈希 / 打字成绩 / 提交附件都在 ?full=1 里）
+          —— 失败原因分清楚：登录过期、服务没起、返回不完整，用户才知道该做什么 */
+    busy('正在收集服务端数据…');
+    var server = null, why = '';
     try {
       var r = await fetch('/api/v2/teacher/export?full=1',
         { credentials: 'same-origin', cache: 'no-store' });
-      if (r.ok) {
-        var j = await r.json();
-        if (j && j.tables) server = j;
+      if (r.status === 401 || r.status === 403) {
+        why = '登录已失效。请刷新页面、重新登录教师端后再导出。';
+      } else if (!r.ok) {
+        why = '服务端返回 HTTP ' + r.status + '。请确认工作台服务正在运行。';
+      } else {
+        var j = await r.json().catch(function () { return null; });
+        if (j && j.tables && typeof j.tables === 'object') server = j;
+        else why = '服务端返回的数据不完整（没有数据表段），本次没有导出。';
       }
-    } catch (e) { server = null; }
-    if (!server) {
-      env.toast('拿不到服务端数据（登录已过期或服务未启动），本次不导出');
-      return false;
+    } catch (e) {
+      why = '连不上服务端：' + ((e && e.message) || e) + '。请确认工作台服务已启动。';
     }
-    /* ② 备份密码（独立于设备锁，输两遍防手滑） */
-    var pwd = await askPassword('设置备份密码',
-      '整个备份用这个密码加密。换电脑恢复时必须输入它，请务必记牢。', '至少 6 位');
-    if (pwd === null) return false;
-    if (!pwd || pwd.length < 6) { env.toast('备份密码至少 6 位，已取消导出'); return false; }
-    var pwd2 = await askPassword('再输一遍备份密码', '', '重复输入');
-    if (pwd2 === null) return false;
-    if (pwd2 !== pwd) { env.toast('两次输入的密码不一致，已取消导出'); return false; }
+    if (!server) { fail('导出失败', why, '本机数据没有任何改动，处理好后可以直接重试。'); return false; }
 
-    /* ③ 打包：本机 localStorage + 服务端表 / 配置 / 学生口令哈希 */
+    /* ② 备份密码（独立于设备锁；一个弹窗输两遍） */
+    var pwd = await askNewBackupPassword();
+    if (!pwd) return false;
+
+    /* ③ 打包：本机 localStorage + 服务端表 / 配置 / 口令哈希 / 打字成绩 / 附件 */
+    busy('正在加密打包，数据多时请稍等…');
     var ls = collect();
     var n = Object.keys(ls).length;
-    var tblN = Object.keys(server.tables || {})
-      .filter(function (t) { return Array.isArray(server.tables[t]) && server.tables[t].length; }).length;
+    var tables = server.tables || {};
+    var tblN = Object.keys(tables)
+      .filter(function (t) { return Array.isArray(tables[t]) && tables[t].length; }).length;
+    var fm = server.files_meta || {};
+    var typN = (server.typing && server.typing.students)
+      ? Object.keys(server.typing.students).length : 0;
     var dump = {
       app: APP, version: VER, kind: 'full',
       at: new Date().toISOString().slice(0, 16).replace('T', ' '),
@@ -456,8 +611,12 @@
       ls: ls,
       server: {
         app_version: server.version, exported_at: server.exported_at,
-        tables: server.tables, config: server.config, creds: server.creds || [],
-        sub: server.sub || null          /* 提交系统：题目/花名册/提交记录 */
+        tables: tables, config: server.config || {},
+        creds: server.creds || [],
+        sub: server.sub || null,           /* 提交系统：题目/花名册/提交记录 */
+        typing: server.typing || {},       /* 打字练习：成绩/金币/装扮 */
+        files: server.files || {},         /* 学生作品附件（含提交附件与增强模块数据） */
+        files_meta: fm
       }
     };
     var salt = randomSalt(env);
@@ -466,7 +625,24 @@
       salt: salt, count: n, payload: encWithKey(JSON.stringify(dump), k, env) });
     download(shell, 'application/octet-stream',
       '班级工作台全量备份-' + stamp(env) + '.cwbackup');
-    env.toast('已导出全量加密备份（服务端 ' + tblN + ' 张表 + 本机 ' + n + ' 项）');
+
+    var extra = [];
+    if (typN) extra.push('打字成绩 ' + typN + ' 人');
+    if (fm.included) extra.push('作品附件 ' + fm.included + ' 个');
+    env.toast('已导出全量备份：服务端 ' + tblN + ' 张表 + 本机 ' + n + ' 项'
+      + (extra.length ? ' + ' + extra.join(' + ') : ''));
+
+    /* 超大附件没进包时要明说，别让用户以为「全都在里面」 */
+    if (fm.skipped && fm.skipped.length) {
+      var lines = fm.skipped.slice(0, 8).map(function (x) {
+        return '· ' + x.name + '（' + fmtSize(x.size) + '）';
+      }).join('\n');
+      fail('备份已导出，但有附件没打进去',
+        '共 ' + fm.skipped.length + ' 个附件超过打包上限（单个 ' + fmtSize(fm.single_max || 0)
+        + '、合计 ' + fmtSize(fm.cap || 0) + '），未包含在这个备份文件里：\n' + lines
+        + (fm.skipped.length > 8 ? '\n…其余 ' + (fm.skipped.length - 8) + ' 个' : ''),
+        '换机时请把数据目录里的 submissions 文件夹整个拷过去，再点「一键恢复」。');
+    }
     return true;
   }
 
@@ -484,76 +660,105 @@
       var file = f.files && f.files[0];
       if (!file) return;
       var r = new FileReader();
-      r.onerror = function () { env.toast('读不到这个文件，可能已被移动或没有权限'); };
+      r.onerror = function () {
+        fail('导入失败', '读不到这个文件，可能已被移动、删除，或没有读取权限。', '请重新选择文件。');
+      };
       r.onload = async function () {
         var parsed;
+        busy('正在校验备份文件…');
         try { parsed = await decode(String(r.result || '')); }
-        catch (e) { env.toast('导入失败：' + ((e && e.message) || e)); return; }
-        if (!parsed) { env.toast('已取消导入'); return; }
+        catch (e) {
+          fail('导入失败', (e && e.message) || e, '本机数据没有任何改动。');
+          return;
+        }
+        if (!parsed) return;                 /* 用户取消了密码输入 / 关掉了弹窗 */
+
         var dump = parsed.dump, key = parsed.key;
         var n = Object.keys(dump.ls || {}).length;
 
+        /* ---------- 全量备份：服务端 + 本机一起还原 ---------- */
         if (dump.kind === 'full' && dump.server) {
           var sv = dump.server;
-          var tblN = Object.keys(sv.tables || {})
-            .filter(function (t) { return Array.isArray(sv.tables[t]) && sv.tables[t].length; }).length;
+          var tables = sv.tables || {};
+          var tblN = Object.keys(tables)
+            .filter(function (t) { return Array.isArray(tables[t]) && tables[t].length; }).length;
           var credsN = (sv.creds || []).length;
-          if (!(await (window.uiConfirm
-            ? window.uiConfirm('全量恢复会整体替换两边的数据' +
-            (dump.at ? '（导出于 ' + dump.at + '）' : '') + '：\n\n'
-            + '· 服务端：' + tblN + ' 张表 + 配置' + (credsN ? ' + ' + credsN + ' 条学生密码' : '') + '\n'
+          var typN = (sv.typing && sv.typing.students)
+            ? Object.keys(sv.typing.students).length : 0;
+          var fileN = sv.files ? Object.keys(sv.files).length : 0;
+          var fm = sv.files_meta || {};
+
+          var go = await confirmBox('全量恢复会用这份备份整体替换本机数据'
+            + (dump.at ? '（导出于 ' + dump.at + '）' : '') + '：\n\n'
+            + '· 服务端：' + tblN + ' 张表 + 配置'
+            + (credsN ? ' + ' + credsN + ' 条学生密码' : '') + '\n'
+            + (typN ? '· 打字成绩：' + typN + ' 名学生\n' : '')
+            + (fileN ? '· 学生作品附件：' + fileN + ' 个\n' : '')
             + '· 本机：' + n + ' 项界面数据\n'
             + '· 教师账号 / 学生密码 / 模块开关会回到备份时的状态\n'
             + (env.lockActive() ? '· 本机解锁密码保持不变\n' : '')
-            + '\n确定继续吗？', { title: '全量恢复', okText: '恢复' })
-            : Promise.resolve(confirm('全量恢复会整体替换两边的数据' +
-            (dump.at ? '（导出于 ' + dump.at + '）' : '') + '：\n\n'
-            + '· 服务端：' + tblN + ' 张表 + 配置' + (credsN ? ' + ' + credsN + ' 条学生密码' : '') + '\n'
-            + '· 本机：' + n + ' 项界面数据\n'
-            + '· 教师账号 / 学生密码 / 模块开关会回到备份时的状态\n'
-            + (env.lockActive() ? '· 本机解锁密码保持不变\n' : '')
-            + '\n确定继续吗？'))))) return;
+            + '\n确定继续吗？', '全量恢复', '恢复');
+          if (!go) return;
+
           var cnt;
           try { cnt = apply(dump, key); }        /* 先落本机（失败不动服务端） */
-          catch (e) { env.toast('本机数据导入失败：' + ((e && e.message) || e)); return; }
-          var ok2 = false, msg2 = '';
-          try {
-            var resp = await fetch('/api/v2/admin/import', {
-              method: 'POST', credentials: 'same-origin',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ tables: sv.tables, config: sv.config || {},
-                                     creds: sv.creds || [], sub: sv.sub || {} })
-            });
-            var j = await resp.json().catch(function () { return {}; });
-            ok2 = !!j.ok;
-            if (!ok2) msg2 = (j && j.msg) || ('HTTP ' + resp.status);
-          } catch (e) { msg2 = (e && e.message) || e; }
-          if (!ok2) {
-            env.toast('本机数据已还原，但服务端恢复失败：' + msg2 + '。刷新后可重试服务端部分。');
-          } else {
-            env.toast('已恢复：服务端 ' + tblN + ' 张表 + 本机 ' + cnt + ' 项，正在重新载入…');
+          catch (e) {
+            fail('本机数据恢复失败', (e && e.message) || e,
+              '服务端没有改动。多半是本机浏览器存储空间不足，清理后重试即可。');
+            return;
           }
-          setTimeout(function () { env.reload(); }, 1200);
+
+          busy('本机已还原，正在写入服务端…');
+          var r1 = await postImport(sv, false);
+
+          /* 服务端认为「数据量骤减」，要求二次确认 —— 带 force 重试一次 */
+          if (!r1.ok && (r1.j.code === 'needs_force')) {
+            var go2 = await confirmBox(
+              (r1.j.msg || '服务端拒绝了这次导入。') + '\n\n'
+              + '继续将以备份内容覆盖服务端现有数据，且无法撤销。',
+              '确认要用它覆盖吗', '仍然导入');
+            if (!go2) {
+              await alertBox('已停止恢复',
+                '服务端数据保持原样（本机界面数据已按备份还原）。\n'
+                + '刷新页面即可回到服务端当前的数据。');
+              return;
+            }
+            busy('正在按你的确认覆盖服务端数据…');
+            r1 = await postImport(sv, true);
+          }
+
+          if (!r1.ok) {
+            fail('服务端恢复失败', (r1.j && r1.j.msg) || ('HTTP ' + r1.status),
+              '本机界面数据已经还原，服务端仍是原样。请检查登录状态与服务运行情况后重试。');
+            return;
+          }
+
+          var warn = (r1.j.warnings || []).slice();
+          if (fm.skipped && fm.skipped.length) {
+            warn.push('备份里有 ' + fm.skipped.length + ' 个附件当年没打进去，'
+              + '换机时需另行拷贝 submissions 目录。');
+          }
+          var okMsg = '已恢复：服务端 ' + (r1.j.rows || 0) + ' 行 / ' + tblN + ' 张表，'
+            + '本机 ' + cnt + ' 项';
+          if (warn.length) await alertBox('恢复完成，但有提示', okMsg + '\n\n' + warn.join('\n'));
+          else env.toast(okMsg + '，正在重新载入…');
+          setTimeout(function () { env.reload(); }, warn.length ? 700 : 900);
           return;
         }
 
-        /* 旧版纯本机备份：走原恢复流程 */
+        /* ---------- 旧版纯本机备份：只还原浏览器数据 ---------- */
         var when = dump.at ? ('（导出于 ' + dump.at + '）') : '';
         var tbl = env.dbKeys.filter(function (k) { return dump.ls['wb-db-' + k]; }).length;
-        if (!(await (window.uiConfirm
-          ? window.uiConfirm('即将用这份备份覆盖本机数据' + when + '。\n\n'
+        var go3 = await confirmBox('即将用这份备份覆盖本机数据' + when + '。\n\n'
           + '· 备份共 ' + n + ' 项，含 ' + tbl + ' 张数据表（纯本机备份，不含服务端数据）\n'
           + '· 本机现有的班级 / 学生 / 成绩等会被替换\n'
           + (env.lockActive() ? '· 本机密码保持不变（备份里的旧密码不会覆盖它）\n' : '')
-          + '\n确定继续吗？', { title: '导入备份', okText: '导入' })
-          : Promise.resolve(confirm('即将用这份备份覆盖本机数据' + when + '。\n\n'
-          + '· 备份共 ' + n + ' 项，含 ' + tbl + ' 张数据表（纯本机备份，不含服务端数据）\n'
-          + '· 本机现有的班级 / 学生 / 成绩等会被替换\n'
-          + (env.lockActive() ? '· 本机密码保持不变（备份里的旧密码不会覆盖它）\n' : '')
-          + '\n确定继续吗？'))))) return;
+          + '\n确定继续吗？', '导入备份', '导入');
+        if (!go3) return;
+
         var cnt2;
         try { cnt2 = apply(dump, key); }
-        catch (e) { env.toast('导入失败：' + ((e && e.message) || e)); return; }
+        catch (e) { fail('导入失败', (e && e.message) || e, '本机数据没有改动。'); return; }
         env.toast('已导入 ' + cnt2 + ' 项，正在重新载入…');
         setTimeout(function () { env.reload(); }, 900);
       };
@@ -563,8 +768,9 @@
   }
 
   /**
-   * 两个入口共用的面板：设置页与工具页都调它，避免再各自长出一套按钮/文案。
-   * 面板里的按钮直接调本模块，所以不存在「两个实现」。
+   * 数据备份与迁移面板（工具页 / 快捷入口用）。
+   * 默认只暴露「一键导出 / 一键恢复」两件事 —— 它们已经是服务端 + 本机的全量操作，
+   * 用户不需要再理解「本机数据」「服务端数据」的区别。
    */
   function openPanel(opts) {
     var env = E();
@@ -575,21 +781,20 @@
       + '<div class="modal" role="dialog" aria-modal="true" style="max-width:520px">'
       + '  <div class="modal-head"><div>'
       + '    <div class="modal-title">数据备份与迁移</div>'
-      + '    <div class="modal-sub">导出 / 恢复用的是同一套实现：' +
-             (env.keySet() ? '当前已设密码，导出为 .cwbackup 加密文件' : '当前未设密码，导出为 .json 明文') + '</div>'
+      + '    <div class="modal-sub">一键导出 / 一键恢复：一个文件带走服务端与本机的全部数据</div>'
       + '  </div></div>'
       + '  <div class="modal-sec">'
       + '    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">'
       + '      <button class="btn btn-primary" style="width:auto;padding:8px 16px;font-size:13px"'
-      + '        onclick="BackupIO.export()">导出备份</button>'
+      + '        onclick="BackupIO.exportFull()">一键导出全量备份</button>'
       + '      <button class="btn" style="width:auto;padding:8px 16px;font-size:13px"'
-      + '        onclick="BackupIO.importFile()">从备份恢复</button>'
+      + '        onclick="BackupIO.importFull()">一键恢复</button>'
       + '    </div>'
       + '    <div class="term-hint" style="margin:0">'
-      + '      导出会把本机全部数据（班级、学生、考勤、作业、成绩、座位、设置…）打包成一个文件；'
-      + '      换电脑 / 重装浏览器前务必导出一份，在新设备上点「从备份恢复」就能整体搬过来。<br>'
-      + '      导入只替换数据、<b>不替换本机密码</b>；文件带条目数与校验和，不完整会直接中止。<br>'
-      + '      需要「清空本机数据」等更细的操作，去 <a href="#settings" onclick="__bkClosePanel()">⚙ 系统设置 → 数据与备份</a>。'
+      + '      导出会把<b>服务端 + 本机</b>的全部数据（班级、学生、考勤、作业、成绩、座位、设置、'
+      + '教师账号与学生密码、打字成绩、学生作品附件）打成一个 <b>.cwbackup</b> 加密文件。<br>'
+      + '      换电脑 / 重装前导出一份，在新设备上点「一键恢复」并输入同一个备份密码即可整体搬过去。<br>'
+      + '      导入只替换数据、<b>不替换本机解锁密码</b>；文件带条目数与校验和，不完整会直接中止且不改动任何数据。'
       + '    </div>'
       + '  </div>'
       + '  <div class="modal-acts">'

@@ -4,17 +4,93 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>打字冒险岛 · 班级工作台</title>
+<meta name="theme-color" content="#B45B33">
+<script>
+/* 主题：与主站共用同一个存储键 wb-smode。
+   放在 <head> 里同步执行 —— 首屏就是对的颜色，不会先亮一下再切暗
+   （暗色主题最刺眼的就是这一下白闪）。 */
+(function () {
+  try {
+    if (localStorage.getItem('wb-smode') === 'dark') {
+      document.documentElement.setAttribute('data-mode', 'dark');
+    }
+  } catch (e) {}
+})();
+</script>
 <style>
 :root{
   --brand:#B45B33; --brand2:#C9713F; --ink:#3B322A; --ink2:#6F6257; --ink3:#9A8B7F;
   --bg:#F8F2E4; --card:#FFFCF4; --line:#EADFD2; --ok:#3E9E5B; --warn:#D9A054; --bad:#C0392B;
   --sky:#5B8DEF; --purple:#8E6FD8; --teal:#2FA6A0;
+  /* ---- 主题令牌（2026-11-03 夜间模式）----
+     原来这些颜色是直接写死在规则里的（#fff / #FBF5E9 / #FBF7F3 …），
+     一旦切夜间就得逐条覆盖，漏一条就留一块白。现在全部收成变量：
+     浅色与夜间各给一套值，规则里只用 var()。 */
+  --surface:#FFFFFF;          /* 纯白面：按钮、键帽、输入台 */
+  --paper:#FBF5E9;            /* 课文区 / 键盘底 / 指法图底 */
+  --key:#FBF7F3;              /* 键帽常态 */
+  --key-bd:#EADFD4;
+  --key-ink:#6B6257;
+  --dim:#C2B9AE;              /* 未敲到的字 */
+  --cur-bg:#F7E2D2;           /* 当前字底纹 */
+  --dim-bg:#EFE5D6;           /* 空格占位 */
+  --brand-soft:#F6E7D6;
+  --sun-bg:#FFF8E2; --sun-line:#E8C96A; --sun-ink:#8A6A1C;
+  --info-bg:#EAF3FF; --info-line:#BBD4F5; --info-ink:#2E5E9E;
+  --info-badge-bg:#EDF3FB; --info-badge-ink:#2F5C93;
+  --en-ok-bg:#EAF4EC; --en-ok-ink:#2C7A46;
+  --ok-soft:#D8EEDD; --bad-soft:#FBE3DE;
+  --tip-bg:#4A3F33; --tip-ink:#FFEFD9;      /* 拼音气泡 */
+  --shadow:rgba(60,30,10,.07);
+  --key-3d:#D9B49C;
+  --glow1:#F6E4CE; --glow2:#EDE9D5;
+  --zone-on:rgba(180,91,51,.07);
+  /* 键帽分区底色（按手指） */
+  --f-lp:#F1EBFB; --f-lp-bd:#DFD0F4;
+  --f-lr:#EAF2FE; --f-lr-bd:#CFE0F8;
+  --f-lm:#E7F6F5; --f-lm-bd:#C4E7E5;
+  --f-li:#FDF3E3; --f-li-bd:#F3DFBD;
+  --f-ri:#EAF6EC; --f-ri-bd:#CDE8D2;
+  --f-th:#F3F1EE; --f-th-bd:#E4E0DA;
+}
+/* 夜间：同一套令牌换值。品牌色提亮（暗底上原先的 #B45B33 只有 3:1），
+   底色用暖黑（#191210 / #241B15），避免纯黑 OLED 上的拖影与刺眼对比。 */
+html[data-mode="dark"]{
+  --brand:#E4926C; --brand2:#F0B392; --ink:#F5EBE4; --ink2:#C9B6A8; --ink3:#A2917F;
+  --bg:#191210; --card:#241B15; --line:rgba(226,150,112,.22);
+  --ok:#5FBF7E; --warn:#E3BC77; --bad:#F0796F;
+  --sky:#7FA7F0; --purple:#B39CF0; --teal:#5CC4BE;
+  --surface:#2C221B;
+  --paper:#1E1611;
+  --key:#2A211B;
+  --key-bd:rgba(226,150,112,.20);
+  --key-ink:#D9C8BA;
+  --dim:#7C6B5F;
+  --cur-bg:rgba(228,146,108,.20);
+  --dim-bg:#33271F;
+  --brand-soft:rgba(228,146,108,.16);
+  --sun-bg:rgba(227,188,119,.13); --sun-line:rgba(227,188,119,.40); --sun-ink:#E3BC77;
+  --info-bg:rgba(127,167,240,.13); --info-line:rgba(127,167,240,.35); --info-ink:#A9C4F5;
+  --info-badge-bg:rgba(127,167,240,.16); --info-badge-ink:#B7CCF7;
+  --en-ok-bg:rgba(95,191,126,.14); --en-ok-ink:#8FD3A5;
+  --ok-soft:rgba(95,191,126,.20); --bad-soft:rgba(240,121,111,.18);
+  --tip-bg:#F5EBE4; --tip-ink:#2A1B14;
+  --shadow:rgba(0,0,0,.45);
+  --key-3d:#15100C;
+  --glow1:#2A1B14; --glow2:#1F1A14;
+  --zone-on:rgba(228,146,108,.09);
+  --f-lp:#2E2438; --f-lp-bd:rgba(142,111,216,.42);
+  --f-lr:#1F2734; --f-lr-bd:rgba(91,141,239,.38);
+  --f-lm:#1B2C2B; --f-lm-bd:rgba(47,166,160,.38);
+  --f-li:#2F2517; --f-li-bd:rgba(232,161,60,.40);
+  --f-ri:#1D2B20; --f-ri-bd:rgba(62,158,91,.40);
+  --f-th:#26221E; --f-th-bd:rgba(200,190,178,.24);
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
 body{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:
-  radial-gradient(1200px 500px at 80% -10%, #F6E4CE 0%, transparent 60%),
-  radial-gradient(900px 400px at -10% 110%, #EDE9D5 0%, transparent 55%),
+  radial-gradient(1200px 500px at 80% -10%, var(--glow1) 0%, transparent 60%),
+  radial-gradient(900px 400px at -10% 110%, var(--glow2) 0%, transparent 55%),
   var(--bg);
   color:var(--ink);-webkit-font-smoothing:antialiased}
 #app{max-width:1180px;margin:0 auto;padding:14px 16px 20px}
@@ -23,34 +99,34 @@ button{font-family:inherit;cursor:pointer;border:none;background:none}
   padding:10px 22px;border-radius:12px;font-size:15px;font-weight:600;
   box-shadow:0 4px 14px rgba(180,91,51,.3);transition:transform .12s}
 .btn:hover{transform:translateY(-1px)}
-.btn.line{background:#fff;color:var(--brand);border:2px solid var(--brand);box-shadow:none}
-.btn.ghost{background:#fff;color:var(--ink2);border:1.5px solid var(--line);box-shadow:none}
+.btn.line{background:var(--surface);color:var(--brand);border:2px solid var(--brand);box-shadow:none}
+.btn.ghost{background:var(--surface);color:var(--ink2);border:1.5px solid var(--line);box-shadow:none}
 .btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
 
 /* 顶栏 */
 .top{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);
-  border-radius:18px;padding:10px 16px;box-shadow:0 6px 20px rgba(60,30,10,.06)}
+  border-radius:18px;padding:10px 16px;box-shadow:0 6px 20px var(--shadow)}
 .logo{font-size:22px;font-weight:800;color:var(--brand);letter-spacing:1px;white-space:nowrap}
 .logo small{font-size:12px;color:var(--ink3);font-weight:400;margin-left:6px}
 .meter{display:flex;gap:8px;align-items:center;margin-left:auto;flex-wrap:wrap}
-.chip{background:#F6E7D6;color:var(--brand);border-radius:999px;padding:5px 12px;font-size:13px;font-weight:600;
+.chip{background:var(--brand-soft);color:var(--brand);border-radius:999px;padding:5px 12px;font-size:13px;font-weight:600;
   display:flex;align-items:center;gap:5px}
-.chip.b{background:#FFF8E2;color:#B07A1A}
-.chip.p{background:#F1EDFB;color:var(--purple)}
+.chip.b{background:var(--sun-bg);color:var(--sun-ink)}
+.chip.p{background:color-mix(in srgb,var(--purple) 14%,transparent);color:var(--purple)}
 .pet-mini{width:44px;height:44px;border-radius:13px;flex:none;overflow:hidden;
-  background:radial-gradient(72% 62% at 50% 74%,#FFF7E9 0%,#FBEADB 100%);
-  border:1px solid rgba(200,160,120,.3);
-  box-shadow:inset 0 1px 0 #fff,0 1px 3px rgba(150,95,50,.12)}
+  background:radial-gradient(72% 62% at 50% 74%,var(--paper) 0%,var(--card) 100%);
+  border:1px solid var(--line);
+  box-shadow:inset 0 1px 0 var(--surface),0 1px 3px var(--shadow)}
 .pet-mini svg{width:100%;height:100%}
 .tabs{display:flex;gap:6px;margin:14px 0 0}
 .tabs button{padding:9px 18px;border-radius:12px;font-size:14.5px;font-weight:600;color:var(--ink2);
-  background:#fff;border:1.5px solid var(--line)}
+  background:var(--surface);border:1.5px solid var(--line)}
 .tabs button.on{color:#fff;background:linear-gradient(135deg,var(--brand),var(--brand2));border-color:transparent;
   box-shadow:0 4px 12px rgba(180,91,51,.25)}
-.demo-bar{margin-top:12px;background:#FFF8E2;border:1.5px dashed #E8C96A;color:#8A6A1C;
+.demo-bar{margin-top:12px;background:var(--sun-bg);border:1.5px dashed var(--sun-line);color:var(--sun-ink);
   border-radius:12px;padding:9px 14px;font-size:13.5px}
 .off-bar{margin:60px auto 0;max-width:460px;text-align:center;background:var(--card);border:1px solid var(--line);
-  border-radius:20px;padding:44px 30px;box-shadow:0 8px 24px rgba(60,30,10,.07)}
+  border-radius:20px;padding:44px 30px;box-shadow:0 8px 24px var(--shadow)}
 .off-bar .big{font-size:44px;margin-bottom:10px}
 .off-bar h2{font-size:19px;margin-bottom:8px}
 .off-bar p{color:var(--ink2);font-size:14px;line-height:1.7}
@@ -58,14 +134,14 @@ button{font-family:inherit;cursor:pointer;border:none;background:none}
 /* 冒险地图 */
 .map-head{display:flex;align-items:center;gap:10px;margin:16px 0 10px;flex-wrap:wrap}
 .stage-chip{display:flex;align-items:center;gap:6px;padding:8px 13px;border-radius:12px;font-size:13.5px;
-  font-weight:600;background:#fff;border:1.5px solid var(--line);color:var(--ink2)}
-.stage-chip.on{border-color:var(--brand);color:var(--brand);background:#F8EEDF}
+  font-weight:600;background:var(--surface);border:1.5px solid var(--line);color:var(--ink2)}
+.stage-chip.on{border-color:var(--brand);color:var(--brand);background:var(--brand-soft)}
 .stage-chip .ic{font-size:16px}
 .stage-desc{font-size:13px;color:var(--ink3);margin:0 0 12px 2px}
 .chap-bar{display:flex;align-items:center;gap:10px;margin:6px 0 14px}
 .chap-bar b{font-size:16px;color:var(--ink)}
 .chap-nav{margin-left:auto;display:flex;gap:6px;align-items:center}
-.chap-nav button{width:34px;height:34px;border-radius:10px;background:#fff;border:1.5px solid var(--line);
+.chap-nav button{width:34px;height:34px;border-radius:10px;background:var(--surface);border:1.5px solid var(--line);
   font-size:16px;color:var(--ink2)}
 .chap-nav button:disabled{opacity:.35}
 .chap-nav span{font-size:13px;color:var(--ink3);min-width:70px;text-align:center}
@@ -73,13 +149,13 @@ button{font-family:inherit;cursor:pointer;border:none;background:none}
 .lv{background:var(--card);border:2px solid var(--line);border-radius:16px;padding:14px;position:relative;
   transition:transform .12s,border-color .12s;text-align:left;width:100%}
 .lv:not(.lock):hover{transform:translateY(-2px);border-color:var(--brand)}
-.lv.lock{opacity:.55;cursor:not-allowed;background:#FBF6F1}
+.lv.lock{opacity:.55;cursor:not-allowed;background:var(--paper)}
 .lv .no{font-size:13px;color:var(--ink3);font-weight:600}
 .lv .nm{font-size:15.5px;font-weight:700;margin:3px 0 7px;color:var(--ink)}
-.lv .stars{font-size:13px;letter-spacing:2px;color:#E8C96A}
-.lv .stars .off{color:#E4DCD2}
-.lv.boss{border-color:#E8C96A;background:linear-gradient(160deg,#FFFDF4,#FFF6DF)}
-.lv.boss .nm{color:#B07A1A}
+.lv .stars{font-size:13px;letter-spacing:2px;color:var(--sun-line)}
+.lv .stars .off{color:var(--line)}
+.lv.boss{border-color:var(--sun-line);background:linear-gradient(160deg,var(--card),var(--sun-bg))}
+.lv.boss .nm{color:var(--sun-ink)}
 .lv .boss-tag{position:absolute;top:-9px;right:10px;background:#E0A93C;color:#fff;font-size:10.5px;
   padding:2px 8px;border-radius:999px;font-weight:700}
 .lv .lock-tag{position:absolute;top:12px;right:12px;font-size:14px}
@@ -102,7 +178,7 @@ body.embed .play-wrap{min-height:calc(100vh - 20px)}
 .play-top .sub{font-size:11.5px;color:var(--ink3)}
 .live{margin-left:auto;display:flex;gap:8px}
 .live .chip{font-variant-numeric:tabular-nums}
-.ime-hint{margin-top:10px;background:#EAF3FF;border:1.5px solid #BBD4F5;color:#2E5E9E;border-radius:10px;
+.ime-hint{margin-top:10px;background:var(--info-bg);border:1.5px solid var(--info-line);color:var(--info-ink);border-radius:10px;
   padding:8px 12px;font-size:13px;flex:0 0 auto}
 .stage1-hint{display:flex;align-items:center;gap:8px;margin-top:10px;color:var(--ink2);font-size:13px}
 .stage1-hint b{color:var(--brand)}
@@ -116,22 +192,22 @@ body.embed .play-wrap{min-height:calc(100vh - 20px)}
    所以把「现在该处于什么状态」和「这一下要不要按 Shift」直接摆在
    课文上方，不用等打错了才发现。 */
 .ime-bar{display:flex;align-items:center;gap:9px;margin-top:8px;flex-wrap:wrap;
-  background:#FFFCF4;border:1.5px dashed #E6D6C2;border-radius:12px;padding:6px 11px;flex:0 0 auto}
+  background:var(--card);border:1.5px dashed var(--line);border-radius:12px;padding:6px 11px;flex:0 0 auto}
 .ime-badge{font-size:12.5px;font-weight:800;padding:3px 9px;border-radius:8px;
-  background:#EDF3FB;color:#2F5C93;white-space:nowrap;transition:background .15s,color .15s}
-.ime-bar.on-cn .ime-badge{background:#FBEFE2;color:#B4632A}
-.ime-bar.on-en .ime-badge{background:#EAF4EC;color:#2C7A46}
+  background:var(--info-badge-bg);color:var(--info-badge-ink);white-space:nowrap;transition:background .15s,color .15s}
+.ime-bar.on-cn .ime-badge{background:var(--brand-soft);color:var(--brand)}
+.ime-bar.on-en .ime-badge{background:var(--en-ok-bg);color:var(--en-ok-ink)}
 .ime-note{font-size:12px;color:var(--ink3);line-height:1.5;flex:1 1 120px;min-width:0}
 .ime-key{margin-left:auto;display:flex;align-items:center;gap:5px;font-size:12.5px;
   font-weight:800;color:var(--brand);white-space:nowrap}
-.ime-key kbd{font-family:Consolas,monospace;background:#fff;border:1.5px solid #E0CBB6;
+.ime-key kbd{font-family:Consolas,monospace;background:var(--surface);border:1.5px solid var(--line);
   border-bottom-width:2.5px;border-radius:6px;padding:1px 6px;font-size:12px;color:var(--ink)}
-.ime-key .sl{color:#B9AC9D;font-weight:700;font-size:11px}
+.ime-key .sl{color:var(--ink3);font-weight:700;font-size:11px}
 /* 小键盘篇章：主键区压暗、小键盘提亮，一眼看出用哪个区 */
 .kb-blk.kb-dim{opacity:.24;filter:grayscale(.55);transition:opacity .2s}
 .kb-blk.kb-focus{filter:drop-shadow(0 0 9px rgba(232,161,60,.45))}
 .text-wrap{position:relative;flex:0 0 auto;margin-top:8px}
-.text-line{background:#FBF5E9;border:2px solid var(--line);
+.text-line{background:var(--paper);border:2px solid var(--line);
   /* 顶部留 24px：这是拼音气泡的"停靠带"，气泡落在框内而不是压到上面的标题栏 */
   border-radius:16px;padding:24px 12px 9px;min-height:64px;
   display:flex;flex-wrap:wrap;gap:2px 3px;align-content:flex-start;
@@ -140,44 +216,44 @@ body.embed .play-wrap{min-height:calc(100vh - 20px)}
   justify-content:center}
 .ch{display:inline-flex;align-items:center;justify-content:center;line-height:1;
   padding:0 1px;border-radius:7px;cursor:pointer}
-.ch .hz{font-size:26px;line-height:30px;font-weight:600;color:#C2B9AE;
+.ch .hz{font-size:26px;line-height:30px;font-weight:600;color:var(--dim);
   transition:color .12s,background .12s;border-radius:7px}
-.ch:hover .hz{color:var(--ink);background:#F3E8D8}
-.ch.o .hz{color:#3E9E5B}
-.ch.e .hz{color:var(--bad);background:#FBE3DE;box-shadow:0 2px 0 #E5A99F}
-.ch.c .hz{color:var(--ink);background:#F7E2D2;box-shadow:0 2px 0 var(--brand)}
+.ch:hover .hz{color:var(--ink);background:var(--brand-soft)}
+.ch.o .hz{color:var(--ok)}
+.ch.e .hz{color:var(--bad);background:var(--bad-soft);box-shadow:0 2px 0 color-mix(in srgb,var(--bad) 45%,transparent)}
+.ch.c .hz{color:var(--ink);background:var(--cur-bg);box-shadow:0 2px 0 var(--brand)}
 /* 空格占位：画成一个可见的浅色小方块，已打变绿、当前变暖色 ——
    中英混排里「QQ 练」中间那一格，学生以前完全看不出要按空格。 */
 .ch.sp{width:15px;height:20px;cursor:default;align-self:center;border-radius:5px;
-  background:#EFE5D6;box-shadow:inset 0 0 0 1px #E3D5C2;transition:background .12s}
-.ch.sp.o{background:#D8EEDD;box-shadow:inset 0 0 0 1px #B8DDC1}
-.ch.sp.c{background:#F7E2D2;box-shadow:0 2px 0 var(--brand)}
-.ch.sp.e{background:#FBE3DE;box-shadow:inset 0 0 0 1px #E5A99F}
+  background:var(--dim-bg);box-shadow:inset 0 0 0 1px var(--line);transition:background .12s}
+.ch.sp.o{background:var(--ok-soft);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ok) 40%,transparent)}
+.ch.sp.c{background:var(--cur-bg);box-shadow:0 2px 0 var(--brand)}
+.ch.sp.e{background:var(--bad-soft);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--bad) 45%,transparent)}
 /* 拼音气泡：深底浅字 + 小三角，pointer-events:none 不挡后面的点击；
    顶上放不下时加 .flip 翻到字下面，三角也跟着朝上 */
-.py-pop{position:absolute;z-index:40;background:#4A3F33;color:#FFEFD9;
+.py-pop{position:absolute;z-index:40;background:var(--tip-bg);color:var(--tip-ink);
   font-size:12.5px;line-height:1;padding:4px 9px 5px;border-radius:8px;
-  box-shadow:0 3px 8px rgba(60,40,20,.28);white-space:nowrap;pointer-events:none}
+  box-shadow:0 3px 8px rgba(0,0,0,.28);white-space:nowrap;pointer-events:none}
 .py-pop::after{content:'';position:absolute;left:50%;bottom:-4px;margin-left:-4px;
-  border:4px solid transparent;border-top-color:#4A3F33;border-bottom:0}
-.py-pop.flip::after{bottom:auto;top:-4px;border-top:0;border-bottom:4px solid #4A3F33}
+  border:4px solid transparent;border-top-color:var(--tip-bg);border-bottom:0}
+.py-pop.flip::after{bottom:auto;top:-4px;border-top:0;border-bottom:4px solid var(--tip-bg)}
 /* 英文关卡：不标拼音，按普通流式排版（和上一版一致，避免空格被 flex 吃掉） */
 .en-line{display:block;font-size:26px;line-height:1.7;letter-spacing:1px;
-  word-break:break-all;font-family:Consolas,Menlo,monospace;font-weight:600;color:#C2B9AE}
-.en-line .d{color:#C2B9AE}
+  word-break:break-all;font-family:Consolas,Menlo,monospace;font-weight:600;color:var(--dim)}
+.en-line .d{color:var(--dim)}
 .en-line .o{color:var(--ok)}
-.en-line .c{color:var(--ink);background:#F7E2D2;border-radius:6px;box-shadow:0 2px 0 var(--brand)}
-.en-line .e{color:var(--bad);background:#FBE3DE}
+.en-line .c{color:var(--ink);background:var(--cur-bg);border-radius:6px;box-shadow:0 2px 0 var(--brand)}
+.en-line .e{color:var(--bad);background:var(--bad-soft)}
 /* 英文课文区：没有拼音气泡，顶部那 24px 的「停靠带」就是纯留白，
    上下改成等距后一行字才真正落在框的正中（还顺手把框压缩了一圈）。 */
 .text-line.en-line{padding:13px 16px;text-align:center}
 /* 大键帽：只做"按哪个键"的提示，竖向占位要小 —— 上一版 112px 高，
    加上文字和间距吃掉了 96px 高度，正好是键盘缺的那 100px。 */
 .key-big{flex:0 0 auto;margin-top:2px;display:flex;flex-direction:column;align-items:center;gap:2px;padding:1px 0 2px}
-.key-cap{width:clamp(54px,7.6vh,70px);height:clamp(54px,7.6vh,70px);border-radius:14px;background:#fff;border:2.5px solid var(--brand);
+.key-cap{width:clamp(54px,7.6vh,70px);height:clamp(54px,7.6vh,70px);border-radius:14px;background:var(--surface);border:2.5px solid var(--brand);
   display:flex;align-items:center;justify-content:center;font-size:clamp(28px,3.9vh,38px);font-weight:800;color:var(--ink);
-  box-shadow:0 3px 0 #D9B49C,0 7px 14px rgba(180,91,51,.15);text-transform:uppercase;font-family:Consolas,monospace}
-.key-finger{font-size:13px;color:#4A4238}
+  box-shadow:0 3px 0 var(--key-3d),0 7px 14px rgba(180,91,51,.15);text-transform:uppercase;font-family:Consolas,monospace}
+.key-finger{font-size:13px;color:var(--ink2)}
 .key-finger b{color:var(--brand)}
 /* 输入台：输入框里实时回显「已经打出来的字」（金山打字通的上屏区）——
    打对的字留在框里不消失，打错自动截回，退格可整字回退。 */
@@ -192,7 +268,7 @@ body.embed .play-wrap{min-height:calc(100vh - 20px)}
    字少的时候不需要额外拉间距：占位符本来就把每个字放在课文对应的槽里，
    看起来自然是「词与词之间均匀分开、与上文字对齐」。 */
 .typing-bar{margin-top:8px;flex:0 0 auto;display:flex;align-items:stretch;
-  background:#FFFCF4;border:2px solid var(--line);border-radius:14px;padding:6px 12px;
+  background:var(--card);border:2px solid var(--line);border-radius:14px;padding:6px 12px;
   transition:border-color .15s,box-shadow .15s}
 .typing-bar:focus-within{border-color:var(--brand);box-shadow:0 0 0 3px rgba(180,91,51,.12)}
 .tb-field{position:relative;flex:1 1 auto;min-width:0}
@@ -204,7 +280,7 @@ body.embed .play-wrap{min-height:calc(100vh - 20px)}
 .tb-echo .ch.d .hz{color:transparent}
 .tb-echo .ch.d .hz,.tb-echo .ch.o .hz{background:none;box-shadow:none}
 .tb-echo .ch.sp.d{background:transparent;box-shadow:none}
-.tb-echo .ch.sp.o{background:#F3E2D2;box-shadow:inset 0 0 0 1px #E3C9B0}
+.tb-echo .ch.sp.o{background:var(--cur-bg);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--brand) 34%,transparent)}
 /* 真输入框：铺满回显层、文字透明，只保留输入法能力 */
 .tb-input{position:absolute;inset:0;width:100%;height:100%;
   border:none;outline:none;background:transparent;padding:0;margin:0;
@@ -217,13 +293,13 @@ body.embed .play-wrap{min-height:calc(100vh - 20px)}
    现在：input 永远透明，回显层一直显示已上屏的字，组合中的拼音单独做成
    一个跟随的小标（.tb-comp），定位在「本轮要上屏的那个字」的格子里。 */
 .tb-comp{position:absolute;z-index:6;padding:0 7px;height:24px;line-height:24px;
-  font-size:16px;font-weight:600;color:#B4632A;background:#FFF3E6;
-  border:1px solid #E9C7A6;border-radius:7px;white-space:nowrap;
-  pointer-events:none;box-shadow:0 2px 6px rgba(180,91,51,.14)}
+  font-size:16px;font-weight:600;color:var(--brand);background:var(--brand-soft);
+  border:1px solid color-mix(in srgb,var(--brand) 36%,transparent);border-radius:7px;white-space:nowrap;
+  pointer-events:none;box-shadow:0 2px 6px rgba(0,0,0,.14)}
 .tb-comp[hidden]{display:none}
 /* 提示浮层：空态时在整个框内居中（多行课文时也不会贴在第一行） */
 .tb-ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-  font-size:14px;font-weight:400;letter-spacing:0;color:#BCB2A6;
+  font-size:14px;font-weight:400;letter-spacing:0;color:var(--ink3);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
 .tb-input:not(:placeholder-shown) + .tb-ph{display:none}
 .tb-count{flex:none;font-size:12px;color:var(--ink3);
@@ -231,7 +307,7 @@ body.embed .play-wrap{min-height:calc(100vh - 20px)}
 /* 进度条与字数同一行：字数从输入框里搬出来，输入框才能整宽参与对齐 */
 .prog-row{flex:0 0 auto;display:flex;align-items:center;gap:12px;margin-top:8px}
 .prog-row .progress-track{flex:1 1 auto;margin-top:0}
-.progress-track{flex:0 0 auto;margin-top:8px;height:10px;border-radius:99px;background:#F4EAE2;overflow:hidden}
+.progress-track{flex:0 0 auto;margin-top:8px;height:10px;border-radius:99px;background:var(--line);overflow:hidden}
 .progress-fill{height:100%;border-radius:99px;background:linear-gradient(90deg,var(--brand),#D89A6E);transition:width .15s}
 
 /* 键盘指法示意图 · 104 键全尺寸（主键区 + 导航簇 + 右侧数字小键盘）
@@ -242,32 +318,32 @@ body.embed .play-wrap{min-height:calc(100vh - 20px)}
 .kb-wrap{position:relative;flex:1 1 auto;min-height:150px;margin-top:6px;width:100%;overflow:hidden}
 .kb{position:absolute;left:50%;top:50%;width:1115px;max-width:none;margin:0;
   transform:translate(-50%,-50%) scale(var(--kbs,1));transform-origin:center center;
-  background:#FBF5E9;border:1.5px solid var(--line);border-radius:14px;padding:10px;user-select:none}
+  background:var(--paper);border:1.5px solid var(--line);border-radius:14px;padding:10px;user-select:none}
 .kb-board{position:relative;width:1092px;height:258px;padding-top:44px;display:flex;gap:18px}
 /* 功能键行：单独一层绝对定位，和主键区之间留一道缝（真机也是分开的一组） */
 .kb-frow{position:absolute;top:0;height:38px}
 .kb-blk{position:relative;height:214px;flex:0 0 auto}
-.kb-k{position:absolute;height:38px;background:#FBF7F3;border:1px solid #EADFD4;border-bottom-width:3px;border-radius:8px;
+.kb-k{position:absolute;height:38px;background:var(--key);border:1px solid var(--key-bd);border-bottom-width:3px;border-radius:8px;
   display:flex;align-items:center;justify-content:center;
   line-height:1;
-  text-align:center;font-size:15px;font-weight:600;letter-spacing:.4px;color:#6B6257;padding:0;
+  text-align:center;font-size:15px;font-weight:600;letter-spacing:.4px;color:var(--key-ink);padding:0;
   font-family:Consolas,Menlo,monospace;transition:transform .1s}
 /* 功能键（Home / NumLk / Enter 等）字多，再缩一档 */
 .kb-k.kb-sm{font-size:10.5px;letter-spacing:.1px;font-family:inherit}
 /* 导航簇与小键盘的空位保持干净（不画键位底色） */
-.kb-k i{position:absolute;top:2px;left:5px;font-size:9px;color:#9C9186;font-style:normal;font-weight:600}
-.kb-k.f-LP,.kb-k.f-RP{background:#F1EBFB;border-color:#DFD0F4}
-.kb-k.f-LR,.kb-k.f-RR{background:#EAF2FE;border-color:#CFE0F8}
-.kb-k.f-LM,.kb-k.f-RM{background:#E7F6F5;border-color:#C4E7E5}
-.kb-k.f-LI{background:#FDF3E3;border-color:#F3DFBD}
-.kb-k.f-RI{background:#EAF6EC;border-color:#CDE8D2}
-.kb-k.f-TH{background:#F3F1EE;border-color:#E4E0DA}
-.kb-k.hot{background:#F7E2D2;border-color:var(--brand);color:var(--brand);
-  box-shadow:0 0 0 2px rgba(180,91,51,.3);animation:kbpulse 1s ease infinite;z-index:1}
-.kb-k.hotsh{background:#FFEFD9;border-color:var(--warn);color:#B07A1A;box-shadow:0 0 0 2px rgba(217,160,84,.35)}
+.kb-k i{position:absolute;top:2px;left:5px;font-size:9px;color:var(--ink3);font-style:normal;font-weight:600}
+.kb-k.f-LP,.kb-k.f-RP{background:var(--f-lp);border-color:var(--f-lp-bd)}
+.kb-k.f-LR,.kb-k.f-RR{background:var(--f-lr);border-color:var(--f-lr-bd)}
+.kb-k.f-LM,.kb-k.f-RM{background:var(--f-lm);border-color:var(--f-lm-bd)}
+.kb-k.f-LI{background:var(--f-li);border-color:var(--f-li-bd)}
+.kb-k.f-RI{background:var(--f-ri);border-color:var(--f-ri-bd)}
+.kb-k.f-TH{background:var(--f-th);border-color:var(--f-th-bd)}
+.kb-k.hot{background:var(--cur-bg);border-color:var(--brand);color:var(--brand);
+  box-shadow:0 0 0 2px color-mix(in srgb,var(--brand) 32%,transparent);animation:kbpulse 1s ease infinite;z-index:1}
+.kb-k.hotsh{background:var(--sun-bg);border-color:var(--warn);color:var(--sun-ink);box-shadow:0 0 0 2px color-mix(in srgb,var(--warn) 35%,transparent)}
 @keyframes kbpulse{50%{transform:translateY(1.5px)}}
 .kb-legend{display:flex;gap:11px;flex-wrap:wrap;margin-top:6px;
-  padding:1px 2px 0;font-size:12.5px;color:#7A7266;align-items:center}
+  padding:1px 2px 0;font-size:12.5px;color:var(--ink2);align-items:center}
 .kb-legend b{display:inline-block;width:12px;height:12px;
   border-radius:3px;margin-right:4px;vertical-align:-1px}
 .kb-legend .kb-tip{margin-left:auto;color:var(--brand);font-weight:700;font-size:12.5px}
@@ -276,11 +352,22 @@ body.embed .play-wrap{min-height:calc(100vh - 20px)}
       圆比方块更贴近"手指落键"的意象，也顺手把十根手指拉成同一节拍；
    ② 名字与键位串排在圆下方，各留 15px / 27px 的基线，行高固定，绝不压字；
    ③ 高亮时圆填色、手指变白、下方名字染成手指色 —— 一眼知道该抬哪根。 */
-.hands{flex:0 0 auto;width:100%;max-width:660px;margin:5px auto 0;background:#FBF5E9;
+.hands{flex:0 0 auto;width:100%;max-width:660px;margin:5px auto 0;background:var(--paper);
   border:1.2px solid var(--line);border-radius:12px;padding:6px 8px 4px;user-select:none}
 .hands svg{width:100%;height:auto;display:block}
+/* 左右手底衬：当前要动的那只手整块微微提亮，一眼知道该抬哪边 */
+.hzone{fill:transparent;transition:fill .18s ease}
+.hzone.on{fill:var(--zone-on)}
 .finger{transition:transform .16s ease}
-.finger .fcircle{fill:#FFFFFF;stroke:var(--c,#ccc);stroke-width:2.2;transition:fill .16s,stroke .16s}
+.finger .fcircle{fill:var(--surface);stroke:var(--c,#ccc);stroke-width:2.2;transition:fill .16s,stroke .16s}
+/* 高亮环：跟着当前手指一圈圈扩散，比单纯改颜色更容易在余光里捕捉到 */
+.finger .fring{fill:none;stroke:var(--c,#ccc);stroke-width:2;opacity:0}
+.finger.active .fring{opacity:.85;animation:fring 1.5s ease-out infinite}
+@keyframes fring{
+  0%{r:18;opacity:.55}
+  70%{r:26;opacity:0}
+  100%{r:26;opacity:0}
+}
 /* 指纹纹路（2026-11-02 替换手指剪影）：
    原来圆里画一根带指甲的手指，本意是"用这根手指"，但学生第一眼
    容易读成"点这个按钮"的手指指示，反而误解。指纹图标没有歧义 ——
@@ -288,26 +375,36 @@ body.embed .play-wrap{min-height:calc(100vh - 20px)}
 .finger .fp{fill:none;stroke:var(--c,#ccc);stroke-width:2.15;stroke-linecap:round;
   stroke-linejoin:round;transition:stroke .16s,stroke-opacity .16s}
 .finger .fp.dim{stroke-opacity:.42;stroke-width:1.75}
-.finger.active{transform:translateY(-4px)}
-.finger.active .fcircle{fill:var(--c,#ccc);stroke:#fff;
-  filter:drop-shadow(0 4px 6px rgba(0,0,0,.18))}
-.finger.active .fp{stroke:#fff}
+.finger.active{transform:translateY(-5px) scale(1.07)}
+.finger.active .fcircle{fill:var(--c,#ccc);stroke:var(--surface);stroke-width:2.4;
+  filter:drop-shadow(0 5px 8px rgba(0,0,0,.30))}
+.finger.active .fp{stroke:var(--surface)}
 .finger.active .fp.dim{stroke-opacity:.72}
+/* 敲对了 / 敲错了：按下瞬间给一根手指染色（0.26s 后退回），
+   这样"我这一下用的是哪根手指"和"应该用哪根"能同时对得上 */
+.finger.hit .fcircle{fill:var(--ok);stroke:var(--surface)}
+.finger.hit .fp{stroke:var(--surface)}
+.finger.miss .fcircle{fill:var(--bad);stroke:var(--surface);animation:fshake .3s ease}
+.finger.miss .fp{stroke:var(--surface)}
+@keyframes fshake{25%{transform:translateX(-2.4px)}75%{transform:translateX(2.4px)}}
+/* 要按住 Shift 时，另一只手的对应小指用虚线描边提示"辅助键在这边" */
+.finger.aux .fcircle{stroke-dasharray:3.4 2.6;stroke-width:2.6}
+.finger.aux .fn{fill:var(--c);font-weight:900}
 /* 文字：深色 + 同底色描边，叠在彩色圆上也照样清楚 */
-.finger .fn{font-size:12.5px;font-weight:800;fill:#2E2822;transition:fill .16s;
-  paint-order:stroke;stroke:#FBF5E9;stroke-width:2.6px;stroke-linejoin:round}
+.finger .fn{font-size:12.5px;font-weight:800;fill:var(--ink);transition:fill .16s;
+  paint-order:stroke;stroke:var(--paper);stroke-width:2.6px;stroke-linejoin:round}
 .finger.active .fn{fill:var(--c)}
-.finger .fk{font-size:9.5px;font-weight:700;fill:#4A4238;font-family:Consolas,Menlo,monospace;
-  letter-spacing:-.2px;transition:fill .16s;paint-order:stroke;stroke:#FBF5E9;stroke-width:2.4px;stroke-linejoin:round}
+.finger .fk{font-size:9.5px;font-weight:700;fill:var(--ink2);font-family:Consolas,Menlo,monospace;
+  letter-spacing:-.2px;transition:fill .16s;paint-order:stroke;stroke:var(--paper);stroke-width:2.4px;stroke-linejoin:round}
 .finger .fk.s{font-size:8.5px}
-.finger.active .fk{fill:#2E2822}
+.finger.active .fk{fill:var(--ink)}
 /* 矮屏压缩：只收顶部与面板留白，键盘交给整体缩放，不再单独改键高字号 */
 @media (max-height:820px){
   .play-card{padding:10px 16px 8px}
   .play-top .bt{font-size:14.5px}
   .play-top .sub{font-size:11px}
   .key-cap{width:clamp(46px,6.6vh,58px);height:clamp(46px,6.6vh,58px);border-radius:12px;
-    font-size:clamp(24px,3.4vh,32px);box-shadow:0 3px 0 #D9B49C,0 6px 12px rgba(180,91,51,.14)}
+    font-size:clamp(24px,3.4vh,32px);box-shadow:0 3px 0 var(--key-3d),0 6px 12px rgba(180,91,51,.14)}
   .key-big{gap:1px;padding:1px 0}
   .key-finger{font-size:12.5px}
   .kb-wrap{min-height:120px;margin-top:4px}
@@ -315,7 +412,15 @@ body.embed .play-wrap{min-height:calc(100vh - 20px)}
   .finger .fn{font-size:13px}
   .finger .fk{font-size:10px}
 }
-.hands .hgrp{font-size:9.5px;font-weight:700;fill:#9A8B7F;letter-spacing:1.5px}
+.hands .hgrp{font-size:9.5px;font-weight:700;fill:var(--ink3);letter-spacing:1.5px}
+.hands .hgrp.on{fill:var(--brand)}
+
+/* 主题切换按钮：与主站同一个存储键（wb-smode），顶栏右侧一枚小圆钮 */
+.mode-btn{width:34px;height:34px;border-radius:12px;border:1.5px solid var(--line);
+  background:var(--surface);color:var(--ink2);font-size:15px;line-height:1;
+  display:inline-flex;align-items:center;justify-content:center;cursor:pointer;
+  transition:border-color .15s,color .15s,transform .12s}
+.mode-btn:hover{border-color:var(--brand);color:var(--brand);transform:translateY(-1px)}
 
 /* 学生端内嵌模式：收窄边距，融入外层页面框架 */
 body.embed{background:var(--bg)}
@@ -840,10 +945,125 @@ body.embed .credit{display:none}
   .legend-row > .item-bar{flex:1 1 100%}
   .legend-row > .kb-tip{margin-left:0}
 }
+
+/* ================= 夜间模式皮肤（2026-11-03） =================
+   练习页（课文 / 键盘 / 指法图）已经全部走 var(--paper/--key/--surface) 令牌，
+   这一段只管「装饰性浅色面板」：结算弹层、排行榜、牧场展台、衣柜、商店、
+   文章库抽屉。它们原来大量写死浅色渐变，逐条改令牌会把规则拆得很散，
+   统一在这里按"暗一档的纸面 + 半透明品牌描边"重刷一遍。
+   金色系（星星 / 金币 / 蛋）保留但提亮，夜间不发脏。 */
+html[data-mode="dark"] .mask{background:rgba(0,0,0,.62)}
+html[data-mode="dark"] .result{box-shadow:0 24px 60px rgba(0,0,0,.55)}
+html[data-mode="dark"] .r-cell{background:var(--surface)}
+html[data-mode="dark"] .r-reward{background:var(--sun-bg);border-color:var(--sun-line);color:var(--sun-ink)}
+html[data-mode="dark"] .r-stars .off{color:var(--line)}
+html[data-mode="dark"] .r-stars .on{color:#F5C24D}
+
+/* 排行榜 */
+html[data-mode="dark"] .lb-card{box-shadow:0 6px 20px rgba(0,0,0,.35)}
+html[data-mode="dark"] .lb-tabs button{background:var(--surface);border-color:var(--line);color:var(--ink2)}
+html[data-mode="dark"] .lb-tabs button.on{background:var(--brand-soft);border-color:var(--brand);color:var(--brand)}
+html[data-mode="dark"] .lb-row.me{background:var(--brand-soft);border-color:color-mix(in srgb,var(--brand) 45%,transparent)}
+html[data-mode="dark"] .lb-row+.lb-row{border-top-color:var(--line)}
+html[data-mode="dark"] .lb-rank{background:var(--paper);color:var(--ink2)}
+html[data-mode="dark"] .lb-rank.r1,html[data-mode="dark"] .lb-rank.r2,html[data-mode="dark"] .lb-rank.r3{color:#25190F}
+html[data-mode="dark"] .lb-pet{background:radial-gradient(72% 62% at 50% 74%,var(--surface) 0%,var(--paper) 100%);
+  border-color:var(--line);box-shadow:inset 0 1px 0 var(--surface)}
+html[data-mode="dark"] .lb-pet.empty{color:var(--ink3)}
+
+/* 牧场：展台 / 宠物卡 / 装饰 / 蛋 */
+html[data-mode="dark"] .ranch-side .stage-box{
+  background:radial-gradient(118% 92% at 50% 6%,#33261D 0%,#271D16 52%,#1F1712 100%);
+  box-shadow:inset 0 2px 7px rgba(0,0,0,.55),inset 0 -3px 9px rgba(255,255,255,.04),0 6px 18px rgba(0,0,0,.35)}
+html[data-mode="dark"] .ranch-side .stage-box:hover{
+  box-shadow:inset 0 2px 7px rgba(0,0,0,.55),inset 0 -3px 9px rgba(255,255,255,.05),0 12px 26px rgba(0,0,0,.45)}
+html[data-mode="dark"] .stage-glow{background:radial-gradient(52% 52% at 50% 34%,rgba(255,225,180,.20),rgba(255,240,214,0) 74%)}
+html[data-mode="dark"] .ranch-side .stage-box::after{background:radial-gradient(50% 50% at 50% 50%,rgba(255,255,255,.10),rgba(255,255,255,0) 78%)}
+html[data-mode="dark"] .stage-nav{background:rgba(44,34,27,.92);border-color:var(--line);color:var(--ink2);
+  box-shadow:0 2px 7px rgba(0,0,0,.4)}
+html[data-mode="dark"] .stage-nav:hover{background:var(--surface)}
+html[data-mode="dark"] .stage-empty,html[data-mode="dark"] .pet-card.lock .ph{color:var(--ink3)}
+html[data-mode="dark"] .pet-card{background:linear-gradient(170deg,var(--surface),var(--paper));
+  border-color:var(--line);box-shadow:0 2px 4px rgba(0,0,0,.30),inset 0 1px 0 rgba(255,255,255,.04)}
+html[data-mode="dark"] .pet-card:hover{box-shadow:0 10px 20px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.05)}
+html[data-mode="dark"] .pet-card.on{border-color:var(--sun-line);
+  background:linear-gradient(170deg,var(--surface),var(--sun-bg));
+  box-shadow:0 0 0 2px color-mix(in srgb,var(--sun-line) 30%,transparent),0 10px 22px rgba(0,0,0,.40)}
+html[data-mode="dark"] .pet-card.lock{background:linear-gradient(170deg,var(--paper),#1B1410)}
+html[data-mode="dark"] .pet-stage{background:radial-gradient(64% 54% at 50% 76%,rgba(255,235,200,.10) 0%,rgba(255,247,233,0) 74%)}
+html[data-mode="dark"] .pet-card .eq{color:#2A1B0F}
+html[data-mode="dark"] .deco-dot{background:var(--surface);border-color:var(--line);
+  box-shadow:0 2px 4px rgba(0,0,0,.30),inset 0 1px 0 rgba(255,255,255,.04)}
+html[data-mode="dark"] .deco-dot.on{border-color:var(--sun-line);background:linear-gradient(170deg,var(--surface),var(--sun-bg))}
+html[data-mode="dark"] .egg-card{background:radial-gradient(120% 100% at 50% 0%,#33261C,#2A2016 72%,#241B12);
+  border-color:var(--sun-line);box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 6px 16px rgba(0,0,0,.40)}
+html[data-mode="dark"] .title-chip{background:color-mix(in srgb,var(--purple) 16%,transparent);color:var(--purple)}
+html[data-mode="dark"] .credit{color:var(--ink3)}
+html[data-mode="dark"] .dd-price{color:#231708}
+
+/* 弹层面板：衣柜 / 商店 / 文章库 */
+html[data-mode="dark"] .wardrobe,html[data-mode="dark"] .item-shop,html[data-mode="dark"] .shop-pop,
+html[data-mode="dark"] .artlib{background:var(--card);border-color:var(--line);
+  box-shadow:0 20px 50px rgba(0,0,0,.50)}
+html[data-mode="dark"] .al-x{background:var(--surface);color:var(--ink2)}
+html[data-mode="dark"] .al-x:hover{background:var(--brand-soft);color:var(--brand)}
+html[data-mode="dark"] .al-tabs button{background:var(--surface);border-color:var(--line);color:var(--ink2)}
+html[data-mode="dark"] .al-tabs button:hover{border-color:var(--brand)}
+html[data-mode="dark"] .al-tabs button.on{background:var(--brand);border-color:var(--brand);color:#25190F}
+html[data-mode="dark"] .al-card{background:var(--surface);border-color:var(--line)}
+html[data-mode="dark"] .al-card:hover{border-color:var(--brand);box-shadow:0 8px 18px rgba(0,0,0,.35)}
+html[data-mode="dark"] .al-card.on{border-color:var(--brand);background:var(--brand-soft);
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--brand) 14%,transparent)}
+html[data-mode="dark"] .ac-type{background:var(--paper);color:var(--ink2)}
+html[data-mode="dark"] .ac-author,html[data-mode="dark"] .ac-meta,html[data-mode="dark"] .al-foot{color:var(--ink3)}
+html[data-mode="dark"] .ac-desc{color:var(--ink2)}
+html[data-mode="dark"] .ac-hard .off,html[data-mode="dark"] .ab-hard .off{color:var(--line)}
+html[data-mode="dark"] .ac-hard .on,html[data-mode="dark"] .ab-hard .on{color:var(--sun-line)}
+
+/* 文章条 / 道具条 / 道具卡 */
+html[data-mode="dark"] .art-bar{background:linear-gradient(135deg,var(--surface),var(--paper));border-color:var(--line)}
+html[data-mode="dark"] .ab-type{background:var(--brand-soft);color:var(--brand)}
+html[data-mode="dark"] .diff-tag.d1{background:var(--en-ok-bg);color:var(--en-ok-ink)}
+html[data-mode="dark"] .diff-tag.d2{background:var(--sun-bg);color:var(--sun-ink)}
+html[data-mode="dark"] .diff-tag.d3{background:var(--bad-soft);color:var(--bad)}
+html[data-mode="dark"] .item-bar{background:var(--paper);border-color:var(--line)}
+html[data-mode="dark"] .ib-tip,html[data-mode="dark"] .ib-dot .ib-n{color:var(--ink3)}
+html[data-mode="dark"] .ib-dot{background:var(--surface);border-color:var(--line);color:var(--ink2)}
+html[data-mode="dark"] .ib-dot:hover{border-color:var(--brand);background:var(--paper)}
+html[data-mode="dark"] .ib-dot.on{border-color:var(--ok);background:var(--en-ok-bg);color:var(--en-ok-ink)}
+html[data-mode="dark"] .ib-dot.on .ib-n{color:var(--en-ok-ink)}
+html[data-mode="dark"] .w-head span.w-coin,
+html[data-mode="dark"] .is-head span.w-coin,
+html[data-mode="dark"] .sp-coin{background:var(--sun-bg);color:var(--sun-ink)}
+html[data-mode="dark"] .sp-row{background:var(--surface);border-color:var(--line)}
+html[data-mode="dark"] .sp-desc,html[data-mode="dark"] .sp-tip,html[data-mode="dark"] .sp-have,
+html[data-mode="dark"] .sp-foot{color:var(--ink3)}
+html[data-mode="dark"] .equip-hint,html[data-mode="dark"] .equip-empty span{color:var(--ink3)}
+html[data-mode="dark"] .equip-empty{background:var(--paper);border-color:var(--line);color:var(--ink2)}
+html[data-mode="dark"] .w-head span,html[data-mode="dark"] .is-head span{color:var(--ink3)}
+html[data-mode="dark"] .deco-sec{border-top-color:var(--line)}
+html[data-mode="dark"] .ds-head b{color:var(--ink2)}
+html[data-mode="dark"] .ds-worn{background:var(--brand-soft);color:var(--brand)}
+html[data-mode="dark"] .ds-worn.none{background:var(--paper);color:var(--ink3)}
+html[data-mode="dark"] .is-card{background:var(--surface);border-color:var(--line)}
+html[data-mode="dark"] .ic-have{background:var(--paper);color:var(--ink3)}
+html[data-mode="dark"] .ic-desc,html[data-mode="dark"] .ic-tip{color:var(--ink3)}
+html[data-mode="dark"] .eq-chip{background:color-mix(in srgb,var(--purple) 16%,transparent);color:var(--purple)}
+
+/* ---------- 夜间：亮色强调块上的文字改暖黑 ----------
+   浅色主题里主按钮/选中页签的品牌橙是深棕（#B45B33），白字 5.9:1 合格；
+   夜间主题把品牌橙提亮成 #E4926C（否则暗底上"看不见橙色"），这时白字只剩
+   2.4:1 —— 亮块配深字反而更清楚，也符合原生暗色主题的观感。 */
+html[data-mode="dark"] .btn:not(.ghost):not(.line),
+html[data-mode="dark"] .tabs button.on,
+html[data-mode="dark"] .lv .boss-tag,
+html[data-mode="dark"] .r-btn{color:#2A1B14}
+html[data-mode="dark"] .btn{box-shadow:0 4px 14px rgba(0,0,0,.35)}
+html[data-mode="dark"] .tabs button.on{box-shadow:0 4px 12px rgba(0,0,0,.32)}
 </style>
 </head>
 <body>
-<div id="app"><div style="text-align:center;padding:80px 0;color:#B9AFA4">正在登上打字冒险岛…</div></div>
+<div id="app"><div style="text-align:center;padding:80px 0;color:var(--ink3)">正在登上打字冒险岛…</div></div>
 <script src="/student/ui-dialog.js?v=20261102"></script>
 <script src="/typing/pinyin.js?v=20261102w"></script>
 <script src="/typing/typing-data.js?v=20261102x"></script>
@@ -873,6 +1093,32 @@ function saveArtId(id) {
 }
 
 /* ---------------- 基础 ---------------- */
+/* 主题：与主站共用 wb-smode。'light' / 'dark'，缺省浅色（与主站一致，
+   不跟系统 —— 机房系统开深色时学生端不该整页变暗）。 */
+var MODE_KEY = 'wb-smode';
+function themeIsDark() {
+  try { return localStorage.getItem(MODE_KEY) === 'dark'; } catch (e) { return false; }
+}
+function applyTheme() {
+  var dark = themeIsDark();
+  document.documentElement.setAttribute('data-mode', dark ? 'dark' : 'light');
+  var mb = document.getElementById('modeBtn');
+  if (mb) {
+    mb.textContent = dark ? '☀' : '🌙';
+    mb.title = dark ? '切回浅色' : '切到夜间';
+  }
+  var meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', dark ? '#191210' : '#B45B33');
+}
+function toggleTheme() {
+  try { localStorage.setItem(MODE_KEY, themeIsDark() ? 'light' : 'dark'); } catch (e) {}
+  applyTheme();
+}
+/* 学生端里切了主题，打字页开着的时候也跟着变（同一 origin 的 storage 事件） */
+window.addEventListener('storage', function (e) {
+  if (!e || !e.key || e.key === MODE_KEY) applyTheme();
+});
+
 function esc(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
     return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
@@ -1005,6 +1251,8 @@ function render() {
         '<span class="chip p">' + esc(st.name) + '</span>' +
         (S.progress.eggs ? '<span class="chip b">🥚 ×' + S.progress.eggs + '</span>' : '') +
         '<span class="pet-mini" title="出战宠物">' + (petSvg || '🐾') + '</span>' +
+        '<button class="mode-btn" id="modeBtn" type="button" title="切换浅色 / 夜间">'
+          + (themeIsDark() ? '☀' : '🌙') + '</button>' +
       '</div>' +
     '</div>' +
     (S.demo ? '<div class="demo-bar">🎬 演示模式：当前未登录，展示的是示例数据，成绩只存在本机。' +
@@ -1019,6 +1267,7 @@ function render() {
     '<span class="credit">打字冒险岛 · 班级工作台 2.0 · 牛老师设计</span>';
   app.classList.add('ui-big');   /* 非练习页：内容按视口高度铺开，减少底部空白 */
   app.innerHTML = html;
+  applyTheme();                  /* 顶栏主题钮的图标 / theme-color 跟着当前主题走 */
   var v = $('#view');
   if (!v) return;
   if (S.view === 'map') v.innerHTML = viewMap();
@@ -1033,6 +1282,9 @@ function bindView() {
   document.querySelectorAll('[data-tab]').forEach(function (b) {
     b.onclick = function () { S.view = b.getAttribute('data-tab'); render(); };
   });
+  /* 顶栏主题钮：切完只改 CSS 变量，不需要重绘整个页面 */
+  var mb = document.getElementById('modeBtn');
+  if (mb) mb.onclick = toggleTheme;
   document.querySelectorAll('[data-lv]').forEach(function (b) {
     b.onclick = function () {
       var p = b.getAttribute('data-lv').split(',');
@@ -1414,7 +1666,7 @@ function paintKb(ch) {
          KB_FINGERS[info.f].name +
          (info.shift ? '，先按住' + (info.shift === 'L' ? '左' : '右') + 'Shift' : ''));
   }
-  paintHands(info.f);
+  paintHands(info.f, info.shift);
   paintIme();
 }
 
@@ -1480,13 +1732,18 @@ function handsDiagram() {
     指示图标；指纹没有第二层含义，一眼就知道是"用这根手指去碰键"。 */
   var w = 640, h = 74, cy = 22, r = 18;
   var s = '<div class="hands" id="handsBox">' +
-    '<svg viewBox="0 0 ' + w + ' ' + h + '" xmlns="http://www.w3.org/2000/svg">';
+    '<svg viewBox="0 0 ' + w + ' ' + h + '" xmlns="http://www.w3.org/2000/svg">' +
+    /* 左右手底衬：哪只手要动，那一块整体微微提亮（2026-11-03 高亮联动） */
+    '<rect class="hzone" data-hand="L" x="4" y="0" width="308" height="74" rx="10"/>' +
+    '<rect class="hzone" data-hand="R" x="328" y="0" width="308" height="74" rx="10"/>';
   HANDS.forEach(function (d) {
     var c = KB_FINGERS[d.f].color;
     var zone = FINGER_ZONE[d.f];
     var keys = Array.isArray(zone) ? zone.join('') : String(zone == null ? '' : zone);
     /* 指纹不需要方向，拇指也不再旋转 */
     s += '<g class="finger" data-finger="' + d.f + '" style="--c:' + c + '">' +
+      /* 高亮扩散环：平时不可见，只有 .active 时向外扩一圈 */
+      '<circle class="fring" cx="' + d.x + '" cy="' + cy + '" r="' + r + '"/>' +
       '<circle class="fcircle" cx="' + d.x + '" cy="' + cy + '" r="' + r + '"/>' +
       '<g transform="translate(' + d.x + ',' + cy + ')">' +
         /* 四层同心弧：外两层是主纹路，内两层收窄，中心一小段竖线做「斗」 */
@@ -1506,13 +1763,63 @@ function handsDiagram() {
   s += '</svg></div>';
   return s;
 }
-function paintHands(fc) {
+/* 指法图高亮（2026-11-03 重做）
+   原来的实现只给"当前目标手指"加 .active，其他信息一律没有：
+     · 要按 Shift 时，另一只手的小指该按住哪个键，图上完全看不出来；
+     · 学生敲错那一下，图上没有任何反馈，"我刚才用哪根手指"对不上；
+     · 敲对了也没有即时确认。
+   现在三个状态分开：
+     .active  当前目标手指（抬起 + 填色 + 扩散环）
+     .aux     需要按住 Shift 的辅助小指（虚线描边）
+     .hit/.miss 刚敲下那一下的反馈（绿闪 / 红闪，0.28s 自动退）
+   同时左右手底衬 .hzone 跟着点亮，扫一眼就知道该抬哪只手。 */
+function paintHands(fc, shiftHand) {
   var box = $('#handsBox');
   if (!box) return;
   box.querySelectorAll('.finger').forEach(function (el) {
-    el.classList.toggle('active', fc != null && el.getAttribute('data-finger') === fc);
+    var f = el.getAttribute('data-finger');
+    var on = fc != null && f === fc;
+    el.classList.toggle('active', on);
+    el.classList.toggle('aux', !!shiftHand && KB_HAND_OF[f] === shiftHand && !on);
+  });
+  var hand = (fc != null && KB_HAND_OF[fc]) || '';
+  box.querySelectorAll('.hzone').forEach(function (z) {
+    var h = z.getAttribute('data-hand');
+    z.classList.toggle('on', h === hand || (!!shiftHand && h === shiftHand));
   });
 }
+/* 敲键瞬间的手指反馈：不影响目标态，只闪一下 */
+function flashFinger(f, kind) {
+  var box = $('#handsBox');
+  if (!box || !f) return;
+  var el = box.querySelector('.finger[data-finger="' + f + '"]');
+  if (!el) return;
+  el.classList.remove('hit', 'miss');
+  el.getBoundingClientRect();      /* 强制重排：连续快打时动画才会重放 */
+  el.classList.add(kind === 'miss' ? 'miss' : 'hit');
+  if (el._ft) clearTimeout(el._ft);
+  el._ft = setTimeout(function () { el.classList.remove('hit', 'miss'); }, 280);
+}
+/* 字符 → 手指（与键盘高亮同一套映射，小键盘篇章也走这里） */
+function kbFingerOfKey(ch) {
+  var zone = (S.play && S.play.L && S.play.L.kbzone) || '';
+  var info = kbKeyInfo(ch, zone);
+  return info ? info.f : '';
+}
+/* 自动化校验用：报「当前目标键应该高亮哪根手指」。
+   直接复用运行时逻辑（含小键盘 zone 判定），不另抄一份映射，
+   否则测试脚本自己算一套、真跑另一套，验了等于没验。 */
+window.kbDebugFinger = function () {
+  var zone = (S.play && S.play.L && S.play.L.kbzone) || '';
+  var cap = document.getElementById('keyCap');
+  var k = cap ? (cap.textContent || '').trim() : '';
+  var info = kbKeyInfo(k, zone);
+  return { k: k, zone: zone, id: info ? info.id : '',
+           expect: info ? info.f : '',
+           active: Array.prototype.map.call(
+             document.querySelectorAll('.finger.active'),
+             function (e) { return e.getAttribute('data-finger'); }) };
+};
 
 /* ---------------- 练习引擎 ---------------- */
 function startLevel(st, ch, lv) {
@@ -2024,8 +2331,14 @@ function bindPlay() {
       var tgt = String(cur.k);
       var strict = /[A-Z]/.test(tgt) || /[!@#$%^&*()_+{}|:"<>?~]/.test(tgt);
       var hit = strict ? (k === tgt) : (k.toLowerCase() === tgt.toLowerCase());
-      if (hit) advance();
-      else { P.errors++; wrongFlash(); }
+      if (hit) {
+        flashFinger(kbFingerOfKey(k), 'hit');     /* 先闪"刚按下的那根手指" */
+        advance();                                 /* 再推进到下一键的目标手指 */
+      } else {
+        P.errors++;
+        wrongFlash();
+        flashFinger(kbFingerOfKey(tgt), 'miss');   /* 敲错：把正确的那根手指标红，纠错更直观 */
+      }
       e.preventDefault();
     };
     clearKd();
@@ -2042,9 +2355,12 @@ function bindPlay() {
       if (ch == null) return;
       begin();
       P.keys++;
-      if (ch === L.text[P.idx]) advance();
-      else {
+      if (ch === L.text[P.idx]) {
+        flashFinger(kbFingerOfKey(ch), 'hit');
+        advance();
+      } else {
         P.errors++; wrongFlash();
+        flashFinger(kbFingerOfKey(L.text[P.idx]), 'miss');
         /* 大小写锁提示：目标是小写、学生却打出大写 —— 十有八九是
            CapsLock 开着。只提醒一次，不反复弹窗打断打字。 */
         var t0 = L.text[P.idx];
