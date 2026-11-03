@@ -12,6 +12,12 @@
 
 ## 一、核心第三方模块：QuickForm
 
+> **状态变更（2026-11-03）**：课堂活动已改为工作台自研实现（`app/activity.py`），
+> 默认部署**不再启动** QuickForm 容器，也不再需要第二套账号。
+> 但 `quickform/app/` 源码仍随仓库与发行包一起分发（供临时回退），
+> **因此本节的全部许可义务继续有效，不得删除**；只有把源码目录整个移除后，
+> 才可以同步移除本节与 `quickform/app/LICENSE`。
+
 | 项目 | 内容 |
 |---|---|
 | 名称 | QuickForm 教师版（智能表单管理服务 / 表单收集与数据大屏） |
@@ -23,7 +29,7 @@
 | 在线演示 | <https://quickform.cn> |
 | 文档 | <https://quickform.readthedocs.io/zh-cn/latest/> |
 | 本项目中的位置 | `quickform/app/`（**官方源码，零改动**）；另有 `quickform/serve.py`、`quickform/init_admin.py`、`quickform/Dockerfile`、`quickform/docker-entrypoint.sh` 为本项目原创的适配层，属本项目 MIT |
-| 接入方式 | 作为 `/qf/` 前缀下的独立容器运行，经 nginx 网关与工作台统一入口 |
+| 接入方式 | **默认不启用**；仅当 `WB_ACTIVITY_BACKEND=qf` 时作为 `/qf/` 前缀下的独立容器回退运行 |
 
 ### MIT 许可下的义务（已履行）
 

@@ -51,7 +51,13 @@ def qf_cfg(cfg):
         port = int(q.get("port") or QF_DEFAULT_PORT)
     except Exception:
         port = QF_DEFAULT_PORT
-    mode = str(q.get("mode") or "background").lower()
+    mode = str(q.get("mode") or "").lower()
+    if not mode:
+        # 课堂活动已并进工作台，QuickForm 默认不再随启动器拉起。
+        # 只有老师显式配置了 quickform.mode（或命令行 --quickform xxx）才启动它。
+        backend = str((cfg.get("activity") or {}).get("backend")
+                      or os.environ.get("WB_ACTIVITY_BACKEND") or "builtin").lower()
+        mode = "background" if backend == "qf" else "off"
     if mode not in ("background", "foreground", "off"):
         mode = "background"
     return {"port": port, "mode": mode, "secret": q.get("secret") or ""}
@@ -338,8 +344,8 @@ def main():
     ap.add_argument("--reset-password", action="store_true")
     # ---- QuickForm 服务 ----
     ap.add_argument("--quickform", choices=("auto", "background", "foreground", "off"),
-                    default="", help="QuickForm 启动方式：background 后台常驻（默认）、"
-                                     "foreground 前台随窗口、off 不启动")
+                    default="", help="QuickForm 启动方式（默认 off：课堂活动已内置）；"
+                                     "background 后台常驻、foreground 前台随窗口")
     ap.add_argument("--qf-port", type=int, default=0, help="QuickForm 端口（默认 5055）")
     ap.add_argument("--qf-status", action="store_true", help="只看状态，不启动任何服务")
     ap.add_argument("--qf-stop", action="store_true", help="停止后台常驻的 QuickForm")
@@ -385,7 +391,8 @@ def main():
         if s["stale"]:
             log("  结论：状态文件残留 / 进程已死 → launch.py --qf-restart")
             return 2
-        log("  结论：未运行 → 启动教师端即会自动拉起，或 launch.py --quickform background")
+        log("  结论：未运行。课堂活动已内置，通常无需启动；"
+            "确需回退旧服务用 launch.py --quickform background")
         return 1
     if args.qf_stop:
         r = qfctl.stop(DATA)

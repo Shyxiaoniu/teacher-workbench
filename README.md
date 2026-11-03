@@ -11,7 +11,7 @@
 http://<服务器局域网 IP>:8080/        ← Docker 部署的入口；直接运行时是 :20020
 ├── /teacher/   教师端  —— 老师用电脑打开
 ├── /s/         学生端  —— 学生用手机打开
-└── /qf/        QuickForm —— 收集表、活动任务与数据分析
+└── /qf/        课堂活动接口（旧地址兼容；界面在教师端「上课」页）
 ```
 
 ---
@@ -25,7 +25,7 @@ http://<服务器局域网 IP>:8080/        ← Docker 部署的入口；直接�
 | 常用 | **首页** | 班级概览、今日课程、本周德育加减分、待办提醒、学生入口二维码 |
 | 常用 | **座位** | 拖拽排座、框选分组、课堂签到实时显示、按状态筛人、结算本节考勤 |
 | 常用 | **课表** | 节次设置、按周排课、课程库、排课冲突提醒 |
-| 教学 | **上课** | 选一个 QuickForm 活动即完成发放，学生「今日」立刻可见；课上实时看提交与数据大屏 |
+| 教学 | **上课** | 新建 / 管理课堂活动，选一个即完成发放，学生「今日」立刻可见；课上实时看提交与数据大屏 |
 | 教学 | **课件** | 课件库上传归档、按课节下发给班级，学生在「课程」里在线预览 |
 | 教学 | **作业** | 布置作业、收交状态与提交率趋势、批量催交 |
 | 教学 | **成绩** | 考试管理、成绩录入（支持批量粘贴）、平均分 / 及格率 / 优秀率、分数段分布、分析报告与导出 |
@@ -52,13 +52,19 @@ http://<服务器局域网 IP>:8080/        ← Docker 部署的入口；直接�
 座位表是唯一会下发「同班同学姓名」的接口，给姓名、学号、座位号、小组与班干部职务
 （与教师端座位卡同一套信息），**不含电话、成绩、内部 id，也不带考勤状态**。
 
-### QuickForm `/qf/`
+### 课堂活动 `/qf/`（工作台内置）
 
-内置的表单服务，负责活动任务、收集表与数据回收分析。工作台的「上课 / 数据大屏 / 学生作品」直接读它的数据。
+**2026-11-03 起，课堂活动已经并进工作台自己的库**：活动、提交、附件都在
+`workbench.db` 与 `data/activity/` 里，不再需要单独的 QuickForm 容器、也不再需要
+第二套账号密码。教师端「上课」页点 **⚙ 活动管理** 即可新建活动、上传教学资料、
+导出 CSV / JSON、清空或删除；旧数据可在同一面板里一键导入。
 
-QuickForm 是第三方开源项目（MIT 许可，© 2026 谢作如，<https://gitee.com/wstlab/quickform>），
-本项目把它的**官方源码零改动**放在 `quickform/app/` 下单独跑一个容器，用法与许可详见
-[第十节「版本与许可」](#十版本与许可) 与 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。
+`/qf/api/*` 保留为**兼容接口**（学生提交页、自定义数据大屏、课件库归档都按这个格式走），
+其余 `/qf/*` 一律 302 回到教师端上课页，所以老师存的旧书签不会 404。
+
+> 旧 QuickForm 源码仍留在 `quickform/`（默认不启动），作为临时回退：
+> 设 `WB_ACTIVITY_BACKEND=qf` 就切回原来的反代模式。许可说明见
+> [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。
 
 ---
 
@@ -257,14 +263,16 @@ QuickForm 是第三方开源项目（MIT 许可，© 2026 谢作如，<https://g
 与 **PC 宽屏版 10 张**（1440×900，含宽屏布局对照表），连同每页的操作流程与状态说明，
 见 **[docs/学生端界面一览.md](docs/学生端界面一览.md)**。
 
-### 16. QuickForm 入口
+### 16. 课堂活动（原 QuickForm 入口）
 
-<img src="docs/shots/app/24-quickform.png" alt="QuickForm" width="760">
+<img src="docs/shots/app/24-quickform.png" alt="课堂活动" width="760">
 
-表单服务自带的后台（默认账号 `wst / quickform`，首次登录后请立刻改密码）。
-工作台的活动任务、收集表与数据大屏都来自这里。
+活动的新建、改名、资料上传、数据导出都在教师端「上课」页的 **⚙ 活动管理** 里完成，
+不再有第二套后台与第二套账号。旧 `/qf/` 地址会自动跳回「上课」页。
 
-启动、复用与排障的完整方案见 **[docs/QuickForm服务一键启动与稳定运行方案.md](docs/QuickForm服务一键启动与稳定运行方案.md)**。
+历史说明（旧 QuickForm 容器）保留在
+**[docs/QuickForm服务一键启动与稳定运行方案.md](docs/QuickForm服务一键启动与稳定运行方案.md)**，
+仅供回退时参考，默认部署已不需要它。
 
 ---
 
@@ -277,7 +285,7 @@ QuickForm 是第三方开源项目（MIT 许可，© 2026 谢作如，<https://g
 | 适合 | 教师机、笔记本、机房临时使用、无外网环境 | NAS、常开小主机、正式长期部署 |
 | 前置 | Windows 10+ / macOS，Python 3.9+（或带运行时的离线包） | 装好 Docker 与 Compose |
 | 启动 | 双击 `启动教师端` | `docker compose up -d` |
-| 对外端口 | `20020`（QuickForm 走 `5055`） | `8080` 一个端口全包 |
+| 对外端口 | `20020` | `8080` 一个端口全包 |
 | 需要外网 | 不需要 | 只在首次构建时需要 |
 | 开机自启 | 需自行加计划任务 | 随 Docker 自启 |
 
@@ -372,14 +380,12 @@ docker compose up -d --build
 
 | 变量 | 默认值 | 是否必改 | 说明 |
 |---|---|---|---|
-| `QF_SECRET_KEY` | `please-change-me-to-a-random-string` | **必改** | QuickForm 会话密钥，不改则重启后要重新登录。用 `openssl rand -hex 24` 生成 |
 | `WEB_PORT` | `8080` | 按需 | 唯一对外端口，被占用时改这里；二维码与学生链接会自动跟随 |
-| `WB_INTERNAL_SECRET` | `wb-internal-change-me` | **建议改** | 工作台跨容器调用 QuickForm 的内部密钥，两个服务必须是同一个值。缺少或两端不一致时，「数据大屏」的清空 / 删除提交会返回 403 |
-| `QF_ADMIN_USER` / `QF_ADMIN_PASSWORD` | `wst` / `quickform` | 按需 | QuickForm 首次启动创建的账号，库里已有账号时不会覆盖 |
+| `WB_ACTIVITY_BACKEND` | `builtin` | 不要动 | 课堂活动后端：`builtin` 工作台内置（推荐）；`qf` 才回退到旧 QuickForm 容器 |
 | `TZ` | `Asia/Shanghai` | 不要动 | 考勤与每日快照按本地日期归档 |
 | `WB_PUBLIC_URL` | 空 | 一般留空 | 只有前面再套域名 / 反向代理时才填完整地址 |
 | `WORKBENCH_DEBUG_PORT` | `20020` | 一般留空 | 仅服务器本机的排障通道，不对外 |
-| `WORKBENCH_VOLUME` / `QUICKFORM_VOLUME` | 见默认 | 不要动 | 命名卷名；改名等于换一个空卷，旧数据仍在原卷里 |
+| `WORKBENCH_VOLUME` | `teacher-workbench-data` | 不要动 | 命名卷名；改名等于换一个空卷，旧数据仍在原卷里 |
 
 改完执行 `docker compose up -d` 生效。
 
@@ -400,7 +406,7 @@ docker compose up -d --build
 | 要做的事 | 怎么做 |
 |---|---|
 | 设教师账号和密码 | 打开 `http://<服务器IP>:8080/teacher/`，按提示创建，**同时设置密保问题**（忘记密码时靠它自助找回） |
-| 改 QuickForm 密码 | 打开 `http://<服务器IP>:8080/qf/`，用默认账号 `wst / quickform` 登录后立刻修改 |
+| 改课堂活动设置 | 教师端「上课」页 → **⚙ 活动管理**；不再有独立的 QuickForm 账号 |
 
 到这里系统就能用了，接下来把班级建起来。
 
@@ -444,7 +450,7 @@ docker compose up -d --build
 
 | 部署方式 | 位置 |
 |---|---|
-| Docker | 两个命名卷：`teacher-workbench-data`（班级、学生、成绩、考勤、德育、导学单、课件、附件、每日快照）、`teacher-workbench-quickform-data`（QuickForm 库与提交附件）；`docker compose down` 不会删，`down -v` 才会删（**危险，别用**） |
+| Docker | 一个命名卷 `teacher-workbench-data`（班级、学生、成绩、考勤、德育、导学单、课件、**课堂活动与提交附件**、每日快照）；`docker compose down` 不会删，`down -v` 才会删（**危险，别用**） |
 | 直接运行 | 项目里的 `app/data` 目录（`workbench.db`、`typing.json`、`submissions/`、课件库、每日快照） |
 
 ### 备份：点一次就够
@@ -526,17 +532,22 @@ app\runtime\win-x64\python\python.exe app\launch.py --reset-password
 **改了端口，二维码还是旧地址**
 二维码与学生入口按「老师当前打开的地址」自动生成，改端口后重启服务即可；若仍不对，多半是用 `127.0.0.1:端口` 打开的——换成服务器局域网 IP 访问，或（Docker）设置 `WB_PUBLIC_URL`。
 
-**QuickForm 页面打不开**
-它只是配套服务，不影响考勤 / 导学单 / 成绩等主功能。
+**课堂活动列表是空的 / 打不开**
+活动数据现在就在工作台自己的库里，不再依赖外部服务，先看这两处：
 
 ```bash
 # Docker
-docker compose ps
-docker compose logs -f quickform
+docker compose ps                      # workbench 是否 healthy
+docker compose logs -f workbench       # 有没有 activity 相关报错
 ```
 
-直接运行时看启动窗口里的 `[3/5] QuickForm` 那一行；缺失 Flask 等依赖会导致它起不来，
-按提示安装依赖，或改用 Docker 部署。
+教师端「上课」页右上角的状态灯应当是「活动服务已就绪（工作台内置）」。
+若显示异常，刷新页面；仍旧异常时确认 `WB_ACTIVITY_BACKEND` 没有被误设成 `qf`
+（那样会去找已经不启动的 QuickForm 容器）。
+
+**旧 /qf/ 地址打不开**
+属正常：旧的 QuickForm 后台已经下线，访问 `/qf/` 会自动跳回教师端「上课」页，
+活动管理在页面右上角的 **⚙ 活动管理** 里。
 
 **时区不对 / 考勤日期错位**
 Docker 部署确认 `.env` 里 `TZ=Asia/Shanghai` 没有被覆盖，改完重启容器；直接运行则跟随系统时区。
@@ -638,7 +649,7 @@ python tools/make_release.py --date 261103    # 指定日期（yyMMdd）
 python tools/make_release.py --out D:\dist    # 指定输出目录（默认 dist/）
 ```
 
-脚本会自动跳过：运行期数据（`app/data/`、`submission-system/data/`、QuickForm 库与上传附件）、
+脚本会自动跳过：运行期数据（`app/data/`、`submission-system/data/`、活动现场库与附件）、
 课件库（`app/courseware/`）、数据库与日志、`.git`、`_analysis/`、`__pycache__`。
 产物落在 `dist/` 下（该目录已被 `.gitignore` 忽略，不会误提交）。
 
@@ -649,7 +660,7 @@ python tools/make_release.py --out D:\dist    # 指定输出目录（默认 dist
 | `启动工作台.bat` / `.command` | 双击启动（Windows / macOS），参数原样传给 `app/launch.py` |
 | `发行说明.md` | 版本、日期、启动方式、数据位置、重新构建方法 |
 | `app/` | 主程序：服务端、教师端页面、学生端（含网页图标）、打字练习、提交系统、图标 |
-| `quickform/` | 表单服务 QuickForm（`app/` 为官方源码，零改动，自带 `LICENSE`） |
+| `quickform/` | 旧 QuickForm 源码（默认不启动，仅作临时回退；自带 `LICENSE`） |
 | `docker/` + `Dockerfile` + `docker-compose.yml` + `.env.example` | 容器化部署所需全部文件 |
 | `docs/` | 9 份使用与设计文档 + `docs/shots/` 下的功能截图（教师端 / 学生端手机版 / 学生端 PC 版 / QuickForm），README 离线也能正常显示 |
 | `README.md` / `LICENSE` | 使用说明与本项目的 MIT 许可证 |

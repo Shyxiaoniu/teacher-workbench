@@ -4,10 +4,10 @@
 # 只用 Python 标准库，没有 requirements.txt：不装第三方包，镜像小、构建快。
 # 数据（SQLite / 上传文件 / 课件库 / 每日快照）全部落在 /app/data，用 volume 持久化。
 #
-# 正式部署请用编排（会同时起 gateway 与 quickform）：
+# 正式部署请用编排（gateway + workbench + init，课堂活动已内置）：
 #   docker compose up -d --build
 #
-# 只想单独跑工作台（不带 QuickForm）也可以：
+# 只想单独跑工作台也可以：
 #   docker build -t teacher-workbench .
 #   docker run -d --name workbench -p 20020:20020 -v workbench-data:/app/data teacher-workbench
 # ============================================================

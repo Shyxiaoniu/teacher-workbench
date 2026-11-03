@@ -1,31 +1,27 @@
 # ============================================================
 # 班级工作台 2.0 · Docker Compose 编排（NAS 部署）
 # ------------------------------------------------------------
-# 一个网页入口，四个容器：
+# 一个网页入口，三个容器：
 #
 #   gateway     nginx 反向代理，唯一对外端口（默认 8080）
-#                ├─ /       → workbench（教师端 /teacher/、学生端 /s/）
-#                └─ /qf/    → quickform（QuickForm 教师版）
-#   workbench   工作台主服务：教师端 / 学生端 / 同步 / 课件 / 提交（容器内 20020）
-#   quickform   QuickForm 教师版（容器内 5055，独立镜像、可单独升级替换）
+#   workbench   工作台主服务：教师端 / 学生端 / 同步 / 课件 / 课堂活动（容器内 20020）
 #   init        一次性容器：修正数据卷属主、补建子目录，跑完即退出
+#
+# 课堂活动（原 QuickForm 那套）已并进 workbench 自己的库里，
+# 不再需要单独的 quickform 容器；旧 /qf/ 链接由工作台做 302 兼容。
 #
 # 对外只有一个地址：  http://<NAS 的局域网 IP>:8080/
 #   · 教师端   http://<NAS>:8080/teacher/
 #   · 学生端   http://<NAS>:8080/s/
-#   · QuickForm http://<NAS>:8080/qf/
 #
 # 常用命令：
 #   docker compose up -d --build        构建并启动全部服务
 #   docker compose ps                   看状态（都 healthy 即可用）
-#   docker compose logs -f quickform    看 QuickForm 日志
-#   docker compose restart quickform    只重启 QuickForm
+#   docker compose logs -f workbench    看工作台日志
 #   docker compose down                 停止并删除容器（数据卷保留）
 #
-# 只更新 QuickForm（不动工作台）：
-#   docker compose build quickform && docker compose up -d quickform
-#   或把官方源码解压覆盖到 ./quickform/app 后：
-#   docker compose restart quickform
+# 想临时退回旧 QuickForm（不推荐）：把 quickform/ 目录与旧数据卷挂回来，
+# 并在 workbench 环境里设 WB_ACTIVITY_BACKEND=qf。详见 docs/。
 #
 # 推到镜像仓库（可选）：
 #   IMAGE_REPO=registry.cn-guangzhou.aliyuncs.com/<命名空间>/teacher-workbench \
@@ -59,18 +55,11 @@ services:
           echo "[init] 工作台数据卷属主正常（10001）"
         fi
         mkdir -p /app/data/files /app/data/backup /app/data/courseware \
-                 /app/data/submissions/enh /app/data/submissions/uploads
+                 /app/data/activity /app/data/submissions/enh /app/data/submissions/uploads
         chown -R 10001:10001 /app/data
-
-        if [ -d /qfdata ]; then
-          echo "[init] QuickForm 数据卷 -> 10002:10002"
-          mkdir -p /qfdata/db /qfdata/uploads /qfdata/assets /qfdata/logs
-          chown -R 10002:10002 /qfdata
-        fi
         echo "[init] 数据卷就绪"
     volumes:
       - workbench-data:/app/data
-      - quickform-data:/qfdata
     environment:
       TZ: ${TZ:-Asia/Shanghai}
     restart: "no"
@@ -107,14 +96,14 @@ services:
       # 对外地址（可选）：留空 = 跟随浏览器访问的地址（推荐）。
       # 只有前面还套了一层域名/端口映射时才需要写死，例如 http://nas.example.lan:8080
       WB_PUBLIC_URL: "${WB_PUBLIC_URL:-}"
-      # QuickForm 服务地址（后端生成学生提交页链接时用；前端走同源 /qf）
+      # 课堂活动后端：builtin = 工作台内置（默认，活动/提交/附件都在 workbench 库里）
+      # 只有临时回退到旧 QuickForm 容器时才改成 qf（需自行把 quickform 服务加回来）
+      WB_ACTIVITY_BACKEND: "${WB_ACTIVITY_BACKEND:-builtin}"
+      # 回退模式下方才用到：旧 QuickForm 服务地址
       WB_QUICKFORM_URL: "${WB_QUICKFORM_URL:-http://quickform:5055}"
       # 信任内网反向代理传来的 X-Forwarded-For（网关容器 → 本容器）。
       # 不开的话所有师生会共用网关那一个 IP：限速互相拖累、日志分不清是谁。
       WB_TRUST_PROXY: "1"
-      # 内部调用密钥：跨容器调用 QuickForm 的 /_wb_internal/* 时校验。
-      # 必须与 quickform 服务的同名变量完全一致，否则「数据大屏」清空/删除会 403。
-      WB_INTERNAL_SECRET: "${WB_INTERNAL_SECRET:-wb-internal-change-me}"
     volumes:
       - workbench-data:/app/data
       # 想在 NAS 文件管理器里直接改数据，把上一行换成（Linux 需先 chown -R 10001:10001 ./data）：
@@ -139,54 +128,7 @@ services:
         max-file: "3"
 
   # ---------------------------------------------------------
-  # quickform：QuickForm 教师版（独立镜像，可单独升级）
-  # 源码在 ./quickform/app，替换后重启本容器即生效；
-  # 数据（SQLite / 学生提交附件 / 任务附件）全在 quickform-data 卷里。
-  # ---------------------------------------------------------
-  quickform:
-    build:
-      context: .
-      dockerfile: quickform/Dockerfile
-    image: ${QF_IMAGE_REPO:-teacher-workbench-quickform}:${QF_IMAGE_TAG:-2.5}
-    container_name: teacher-workbench-quickform
-    depends_on:
-      init:
-        condition: service_completed_successfully
-    restart: unless-stopped
-    environment:
-      TZ: ${TZ:-Asia/Shanghai}
-      # 会话加密密钥：务必在 .env 里换成随机串（不换则每次重启登录态失效）
-      SECRET_KEY: "${QF_SECRET_KEY:-please-change-me-in-dotenv}"
-      QF_PREFIX: /qf
-      QUICKFORM_PORT: "5055"
-      QF_DATA_DIR: /data
-      # 首次启动自动创建的账号（已存在任何账号时不会覆盖）
-      QF_ADMIN_USER: "${QF_ADMIN_USER:-wst}"
-      QF_ADMIN_PASSWORD: "${QF_ADMIN_PASSWORD:-quickform}"
-      # 内部调用密钥：必须与 workbench 服务的同名变量一致（同改同不改）
-      WB_INTERNAL_SECRET: "${WB_INTERNAL_SECRET:-wb-internal-change-me}"
-    volumes:
-      - quickform-data:/data
-      # 想让「换官方源码」不用重建镜像：把官方仓库解压到宿主机目录后挂进来（下一行取消注释）
-      # - ./quickform/app:/opt/quickform/app:ro
-    healthcheck:
-      test:
-        - CMD
-        - python
-        - -c
-        - "import sys,urllib.request;r=urllib.request.urlopen('http://127.0.0.1:5055/login',timeout=4);sys.exit(0 if r.status<500 else 1)"
-      interval: 30s
-      timeout: 6s
-      start_period: 40s
-      retries: 3
-    security_opt:
-      - no-new-privileges:true
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-
+  # gateway：统一网页入口（唯一对外端口）
   # ---------------------------------------------------------
   # gateway：统一网页入口（唯一对外端口）
   # ---------------------------------------------------------
@@ -195,8 +137,6 @@ services:
     container_name: teacher-workbench-gateway
     depends_on:
       workbench:
-        condition: service_started
-      quickform:
         condition: service_started
     restart: unless-stopped
     ports:
@@ -224,5 +164,7 @@ volumes:
   # 固定卷名：换 compose 项目名、重装容器都不会丢数据
   workbench-data:
     name: ${WORKBENCH_VOLUME:-teacher-workbench-data}
-  quickform-data:
-    name: ${QUICKFORM_VOLUME:-teacher-workbench-quickform-data}
+  # 旧的 QuickForm 数据卷不再由本编排创建。已有数据不会自动删除，
+  # 需要导入时用工作台「活动管理 → 导入旧 QuickForm 数据」，或把卷挂到
+  # 一个临时容器里把 quickform.db 与 uploads 拷到 quickform/app 下再导入。
+  # （此前声明：quickform-data: name: ${QUICKFORM_VOLUME:-teacher-workbench-quickform-data}）

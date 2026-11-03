@@ -15349,9 +15349,16 @@ let qfRosterKw = '';
 let qfRosterSort = 'time-asc';
 let qfLastMatched = [];          // 当前大屏的本班匹配结果（供搜索/排序/导出复用）
 const qfApiKey = () => 'wb-qf-api';
+/* 后端类型：builtin=工作台内置（默认）/ qf=回退到 QuickForm。
+   页面初始化时以 /api/v2/state 的返回为准；这里先给默认值，避免第一帧就判错。 */
+window.WB_ACT_BACKEND = window.WB_ACT_BACKEND || 'builtin';
 function qfLsGet(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }
 function qfLsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
 function qfApiBase() {
+  /* 自研后端（2026-11-03 起默认）：接口就在本机 /qf 下。
+     此时忽略 localStorage 里历史保存的「外部 QuickForm 地址」——
+     那台机器可能早就关了，留着只会让整页连不上。 */
+  if (window.WB_ACT_BACKEND !== 'qf') return '/qf';
   try {
     const v = localStorage.getItem(qfApiKey());
     /* 老版本存的是 http://127.0.0.1:5055 这类「本机地址」：换到 Docker 部署后
@@ -15654,13 +15661,29 @@ function renderActivity() {
   .qf-subcfg-row{display:flex;align-items:center;gap:8px;font-size:13px;padding:5px 0}
   .qf-subcfg-nm{flex:0 0 auto;max-width:42%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
   .qf-subcfg-inp{flex:1 1 auto;min-width:120px;padding:6px 9px;border:1px solid var(--border,#DDE5E1);border-radius:8px;font-size:13px;background:var(--bg-surface,#fff);color:var(--text-primary);box-sizing:border-box}
+  /* ⚙ 活动管理弹窗（2026-11-03 · 自研后端） */
+  .act-admin{width:min(860px,94vw);max-width:none}
+  .act-form{display:grid;grid-template-columns:1fr 1fr;gap:10px 12px}
+  .act-form .full{grid-column:1 / -1}
+  .act-form label{display:block;font-size:12px;color:var(--text-secondary);margin-bottom:4px;font-weight:600}
+  .act-form input,.act-form textarea,.act-form select{width:100%;box-sizing:border-box;padding:7px 9px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg-surface);color:var(--text-primary);font-family:inherit}
+  .act-form textarea{resize:vertical;min-height:54px}
+  .act-list{display:flex;flex-direction:column;gap:8px}
+  .act-row{display:flex;gap:10px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--bg-surface)}
+  .act-main{min-width:0;flex:1 1 240px}
+  .act-main b{font-size:14px}
+  .act-meta{display:block;font-size:12px;color:var(--text-secondary);margin-top:2px;word-break:break-all}
+  .act-ops{display:flex;gap:6px;flex-wrap:wrap}
+  .act-ops .btn{padding:4px 9px;font-size:12px;width:auto}
+  .act-ops .act-del{color:var(--status-error,#E24B4A);border-color:var(--status-error,#E24B4A)}
+  .act-file-row{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-secondary);margin-top:4px}
 </style>
   <div class="notice" data-foldable data-fold-title="活动说明">
-    课堂活动列表<b>直接来自 QuickForm 后台「数据设置」的任务</b>：在后台新建 / 修改活动，
-    回到这里点「刷新」即可同步。交互式学习单由教师自行设计——写一份网页，系统自动注入
-    学号 / 姓名登录与逐题提交，数据走 QuickForm 活动提交 API。选好活动即完成发放：
-    学生端「今日」对应课程里出现「进入课堂活动」。学生提交的数据与作品由工作台
-    自动归档到课件库对应课程目录。
+    课堂活动<b>已由工作台自己托管</b>（2026-11-03 起，不再依赖 QuickForm 服务）：
+    点上方<b>「⚙ 活动管理」</b>新建 / 改名 / 删除活动、上传教学资料、导出提交数据。
+    交互式学习单由教师自行设计——写一份网页，系统自动注入学号 / 姓名登录与逐题提交，
+    数据直接进工作台的活动库。选好活动即完成发放：学生端「今日」对应课程里出现
+    「进入课堂活动」。学生提交的数据与作品由工作台自动归档到课件库对应课程目录。
   </div>
   ${actClassBarHtml()}
   <div class="qf-wrap">
@@ -15668,12 +15691,12 @@ function renderActivity() {
       <span class="qf-dot" id="qfDot"></span>
       <b id="qfStatusText">检测中…</b>
       <span style="flex:1"></span>
-      <a class="btn btn-ghost btn-sm" href="${qfApiBase()}/dashboard" target="_blank">打开数据服务后台</a>
+      <button class="btn btn-primary btn-sm" onclick="actAdminOpen()">⚙ 活动管理</button>
       <button class="btn btn-ghost btn-sm" onclick="qfInit()">刷新</button>
     </div>
 
     <div class="qf-card">
-      <div class="qf-card-h">① 选择活动（列表来自 QuickForm 后台「数据设置」）</div>
+      <div class="qf-card-h">① 选择活动（列表来自「活动管理」）</div>
       <div class="qf-task-row">
         <select id="qfTaskSel" class="qf-sel" onchange="qfSelectTask()" style="max-width:480px"><option value="">加载中…</option></select>
         <span class="qf-api" id="qfTaskApi"></span>
@@ -15690,8 +15713,8 @@ function renderActivity() {
     </div>
 
     <div class="qf-card">
-      <div class="qf-card-h">② 设计交互式学习单（QuickForm 活动提交 API）</div>
-      <div class="qf-muted" style="margin-bottom:10px">上传一份网页文件（.html）或用默认模板，系统自动注入<b>学号 / 姓名 / 班级</b>登录、匹配本班花名册、并接入 QuickForm 活动提交 API。每道标了 <code>q-block</code> 的题目都会自动长出独立提交按钮，每个按钮会在数据大屏开一个专属数据显示窗口。部署后点①里的活动即可发放给学生。</div>
+      <div class="qf-card-h">② 设计交互式学习单（活动提交 API）</div>
+      <div class="qf-muted" style="margin-bottom:10px">上传一份网页文件（.html）或用默认模板，系统自动注入<b>学号 / 姓名 / 班级</b>登录、匹配本班花名册、并接入活动提交接口。每道标了 <code>q-block</code> 的题目都会自动长出独立提交按钮，每个按钮会在数据大屏开一个专属数据显示窗口。部署后点①里的活动即可发放给学生。</div>
       <div class="qf-cust-row">
         <label class="btn btn-ghost btn-sm" style="cursor:pointer">📤 上传网页文件<input id="qfCustFile" type="file" accept=".html,.htm" style="display:none" onchange="qfCustomLoadFile(event)"></label>
         <button class="btn btn-ghost btn-sm" onclick="qfCustomUseDefault()">📝 用默认模板</button>
@@ -16150,6 +16173,313 @@ window.qfPublishBatch = qfPublishBatch;
 /** 下发 chip 里按班收回（复用 qfUnpublish，传具体班级） */
 function qfPubChipRevoke(clsId, taskId) { qfUnpublish(taskId, clsId); }
 window.qfPubChipRevoke = qfPubChipRevoke;
+
+/* ===================== ⚙ 活动管理（2026-11-03 · 自研后端） =====================
+   以前这些事都得去 QuickForm 后台做：另一个网址、另一套账号、另一套密码。
+   现在收进教师端一个弹窗，身份直接用工作台会话：
+     列表 / 新建 / 改名 / 删除 / 清空提交 / 导出 CSV·JSON / 上传教学资料 / 导入旧数据。
+   后端：/api/v2/teacher/activity/*
+   数据落在工作台自己的库里，提交带班级·学号列（不再是塞在 JSON 里的字符串）。 */
+let actAdminTasks = [];
+let actAdminEditId = '';
+
+function actClassLabel(cid) {
+  const c = (dbT('classes') || []).find(x => String(x.id) === String(cid));
+  return c ? (c.name || '') : '';
+}
+
+function actAdminOpen() {
+  if (document.getElementById('actAdminOv')) return;
+  const ov = document.createElement('div');
+  ov.className = 'modal-ov';
+  ov.id = 'actAdminOv';
+  ov.style.zIndex = 4100;
+  const clsOpts = (dbT('classes') || []).map(c =>
+    `<option value="${esc(c.id)}">${esc(c.name || ('班级' + c.id))}</option>`).join('');
+  ov.innerHTML = `
+    <div class="modal act-admin" role="dialog" aria-modal="true">
+      <div class="modal-head">
+        <div>
+          <div class="modal-title">⚙ 活动管理</div>
+          <div class="modal-sub">课堂活动现在由工作台自己托管 · 不用再登录 QuickForm 后台</div>
+        </div>
+        <button type="button" class="qf-pub-x" id="actAdminX" aria-label="关闭" title="关闭">✕</button>
+      </div>
+
+      <div class="modal-sec">
+        <div class="modal-lb" id="actFormTitle">新建活动</div>
+        <div class="act-form">
+          <div class="full">
+            <label>活动标题（学生端和大屏上显示的就是这个）</label>
+            <input id="actTitle" placeholder="例如：导学单 · 算法初识">
+          </div>
+          <div class="full">
+            <label>活动说明（可留空，只给老师看）</label>
+            <textarea id="actDesc" placeholder="这节课要做什么、注意事项…"></textarea>
+          </div>
+          <div>
+            <label>关联班级（可留空）</label>
+            <select id="actClass"><option value="">（不限班级）</option>${clsOpts}</select>
+          </div>
+          <div>
+            <label>课程名（可留空，用于学生端按课匹配）</label>
+            <input id="actCourse" placeholder="例如：信息科技">
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm" id="actSaveBtn" style="width:auto">保存</button>
+          <button class="btn btn-ghost btn-sm" id="actNewBtn" style="width:auto">清空表单</button>
+          <span style="flex:1"></span>
+          <span class="qf-muted" id="actFormMsg" style="font-size:12px"></span>
+        </div>
+      </div>
+
+      <div class="modal-sec" style="border-bottom:none">
+        <div class="modal-lb">已有活动</div>
+        <div class="act-list" id="actAdminList">加载中…</div>
+      </div>
+
+      <div class="modal-acts">
+        <button class="btn btn-ghost btn-sm" id="actMigrateBtn" style="width:auto">导入旧 QuickForm 数据</button>
+        <span style="flex:1"></span>
+        <button class="btn btn-ghost" id="actAdminClose" style="width:auto">关闭</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ov);
+
+  const close = () => ov.remove();
+  const onKey = e => {
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); }
+  };
+  document.addEventListener('keydown', onKey, true);
+  ov.addEventListener('click', e => { if (e.target === ov) { document.removeEventListener('keydown', onKey, true); close(); } });
+  document.getElementById('actAdminX').onclick = () => { document.removeEventListener('keydown', onKey, true); close(); };
+  document.getElementById('actAdminClose').onclick = () => { document.removeEventListener('keydown', onKey, true); close(); };
+  document.getElementById('actSaveBtn').onclick = actAdminSave;
+  document.getElementById('actNewBtn').onclick = actAdminNew;
+  document.getElementById('actMigrateBtn').onclick = actAdminMigrate;
+  document.getElementById('actAdminList').addEventListener('click', actAdminOps);
+  actAdminLoad();
+}
+window.actAdminOpen = actAdminOpen;
+
+function actAdminFormMsg(s) {
+  const el = document.getElementById('actFormMsg');
+  if (el) el.textContent = s || '';
+}
+
+function actAdminNew() {
+  actAdminEditId = '';
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  set('actTitle', ''); set('actDesc', ''); set('actClass', ''); set('actCourse', '');
+  const t = document.getElementById('actFormTitle');
+  if (t) t.textContent = '新建活动';
+  actAdminFormMsg('');
+}
+
+async function actAdminLoad() {
+  const box = document.getElementById('actAdminList');
+  try {
+    const r = await fetch('/api/v2/teacher/activity/list', { credentials: 'same-origin' });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.msg || '读取失败');
+    actAdminTasks = j.tasks || [];
+    actAdminRender();
+  } catch (e) {
+    if (box) box.innerHTML = '<div class="qf-muted">读取失败：' + esc(e.message || e) + '</div>';
+  }
+}
+
+function actAdminRender() {
+  const box = document.getElementById('actAdminList');
+  if (!box) return;
+  if (!actAdminTasks.length) {
+    box.innerHTML = '<div class="qf-muted">还没有活动，先在上方新建一个。</div>';
+    return;
+  }
+  box.innerHTML = actAdminTasks.map(t => {
+    const cls = t.class_id ? actClassLabel(t.class_id) : '';
+    const atts = (t.attachments || []).map(a =>
+      `<div class="act-file-row">📎 <a href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.name)}</a>
+       <span>${(a.size / 1024).toFixed(0)} KB</span>
+       <button class="btn btn-ghost btn-sm" data-op="delfile" data-url="${esc(a.url)}">移除</button></div>`).join('');
+    return `<div class="act-row" data-id="${esc(t.task_id)}">
+      <div class="act-main">
+        <b>${esc(t.title)}</b>
+        <span class="act-meta">活动号 ${esc(t.task_id)} · ${t.count} 条提交${cls ? ' · ' + esc(cls) : ''}${t.created_at ? ' · ' + esc(t.created_at) : ''}</span>
+        ${atts}
+      </div>
+      <div class="act-ops">
+        <button class="btn btn-ghost btn-sm" data-op="view">数据</button>
+        <button class="btn btn-ghost btn-sm" data-op="csv">导出CSV</button>
+        <button class="btn btn-ghost btn-sm" data-op="json">导出JSON</button>
+        <button class="btn btn-ghost btn-sm" data-op="up">上传资料</button>
+        <button class="btn btn-ghost btn-sm" data-op="edit">编辑</button>
+        <button class="btn btn-ghost btn-sm" data-op="clear">清空提交</button>
+        <button class="btn btn-ghost btn-sm act-del" data-op="del">删除</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function actAdminOps(e) {
+  const btn = e.target.closest('button[data-op]');
+  if (!btn) return;
+  const row = btn.closest('.act-row');
+  const id = row && row.dataset.id;
+  const op = btn.dataset.op;
+  const t = actAdminTasks.find(x => x.task_id === id);
+  if (!t) return;
+  if (op === 'view') {
+    const ov = document.getElementById('actAdminOv'); if (ov) ov.remove();
+    const sel = document.getElementById('qfTaskSel');
+    if (sel) sel.value = id;
+    qfActiveId = id;
+    qfRenderDash();
+    const dash = document.getElementById('qfDash');
+    if (dash) dash.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    return;
+  }
+  if (op === 'csv' || op === 'json') {
+    window.open('/api/v2/teacher/activity/export?task=' + encodeURIComponent(id) + '&format=' + op, '_blank');
+    return;
+  }
+  if (op === 'edit') {
+    actAdminEditId = id;
+    const set = (k, v) => { const el = document.getElementById(k); if (el) el.value = v; };
+    set('actTitle', t.title || ''); set('actDesc', t.description || '');
+    set('actClass', t.class_id || ''); set('actCourse', t.course || '');
+    const tt = document.getElementById('actFormTitle');
+    if (tt) tt.textContent = '编辑活动：' + (t.title || id);
+    document.getElementById('actTitle').focus();
+    return;
+  }
+  if (op === 'up') { actAdminUpload(id); return; }
+  if (op === 'delfile') {
+    const r = await fetch('/api/v2/teacher/activity/del-file', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task_id: id, url: btn.dataset.url })
+    });
+    const j = await r.json();
+    toast(j.ok ? '资料已移除' : '移除失败');
+    actAdminLoad();
+    return;
+  }
+  if (op === 'clear') {
+    const ok = await uiConfirm('清空活动「' + esc(t.title) + '」的<b>全部提交数据</b>？<br>附件也会一起删掉，不可恢复。', { title: '清空提交', okText: '确认清空' });
+    if (!ok) return;
+    const r = await fetch('/api/v2/teacher/activity/clear', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task_id: id })
+    });
+    const j = await r.json();
+    toast(j.ok ? ('已清空 ' + (j.deleted || 0) + ' 条') : (j.msg || '清空失败'));
+    actAdminLoad();
+    return;
+  }
+  if (op === 'del') {
+    const ok = await uiConfirm('删除活动「' + esc(t.title) + '」？<br>提交数据、附件、以及已经发给班级的发放记录都会一起删除，<b>不可恢复</b>。', { title: '删除活动', okText: '确认删除' });
+    if (!ok) return;
+    const r = await fetch('/api/v2/teacher/activity/delete', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task_id: id })
+    });
+    const j = await r.json();
+    toast(j.ok ? '活动已删除' : (j.msg || '删除失败'));
+    actAdminNew();
+    actAdminLoad();
+  }
+}
+
+async function actAdminSave() {
+  const g = id => (document.getElementById(id) || {}).value || '';
+  const title = g('actTitle').trim();
+  if (!title) { actAdminFormMsg('标题不能为空'); return; }
+  const body = {
+    task_id: actAdminEditId || '',
+    title: title,
+    description: g('actDesc'),
+    class_id: g('actClass') ? Number(g('actClass')) : 0,
+    course: g('actCourse').trim()
+  };
+  const btn = document.getElementById('actSaveBtn');
+  if (btn) btn.disabled = true;
+  actAdminFormMsg('保存中…');
+  try {
+    const r = await fetch('/api/v2/teacher/activity/save', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.msg || '保存失败');
+    toast(actAdminEditId ? '已保存' : '活动已创建');
+    actAdminNew();
+    actAdminLoad();
+    qfLoadTaskList();          // 主页面下拉框同步
+  } catch (e) {
+    actAdminFormMsg('✗ ' + (e.message || e));
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+function actAdminUpload(taskId) {
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.multiple = true;
+  inp.onchange = async () => {
+    if (!inp.files || !inp.files.length) return;
+    const fd = new FormData();
+    for (const f of inp.files) fd.append('files', f, f.name);
+    toast('上传中…');
+    try {
+      const r = await fetch('/api/v2/teacher/activity/upload?task=' + encodeURIComponent(taskId), {
+        method: 'POST', credentials: 'same-origin', body: fd
+      });
+      const j = await r.json();
+      if (!j.ok) throw new Error(j.msg || '上传失败');
+      toast('已上传 ' + (j.files || []).length + ' 个资料');
+      actAdminLoad();
+    } catch (e) {
+      toast('上传失败：' + (e.message || e));
+    }
+  };
+  inp.click();
+}
+
+async function actAdminMigrate() {
+  const ok = await uiConfirm('把旧 QuickForm 里的活动、提交记录和作品文件导入本系统？<br>先做一次<b>预演</b>，只看数量不写库，确认后再真正导入。', { title: '导入旧数据', okText: '开始预演', danger: false });
+  if (!ok) return;
+  const call = body => fetch('/api/v2/teacher/activity/migrate', {
+    method: 'POST', credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  }).then(r => r.json());
+  try {
+    const dry = await call({ apply: false });
+    if (!dry.ok && !dry.stat) throw new Error(dry.msg || '预演失败');
+    const s = dry.stat || {};
+    const okGo = await uiConfirm(
+      '预演结果：活动 <b>' + (s.tasks || 0) + '</b> 个、提交 <b>' + (s.submissions || 0) +
+      '</b> 条、附件 <b>' + (s.files || 0) + '</b> 个，跳过 ' + (s.skipped || 0) +
+      ' 个已存在的活动。' + ((s.missing_files || []).length ? '<br>缺文件 ' + s.missing_files.length + ' 个（记录保留）。' : '') +
+      '<br><br>现在真正写入本系统？', { title: '确认导入', okText: '写入', danger: false });
+    if (!okGo) return;
+    const real = await call({ apply: true });
+    if (!real.ok) throw new Error((real.stat && real.stat.errors || []).join('；') || real.msg || '导入失败');
+    const r2 = real.stat || {};
+    uiAlert('导入完成：活动 ' + (r2.tasks || 0) + ' 个、提交 ' + (r2.submissions || 0) + ' 条、附件 ' + (r2.files || 0) + ' 个。', { title: '导入完成' });
+    actAdminLoad();
+    qfLoadTaskList();
+  } catch (e) {
+    uiAlert('导入失败：' + esc(e.message || e), { title: '导入失败' });
+  }
+}
+
 
 /* ===================== ③ 下发到班级 · 入口：改为「下发」按钮 + 弹窗 =====================
    整块下发逻辑（多选 / 状态跟踪 / 批量发放 / 单班收回）与原来完全一致，
@@ -16625,6 +16955,12 @@ function qfSwitchTab(which) {
 window.qfSwitchTab = qfSwitchTab;
 
 async function qfInit() {
+  /* 先问服务端用的是哪个后端：内置（默认）还是回退到 QuickForm。
+     它决定 qfApiBase() 走同源 /qf 还是外部地址。 */
+  try {
+    const st = await fetch('/api/v2/state', { cache: 'no-store' }).then(r => r.json());
+    if (st && st.activity_backend) window.WB_ACT_BACKEND = st.activity_backend;
+  } catch (e) {}
   await qfSetApiFromConfig();
   const ap = document.getElementById('qfApiText'); if (ap) ap.textContent = qfAbsBase();
   qfPing();
@@ -16648,12 +16984,18 @@ window.qfSetApiFromConfig = qfSetApiFromConfig;
 async function qfPing() {
   const dot = document.getElementById('qfDot'), txt = document.getElementById('qfStatusText');
   if (!dot) return;
+  const builtin = window.WB_ACT_BACKEND !== 'qf';
   dot.className = 'qf-dot'; txt.textContent = '检测中…';
   try {
-    await fetch(qfApiBase() + '/', { mode: 'no-cors' });
-    dot.classList.add('on'); txt.textContent = '活动数据服务已连接';
+    const r = await fetch(qfApiBase() + '/api/tasks', { cache: 'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json().catch(() => ({}));
+    if (!j || (!j.tasks && !j.success)) throw new Error('返回格式不对');
+    dot.classList.add('on');
+    txt.textContent = builtin ? '活动服务已就绪（工作台内置）' : '活动数据服务已连接';
   } catch (e) {
-    dot.classList.add('off'); txt.textContent = '未连接到活动数据服务';
+    dot.classList.add('off');
+    txt.textContent = builtin ? '活动服务异常，请刷新页面' : '未连接到活动数据服务';
   }
 }
 window.qfPing = qfPing;

@@ -38,6 +38,7 @@ import pages as P                      # noqa: E402
 import projection as PJ                # noqa: E402
 import ports as PORTX                  # noqa: E402
 from store import Store, TABLES, ImportRefused   # noqa: E402
+from activity import ActivityStore, parse_multipart   # noqa: E402  课堂活动（自研，替代 QuickForm）
 from typing_store import TypingStore   # noqa: E402
 import ooxml_preview as OOX            # noqa: E402  课件在线预览（纯 Python 解析 OOXML）
 
@@ -63,6 +64,10 @@ LEG.STATIC_ROOT = ROOT
 
 PORT = PORTX.DEFAULT_PORT
 STORE = Store(DB_PATH)
+# 课堂活动（2026-11-03 · 方案 B）：活动/提交/附件落自己的表，附件落
+# <数据目录>/activity/<活动号>/，附件 URL 沿用 /static/uploads/…（与 QuickForm 同构，
+# 前端大屏、课件库归档、自定义页面都不用改）。
+ACT = ActivityStore(DB_PATH, os.path.join(DATA_DIR, "activity"))
 CFG = A.load_config(CONFIG_PATH)
 SESS = A.Sessions()
 # 打字冒险岛：独立成绩存储 + 配置缺省（教师开放开关 / 年级词库范围）
@@ -71,11 +76,18 @@ if not isinstance(CFG.get("typing"), dict):
     CFG["typing"] = {}
 CFG["typing"].setdefault("enabled", False)
 CFG["typing"].setdefault("grades", [])
+# 课堂活动后端：builtin=自研（默认，2026-11-03 起）/ qf=仍转发给 QuickForm（回退用）
+if not isinstance(CFG.get("activity"), dict):
+    CFG["activity"] = {}
+CFG["activity"].setdefault("backend", "builtin")
 PET_IDS = ["cat", "dog", "rabbit", "penguin", "panda", "dino", "unicorn", "dragon"]
 COND = threading.Condition()
 STARTED = time.time()
 VERSION = "2.0"
 ONLINE_WINDOW = 300      # 5 分钟内活跃算在线
+# 可内联直出的附件类型（其余一律按下载处理，防止同源执行脚本）
+_INLINE_EXTS = {"png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "pdf",
+                "mp4", "webm", "ogg", "mp3", "wav", "m4a", "txt"}
 
 # SSE 长连接上限（每个连接一个线程）
 _SSE_MAX = 200
@@ -357,6 +369,17 @@ def activity_base():
     return v.rstrip("/")
 
 
+def activity_backend():
+    """课堂活动后端：builtin（自研，默认）或 qf（回退到 QuickForm）。
+
+    优先级：环境变量 > 教师端设置 > 默认 builtin。
+    环境变量放最高，是因为容器/计划任务里改一行就能整体切回去，不用开页面。
+    """
+    v = (os.environ.get("WB_ACTIVITY_BACKEND")
+         or (CFG.get("activity") or {}).get("backend") or "builtin")
+    return "qf" if str(v).strip().lower() == "qf" else "builtin"
+
+
 def _mp_append(raw, ctype, fields):
     """往 multipart 请求体末尾追加几个文本字段，保留原有文件与全部内容。
 
@@ -564,6 +587,22 @@ class Handler(LEG.Handler):
                         "msg": "备份内容不是有效的 JSON（文件可能损坏或没下载完整）。"}, 400)
             return None
 
+    def _download(self, body, filename, ctype):
+        """带下载头的二进制响应（导出 CSV/JSON 用，中文名走 RFC 5987）。"""
+        self._sec_sent = False
+        self.send_response(200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Content-Disposition",
+                         'attachment; filename="%s"; filename*=UTF-8\'\'%s'
+                         % (filename, urllib.parse.quote(filename)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        try:
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+
     def _html(self, html, code=200, csp=True):
         self._sec_sent = False
         body = html.encode("utf-8")
@@ -767,6 +806,207 @@ class Handler(LEG.Handler):
         out["ok"] = bool(ok)
         return out, (200 if 200 <= code < 300 else code)
 
+    # ------------------------------------------------------------------
+    # 课堂活动：自研后端（2026-11-03 · 方案 B）
+    # ------------------------------------------------------------------
+    # 前端 2 万行代码原来直连 /qf/api/*，这里在同一个 URL 上换实现，
+    # 前端一行不用改：接口形状、字段名、附件 URL 全部按 QuickForm 的来。
+    # 想退回旧的 QuickForm：设置 activity.backend=qf 或环境变量
+    # WB_ACTIVITY_BACKEND=qf，本函数自动改回反代。
+    def _qf_dispatch(self, path, query="", body=None):
+        if activity_backend() == "qf":
+            return self._qf_proxy(path, query, body)
+        return self._qf_local(path, query, body)
+
+    def _qf_task_json(self, t):
+        """把内部活动行翻译成 QuickForm /api/tasks 的形状（api 给相对路径）。"""
+        return {"task_id": t["task_id"], "title": t["title"],
+                "description": t.get("description") or "",
+                "count": t.get("count", 0),
+                "created_at": t.get("created_at") or "",
+                "api": "/qf/api/" + urllib.parse.quote(t["task_id"], safe="")}
+
+    def _qf_local(self, path, query="", body=None):
+        sub = path[len("/qf"):] or "/"
+        method_post = body is not None
+
+        # 附件：/qf/static/uploads/<活动>/<文件>（QuickForm 模板里的绝对路径）
+        if sub.startswith("/static/uploads/"):
+            return self._act_file(path)
+
+        # 活动列表
+        if sub == "/api/tasks":
+            tasks = [self._qf_task_json(t) for t in ACT.tasks()]
+            return self._json_cors_success({"success": True, "tasks": tasks})
+
+        if sub.startswith("/api/"):
+            rest = sub[len("/api/"):].strip("/")
+            if not rest:
+                return self._json_cors({"ok": False, "msg": "缺少活动号"}, 400)
+            parts = rest.split("/")
+            quoted = urllib.parse.unquote(parts[0])
+            if "/" in quoted or ".." in quoted:
+                return self._json_cors({"ok": False, "msg": "活动号不合法"}, 400)
+            task = ACT.get_task(quoted)
+            if not task:
+                return self._json_cors({"error": "任务不存在", "ok": False,
+                                        "msg": "任务不存在"}, 404)
+            action = parts[1] if len(parts) > 1 else ""
+            if action == "count" and not method_post:
+                return self._json_cors_success({"total_submissions": ACT.count(quoted),
+                                                "task_id": quoted})
+            if action in ("all", "") and not method_post:
+                subs = ACT.submissions(quoted)
+                return self._json_cors_success({
+                    "submissions": subs, "total_submissions": len(subs),
+                    "task_id": quoted, "task_title": task["title"]})
+            if action == "" and method_post:
+                return self._act_api_submit(quoted, task, body)
+            return self._json_cors({"ok": False, "msg": "不支持的接口"}, 404)
+
+        # 工作台内部端点（数据大屏的读 / 清空 / 删单条）
+        if sub.startswith("/_wb_internal/"):
+            if not self._is_teacher():
+                return self._json_cors({"success": False, "ok": False,
+                                        "message": "未登录"}, 401)
+            rest = sub[len("/_wb_internal/"):].strip("/")
+            head, _, arg = rest.partition("/")
+            arg = urllib.parse.unquote(arg)
+            if head == "list":
+                t = ACT.get_task(arg)
+                if not t:
+                    return self._json_cors({"ok": False, "msg": "任务不存在"}, 404)
+                subs = ACT.submissions(arg)
+                return self._json_cors_success({
+                    "submissions": subs, "task_id": arg, "task_title": t["title"],
+                    "total_submissions": len(subs)})
+            if head == "clear":
+                n, _ids = ACT.clear(arg)
+                return self._json_cors_success({"success": True, "deleted": n,
+                                                "message": "已清空所有提交数据"})
+            if head == "delete":
+                if not arg.isdigit():
+                    return self._json_cors({"success": False, "message": "提交号不合法"}, 400)
+                ok = ACT.delete_submission(int(arg))
+                return self._json_cors_success(
+                    {"success": ok, "message": "提交数据已删除" if ok else "提交数据不存在"},
+                    200 if ok else 404)
+            return self._json_cors({"ok": False, "msg": "不支持的内部接口"}, 404)
+
+        # QuickForm 自己的页面（dashboard / login / profile）已下线：
+        # 老师存的书签不能变 404，统一送回教师端「上课 · 课堂活动」。
+        return self._redirect("/teacher/#guide")
+
+    def _act_api_submit(self, task_key, task, raw):
+        """兼容 QuickForm 的匿名提交口（/qf/api/<task> POST）。
+
+        学生正常走 /api/v2/student/submit（带票、身份由服务端补）；
+        这个口留给老师自己设计的页面直连，身份就按提交里带的学号/姓名认。
+
+        raw 由调用方读好再传进来：do_POST 已经把请求体消费掉了，
+        这里再 read 一次会一直等剩余字节（表现为浏览器转圈、请求超时）。
+        """
+        ctype = (self.headers.get("Content-Type") or "").lower()
+        if not raw:
+            return self._json_cors({"ok": False, "msg": "提交内容为空"}, 400)
+        fields, files = {}, []
+        if ctype.startswith("multipart/form-data"):
+            fields, files = parse_multipart(raw, self.headers.get("Content-Type") or "")
+        elif "json" in ctype:
+            try:
+                obj = json.loads(raw.decode("utf-8") or "{}")
+                fields = obj if isinstance(obj, dict) else {"data": obj}
+            except Exception:
+                return self._json_cors({"ok": False, "msg": "提交内容不是合法 JSON"}, 400)
+        else:
+            try:
+                fields = dict(urllib.parse.parse_qsl(raw.decode("utf-8", "replace"),
+                                                     keep_blank_values=True))
+            except Exception:
+                fields = {"data": raw.decode("utf-8", "replace")[:5000]}
+        try:
+            res = ACT.add_submission(task_key, fields, files,
+                                     ip=self._client_ip_safe())
+        except ValueError as e:
+            return self._json_cors({"ok": False, "message": str(e)}, 413)
+        except LookupError:
+            return self._json_cors({"ok": False, "message": "任务不存在"}, 404)
+        return self._json_cors_success({"message": "提交成功",
+                                        "id": res["id"],
+                                        "attachment": res.get("attachment")})
+
+    def _client_ip_safe(self):
+        try:
+            return A.client_ip(self)
+        except Exception:
+            return ""
+
+    def _json_cors_success(self, obj, code=200):
+        return self._json_cors(obj, code)
+
+    def _act_file(self, path):
+        """发附件。图片/PDF/音视频内联，其余强制下载，避免同源执行脚本。"""
+        p = ACT.file_path(path)
+        if not p:
+            return self._json({"ok": False, "msg": "文件不存在"}, 404)
+        ext = os.path.splitext(p)[1].lstrip(".").lower()
+        import mimetypes
+        ctype = mimetypes.guess_type(p)[0] or "application/octet-stream"
+        try:
+            with open(p, "rb") as f:
+                data = f.read()
+        except OSError:
+            return self._json({"ok": False, "msg": "文件读取失败"}, 500)
+        disp = "inline" if ext in _INLINE_EXTS else "attachment"
+        self._sec_sent = False
+        self.send_response(200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Content-Disposition",
+                         '%s; filename="%s"' % (disp, os.path.basename(p)))
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Cache-Control", "private, max-age=3600")
+        self.end_headers()
+        try:
+            self.wfile.write(data)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+
+    def _act_upload(self):
+        """活动教学资料上传（multipart）。教师专用，单文件 40MB。"""
+        if not self._is_teacher():
+            return self._json({"ok": False, "msg": "未登录"}, 401)
+        q2 = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        task = str((q2.get("task") or [""])[0] or "").strip()
+        if not ACT.get_task(task):
+            return self._json({"ok": False, "msg": "活动不存在"}, 404)
+        ctype = self.headers.get("Content-Type") or ""
+        if not ctype.lower().startswith("multipart/form-data"):
+            return self._json({"ok": False, "msg": "请用表单上传文件"}, 400)
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except Exception:
+            length = 0
+        if length <= 0:
+            return self._json({"ok": False, "msg": "没有收到内容"}, 400)
+        if length > 40 * 1024 * 1024:
+            return self._json({"ok": False, "msg": "文件太大（单文件上限 40MB）"}, 413)
+        raw = self.rfile.read(length)
+        _fields, files = parse_multipart(raw, ctype)
+        if not files:
+            return self._json({"ok": False, "msg": "没有收到文件"}, 400)
+        saved = []
+        for f in files[:10]:
+            try:
+                saved.append(ACT.add_attachment(task, f.get("name"),
+                                                f.get("data") or b"", f.get("mime")))
+            except ValueError as e:
+                return self._json({"ok": False, "msg": str(e)}, 413)
+        STORE.audit("teacher", "activity-upload",
+                    "%s 上传 %d 个资料" % (task, len(saved)))
+        return self._json({"ok": True, "files": saved,
+                           "attachments": ACT.attachments(task)})
+
     def do_GET(self):
         self._sec_sent = False
         u = urllib.parse.urlparse(self.path)
@@ -820,7 +1060,11 @@ class Handler(LEG.Handler):
             if path == "/qf":
                 return self._redirect("/qf/")
             if path.startswith("/qf/"):
-                return self._qf_proxy(path, u.query)
+                return self._qf_dispatch(path, u.query)
+            # 课堂活动附件：QuickForm 时代的 URL 就是 /static/uploads/<活动>/<文件>，
+            # 大屏、课件库归档、自定义页面都按这个前缀取，所以必须照旧可访问。
+            if path.startswith("/static/uploads/"):
+                return self._act_file(path)
             if path.startswith("/teacher/"):
                 return self._teacher_static(path[len("/teacher/"):])
             # 学习单开关：活动被「关闭」后，非教师直接打开学生页会被拦下；
@@ -1173,15 +1417,11 @@ class Handler(LEG.Handler):
         gt = get_gticket(tok)
         if not gt:
             return self._json_cors({"ok": False, "msg": "提交凭证已失效，请回到学生端重新打开这一环节"}, 401)
-        base = activity_base()
-        if not base:
-            return self._json_cors({"ok": False,
-                                    "msg": "老师还没有在教师端配置「活动数据服务」地址"}, 503)
         task = str(gt.get("task") or "").strip()
         if not task:
             return self._json_cors({"ok": False,
                                     "msg": "这个环节没有绑定活动任务，无法提交到数据大屏"}, 400)
-        # 只允许转发到配置里那一个服务的 /api/<task>，不做通用代理（避免被当成跳板）
+        # 任务号会拼进 URL / 当作目录名，只允许安全字符
         if "/" in task or ".." in task:
             return self._json_cors({"ok": False, "msg": "任务号不合法"}, 400)
 
@@ -1196,6 +1436,15 @@ class Handler(LEG.Handler):
 
         who = {"学号": gt.get("no") or "", "姓名": gt.get("name") or "",
                "班级": gt.get("cls") or ""}
+
+        # 自研后端：不再需要「活动数据服务地址」，也不跨进程转发，直接落本地库
+        if activity_backend() == "builtin":
+            return self._student_submit_local(task, gt, raw, ctype, who)
+
+        base = activity_base()
+        if not base:
+            return self._json_cors({"ok": False,
+                                    "msg": "老师还没有在教师端配置「活动数据服务」地址"}, 503)
 
         if ctype.lower().startswith("multipart/form-data"):
             out = _mp_append(raw, ctype, who)
@@ -1232,6 +1481,49 @@ class Handler(LEG.Handler):
         if isinstance(out, dict) and "ok" not in out:
             out["ok"] = 200 <= code < 300
         return self._json_cors(out, 200 if 200 <= code < 300 else code)
+
+    def _student_submit_local(self, task, gt, raw, ctype, who):
+        """学生提交（自研后端）：解析 → 补身份 → 落库，全程本进程内完成。
+
+        比转发版本多做了两件事：
+          · 文件确实落到 <数据目录>/activity/<活动>/，并回填 /static/uploads/… 路径；
+          · 同一学生重复提交时给出「已覆盖」提示（QuickForm 只会追加一条，
+            数据大屏上同一人出现两行，老师要自己认哪条是新的）。
+        """
+        if not ACT.get_task(task):
+            return self._json_cors({"ok": False,
+                                    "msg": "这个活动已被删除，请让老师重新发放"}, 404)
+        fields, files = {}, []
+        low = (ctype or "").lower()
+        if low.startswith("multipart/form-data"):
+            fields, files = parse_multipart(raw, ctype)
+            if not fields and not files:
+                return self._json_cors({"ok": False, "msg": "提交内容格式无法解析"}, 400)
+        elif "json" in low:
+            try:
+                obj = json.loads(raw.decode("utf-8") or "{}")
+            except Exception:
+                return self._json_cors({"ok": False, "msg": "提交内容不是合法 JSON"}, 400)
+            fields = obj if isinstance(obj, dict) else {"答案": obj}
+        else:
+            txt = raw.decode("utf-8", "ignore")
+            try:
+                fields = dict(urllib.parse.parse_qsl(txt, keep_blank_values=True))
+            except Exception:
+                fields = {"答案": txt[:5000]}
+        # 身份以服务端签的票为准，页面自己填的一律覆盖（防冒名）
+        fields.update(who)
+        try:
+            res = ACT.add_submission(task, fields, files, ip=self._client_ip_safe(),
+                                     sid=who.get("学号"), name=who.get("姓名"),
+                                     cls=who.get("班级"))
+        except ValueError as e:
+            return self._json_cors({"ok": False, "msg": str(e)}, 413)
+        except LookupError:
+            return self._json_cors({"ok": False, "msg": "任务不存在"}, 404)
+        out = {"ok": True, "message": "提交成功", "id": res["id"],
+               "attachment": res.get("attachment")}
+        return self._json_cors(out, 200)
 
     def _json_cors(self, obj, code=200):
         """给跨端提交用的 JSON：页面可能来自 5055 那个域，要显式放开。
@@ -1286,7 +1578,7 @@ class Handler(LEG.Handler):
             if path == "/qf" or path.startswith("/qf/"):
                 n = int(self.headers.get("Content-Length") or 0)
                 body = self.rfile.read(n) if n > 0 else b""
-                return self._qf_proxy(path, u.query, body=body)
+                return self._qf_dispatch(path, u.query, body=body)
             return super().do_POST()
         except (BrokenPipeError, ConnectionResetError):
             pass
@@ -1318,7 +1610,9 @@ class Handler(LEG.Handler):
                                "rev": STORE.rev(), "total": st["total"],
                                "has_password": bool(CFG["teacher"].get("password_hash")),
                                "has_qa": has_qa(), "config_rev": CFG_VER[0],
-                               "port": _port(), "version": VERSION})
+                               "port": _port(), "version": VERSION,
+                               "activity_backend": activity_backend(),
+                               "activity_tasks": len(ACT.tasks())})
         if path == "/api/v2/auth/session":
             s = self._session()
             if not s:
@@ -1360,9 +1654,51 @@ class Handler(LEG.Handler):
             task = (qs.get("task") or [""])[0].strip()
             if not task:
                 return self._json({"ok": False, "msg": "缺少 task"}, 400)
+            if activity_backend() == "builtin":
+                t = ACT.get_task(task)
+                if not t:
+                    return self._json({"ok": False, "msg": "活动不存在"}, 404)
+                subs = ACT.submissions(task)
+                return self._json({"ok": True, "submissions": subs, "task_id": task,
+                                   "task_title": t["title"],
+                                   "total_submissions": len(subs)})
             out, code = self._qf_internal_call(
                 "/_wb_internal/list/" + urllib.parse.quote(task, safe=""), method="GET")
             return self._json(out, code)
+        if path == "/api/v2/teacher/activity/list":
+            # 活动管理页：活动列表 + 每条的提交数 + 教学资料附件
+            if not self._is_teacher():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            tasks = ACT.tasks(include_archived=True)
+            for t in tasks:
+                t["attachments"] = ACT.attachments(t["task_id"])
+            return self._json({"ok": True, "backend": activity_backend(), "tasks": tasks})
+        if path == "/api/v2/teacher/activity/data":
+            if not self._is_teacher():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            task = (qs.get("task") or [""])[0].strip()
+            t = ACT.get_task(task)
+            if not t:
+                return self._json({"ok": False, "msg": "活动不存在"}, 404)
+            subs = ACT.submissions(task)
+            return self._json({"ok": True, "task_id": task, "task_title": t["title"],
+                               "submissions": subs, "total_submissions": len(subs)})
+        if path == "/api/v2/teacher/activity/export":
+            # 导出：csv（Excel 直接打开，带 BOM）/ json（原始结构，给二次处理）
+            if not self._is_teacher():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            task = (qs.get("task") or [""])[0].strip()
+            fmt = ((qs.get("format") or ["csv"])[0] or "csv").lower()
+            t = ACT.get_task(task)
+            if not t:
+                return self._json({"ok": False, "msg": "活动不存在"}, 404)
+            if fmt == "json":
+                body = json.dumps({"task": t, "submissions": ACT.submissions(task)},
+                                  ensure_ascii=False, indent=2).encode("utf-8")
+                return self._download(body, "activity-%s.json" % task,
+                                      "application/json; charset=utf-8")
+            return self._download(ACT.export_csv(task), "activity-%s.csv" % task,
+                                  "text/csv; charset=utf-8")
         if path == "/api/v2/sync":
             return self._sync_pull(qs)
         if path == "/api/v2/events":
@@ -2008,6 +2344,9 @@ class Handler(LEG.Handler):
             # 2026-11-03（换机测试 F3/F4）：打字练习成绩与提交附件都不在 29 表里，
             # 以前不打包 —— 换机后「打字进度金币装扮全归零」「提交记录在、作品文件没了」。
             data["typing"] = _typing_snapshot()
+            # 课堂活动（2026-11-03 方案 B）：活动/提交/附件已并入工作台自己的库，
+            # 备份口径随之合一——不再需要单独打包 QuickForm 的数据卷。
+            data["activity"] = _act_snapshot()
             files, meta = _sub_files_snapshot()
             if files:
                 data["files"] = files
@@ -2176,6 +2515,9 @@ class Handler(LEG.Handler):
         # 课程资料包是 zip 二进制，必须在这里截住：下面 _read_json 会把它当 JSON 读坏
         if path == "/api/v2/admin/import-files":
             return self._import_files()
+        # 活动教学资料是 multipart 二进制，同理必须在 _read_json 之前截住
+        if path == "/api/v2/teacher/activity/upload":
+            return self._act_upload()
         body = self._read_json()
         if body is None:
             return          # 请求体过大，_read_json 已经回过 413 了
@@ -2190,14 +2532,114 @@ class Handler(LEG.Handler):
             if path == "/api/v2/qf-clear":
                 if not task:
                     return self._json({"ok": False, "msg": "缺少 task"}, 400)
+                if activity_backend() == "builtin":
+                    n, _ids = ACT.clear(task)
+                    STORE.audit("teacher", "activity-clear", "%s 清空 %d 条" % (task, n))
+                    return self._json({"ok": True, "deleted": n,
+                                       "message": "已清空所有提交数据"})
                 out, code = self._qf_internal_call(
                     "/_wb_internal/clear/" + urllib.parse.quote(task, safe=""))
                 return self._json(out, code)
             sub = str((q2.get("sub") or [body.get("sub") or ""])[0] or "").strip()
             if not sub.isdigit():
                 return self._json({"ok": False, "msg": "缺少或非法的 sub"}, 400)
+            if activity_backend() == "builtin":
+                ok = ACT.delete_submission(int(sub))
+                return self._json({"ok": ok, "message": "提交数据已删除" if ok else "提交数据不存在"},
+                                  200 if ok else 404)
             out, code = self._qf_internal_call("/_wb_internal/delete/%s" % sub)
             return self._json(out, code)
+        # ------------------------------------------------------------------
+        # 活动管理（2026-11-03 · 方案 B）：新建/改名/删除/清空/删单条
+        # ------------------------------------------------------------------
+        if path == "/api/v2/teacher/activity/save":
+            if not self._is_teacher():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            task = str(body.get("task_id") or "").strip()
+            try:
+                if task:
+                    if not ACT.get_task(task):
+                        return self._json({"ok": False, "msg": "活动不存在"}, 404)
+                    t = ACT.update_task(task, title=body.get("title"),
+                                        description=body.get("description"),
+                                        class_id=body.get("class_id") or 0,
+                                        course=body.get("course") or "",
+                                        archived=body.get("archived"))
+                    act = "activity-update"
+                else:
+                    t = ACT.create_task(body.get("title"), body.get("description") or "",
+                                        body.get("class_id") or 0, body.get("course") or "")
+                    act = "activity-create"
+            except ValueError as e:
+                return self._json({"ok": False, "msg": str(e)}, 400)
+            STORE.audit("teacher", act, "%s %s" % (t["task_id"], t["title"]))
+            t["attachments"] = ACT.attachments(t["task_id"])
+            return self._json({"ok": True, "task": t})
+        if path == "/api/v2/teacher/activity/delete":
+            if not self._is_teacher():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            task = str(body.get("task_id") or "").strip()
+            if not ACT.get_task(task):
+                return self._json({"ok": False, "msg": "活动不存在"}, 404)
+            ok = ACT.delete_task(task)
+            STORE.audit("teacher", "activity-delete", task)
+            # 发放记录一起清：留着指向已删活动的条目，学生端会点开一个空页面
+            for p in STORE.table_rows("activity_pushes"):
+                if str(p.get("task_id")) == task:
+                    STORE.delete("activity_pushes", p.get("id"))
+            return self._json({"ok": True, "deleted": ok})
+        if path == "/api/v2/teacher/activity/clear":
+            if not self._is_teacher():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            task = str(body.get("task_id") or "").strip()
+            if not ACT.get_task(task):
+                return self._json({"ok": False, "msg": "活动不存在"}, 404)
+            n, _ids = ACT.clear(task)
+            STORE.audit("teacher", "activity-clear", "%s 清空 %d 条" % (task, n))
+            return self._json({"ok": True, "deleted": n})
+        if path == "/api/v2/teacher/activity/del-sub":
+            if not self._is_teacher():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            sub = str(body.get("sub") or "").strip()
+            if not sub.isdigit():
+                return self._json({"ok": False, "msg": "提交号不合法"}, 400)
+            ok = ACT.delete_submission(int(sub))
+            return self._json({"ok": ok, "msg": "已删除" if ok else "提交不存在"},
+                              200 if ok else 404)
+        if path == "/api/v2/teacher/activity/del-file":
+            if not self._is_teacher():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            task = str(body.get("task_id") or "").strip()
+            url = str(body.get("url") or "").strip()
+            ok = ACT.delete_attachment(task, url)
+            return self._json({"ok": ok}, 200 if ok else 404)
+        if path == "/api/v2/teacher/activity/migrate":
+            # 一键导入旧 QuickForm 数据（默认预演，apply=true 才写库）
+            if not self._is_teacher():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            try:
+                sys.path.insert(0, os.path.join(os.path.dirname(ROOT), "tools"))
+                import qfmigrate
+            except Exception as e:
+                return self._json({"ok": False, "msg": "迁移模块不可用：%s" % e}, 500)
+            qf_db, uploads = qfmigrate.default_paths()
+            if not os.path.isfile(qf_db):
+                return self._json({"ok": False,
+                                   "msg": "没找到 QuickForm 数据库（%s）。"
+                                          "如果旧数据在容器卷里，请先拷到该路径。" % qf_db}, 404)
+            lines = []
+            try:
+                stat = qfmigrate.migrate(qf_db, uploads, ACT,
+                                         dry_run=not bool(body.get("apply")),
+                                         replace=bool(body.get("replace")),
+                                         log=lambda s: lines.append(str(s)))
+            except Exception as e:
+                return self._json({"ok": False, "msg": "导入失败：%s" % e}, 500)
+            if body.get("apply"):
+                STORE.audit("teacher", "activity-migrate",
+                            "活动 %d / 提交 %d / 附件 %d"
+                            % (stat["tasks"], stat["submissions"], stat["files"]))
+            return self._json({"ok": not stat["errors"], "stat": stat, "log": lines})
         if path == "/api/v2/auth/setup":
             if CFG["teacher"].get("password_hash"):
                 return self._json({"ok": False, "msg": "账号已设置"}, 400)
@@ -2614,7 +3056,9 @@ class Handler(LEG.Handler):
             if not self._is_teacher():
                 return self._json({"ok": False, "msg": "未登录"}, 401)
             base = str(body.get("api_base") or "").strip().rstrip("/")
-            if base and not (base.startswith("http://") or base.startswith("https://")):
+            # 同源相对路径（如 /qf）也算合法：Docker/内置模式下接口就和网页同入口
+            if base and not (base.startswith("http://") or base.startswith("https://")
+                             or base.startswith("/")):
                 return self._json({"ok": False, "msg": "地址要以 http:// 或 https:// 开头"}, 400)
             act = CFG.setdefault("activity", {})
             act["api_base"] = base
@@ -2987,6 +3431,14 @@ class Handler(LEG.Handler):
             if n:
                 counts["typing_students"] = n
 
+        # 课堂活动：与 29 表同源但不同表，单独恢复（含附件 base64）
+        if isinstance(body.get("activity"), dict) and body["activity"]:
+            ar = _act_restore(body.get("activity"))
+            if ar.get("tasks") or ar.get("submissions"):
+                counts["activity_tasks"] = ar.get("tasks", 0)
+                counts["activity_submissions"] = ar.get("submissions", 0)
+                counts["activity_files"] = ar.get("files", 0)
+
         # 全量备份还带提交系统（随堂测 / 作品收集）的自有数据：
         # 题目配置、花名册、提交记录都在 submissions/ 下的独立 JSON 里，
         # 不随 STORE 表走——漏了它们，恢复完随堂测就变回默认题库。
@@ -3064,6 +3516,22 @@ def _sub_restore(sub):
 # ---------------------------------------------------------------------------
 # 打字练习数据：独立 typing.json，不进 29 表体系，必须单独搬
 # ---------------------------------------------------------------------------
+def _act_snapshot():
+    """课堂活动快照（活动 / 提交 / 附件）。读失败不阻塞导出。"""
+    try:
+        return ACT.snapshot()
+    except Exception:
+        return {}
+
+
+def _act_restore(snap):
+    """恢复课堂活动。返回 {tasks, submissions, files} 条数。"""
+    try:
+        return ACT.restore(snap)
+    except Exception:
+        return {"tasks": 0, "submissions": 0, "files": 0}
+
+
 def _typing_snapshot():
     try:
         d = TYPING.data
