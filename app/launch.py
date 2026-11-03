@@ -25,6 +25,14 @@ import subprocess
 import webbrowser
 import urllib.request
 
+# 输出重定向到管道/文件时（如计划任务、日志采集），Windows 默认按 GBK 编码，
+# 打印 ✓/▲ 等符号会直接 UnicodeEncodeError 崩掉。统一强制 UTF-8 + 容错替换。
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 ROOT = os.path.dirname(os.path.abspath(__file__))
 # 项目根：QuickForm 源码（quickform/app）与随包运行时（runtime/）都挂在这一层，
 # 不是 app/ 里面。qfctl 的目录探测与解释器选择都以项目根为基准。
