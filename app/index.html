@@ -16289,7 +16289,8 @@ async function actAdminOps(e) {
     if (sel) sel.value = id;
     actActiveId = id;
     actRenderDash();
-    const dash = document.getElementById('actDash');
+    // 大屏容器是 #actPaneDash（数据大屏页签），滚动锚点不能指向不存在的 id
+    const dash = document.getElementById('actPaneDash');
     if (dash) dash.scrollIntoView({ behavior: 'smooth', block: 'start' });
     return;
   }
