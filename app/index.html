@@ -9207,7 +9207,7 @@ const SYNC_TABLES = {
   duty_areas: { key:'duty_areas', cn:'值日区域',
     cols:['class_id','name','sort_order','enabled'] },
   duty_positions: { key:'duty_positions', cn:'值日岗位',
-    cols:['name','sort_order','enabled','builtin'] },
+    cols:['class_id','name','sort_order','enabled','builtin'] },
   course_progress: { key:'course_progress', cn:'课程进度',
     cols:['class_id','course_id','content','date','note','sort_order'] },
   progress_cols: { key:'progress_cols', cn:'进度表头',
@@ -14457,17 +14457,15 @@ async function applyGroupTemplate(id, mode) {
       });
     }
 
-    /* 模板坐标没覆盖到的已排座学生 → 按模板末组规模自动续编，确保不漏人 */
-    const leftover = seats.filter(s => !used.has(Number(s.id)))
-      .sort((a, b) => (Number(a.row) - Number(b.row)) || (Number(a.col) - Number(b.col)));
-    const autoSize = (built.length
-      ? ((tpl.groups[tpl.groups.length - 1] || {}).members || []).length : 4) || 4;
-    let autoN = built.length, k = 0;
-    while (k < leftover.length) {
-      const chunk = leftover.slice(k, k + autoSize);
-      k += chunk.length; autoN++;
-      built.push({ id: ++gid, class_id: cls, name: `第${autoN}组`, mode: 'teacher_classroom',
-                   seat_ids: chunk.map(x => Number(x.id)), roles: {}, locked: false });
+    /* 模板坐标没覆盖到的已排座学生：保持未分组（空位保持为空）。
+       2026-11-03 牛哥反馈：以前这里会按模板末组规模「自动续编」出新组，
+       模板里有套不上的空位小组时，座位表会多出老师从没建过的「第N组」。 */
+    const leftover = seats.filter(s => !used.has(Number(s.id))).length;
+    if (!built.length) {
+      /* 一组都没套上（本班座位结构和模板完全对不上）→ 不动现有分组，
+         别把老师已有的组清空后留一个白板 */
+      toast(`模板「${tpl.name}」与本班座位对不上（0 组匹配），未做任何更改`);
+      return;
     }
     /* 模板里只存了「组长」这一条角色，其余成员没有记录 → 必须补全编号，
        否则渲染时按位置兜底会多判出一个组长（一个组两个组长） */
@@ -14476,7 +14474,8 @@ async function applyGroupTemplate(id, mode) {
     state.activeGroup = null;
     closeFloat();
     renderContent();
-    toast(`已按结构套用「${tpl.name}」：${built.length} 组，覆盖 ${seats.length} 人（保留原座位坐标）`);
+    toast(`已按结构套用「${tpl.name}」：${built.length} 组，覆盖 ${seats.length - leftover} 人（保留原座位坐标）`
+      + (leftover ? `；${leftover} 名未匹配的学生保持未分组` : ''));
     return;
   }
 
@@ -28115,7 +28114,22 @@ window.printStudentReport = printStudentReport;
 /** 班干部职务：默认留空，由教师在值日页逐个指派（牛哥 2026-10-19：班干部/值日默认空）。
    不再自动套学生，避免出现「张明轩」既是班长又是生活委员、或新建班自动塞满人的情况。 */
 function ensureDutyPositions() {
-  return dbT('duty_positions') || [];
+  const list = dbT('duty_positions') || [];
+  /* 2026-11-03 修复：duty_positions 原来没有 class_id（全局一张表），
+     切班级后班干部列表纹丝不动——102 班加的班长会原样出现在 103 班的页面上。
+     这里幂等补齐归属班：有学生的按学生所在班，没指派人的归到当前班。
+     classes 还没加载完（启动早期）就先不动，等值日页渲染时再补。 */
+  if (!(dbT('classes') || []).length) return list;
+  let dirty = false;
+  const fallback = Number(curSeatClass()) || 0;
+  list.forEach(p => {
+    if (p.class_id != null && p.class_id !== '') return;
+    const stu = dbT('students').find(s => s.id === p.student_id);
+    p.class_id = (stu && Number(stu.class_id)) || fallback;
+    dirty = true;
+  });
+  if (dirty) dbSet('duty_positions', list);
+  return list;
 }
 /** 切换到别的周（重排） */
 function shiftDutyWeek(n) {
@@ -28178,7 +28192,8 @@ function addDutyPos() {
   const maxId = list.reduce((m, p) => Math.max(m, Number(p.id) || 0), 0);
   const maxOrder = list.reduce((m, p) => Math.max(m, Number(p.sort_order) || 0), 0);
   const id = maxId + 1;
-  list.push({ id, name: '新职务', sort_order: maxOrder + 1, enabled: true, builtin: false, student_id: 0 });
+  list.push({ id, name: '新职务', sort_order: maxOrder + 1, enabled: true, builtin: false,
+              class_id: curSeatClass(), student_id: 0 });
   dbSet('duty_positions', list);
   renderContent();
   renameDutyPos(id);          // 新建后直接进改名，方便立刻输入
@@ -30805,8 +30820,11 @@ const DEMO_RENDER = {
       </tr>`;
     }).join('');
 
-    /* 班干部 */
-    const posRows = (dbT('duty_positions') || []).slice()
+    /* 班干部（2026-11-03 修复）：只显示本班的职务。
+       以前 duty_positions 是全局表，切班级列表不跟着换，
+       102 班的班长会原样出现在 103 班的值日页上。 */
+    const posRows = (dbT('duty_positions') || [])
+      .filter(p => Number(p.class_id) === Number(cls)).slice()
       .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)).map(p => {
       const stu = dbT('students').find(s => s.id === p.student_id);
       const g = p.student_id ? hwGroupOfSid(p.student_id) : '';

@@ -1780,9 +1780,14 @@ class Handler(LEG.Handler):
             nos[str(x.get("id"))] = str(x.get("student_no") or "")
 
         # 班干部职务（duty_positions，与教师端 dutyPosNameOf 同源同口径）
+        # 2026-11-03 起该表带 class_id 按班隔离；老数据没有 class_id 时
+        # 保持原行为（按 student_id 归属，学生本身不会跨班，天然不串）。
         pos_of = {}
         for p in STORE.table_rows("duty_positions"):
             if p.get("enabled") is False:
+                continue
+            pc = p.get("class_id")
+            if pc not in (None, "") and _seat_i(pc) != cid:
                 continue
             sid = str(p.get("student_id") or "")
             nm = str(p.get("name") or "").strip()
@@ -2990,6 +2995,51 @@ class Handler(LEG.Handler):
             return self._json({"ok": False, "msg": info or "签到失败"}, 400)
         return self._json(dict({"ok": True, "rev": STORE.rev()}, **info))
 
+    def _class_lesson_at(self, cid, dow, period):
+        """本班在「周几 · 第几节」有没有排课。
+
+        口径与缺勤扫描（absent_sweep_once）一致：day_of_week 0=周一。
+        返回 True（有课）/ False（这个时段没课）/ "no_table"（本班课表完全没在用，
+        老师从没排过课就不约束签到——与缺勤扫描的退化口径相同）。
+        week_pattern（单双周）不参与判定：按「该时段有课」从宽，
+        宁可多放行一次签到，也不把单双周排课的班误拦在门外。
+        考勤行存的 period 是作息表 seq（1~20），lessons.period_id 引用的是
+        作息表 id——先把节次号映射回作息表行，再用该行的 id/seq 双口径去匹配。
+        """
+        ids = set()
+        for r in STORE.table_rows("periods"):
+            if r.get("deleted"):
+                continue
+            for k in ("seq", "id"):
+                try:
+                    if int(float(r.get(k))) == int(period):
+                        for k2 in ("id", "seq"):
+                            try:
+                                ids.add(int(float(r.get(k2))))
+                            except Exception:
+                                pass
+                        break
+                except Exception:
+                    pass
+        if not ids:
+            ids.add(int(period))          # 没有作息表就按号直比（老数据兜底）
+        has_any = False
+        for l in STORE.table_rows("lessons"):
+            if l.get("deleted"):
+                continue
+            if str(l.get("class_id") or "") != str(cid):
+                continue
+            has_any = True
+            try:
+                if int(float(l.get("day_of_week"))) != int(dow):
+                    continue
+                if int(float(l.get("period_id"))) not in ids:
+                    continue
+            except Exception:
+                continue
+            return True
+        return "no_table" if not has_any else False
+
     def _write_checkin(self, sid, st, p, period, d, source):
         """登录自动签到 / 学生手动签到共用的落库核心。
 
@@ -3003,6 +3053,15 @@ class Handler(LEG.Handler):
         old = STORE.get_row("attendance", rid) or {}
         first = str(old.get("checked_at") or "")
         old_status = str(old.get("status") or "")
+
+        # 课表闸门（2026-11-03 牛哥反馈）：本班这个时段没排课就不允许签到。
+        # 以前只校验节次合法性与时间窗：课表没排课的日子（周末/无课日下午）
+        # 登录照样被记一笔出勤，考勤统计出现假全勤。
+        # 退化口径：本班课表完全没在用（0 条课）就不拦，保持旧行为。
+        lesson = self._class_lesson_at(st.get("class_id"),
+                                       time.localtime().tm_wday, period)
+        if lesson is False:
+            return False, "第 %s 节本班今天没有排课，无需签到" % period
 
         now_min = time.localtime().tm_hour * 60 + time.localtime().tm_min
         def _mins(v):
