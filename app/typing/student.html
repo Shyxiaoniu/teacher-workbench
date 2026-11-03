@@ -1943,21 +1943,19 @@ function startLevel(st, ch, lv) {
    不是常驻的。英文：保持普通字符流（空格不会被 flex 吃掉）。 */
 function textHtml(text, idx, bad) {
   var isCn = S.play && S.play.L && S.play.L.mode === 'cn';
-  /* 当前格挂着敲错的字（2026-11-03）：红色就地显示，打对自动替换 */
-  var errCh = (S.play && S.play.errChar) || '';
+  /* 当前格挂着敲错的字（2026-11-03 牛哥第二次反馈）：
+     课文行**永远显示原文**，不把错字顶进来——顶掉了学生就看不见
+     该打什么了。错字只在输入框回显层（echoHtml）里红色保留；
+     课文行这边只把当前格标红（.e），提示"这个位置打错了"。 */
+  var hasErr = !!(S.play && S.play.errChar);
   var i, cls, s = '';
   if (isCn && window.PY && PY.annotate) {
     var arr = PY.annotate(text);
     for (i = 0; i < arr.length; i++) {
-      cls = i < idx ? 'o' : (i === idx ? (bad ? 'e' : 'c') : 'd');
+      cls = i < idx ? 'o' : (i === idx ? ((bad || (i === idx && hasErr)) ? 'e' : 'c') : 'd');
       /* 空格也要带状态：中英混排关里空格很多，原来只渲染一个空 span，
          学生根本看不出"这里要按一下空格"，只会以为两个字挨得近。 */
       if (arr[i].c === ' ') { s += '<span class="ch sp ' + cls + '"></span>'; continue; }
-      if (i === idx && errCh) {
-        s += '<span class="ch e" title="这个字打错了，打对会自动替换">' +
-          '<span class="hz">' + esc(errCh) + '</span></span>';
-        continue;
-      }
       s += '<span class="ch ' + cls + '"' +
         (arr[i].p ? ' data-p="' + esc(arr[i].p) + '"' : '') +
         '><span class="hz">' + esc(arr[i].c) + '</span></span>';
@@ -1965,8 +1963,7 @@ function textHtml(text, idx, bad) {
     return s;
   }
   for (i = 0; i < text.length; i++) {
-    cls = i < idx ? 'o' : (i === idx ? (bad ? 'e' : 'c') : 'd');
-    if (i === idx && errCh) { s += '<span class="e" title="这个字打错了，打对会自动替换">' + esc(errCh) + '</span>'; continue; }
+    cls = i < idx ? 'o' : (i === idx ? ((bad || (i === idx && hasErr)) ? 'e' : 'c') : 'd');
     s += '<span class="' + cls + '">' + esc(text[i]) + '</span>';
   }
   return s;
