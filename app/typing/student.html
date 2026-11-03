@@ -249,7 +249,7 @@ body.embed .play-wrap{min-height:calc(100vh - 20px)}
 .text-line.en-line{padding:13px 16px;text-align:center}
 /* 大键帽：只做"按哪个键"的提示，竖向占位要小 —— 上一版 112px 高，
    加上文字和间距吃掉了 96px 高度，正好是键盘缺的那 100px。 */
-.key-big{flex:0 0 auto;margin-top:2px;display:flex;flex-direction:column;align-items:center;gap:2px;padding:1px 0 2px}
+.key-big{flex:0 0 auto;margin-top:2px;display:flex;flex-direction:column;align-items:center;gap:10px;padding:1px 0 2px}
 .key-cap{width:clamp(54px,7.6vh,70px);height:clamp(54px,7.6vh,70px);border-radius:14px;background:var(--surface);border:2.5px solid var(--brand);
   display:flex;align-items:center;justify-content:center;font-size:clamp(28px,3.9vh,38px);font-weight:800;color:var(--ink);
   box-shadow:0 3px 0 var(--key-3d),0 7px 14px rgba(180,91,51,.15);text-transform:uppercase;font-family:Consolas,monospace}
@@ -346,7 +346,12 @@ body.embed .play-wrap{min-height:calc(100vh - 20px)}
   padding:1px 2px 0;font-size:12.5px;color:var(--ink2);align-items:center}
 .kb-legend b{display:inline-block;width:12px;height:12px;
   border-radius:3px;margin-right:4px;vertical-align:-1px}
-.kb-legend .kb-tip{margin-left:auto;color:var(--brand);font-weight:700;font-size:12.5px}
+/* 图例原位高亮（2026-11-03）：用到哪根手指，哪枚图例点亮——
+   色块加同色描边并微微放大，文字染成手指色，一眼对上键盘上的分区 */
+.kb-legend span{border-radius:7px;padding:1px 4px;transition:.15s}
+.kb-legend span.on{color:var(--ink);font-weight:800;background:#FFF6EC;
+  box-shadow:inset 0 0 0 1.5px #E8CFAF}
+.kb-legend span.on b{transform:scale(1.25);box-shadow:0 0 0 2px rgba(214,120,60,.35)}
 /* 指法图：2026-11-02 四次调整 —— 从「圆角方块」改成「圆形徽章 + 手指剪影」：
    ① 每根手指一个白底彩边圆，圆内是一只竖着的手指（指尖圆、指节有折痕），
       圆比方块更贴近"手指落键"的意象，也顺手把十根手指拉成同一节拍；
@@ -405,7 +410,7 @@ body.embed .play-wrap{min-height:calc(100vh - 20px)}
   .play-top .sub{font-size:11px}
   .key-cap{width:clamp(46px,6.6vh,58px);height:clamp(46px,6.6vh,58px);border-radius:12px;
     font-size:clamp(24px,3.4vh,32px);box-shadow:0 3px 0 var(--key-3d),0 6px 12px rgba(180,91,51,.14)}
-  .key-big{gap:1px;padding:1px 0}
+  .key-big{gap:9px;padding:1px 0}
   .key-finger{font-size:12.5px}
   .kb-wrap{min-height:120px;margin-top:4px}
   .hands{margin-top:5px;padding:5px 7px 4px}
@@ -630,13 +635,10 @@ body.embed .credit{display:none}
 .legend-row{flex:0 0 auto;display:flex;align-items:center;gap:12px;
   margin-top:6px;padding:0 2px;flex-wrap:wrap}
 .legend-row > .kb-legend{margin:0;padding:0;flex:0 1 auto}
-/* 道具条居右（2026-11-02）：虚线框收缩到内容宽度，靠右贴齐页边；
-   左端图例保持不动，中间留白归到图例一侧。右端出现「目标键」提示时，
-   道具框自动让到它左侧，两者间隔由 legend-row 的 gap 控制。 */
+/* 道具条独占最右（2026-11-03）：右端的「目标键」提示已删，虚线框直接贴右页边；
+   左端图例保持不动，中间留白由 margin-left:auto 吃掉。 */
 .legend-row > .item-bar{flex:0 1 auto;margin-top:0;margin-left:auto;min-width:0;
   max-width:100%;justify-content:flex-end}
-.legend-row > .kb-tip{margin-left:auto;color:var(--brand);font-weight:700;
-  font-size:12.5px;white-space:nowrap}
 
 /* ---- 练习页道具条 ---- */
 .item-bar{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:7px;
@@ -938,12 +940,11 @@ body.embed .credit{display:none}
   .al-grid{grid-template-columns:1fr}
   #view .level-grid{grid-template-columns:1fr 1fr}
 }
-/* 窄屏：图例、道具条、目标键提示按顺序换行，谁都不被压扁。
+/* 窄屏：图例、道具条按顺序换行，谁都不被压扁。
    注意：这段必须放在 .legend-row 主样式之后 —— 同特异性下后写的赢。 */
 @media (max-width:860px){
   .legend-row{align-items:flex-start}
   .legend-row > .item-bar{flex:1 1 100%}
-  .legend-row > .kb-tip{margin-left:0}
 }
 
 /* ================= 夜间模式皮肤（2026-11-03） =================
@@ -953,6 +954,9 @@ body.embed .credit{display:none}
    统一在这里按"暗一档的纸面 + 半透明品牌描边"重刷一遍。
    金色系（星星 / 金币 / 蛋）保留但提亮，夜间不发脏。 */
 html[data-mode="dark"] .mask{background:rgba(0,0,0,.62)}
+/* 图例原位高亮的夜间版：浅米底在暗纸上太扎眼，换成暗底亮描边 */
+html[data-mode="dark"] .kb-legend span.on{background:rgba(255,255,255,.08);
+  box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.22)}
 html[data-mode="dark"] .result{box-shadow:0 24px 60px rgba(0,0,0,.55)}
 html[data-mode="dark"] .r-cell{background:var(--surface)}
 html[data-mode="dark"] .r-reward{background:var(--sun-bg);border-color:var(--sun-line);color:var(--sun-ink)}
@@ -1624,23 +1628,36 @@ function kbDiagram() {
   r += '</div></div>';   /* .kb / .kb-wrap */
   return r;
 }
-/* 指位图例 + 道具条同一行（2026-11-02 按标注调整）
-   图例原来在键盘框内部，跟着键盘一起缩放、右侧半行是空的；
-   把它提到键盘外面，和道具条并排占一行，指法图仍在自己那一行居中。
-   kbTip 留在最右：它随当前目标键变化，靠右更容易在余光里扫到。 */
+/* 指位图例 + 道具条同一行（2026-11-03 按标注再调）
+   图例在左，道具条独占最右（2026-11-03 牛哥要求：道具放最右边）；
+   原来挂在右端的「目标键 → 手指」文字提示（kbTip）已删——
+   键帽下方「用 ×指 敲下这个键」已经说了同一件事，两处重复反而吵。
+   图例会随当前按键在「原位置」高亮：用到哪根手指，哪枚图例点亮。 */
 function legendRow() {
   return '<div class="legend-row">' +
-    '<div class="kb-legend">' +
-      '<span><b style="background:' + KB_FINGERS.LP.color + '"></b>小指</span>' +
-      '<span><b style="background:' + KB_FINGERS.LR.color + '"></b>无名指</span>' +
-      '<span><b style="background:' + KB_FINGERS.LM.color + '"></b>中指</span>' +
-      '<span><b style="background:' + KB_FINGERS.LI.color + '"></b>食指·左手</span>' +
-      '<span><b style="background:' + KB_FINGERS.RI.color + '"></b>食指·右手</span>' +
-      '<span><b style="background:' + KB_FINGERS.TH.color + '"></b>拇指·空格</span>' +
+    '<div class="kb-legend" id="kbLegend">' +
+      '<span data-lgf="LP"><b style="background:' + KB_FINGERS.LP.color + '"></b>小指</span>' +
+      '<span data-lgf="LR"><b style="background:' + KB_FINGERS.LR.color + '"></b>无名指</span>' +
+      '<span data-lgf="LM"><b style="background:' + KB_FINGERS.LM.color + '"></b>中指</span>' +
+      '<span data-lgf="LI"><b style="background:' + KB_FINGERS.LI.color + '"></b>食指·左手</span>' +
+      '<span data-lgf="RI"><b style="background:' + KB_FINGERS.RI.color + '"></b>食指·右手</span>' +
+      '<span data-lgf="RM"><b style="background:' + KB_FINGERS.RM.color + '"></b>中指·右手</span>' +
+      '<span data-lgf="RR"><b style="background:' + KB_FINGERS.RR.color + '"></b>无名指·右手</span>' +
+      '<span data-lgf="RP"><b style="background:' + KB_FINGERS.RP.color + '"></b>小指·右手</span>' +
+      '<span data-lgf="TH"><b style="background:' + KB_FINGERS.TH.color + '"></b>拇指·空格</span>' +
     '</div>' +
     itemBar() +
-    '<span class="kb-tip" id="kbTip"></span>' +
   '</div>';
+}
+/* 图例原位高亮：给当前手指对应的图例加 .on（2026-11-03 牛哥标注） */
+function paintLegend(f) {
+  var lg = $('#kbLegend');
+  if (!lg) return;
+  lg.querySelectorAll('span.on').forEach(function (el) { el.classList.remove('on'); });
+  if (f && KB_FINGERS[f]) {
+    var el = lg.querySelector('span[data-lgf="' + f + '"]');
+    if (el) el.classList.add('on');
+  }
 }
 function paintKb(ch) {
   var box = $('#kbBox');
@@ -1648,24 +1665,16 @@ function paintKb(ch) {
   box.querySelectorAll('.kb-k.hot, .kb-k.hotsh').forEach(function (el) {
     el.classList.remove('hot', 'hotsh');
   });
-  var tip = $('#kbTip');
   var zone = (S.play && S.play.L && S.play.L.kbzone) || '';
   var info = kbKeyInfo(ch, zone);
-  if (!info) { if (tip) tip.textContent = ''; paintHands(null); paintIme(); return; }
+  if (!info) { paintLegend(null); paintHands(null); paintIme(); return; }
   var k = box.querySelector('[data-kb="' + info.id + '"]');
   if (k) k.classList.add('hot');
   if (info.shift) {
     var s = box.querySelector('[data-kb="' + (info.shift === 'L' ? 'shiftL' : 'shiftR') + '"]');
     if (s) s.classList.add('hotsh');
   }
-  if (tip) {
-    var nm = (ch === ' ') ? '空格' : ch.toUpperCase();
-    tip.textContent = info.num
-      ? ('目标键 ' + nm + ' → 右手' + KB_FINGERS[info.f].name + '（数字小键盘）')
-      : ('目标键 ' + nm + ' → ' + (info.hand === 'L' ? '左手' : '右手') +
-         KB_FINGERS[info.f].name +
-         (info.shift ? '，先按住' + (info.shift === 'L' ? '左' : '右') + 'Shift' : ''));
-  }
+  paintLegend(info.f);
   paintHands(info.f, info.shift);
   paintIme();
 }

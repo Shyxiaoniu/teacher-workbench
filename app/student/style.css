@@ -686,17 +686,17 @@ label{display:block;font-size:13px;color:var(--text-secondary);margin:12px 0 6px
 /* 轴标注：左侧排号 / 顶部列号，让「第几排第几列」一眼可读 */
 .smap-ax{
   display:flex;align-items:center;justify-content:center;
-  font-size:9px;font-weight:700;color:var(--text-secondary);
+  font-size:calc(var(--fs,11.5px) * .8);font-weight:700;color:var(--text-secondary);
   font-variant-numeric:tabular-nums;user-select:none;
 }
-.smap-ax.corner{font-size:8px;font-weight:600;gap:1px;opacity:.85}
+.smap-ax.corner{font-size:calc(var(--fs,11.5px) * .72);font-weight:600;gap:1px;opacity:.85}
 .smap-ax.corner i{font-style:normal}
 .smap-ax.axc{align-self:end;padding-bottom:1px}
 .smap-ax.axr{min-height:56px}
 .smap-cell{
   position:relative;min-height:56px;border-radius:9px;
   display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:1px;padding:16px 1px 14px;
+  gap:1px;padding:calc(var(--fs,11.5px) * 1.15 + 3px) 1px 14px;
   font-size:var(--fs,11.5px);line-height:1.2;font-weight:600;
   color:var(--text-primary);background:var(--bg-surface);
   border:1px solid var(--border);overflow:hidden;
@@ -710,36 +710,39 @@ label{display:block;font-size:13px;color:var(--text-secondary);margin:12px 0 6px
   word-break:break-all;text-align:center;line-height:1.15;
   max-height:2.35em;
 }
-/* 学号：与教师端 .seat-no2 同款，等宽小字跟在姓名下面（8 列手机一格 37px，
-   7 位学号只有 8px 才放得下；更长的学号省略号截断，宽屏自然完整） */
+/* 学号：与教师端 .seat-no2 同款，等宽小字跟在姓名下面。
+   字号随 --fs 自适应（宽屏格子大字就大，手机自动缩），
+   更长的学号省略号截断 */
 .smap-no{
   display:block;max-width:100%;overflow:hidden;
   text-overflow:ellipsis;white-space:nowrap;text-align:center;
-  font-size:8px;line-height:1.25;font-weight:500;letter-spacing:-.2px;
+  font-size:calc(var(--fs,11.5px) * .78);line-height:1.25;font-weight:500;letter-spacing:-.2px;
   color:var(--text-secondary);font-family:var(--font-mono,ui-monospace,monospace);
 }
-/* 小组条：与教师端 .seat-gname 同款——组色底白字贴顶、高度锁死不盖姓名 */
+/* 小组条：与教师端 .seat-gname 同款——组色底白字贴顶、高度锁死不盖姓名。
+   高度与字号都随 --fs 走，格子右上永远留不出给姓名的位置 */
 .smap-g{
-  position:absolute;top:0;left:0;right:0;height:13px;
+  position:absolute;top:0;left:0;right:0;
+  height:calc(var(--fs,11.5px) * 1.15 + 2px);
   display:flex;align-items:center;justify-content:space-between;gap:1px;
   padding:0 1px;border-radius:8px 8px 0 0;overflow:hidden;
   background:var(--gc,var(--brand-primary));color:#fff;
-  font-size:7.5px;font-weight:500;line-height:1;letter-spacing:.2px;
+  font-size:calc(var(--fs,11.5px) * .75);font-weight:500;line-height:1;letter-spacing:.2px;
 }
-/* 宽屏格子宽，组条恢复到与教师端接近的字号 */
-@media (min-width:421px){ .smap-g{font-size:9px} .smap-g i{font-size:8px} }
+.smap-g i{font-size:calc(var(--fs,11.5px) * .75)}
 .smap-g .gn-t{
   min-width:0;flex:1 1 auto;overflow:hidden;
   text-overflow:ellipsis;white-space:nowrap;text-align:left;font-weight:600;
 }
-.smap-g i{font-style:normal;font-size:7.5px;opacity:.92;flex-shrink:0;white-space:nowrap}
+.smap-g i{font-style:normal;font-size:calc(var(--fs,11.5px) * .75);opacity:.92;flex-shrink:0;white-space:nowrap}
 .smap-g i.lead{font-weight:700;opacity:1;background:rgba(255,255,255,.28);
   padding:0 3px;border-radius:4px}
 /* 座位号（序号）角签：与教师端 .seat-seq 同款。贴左下——右上被组条占了，
    中间是姓名行，只有底部两角是空的（右下给班干部牌） */
 .smap-seq{
   position:absolute;left:2px;bottom:2px;font-style:normal;
-  font-size:8px;font-weight:700;line-height:1;padding:2px 3px;border-radius:5px;
+  font-size:calc(var(--fs,11.5px) * .72);font-weight:700;line-height:1;
+  padding:2px 3px;border-radius:5px;
   background:var(--brand-soft);color:var(--brand-primary);
   font-variant-numeric:tabular-nums;
 }
@@ -747,7 +750,8 @@ label{display:block;font-size:13px;color:var(--text-secondary);margin:12px 0 6px
 .smap-pos{
   position:absolute;right:2px;bottom:2px;font-style:normal;
   max-width:72%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-  font-size:8.5px;font-weight:600;line-height:1;padding:2px 4px;border-radius:5px;
+  font-size:calc(var(--fs,11.5px) * .76);font-weight:600;line-height:1;
+  padding:2px 4px;border-radius:5px;
   background:linear-gradient(135deg,#FFF3D6,#FFE7AD);color:#8A6116;
 }
 .smap-cell.empty{background:transparent;border:1px dashed var(--border);opacity:.45}
@@ -808,7 +812,8 @@ html[data-mode="dark"] .smap-cell.me{color:#2A1B14}
 .smap-foot .smap-cnt{margin-left:auto;font-variant-numeric:tabular-nums}
 @media (max-width:420px){
   .smap-grid{gap:4px;min-width:calc(16px + (var(--c,9) - 1) * 36px + (var(--c,9) - 1) * 4px)}
-  .smap-cell{min-height:52px;font-size:var(--fs,11px);border-radius:8px;padding:15px 1px 14px}
+  .smap-cell{min-height:52px;font-size:var(--fs,11px);border-radius:8px;
+    padding:calc(var(--fs,11px) * 1.15 + 3px) 1px 14px}
   .smap-ax.axr{min-height:52px}
   .smap-foot{gap:10px}
 }

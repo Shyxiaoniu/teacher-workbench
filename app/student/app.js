@@ -309,13 +309,13 @@
       var gTag = push
         ? (locked
             ? '<div class="tag mut" data-locked="1">学习单已关闭</div>'
-            : '<div class="tag hot" data-act="' + esc(push.url || '') + '" data-act-title="' +
+            : '<div class="tag hot" data-act="/g/act/' + encodeURIComponent(push.id || '') + '" data-act-title="' +
               esc(push.task_title || '课堂活动') + '">进学习单</div>')
         : '<div class="tag mut">暂无学习单</div>';
       return '<div class="lesson' + (isNow ? ' now' : '') + (locked ? ' locked' : '') + '" ' +
         (push ? (locked
           ? 'data-locked="1"'
-          : 'data-act="' + esc(push.url || '') + '" data-act-title="' + esc(push.task_title || '课堂活动') + '"') : '') + '>' +
+          : 'data-act="/g/act/' + encodeURIComponent(push.id || '') + '" data-act-title="' + esc(push.task_title || '课堂活动') + '"') : '') + '>' +
         '<div class="t"><b>' + esc(p.label || ('第' + (p.seq || '') + '节')) + '</b>' + esc(st) + '</div>' +
         '<div class="m"><b>' + esc(c.name || l.course_name || '课程') + '</b>' +
         '<span>' + (push
@@ -337,13 +337,13 @@
           return '<div class="lesson' + (locked ? ' locked' : '') + '" ' +
             (locked
               ? 'data-locked="1"'
-              : 'data-act="' + esc(p.url || '') + '" data-act-title="' + esc(p.task_title || '课堂活动') + '"') + '>' +
+              : 'data-act="/g/act/' + encodeURIComponent(p.id || '') + '" data-act-title="' + esc(p.task_title || '课堂活动') + '"') + '>' +
             '<div class="t"><b>' + esc(p.course || '课堂活动') + '</b></div>' +
             '<div class="m"><b>' + esc(p.task_title || '课堂活动') + '</b>' +
             '<span>' + (locked ? '老师已关闭，暂时无法打开' : '交互式学习单 · 点开作答并提交，提交后有状态提示') + '</span></div>' +
             (locked
               ? '<div class="tag mut" data-locked="1">已关闭</div>'
-              : '<div class="tag hot" data-act="' + esc(p.url || '') + '" data-act-title="' + esc(p.task_title || '课堂活动') + '">打开学习单</div>') +
+              : '<div class="tag hot" data-act="/g/act/' + encodeURIComponent(p.id || '') + '" data-act-title="' + esc(p.task_title || '课堂活动') + '">打开学习单</div>') +
             '</div>';
         }).join('') + '</div>'
       : '';
@@ -615,6 +615,7 @@
     bind();
     bindSu();
     paintNav();
+    smapAutoSize();
     // 今日页里待交作业可直接点开
     document.querySelectorAll('[data-hw]').forEach(function (el) {
       el.onclick = function () { openHw(el.getAttribute('data-hw')); };
@@ -783,7 +784,7 @@
       (turned ? '<div class="smap-note">老师设置的讲台在' + stageCn +
         '，这里统一翻到上方显示，座位号与老师那张表一致</div>' : '') +
       '<div class="smap-scroll"><div class="smap-grid" style="--c:' + (C + 1) +
-        ';--fs:' + (C <= 5 ? 13 : C <= 7 ? 11.5 : C <= 9 ? 10 : 9) + 'px">' +
+        ';--fs:12px">' +
         cells + '</div></div>' +
       '<div class="smap-note smap-axis-note">左侧数字是第几排 · 顶部数字是第几列' +
         ' · 格子左下角是座位号</div>' +
@@ -798,6 +799,23 @@
       '</div>' +
       '</div>';
   }
+
+  /* 座位卡字号自适应（2026-11-03 牛哥反馈：字体太小看不清）：
+     不再按「列数」定字号，改按「格子实际宽度」换算，观感对齐教师端
+     （教师端 .seat-name 13.5px 配约 120~150px 格宽，比例约 11%）。
+     宽屏格子大 → 字就大；手机 8 列格子 40px → 自动缩到下限；
+     缩放窗口时 resize 监听实时重算，字号跟着格子走。 */
+  function smapAutoSize() {
+    var grid = document.querySelector('.smap-grid');
+    if (!grid) return;
+    var cell = grid.querySelector('.smap-cell');
+    if (!cell) return;
+    var w = cell.getBoundingClientRect().width;
+    if (!w) return;
+    var fs = Math.max(10.5, Math.min(14, w * 0.115));
+    grid.style.setProperty('--fs', fs.toFixed(1) + 'px');
+  }
+  window.addEventListener('resize', smapAutoSize);
 
   /* ---------------- 明细行 / 小工具（页面与弹层共用，v2.1.0） ---------------- */
   function statCard(num, label) {

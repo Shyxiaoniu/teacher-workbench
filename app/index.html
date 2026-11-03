@@ -210,6 +210,9 @@ body {
 .ui-dlg-msg { border-bottom:none; }
 .ui-dlg-msg b { font-weight:500; color:var(--brand-primary); }
 .login-foot { font-size:11px; color:var(--text-secondary); margin-top:24px; }
+/* 登录/设置页的「输入框下方」提示位：错误红字、成功绿字，占一行高度不跳动 */
+.lock-ferr { color:#E5484D; font-size:12.5px; line-height:1.5; min-height:18px; margin-top:4px; }
+.lock-ferr.ok { color:#1D9E75; font-weight:600; }
 /* 登录/锁屏右下角设计者署名：复用顶栏同款 .af-credit 样式（🐮 牛老师设计） */
 .brand-badge { position:absolute; right:18px; bottom:16px; z-index:6; color:var(--text-secondary); user-select:none; pointer-events:none; }
 @media (max-width:560px) { .brand-badge { right:14px; bottom:12px; } }
@@ -10938,14 +10941,15 @@ function clsPickerHtml() {
         String(c.id) === String(cur) ? ' selected' : ''}>${esc(c.name)}</option>`).join('')}
     </select></label>`;
 }
-/** 页内班级切换：口径与旧全局切换一致（排座配置随班存取、学生页回第 1 页） */
+/** 页内班级切换：口径与旧全局切换一致（排座配置随班存取、学生页回第 1 页）。
+    keepScroll：切班级是「原地换数据」，页面不能跳动（2026-11-03）。 */
 function setPageClass(v) {
   if (state.route === 'seats') seatCfgSave();
   state.currentClass = (v === 'all' || v == null || v === '') ? 'all' : v;
   state.stuPage = 1;
   try { LS.set('wb-current-class', String(state.currentClass)); } catch (_) {}
   if (state.route === 'seats') seatCfgLoad();
-  renderContent();
+  renderContent({ keepScroll: true });
 }
 window.setPageClass = setPageClass;
 
@@ -11210,6 +11214,12 @@ function renderContent(opts = {}) {
      不用给几千处增删改逐个加持久化调用。节流 600ms，连点也不卡。 */
   dbPersistSoon();
 
+  /* keepScroll（2026-11-03 牛哥反馈）：.content 自己是滚动容器，
+     innerHTML 一换 scrollTop 就归零——值日/分组等页切个班级，
+     整页内容会"自己动一下"（滚回顶部）。传 keepScroll 的重绘
+     （页内切班级、搜索这类原地刷新）先记下滚动位置，渲染完还原。 */
+  const prevScrollTop = opts.keepScroll ? c.scrollTop : 0;
+
   /* 各页面渲染函数内部统一走 dbT()，预览模式读 DEMO_DATA、登录后读 DB，
      所以两种模式都能直接渲染。只有缺渲染函数的模块才回落到占位页。 */
   if (state.route === 'home') {
@@ -11292,6 +11302,9 @@ function renderContent(opts = {}) {
 
   /* 最后一步：把这一页的「功能说明」统一折成按钮，减少首屏占用 */
   try { autoFoldContent(); } catch (e) {}
+
+  /* 还原滚动位置：内容与工具条都挂载完、高度定型后再拨回去，才拨得准 */
+  if (opts.keepScroll && prevScrollTop) c.scrollTop = prevScrollTop;
 }
 
 /* ============================================================
@@ -15668,13 +15681,13 @@ function renderActivity() {
 
     <div class="act-card">
       <div class="act-card-h">② 设计交互式学习单（活动提交 API）</div>
-      <div class="act-muted" style="margin-bottom:10px">上传一份网页文件（.html）或用默认模板，系统自动注入<b>学号 / 姓名 / 班级</b>登录、匹配本班花名册、并接入活动提交接口。每道标了 <code>q-block</code> 的题目都会自动长出独立提交按钮，每个按钮会在数据大屏开一个专属数据显示窗口。部署后点①里的活动即可发放给学生。</div>
+      <div class="act-muted" style="margin-bottom:10px">上传一份网页文件（.html）或用默认模板，系统会自动接入活动提交接口，并注入学生的<b>学号 / 姓名 / 班级</b>：学生从学生端打开时自动识别身份；直接打开链接时输入学号，姓名与班级自动匹配本班名单。网页里每个「题目块」都会自动长出独立的提交按钮，每个按钮在数据大屏有专属的数据显示窗口。部署后点①里的活动即可发放给学生。</div>
       <div class="act-cust-row">
         <label class="btn btn-ghost btn-sm" style="cursor:pointer">📤 上传网页文件<input id="actCustFile" type="file" accept=".html,.htm" style="display:none" onchange="actCustomLoadFile(event)"></label>
         <button class="btn btn-ghost btn-sm" onclick="actCustomUseDefault()">📝 用默认模板</button>
         <label class="act-act" style="cursor:pointer"><input id="actCustPerQ" type="checkbox" checked style="margin:0" onchange="actRenderFileCfg()"> 每题单独提交按钮</label>
       </div>
-      <div class="act-cust-tip">约定：把每道题包进 <code>&lt;div class="q-block" data-btn="第1题"&gt;…题目与输入框…&lt;/div&gt;</code>；要让学生一键跳转外链，加 <code>&lt;div data-ext-url="https://…"&gt;链接说明&lt;/div&gt;</code>。不带 <code>q-block</code> 或取消勾选时，整页一个提交按钮。</div>
+      <div class="act-cust-tip">约定：把每道题包进一个「题目块」——<code>&lt;div class="act-q" data-btn="第1题"&gt;…题目与输入框…&lt;/div&gt;</code>，系统按题目块逐题生成提交按钮；要让学生一键跳转外链，加 <code>&lt;div data-ext-url="https://…"&gt;链接说明&lt;/div&gt;</code>。页面里没有题目块、或取消勾选「每题单独提交按钮」时，整页只保留一个提交按钮。</div>
       <textarea id="actCustHtml" class="act-cust-edit" spellcheck="false" placeholder="在此粘贴/编辑网页 HTML，或点「上传网页文件」「用默认模板」" oninput="actFileCfgDebounced()"></textarea>
       <div id="actFileCfg" class="act-filecfg"></div>
       <div id="actSubmitCfg" class="act-filecfg act-subcfg"></div>
@@ -16511,15 +16524,15 @@ function actCustomDefaultTpl() {
 '<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">',
 '<title>课堂活动页</title>',
 '<style>body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;max-width:680px;margin:24px auto;padding:0 16px;color:#1A2E28;line-height:1.7}',
-'.q-block{border:1px solid #DDE5E1;border-radius:14px;padding:14px 16px;margin:14px 0}',
+'.act-q{border:1px solid #DDE5E1;border-radius:14px;padding:14px 16px;margin:14px 0}',
 'label{display:block;font-weight:600;margin:10px 0 4px}',
 'input,textarea{width:100%;padding:10px;border:1px solid #cfe3dc;border-radius:10px;box-sizing:border-box;font-size:14px}',
 '.ext{background:#E1F5EE;border:1px dashed #0F6E56;border-radius:12px;padding:12px 14px;margin:14px 0}</style></head>',
 '<body>',
 '<h1>课堂探究活动</h1><p>请先登录，再按题目逐一提交。每道题有独立提交按钮，老师能在数据大屏看到每一题的提交情况。</p>',
-'<div class="q-block" data-btn="第1题 · 我的发现"><h3>第 1 题：写出你的发现</h3>',
+'<div class="act-q" data-btn="第1题 · 我的发现"><h3>第 1 题：写出你的发现</h3>',
 '<label>发现内容</label><textarea name="发现内容" rows="3" placeholder="写下你的观察与想法"></textarea></div>',
-'<div class="q-block" data-btn="第2题 · 我的作品"><h3>第 2 题：作品说明</h3>',
+'<div class="act-q" data-btn="第2题 · 我的作品"><h3>第 2 题：作品说明</h3>',
 '<label>作品说明</label><input name="作品说明" placeholder="一句话介绍你的作品">',
 '<label>作品文件</label><input type="file" name="作品文件"></div>',
 '<div class="ext" data-ext-url="https://www.example.com/reference"><b>参考资料</b><br>点击下方的按钮可一键跳转到外部参考资料页面。</div>',
@@ -16535,8 +16548,9 @@ function actCustomUseDefault() { const el = document.getElementById('actCustHtml
 function actCustStatus(t, cls) { const el = document.getElementById('actCustStatus'); if (el) { el.textContent = t || ''; el.className = 'act-muted' + (cls ? (' ' + cls) : ''); } }
 function actCustomClear() { const el = document.getElementById('actCustHtml'); if (el) el.value = ''; actCustStatus('已清空'); actUpdateCustomLink(true); actRenderFileCfg(); }
 
-/* ===== 文件题设置：只在含 <input type="file"> 的 .q-block 上显示「允许空文件提交」 =====
-   存储：勾选后在该 .q-block 的起始标签写入 data-allow-empty="1"，取消则移除。
+/* ===== 文件题设置：只在含 <input type="file"> 的题目块（.act-q）上显示「允许空文件提交」 =====
+   存储：勾选后在该题目块的起始标签写入 data-allow-empty="1"，取消则移除。
+   兼容：老版本学习单用的是 .q-block 类名，解析时两种都认。
    配置随 HTML 一起保存 / 生成 / 下发（课件库、学习单快照都带着它），不依赖额外文件。 */
 function actFileBlocks() {
   const el = document.getElementById('actCustHtml');
@@ -16544,7 +16558,7 @@ function actFileBlocks() {
   if (!html) return { html: '', doc: null, fileBlocks: [] };
   let doc;
   try { doc = new DOMParser().parseFromString(html, 'text/html'); } catch (e) { return { html: html, doc: null, fileBlocks: [] }; }
-  const blocks = Array.from(doc.querySelectorAll('.q-block'));
+  const blocks = Array.from(doc.querySelectorAll('.act-q,.q-block'));
   const fileBlocks = [];
   blocks.forEach(function (b, i) {
     if (!b.querySelector('input[type="file"]')) return;          // 仅文件提交类题目
@@ -16580,13 +16594,13 @@ function actRenderFileCfg() {
 }
 let _qfFileCfgTimer = null;
 function actFileCfgDebounced() { if (_qfFileCfgTimer) clearTimeout(_qfFileCfgTimer); _qfFileCfgTimer = setTimeout(actRenderFileCfg, 350); }
-/* 把某个 .q-block 的某个属性写入文本框 HTML（DOM 解析 → 改 → 整文档序列化） */
+/* 把某个题目块（.act-q，兼容旧 .q-block）的某个属性写入文本框 HTML（DOM 解析 → 改 → 整文档序列化） */
 function actWriteBlockAttr(idx, attr, value) {
   const el = document.getElementById('actCustHtml'); if (!el) return false;
   const html = el.value;
   let doc;
   try { doc = new DOMParser().parseFromString(html, 'text/html'); } catch (e) { return false; }
-  const b = doc.querySelectorAll('.q-block')[idx]; if (!b) return false;
+  const b = doc.querySelectorAll('.act-q,.q-block')[idx]; if (!b) return false;
   if (value) b.setAttribute(attr, value); else b.removeAttribute(attr);
   const hasDoctype = /^\s*<!doctype/i.test(html);
   el.value = (hasDoctype ? '<!doctype html>\n' : '') + doc.documentElement.outerHTML;
@@ -16606,7 +16620,7 @@ function actRenderSubmitCfg() {
   if (!html) { box.innerHTML = ''; return; }
   let doc;
   try { doc = new DOMParser().parseFromString(html, 'text/html'); } catch (e) { box.innerHTML = ''; return; }
-  const blocks = Array.from(doc.querySelectorAll('.q-block'));
+  const blocks = Array.from(doc.querySelectorAll('.act-q,.q-block'));
   if (!blocks.length) { box.innerHTML = ''; return; }
   const rows = blocks.map(function (b, i) {
     const h = b.querySelector('h1,h2,h3,h4');
@@ -16712,7 +16726,7 @@ function actBuildCustomPage(html, opts) {
   R.push('actResolveApi();');
   R.push('actRoster().then(function(){');
   R.push('var need=document.querySelectorAll("[data-act-needlogin]");if(!ACT_TEST){need.forEach(function(b){b.disabled=true})}');
-  R.push('var blocks=document.querySelectorAll(".q-block");');
+  R.push('var blocks=document.querySelectorAll(".act-q,.q-block");');
   R.push('var _customBtns=[];for(var _ci=0;_ci<blocks.length;_ci++){var _cl=(blocks[_ci].getAttribute("data-submit-label")||"").trim();if(_cl)_customBtns.push([blocks[_ci],_cl])}');
   R.push('if(_customBtns.length){_customBtns.forEach(function(_p){var b=_p[0],lbl=_p[1];var foot=document.createElement("div");foot.style.marginTop="12px";var btn=document.createElement("button");btn.className="act-submit-btn";btn.setAttribute("data-act-needlogin","");btn.textContent=lbl;btn.onclick=function(){actSubmitBlock(btn,b,lbl)};var st=document.createElement("span");st.setAttribute("data-act-status","");st.className="act-st";foot.appendChild(btn);foot.appendChild(st);b.appendChild(foot)})}');
   R.push('else if(BLOCKS_PER_Q&&blocks.length){blocks.forEach(function(b,idx){var lbl=b.getAttribute("data-btn")||((b.querySelector("h2,h3,h4")||{}).textContent)||("第"+(idx+1)+"题");var foot=document.createElement("div");foot.style.marginTop="12px";var btn=document.createElement("button");btn.className="act-submit-btn";btn.setAttribute("data-act-needlogin","");btn.textContent="提交："+lbl;btn.onclick=function(){actSubmitBlock(btn,b,lbl)};var st=document.createElement("span");st.setAttribute("data-act-status","");st.className="act-st";foot.appendChild(btn);foot.appendChild(st);b.appendChild(foot)})}');
@@ -17072,7 +17086,7 @@ function actDashboardHtml(j, subs, matched, clsStus, cls) {
           + '可展开下方「本活动全部提交」核对原始数据。</div>'
         : '')
     + '<div class="act-sec"><h3>本班提交趋势（按日）</h3><canvas id="actChartTrend" width="320" height="170"></canvas></div>'
-    + '<div class="act-sec"><h3>学生作品（最近 8 个，点开即看）</h3>'
+    + '<div class="act-sec"><h3>学生作品</h3>'
     +   '<div id="actRecentBox"></div></div>'
     + '<div class="act-sec"><h3>提交名单（本班）</h3>'
     +   '<div class="act-rtools">'
@@ -17082,7 +17096,7 @@ function actDashboardHtml(j, subs, matched, clsStus, cls) {
     +     '<span class="act-rt-hint" id="actRosterCount">' + (rv.kw ? ('筛选出 ' + rv.rows.length + ' / ' + rv.total + ' 人') : '') + '</span>'
     +   '</div>'
     +   '<div class="act-roster" id="actRosterList">' + rosterHtml + '</div>' + missHtml + '</div>'
-    + '<div class="act-sec"><h3>最近提交明细（近 12 条）</h3>' + actTableHtml(matched, 12) + '</div>'
+    + '<div class="act-sec"><h3>最近提交明细' + (matched.length ? '（近 12 条）' : '') + '</h3>' + actTableHtml(matched, 12) + '</div>'
     + actButtonWindowsHtml(matched)
     + (subs.length > matched.length
         ? '<details class="act-allsubs"' + (actAllSubsOpen ? ' open' : '') + ' ontoggle="actAllSubsToggle(this.open)"><summary>本活动全部提交（' + subs.length + ' 份，不限班级，已去重）</summary>' + actTableHtml(subs, 0) + '</details>'
@@ -17093,7 +17107,10 @@ window.actDashboardHtml = actDashboardHtml;
 // 数据大屏管理：一键清空 / 删除单条提交记录（教师已登录即可）
 async function actClearSubs() {
   if (!actActiveId) { toast('请先选择活动'); return; }
-  const ok = await uiConfirm('确定清空本活动「' + actActiveId + '」的全部提交数据吗？此操作不可恢复。', { title: '一键清空数据' });
+  // 弹窗里显示活动标题（而不是看不出含义的任务号），选不到时才退回任务号
+  const t = actTaskList.find(x => x.task_id === actActiveId);
+  const tName = (t && String(t.title || '').trim()) || actActiveId;
+  const ok = await uiConfirm('确定清空活动「' + tName + '」的全部提交数据吗？此操作不可恢复。', { title: '一键清空数据' });
   if (!ok) return;
   try {
     const r = await fetch('/api/v2/act-clear?task=' + encodeURIComponent(actActiveId), { method: 'POST' });
@@ -32871,18 +32888,20 @@ function renderLock(setup) {
       <div class="login-sub">${setup
         ? '设置一个本地密码：以后打开本工具都要输它才能浏览。仅本机、不联网、不保存明文。'
         : '请输入本地密码解锁（数据只存在本机浏览器）'}</div>
-      ${setup ? `<input id="lockPwd1" class="fl-inp" type="password" placeholder="设置密码（至少 8 位）" style="margin-bottom:10px">` : ''}
-      <input id="lockPwd" class="fl-inp" type="password" placeholder="${setup ? '再输一遍密码' : '本地密码'}">
-      ${setup ? `
+      ${setup ? `<input id="lockPwd1" class="fl-inp" type="password" placeholder="设置密码（至少 8 位）" style="margin-bottom:2px">
+      <div id="lockPw1Err" class="lock-ferr"></div>
+      <input id="lockPwd" class="fl-inp" type="password" placeholder="再输一遍密码" style="margin-top:8px">
+      <div id="lockPwTip" class="lock-ferr"></div>
       <div style="display:flex;gap:8px;align-items:center;margin-top:14px;font-size:12px;color:var(--text-secondary)">
         <span style="flex:1;height:1px;background:var(--border)"></span>密保问题（选填，用于找回密码）<span style="flex:1;height:1px;background:var(--border)"></span>
       </div>
       <input id="lockQ" class="fl-inp" type="text" placeholder="密保问题，如：我第一只宠物的名字？" style="margin-top:10px">
       <input id="lockA" class="fl-inp" type="text" placeholder="密保答案" style="margin-top:8px">
+      <div id="lockQaErr" class="lock-ferr"></div>
       <input id="lockHint" class="fl-inp" type="text" placeholder="密码提示（可选，忘记时看一眼）" style="margin-top:8px">`
-      : ''}
-      <div id="lockErr" style="color:#E5484D;min-height:18px;font-size:13px;margin-top:8px"></div>
-      <button class="btn btn-primary" id="lockBtn" style="width:100%;margin-top:4px">${setup ? '设置并进入' : '解锁'}</button>
+      : `<input id="lockPwd" class="fl-inp" type="password" placeholder="本地密码">
+      <div id="lockErr" class="lock-ferr"></div>`}
+      <button class="btn btn-primary" id="lockBtn" style="width:100%;margin-top:10px">${setup ? '设置并进入' : '解锁'}</button>
       ${setup ? `
       <button class="btn" id="lockDemo" type="button" style="width:100%;margin-top:8px">
         先逛逛界面（不设密码）</button>
@@ -32894,16 +32913,25 @@ function renderLock(setup) {
       <div class="login-foot">${setup ? '密码只存在这台电脑上；忘记密码可答密保问题重设，或清空本机数据。' : '本地密码锁 · 数据不离开本机'}</div>
     </div></div>`;
   const submit = () => {
+    /* 提示一律打在「对应输入框的正下方」（2026-11-03 牛哥要求）：
+       密码太短 → 第一个密码框下；两次不一致 → 确认框下的实时提示位；
+       密保问题 → 密保答案框下；解锁失败 → 密码框下。 */
     const err = document.getElementById('lockErr');
+    const err1 = document.getElementById('lockPw1Err');
+    const tip = document.getElementById('lockPwTip');
+    const qaErr = document.getElementById('lockQaErr');
     if (setup) {
       const p1 = document.getElementById('lockPwd1').value;
       const p2 = document.getElementById('lockPwd').value;
-      if (p1.length < 8) { err.textContent = '密码至少 8 位'; return; }
-      if (p1 !== p2) { err.textContent = '两次输入不一致'; return; }
+      if (err1) err1.textContent = '';
+      if (tip) tip.textContent = '';
+      if (qaErr) qaErr.textContent = '';
+      if (p1.length < 8) { if (err1) err1.textContent = '密码至少 8 位'; return; }
+      if (p1 !== p2) { if (tip) tip.textContent = '两次输入不一致'; return; }
       const q = (document.getElementById('lockQ').value || '').trim();
       const a = (document.getElementById('lockA').value || '').trim();
       const hint = (document.getElementById('lockHint').value || '').trim();
-      if ((q && !a) || (!q && a)) { err.textContent = '密保问题和答案要一起填，或都留空'; return; }
+      if ((q && !a) || (!q && a)) { if (qaErr) qaErr.textContent = '密保问题和答案要一起填，或都留空'; return; }
       lockSet(p1, hint).then(async () => {
         deriveDataKey(p1, lockSalt());
         if (q && a) await lockSetQA(q, a);
@@ -32911,14 +32939,34 @@ function renderLock(setup) {
       });
     } else {
       const p = document.getElementById('lockPwd').value;
-      if (!p) { err.textContent = '请输入密码'; return; }
+      if (!p) { if (err) err.textContent = '请输入密码'; return; }
       lockCheck(p).then(ok => {
         if (ok) { deriveDataKey(p, lockSalt()); goToApp(); }
-        else { err.textContent = '密码错误，请重试'; document.getElementById('lockPwd').value = ''; }
+        else { if (err) err.textContent = '密码错误，请重试'; document.getElementById('lockPwd').value = ''; }
       });
     }
   };
   document.getElementById('lockBtn').onclick = submit;
+  /* 输入密码时实时核对（2026-11-03）：两遍都填了就当场告诉结果——
+     一致绿勾、不一致红字，不用等点按钮才发现打错了。 */
+  if (setup) {
+    const tip = document.getElementById('lockPwTip');
+    const live = () => {
+      if (!tip) return;
+      const p1 = document.getElementById('lockPwd1').value;
+      const p2 = document.getElementById('lockPwd').value;
+      if (p1 && p2 && p1 === p2) {
+        tip.textContent = '✓ 两次输入一致'; tip.className = 'lock-ferr ok';
+      } else if (p2 && p1) {
+        tip.textContent = '两次输入不一致'; tip.className = 'lock-ferr';
+      } else { tip.textContent = ''; tip.className = 'lock-ferr'; }
+      const e1 = document.getElementById('lockPw1Err'); if (e1) e1.textContent = '';
+    };
+    ['lockPwd1', 'lockPwd'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener('input', live);
+    });
+  }
   const demoBtn = document.getElementById('lockDemo');
   if (demoBtn) demoBtn.onclick = () => startDemo();
   root.querySelector('.login-card').addEventListener('keydown', e => { if (e.key === 'Enter') submit(); });
@@ -33427,9 +33475,6 @@ function cwLibPanelHtml() {
         </div>
         <label class="cw-selall"><input type="checkbox" id="cwSelAll" onchange="cwSelAllToggle(this.checked)"> 全选本课节</label>
         <span class="cw-muted" id="cwToolbarHint"></span>
-        <span class="sp"></span>
-        <button class="btn btn-sm" data-batch="1" onclick="cwPushDialog(this)"
-                title="把勾选的文件一次下发给一个或多个班级">⬇ 一键下发</button>
       </div>
       <div class="cw-selbar" id="cwSelBar" hidden>
         <span>已选 <b id="cwSelCount">0</b> 个文件</span>

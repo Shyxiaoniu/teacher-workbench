@@ -1143,6 +1143,11 @@ class Handler(LEG.Handler):
                                         "请回到学生端重新登录后再打开这个环节。"), 403)
 
         parts = [p for p in path.split("/") if p]
+        # 课堂活动学习单入口：/g/act/<push_id>（2026-11-03）
+        # 与导学单同款机制：校验身份与签到状态后，把票和身份挂在 URL 上再跳。
+        if len(parts) >= 2 and parts[1] == "act":
+            return self._activity_gate(r, parts[2] if len(parts) > 2 else "")
+
         gid = urllib.parse.unquote(parts[1]) if len(parts) > 1 else ""
         try:
             idx = int(parts[2]) if len(parts) > 2 else 0
@@ -1210,6 +1215,69 @@ class Handler(LEG.Handler):
             "wbTask": task,
             "wbBase": public_base(self.headers),
             "wbGid": str(gid),
+        })
+        return self._redirect(url + sep + qs)
+
+    def _activity_gate(self, r, push_id):
+        """课堂活动学习单入口：/g/act/<push_id>（2026-11-03）。
+
+        学生端打开学习单统一走这里，三件事：
+        ① 身份注入：把「票 + 学号/姓名/班级」挂到学习单 URL 上——以前学生端
+           直接 window.open 裸链接，页面拿不到身份，教师端导入的学生
+           班级/姓名/学号在学习单上永远显示不出来；
+        ② 签到闸门：今天一笔有效签到都没有（或缺勤）就不放行，
+           先回学生端签到（牛哥要求：不签到不能打开课程对应的学习单）；
+        ③ 发放校验：只放行本班、已发放（published）的学习单。
+        """
+        push = None
+        for row in STORE.table_rows("activity_pushes"):
+            if str(row.get("id")) == str(push_id):
+                push = row
+                break
+        if not push or str(push.get("class_id")) != str(r.get("class_id")):
+            return self._html(_tip_page("找不到这份学习单",
+                                        "它可能已被老师收回，或者不属于你所在的班级。"), 404)
+        if str(push.get("status") or "published") != "published":
+            return self._html(_tip_page("这份学习单还没有发放",
+                                        "老师还没发放或已收回，等老师重新开启后再打开。"), 403)
+
+        # 签到闸门：出勤/迟到/请假都算有效签到；一笔都没有或缺勤 → 拦下
+        d = time.strftime("%Y-%m-%d")
+        ok_st = ("checked", "late", "sick", "personal", "present", "early_leave")
+        signed = any(
+            str(a.get("status") or "") in ok_st
+            for a in STORE.table_rows("attendance")
+            if str(a.get("student_id")) == str(r.get("id"))
+            and str(a.get("date") or "") == d and not a.get("deleted"))
+        if not signed:
+            return self._html(_tip_page(
+                "请先签到",
+                "今天还没有你的签到记录，先回到学生端完成签到，再打开这门课的学习单。"), 403)
+
+        url = str(push.get("url") or "").strip()
+        if not url:
+            return self._html(_tip_page("这份学习单还没有可打开的地址",
+                                        "老师可能还没完成配置，稍后再试。"), 404)
+        if url.startswith("/"):
+            url = public_base(self.headers) + url
+
+        task = str(push.get("task_id") or "").strip()
+        cls_name = self._class_name(r.get("class_id"))
+        tok = new_gticket({
+            "sid": str(r.get("id") or ""),
+            "no": str(r.get("student_no") or ""),
+            "name": str(r.get("name") or ""),
+            "cls": cls_name,
+            "gid": "", "idx": 0, "task": task,
+        })
+        sep = "&" if "?" in url else "?"
+        qs = urllib.parse.urlencode({
+            "wbT": tok,
+            "wbSid": str(r.get("student_no") or ""),
+            "wbName": str(r.get("name") or ""),
+            "wbCls": cls_name,
+            "wbTask": task,
+            "wbBase": public_base(self.headers),
         })
         return self._redirect(url + sep + qs)
 
