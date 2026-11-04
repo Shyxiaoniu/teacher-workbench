@@ -26700,6 +26700,11 @@ function openImportClass(id) {
   const c = (dbT('classes') || []).find(x => x.id === Number(id));
   if (!c) return;
   window.__clsImpClass = Number(id);
+  /* 2026-11-04 修 bug：__clsImp 是全局暂存，以前打开弹窗不重置——
+     上一次（甚至别的班的）解析结果残留在里面，这次粘贴新名单会被
+     追加合并，确认导入时旧名单一并写进来（老师以为剪贴板带了旧内容）。
+     每次打开弹窗都从干净状态开始；同一次弹窗内分批粘贴仍会追加。 */
+  window.__clsImp = null;
   showFloat(`导入名单 · ${c.name}`, `
     <div class="imp-tip">
       支持 <b>.xlsx</b>（Excel/WPS 直接保存的文件）和 <b>.csv</b>。<br>
@@ -26717,7 +26722,8 @@ function openImportClass(id) {
     </div>
     <!-- 没有 Excel 的老师占多数：直接从微信/纸质名单复制粘贴就能用（2026-10-28 加） -->
     <div style="margin-top:14px">
-      <div class="modal-lb" style="margin-bottom:6px">或者直接粘贴名单</div>
+      <div class="modal-lb" style="margin-bottom:6px">或者直接粘贴名单
+        <span class="dim" style="font-weight:400">（多次粘贴会追加进下面的列表，重复的行自动跳过）</span></div>
       <textarea id="clsPaste" class="fl-inp" rows="4"
         style="width:100%;resize:vertical;line-height:1.6"
         placeholder="一行一个学生，学号和姓名用空格 / 逗号隔开，例如：&#10;01 王小明&#10;02,李思思&#10;张宇航"></textarea>
@@ -26726,6 +26732,7 @@ function openImportClass(id) {
     </div>
     <div id="clsPreview" style="margin-top:10px"></div>
     <button class="btn btn-ghost btn-sm" type="button" onclick="clsAddRow()" style="margin-top:8px">＋ 手动添加一行</button>
+    <button class="btn btn-ghost btn-sm" type="button" onclick="clsClearParsed()" style="margin-top:8px">🗑 清空列表</button>
     <div class="hwp-acts">
       <button class="btn btn-primary" type="button" id="clsApplyBtn" disabled
         onclick="applyClassImport(${c.id})">确认导入</button>
@@ -27046,12 +27053,31 @@ function clsPasteApply() {
                     hit: no ? byNo.get(no) : (byKey.get(mkey) || null), sex, parent, phone });
     added++;
   });
-  if (!added) { toast('没解析出姓名，检查每行是不是「学号 姓名」格式'); return; }
+  if (!added) {
+    /* 2026-11-04 修 bug：以前只有一句「没解析出姓名」——
+       如果是重复粘贴同一份名单，所有行都因「已在列表里」被跳过，
+       老师看到的却是「没解析出姓名」，完全被误导（还以为粘贴失败）。
+       按真实原因分开提示。 */
+    if (skipped) { toast(`这批 ${skipped} 行都已在上面的列表里（重复行自动跳过，无需再粘贴）`); }
+    else { toast('没解析出姓名，检查每行是不是「学号 姓名」格式'); }
+    return;
+  }
   renderClsPreview();
   if (ta) ta.value = '';
-  toast(`已解析 ${added} 名学生${skipped ? `，跳过 ${skipped} 行` : ''}，核对后点「确认导入」`);
+  toast(`已解析 ${added} 名学生${skipped ? `，跳过 ${skipped} 行（重复或格式不对）` : ''}，核对后点「确认导入」`);
 }
 window.clsPasteApply = clsPasteApply;
+/** 清空已解析的名单（含文件导入的），从零开始（2026-11-04 加） */
+function clsClearParsed() {
+  window.__clsImp = null;
+  const ta = document.getElementById('clsPaste');
+  if (ta) ta.value = '';
+  renderClsPreview();
+  const btn = document.getElementById('clsApplyBtn');
+  if (btn) btn.disabled = true;
+  toast('已清空，可重新粘贴或选文件');
+}
+window.clsClearParsed = clsClearParsed;
 function applyClassImport(clsId) {
   const d = window.__clsImp;
   if (!d || !d.parsed.length) { toast('先选 CSV 文件'); return; }
@@ -27108,6 +27134,7 @@ function applyClassImport(clsId) {
     added++;
   });
   closeFloat();
+  window.__clsImp = null;    // 导入完成即清空，别让这份名单泄漏到下一次打开（2026-11-04 修 bug）
   syncClassCount();          // 班级人数跟着学生表重算，否则班级卡片和首页统计还显示 0
   loadClasses();
   renderContent();
