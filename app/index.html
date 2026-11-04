@@ -5121,6 +5121,29 @@ body:has(.mini-bar) .corner-credit { display:none; }
 }
 .tt-p:hover .tt-p-del { opacity:1; }
 .tt-p-del:hover { background:var(--error-soft); color:var(--status-error); }
+/* 课程卡右上角「删除这节排课」（2026-11-05）
+   和上面节次删除钮是同一套视觉语言：默认隐形，鼠标移到卡片上才浮现，
+   免得一屏课表到处是 ✕；触屏没有 hover，就常显但压低不透明度。 */
+.tt-cell .tt-chip { position:relative; cursor:pointer; }
+.tt-chip-del {
+  position:absolute; right:1px; top:1px; width:15px; height:15px; padding:0;
+  border:none; border-radius:5px; background:transparent; color:var(--text-secondary);
+  font-size:10px; line-height:1; cursor:pointer; opacity:0; transition:.12s;
+  display:flex; align-items:center; justify-content:center; z-index:2;
+}
+.tt-chip:hover .tt-chip-del,
+.tt-chip-del:focus-visible { opacity:1; }
+.tt-chip-del:hover { background:var(--error-soft); color:var(--status-error); }
+/* 冲突格子的 ⚠ 角标也在右上角，和 ✕ 撞位置：鼠标进卡片时角标先让位，
+   老师此刻要操作的是这张卡，不是读角标（移开就回来）。 */
+.tt-cell.has-conflict:hover::after { opacity:0; transition:opacity .12s; }
+@media (hover:none) {
+  .tt-chip-del { opacity:.5; }
+  /* 触屏没有 hover 阶段：把角标往左挪，两个控件都留得下 */
+  .tt-cell.has-conflict::after { right:21px; }
+}
+/* 整张课表一节课都没有时的引导条（删掉最后一节后出现） */
+.tt-empty-bar { margin-bottom:10px; border-left:3px solid var(--brand-primary); }
 /* 大课间等非上课节次 */
 .tt-row-break { background:var(--bg-page); }
 .tt-row-break .tt-p-name { font-weight:400; color:var(--text-secondary); }
@@ -10766,6 +10789,12 @@ async function goToApp(returnTo) {
   if (!await authGate()) return;
   state.__booting = true;        // 启动期间 renderPage 只记路由不渲染（防解锁后空白一闪）
 
+  /* 学习单自愈巡检（2026-11-05）：每天第一次进工作台，静默把「设了学习单」的
+     课程重新部署一遍。资料页推送 / 设学习单这两个动作以前都不部署学生页，
+     历史数据里 custom_templates[task] 很可能还是默认模板 —— 扫一遍就正过来了。
+     放到启动 3 秒后，别跟首屏渲染抢网络。 */
+  setTimeout(() => { try { cwHealSheets(); } catch (e) {} }, 3000);
+
   // 首次登录写入种子配置
   // 种子和配置加载都不能阻断进应用：失败就降级，不让用户卡在加载中
   try { await ensureSeed(); }
@@ -16239,6 +16268,76 @@ async function actDeploySheet(t, course) {
 }
 window.actDeploySheet = actDeploySheet;
 
+/** 让「资料里设为学习单的那份网页」立刻成为该课程的学生页（2026-11-05）
+ *
+ *  背景（牛哥反馈的缺陷）：学习单有两条下发路径 ——
+ *    ① 大屏「📤 下发」→ actDeploySheet 把网页注入运行时，写进
+ *       custom_templates[task]，学生端 /submit/custom.html?task=… 拿到的是它；
+ *    ② 资料页「⬇ 推送」→ 只在 materials 表里加一条记录，**从不部署**。
+ *  于是从资料进去的学生，服务端按 task 取到的还是上一次部署的东西
+ *  （多半是更早一次大屏下发时的默认模板），永远不是老师做的那份网页。
+ *  这里把部署动作补到资料侧：找/建同名任务 → 走同一条 actDeploySheet。
+ */
+async function cwEnsureSheetDeployed(course) {
+  course = String(course || '').trim();
+  if (!course || course === '未分课程') return false;
+  let sheet = '';
+  try { sheet = await actSheetOf(course); } catch (e) { sheet = ''; }
+  if (!sheet) return false;            // 没设学习单：这门课本来就用默认模板，不必动
+  let t = null;
+  try {
+    const r = await fetch(actApiBase() + '/tasks', { mode: 'cors' });
+    if (r.ok) {
+      const j = await r.json();
+      t = ((j && j.tasks) || []).find(x =>
+        String(x.title || '').trim() === course
+        || String(x.course || '').trim() === course) || null;
+    }
+  } catch (e) {}
+  if (!t) {                            // 大屏还没为这门课建过任务 → 建一个同名的
+    try {
+      const r = await fetch('/api/v2/teacher/activity/save', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ task_id: '', title: course, description: '',
+                               class_id: 0, course: course })
+      });
+      const j = await r.json();
+      if (j && j.ok && j.task) { t = j.task; actTaskList = (actTaskList || []).concat([t]); }
+    } catch (e) {}
+  }
+  if (!t) return false;
+  if (!String(t.course || '').trim()) t.course = course;
+  /* 大屏下拉里可能还留着别的课选中的网页，这里临时清空，
+     让 actDeploySheet 按「这门课」重新取一次（否则会拿错文件） */
+  const bak = actSheetFile;
+  actSheetFile = null;
+  try { return await actDeploySheet(t, course); }
+  catch (e) { return false; }
+  finally { actSheetFile = bak; }
+}
+window.cwEnsureSheetDeployed = cwEnsureSheetDeployed;
+
+/** 学习单自愈巡检（2026-11-05）：每天第一次打开工作台时，把所有「设了学习单」
+ *  的课程重新部署一遍。历史数据里 custom_templates[task] 可能还是默认模板
+ *  （资料页推送/设学习单以前都不部署），扫一遍就被正确网页覆盖掉。
+ *  每天只跑一次，静默执行，不打扰老师。 */
+async function cwHealSheets() {
+  try {
+    if (LS.get('wb-sheet-heal') === today()) return;
+    LS.set('wb-sheet-heal', today());
+    const cfg = await cwConfigCached(true);
+    const names = ((cfg && cfg.courses) || [])
+      .map(c => String(c.name || '').trim()).filter(Boolean);
+    let fixed = 0;
+    for (const n of names) {
+      if (await cwEnsureSheetDeployed(n)) fixed++;
+    }
+    if (fixed) console.log('[学习单] 已按资料里的网页同步 ' + fixed + ' 门课的学生页');
+  } catch (e) {}
+}
+window.cwHealSheets = cwHealSheets;
+
 async function actLoadTaskList() {
   const sel = document.getElementById('actTaskSel');
   if (!sel) return;
@@ -19770,14 +19869,43 @@ function lessonConflicts(dow, pid, courseId, wp, cls) {
 }
 window.lessonConflicts = lessonConflicts;
 
+/** 课程卡右上角 ✕：先问一句再删（课表一屏几十个格子，误点一下就没了太危险）。
+    确认后走 delLesson —— 按「星期 + 节次 + 班级」精确删，
+    同一格如果是「全部班级」视图里的别的班，不受影响。 */
+async function delLessonAsk(dow, pid, clsId) {
+  const cls = Number(clsId) || curSeatClass();
+  const l = (dbT('lessons') || []).find(x =>
+    Number(x.day_of_week) === Number(dow)
+    && Number(x.period_id) === Number(pid)
+    && Number(x.class_id) === Number(cls));
+  if (!l) { toast('这节排课已经删掉了'); renderContent(); return; }
+  const c = (dbT('courses') || []).find(x => Number(x.id) === Number(l.course_id)) || {};
+  const cl = (dbT('classes') || []).find(x => Number(x.id) === Number(cls)) || {};
+  const p = (dbT('periods') || []).find(x => Number(x.id) === Number(pid)) || {};
+  const wd = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'][Number(dow)] || '';
+  const ok = await uiConfirm(
+    '确定删除这节排课吗？\n\n· ' + (c.name || '这门课')
+    + (cl.name ? ' · ' + cl.name : '')
+    + '\n· ' + wd + ' ' + (p.label || p.name || ('第 ' + pid + ' 节'))
+    + '\n\n只删这一格：同班其他课、其他班同一时段的课都不受影响。',
+    { title: '删除排课', danger: true, okText: '删除' });
+  if (!ok) return;
+  delLesson(dow, pid, cls);
+}
+window.delLessonAsk = delLessonAsk;
+
 function delLesson(dow, pid, clsId) {
   const cls = Number(clsId) || curSeatClass();
-  dbSet('lessons', dbT('lessons').filter(l =>
+  const rest = dbT('lessons').filter(l =>
     !(Number(l.day_of_week) === Number(dow)
       && Number(l.period_id) === Number(pid)
-      && Number(l.class_id) === Number(cls))));
+      && Number(l.class_id) === Number(cls)));
+  dbSet('lessons', rest);
   closeCellDialog();
-  toast('已清除');
+  /* 删掉最后一节后给个明确出口：学生端/大屏都靠课表，空着要提醒老师补 */
+  const left = rest.filter(l => Number(l.class_id) === Number(cls)).length;
+  toast(left ? '已删除这节排课'
+             : '已删除这节排课：这个班的课表空了，点任意格子就能重新排');
   renderContent();
 }
 window.delLesson = delLesson;
@@ -31350,6 +31478,11 @@ const DEMO_RENDER = {
        所以这里每次都按当前时间现算，取消设置时自然回滚。 */
     const pClash = periodClashMap(0);
 
+    /* 本班（或全部班）一共有多少节课：用来判断「整张课表是不是空的」——
+       删掉最后一节排课后要给出引导，而不是留一张只有 + 号的空网格。 */
+    const myLessons = lessons.filter(l =>
+      selCls == null || Number(l.class_id) === selCls);
+
     const cell = (dow, p) => {
       const list = lessons.filter(x => Number(x.day_of_week) === Number(dow)
         && Number(x.period_id) === Number(p.id)
@@ -31370,6 +31503,9 @@ const DEMO_RENDER = {
             onclick="event.stopPropagation();editCell(${dow}, ${p.id}, ${Number(l.class_id) || 0})"
             style="background:${c.color}1A;border-left:2.5px solid ${c.color};
                    border-radius:4px;padding:4px 6px">
+          <!-- 删除这一节排课（2026-11-05）：鼠标移上卡片才浮现，点一下先确认 -->
+          <button class="tt-chip-del" type="button" title="删除这节排课"
+            onclick="event.stopPropagation();delLessonAsk(${dow}, ${p.id}, ${Number(l.class_id) || 0})">✕</button>
           <div style="font-size:11.5px;font-weight:500">${esc(c.name)}${wp?`<span class="tt-wp">${wp}</span>`:''}</div>
           <div class="tt-chip-meta">
             ${clsName ? `<span class="tt-cls" title="上课班级">${esc(clsName)}</span>` : ''}
@@ -31431,6 +31567,11 @@ const DEMO_RENDER = {
           return esc(pp.label || '');
         }).join('、')}）——
       点左侧节次名可以改时间；重叠的节次会一直标红，调开之后自动消失。
+    </div>` : ''}
+
+    ${(periods.length && !myLessons.length) ? `<div class="notice tt-empty-bar" data-no-fold>
+      <strong>课表还是空的</strong> —— 点下面任意一格就能排第一节课；
+      已经有课再想删掉，把鼠标移到课程卡上，点右上角的 ✕ 即可。
     </div>` : ''}
 
     <div class="card tt-card">
@@ -34262,11 +34403,24 @@ async function cwPushDialog(btn) {
   if (added) dbSet('materials', arr);
   const clsName = id => ((dbT('classes').find(c => Number(c.id) === Number(id)) || {}).name) || '该班';
   const clsTxt = clsIds.map(clsName).join('、');
+  /* 推送的如果是网页，且它正是本课程「设为学习单」的那份 —— 就地部署学生页
+     （2026-11-05）。不这么做，学生从「资料」点进去拿到的还是旧页面/默认模板。 */
+  let depCourses = [];
+  if (picked.some(f => /\.html?$/i.test(f.name || ''))) {
+    const names = [...new Set(picked
+      .map(f => String(f.course || cwState.course || '').trim()).filter(Boolean))];
+    for (const n of names) {
+      try { if (await cwEnsureSheetDeployed(n)) depCourses.push(n); } catch (e) {}
+    }
+  }
   if (added) {
     toast('已下发 ' + added + ' 个文件到「' + clsTxt + '」：学生端「资料」即可打开'
       + (skipped ? '（另有 ' + skipped + ' 个此前已推送，已跳过）' : ''));
   } else {
     toast('这些文件都已经推送给所选班级了，可在「推送记录」里查看');
+  }
+  if (depCourses.length) {
+    setTimeout(() => toast('学习单已按「' + depCourses.join('、') + '」里的网页更新：学生打开就是最新版'), 1100);
   }
   cwSelClear();
   cwPaintPushed();
@@ -34873,6 +35027,12 @@ async function cwSetSheet(btn) {
     cwState.sheet = String(r.sheet || '');
     cwPaintFiles(cwState.files);
     toast(r.msg || (on ? '已取消学习单标记' : '已设为学习单'));
+    /* 设为学习单后立刻部署（2026-11-05）：光打标记不部署，学生从资料点开
+       拿到的还是旧页面。这里顺手把学生页刷成这份网页的最新版。 */
+    if (!on) {
+      const okd = await cwEnsureSheetDeployed(course);
+      if (okd) setTimeout(() => toast('学生页已按这份网页更新：大屏下发与资料打开都是它'), 1000);
+    }
   } catch (e) { toast(e.message || '设置失败'); }
 }
 window.cwSetSheet = cwSetSheet;

@@ -1016,6 +1016,23 @@ body.embed .credit{display:none}
   max-height:min(56vh,500px)}
 #app.ui-big .credit{margin-top:auto;padding-top:16px}
 
+/* ---------- 牧场：独立滚动容器（2026-11-05） ----------
+   以前 #view 跟着整页一起滚：牧场右边一长串「背景 / 特效 / 衣柜 / 商店」，
+   往下翻到商店时左边的宠物详情早就滚出屏幕了，想换宠物还得先滚回顶上。
+   现在把 #view 变成自己的滚动容器：高度 = 视口 - 吸顶区 - 页脚（JS 算），
+   内部单独滑动，顶栏和页签始终不动，任何屏高下都看得到、点得到。
+   overscroll-behavior:contain 防止滑到头时把整页一起带着滚。 */
+#app.ui-big #view.view-scroll{
+  overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
+  scrollbar-gutter:stable;padding-right:4px;
+}
+#view.view-scroll::-webkit-scrollbar{width:8px}
+#view.view-scroll::-webkit-scrollbar-track{background:transparent}
+#view.view-scroll::-webkit-scrollbar-thumb{background:var(--line);border-radius:99px}
+#view.view-scroll::-webkit-scrollbar-thumb:hover{background:var(--ink3)}
+/* 滚动容器里侧栏的 sticky 基准变成容器本身，间距按容器补 */
+#view.view-scroll .ranch-side{top:0}
+
 /* ---------- 屏幕适配：宽屏饱满，窄屏不挤 ---------- */
 @media (max-width:1000px){
   #app .logo{font-size:23px}
@@ -1465,11 +1482,33 @@ function render() {
   applyTheme();                  /* 顶栏主题钮的图标 / theme-color 跟着当前主题走 */
   var v = $('#view');
   if (!v) return;
+  /* 牧场用独立滚动容器（2026-11-05）：内容比一屏长得多，跟着整页滚会把
+     左边宠物详情顶出屏幕。先定 class 再塞内容，最后按当前视口算高度。 */
+  var scrollable = (S.view === 'ranch');
+  v.classList.toggle('view-scroll', scrollable);
   if (S.view === 'map') v.innerHTML = viewMap();
   else if (S.view === 'lb') { v.innerHTML = viewLb(); loadLb(); }
   else v.innerHTML = viewRanch();
   bindView();
+  if (scrollable) { v.scrollTop = 0; fitViewScroll(); }
 }
+
+/* 牧场滚动容器的高度：视口 - 吸顶区 - 页脚 - #app 上下内边距。
+   切页签、缩放窗口、手机转屏都要重算（resize 只绑一次，见文件末尾）。 */
+function fitViewScroll() {
+  var v = document.getElementById('view');
+  if (!v || !v.classList.contains('view-scroll')) return;
+  var st = document.querySelector('.stick-top');
+  var top = st ? st.offsetHeight : 0;
+  var credit = document.querySelector('.credit');
+  var foot = credit ? credit.offsetHeight + 18 : 0;
+  var app = document.getElementById('app');
+  var cs = app ? getComputedStyle(app) : null;
+  var pad = cs ? (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0) : 0;
+  var h = window.innerHeight - top - foot - pad - 8;
+  v.style.maxHeight = Math.max(220, Math.round(h)) + 'px';
+}
+window.addEventListener('resize', function () { fitViewScroll(); });
 function tabBtn(id, name) {
   return '<button class="' + (S.view === id ? 'on' : '') + '" data-tab="' + id + '">' + name + '</button>';
 }

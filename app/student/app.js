@@ -41,6 +41,20 @@
     });
   }
   function todayIdx() { return (new Date().getDay() + 6) % 7; }   // 周一=0
+  /* 所有「离开当前页」的跳转一律开新标签页（2026-11-05 牛哥要求）：
+     学生正在看资料/作业，点一个外链把学生端顶掉，回来要重新找位置。
+     新标签页打开后原页面原样留着。被浏览器拦下时给明确提示（否则学生
+     只会觉得"点了没反应"）。 */
+  function openNewTab(url) {
+    var w = null;
+    try { w = window.open(url, '_blank'); } catch (e) { w = null; }
+    if (!w) {
+      toast('浏览器拦住了新窗口：请允许本站弹出窗口，或按住 Ctrl 再点一次');
+      return false;
+    }
+    try { w.opener = null; } catch (e) {}   // 断开引用，别人拿不到本页的 window
+    return true;
+  }
   function todayStr() {
     var d = new Date();
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' +
@@ -961,7 +975,7 @@
        ★ 网页 / .url 一律「点一下直接跳」，不再先弹预览弹窗再点第二次：
          学习单要立刻能答题，中间隔一层预览纯属多余步骤（牛哥 2026-11-04）。 */
     var openUrl = '/g/mat/' + encodeURIComponent(m.id);
-    if (matIsUrl(m) || matIsWeb(m)) { window.location.href = openUrl; return; }
+    if (matIsUrl(m) || matIsWeb(m)) { openNewTab(openUrl); return; }
     var kind = matKind(m), e = matExt(m);
     var pv = String(m.url).replace('/cw/', '/cwpv/');   // 预览闸门（Office 由服务端渲染）
     var dl = m.url;                                      // 原始文件（下载 / 新窗口）
@@ -1668,6 +1682,25 @@
       showLogin('连不上老师电脑，确认手机和电脑在同一个 Wi-Fi');
     });
   }
+
+  /* 全局兜底（2026-11-05）：学生端页面上任何 <a href> 一律开新标签页。
+     覆盖：外链 URL、站内页面、弹窗里动态拼出来的链接，以及以后新加的任何
+     链接——不用逐个记得写 target="_blank"。
+     跳过三类：① #锚点（本页内跳转）；② javascript:（脚本动作）；
+     ③ 已显式写 target 的（它自己声明了打开方式）；④ download 下载。
+     用冒泡阶段而不是捕获：业务代码先跑，它若已 preventDefault（自定义
+     预览器等），这里就不再插手，避免把别人的交互吃掉。 */
+  document.addEventListener('click', function (e) {
+    var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
+    if (!a) return;
+    if (e.defaultPrevented) return;
+    if (a.target && a.target !== '_self') return;
+    if (a.hasAttribute('download')) return;
+    var href = a.getAttribute('href') || '';
+    if (!href || href.charAt(0) === '#' || /^javascript:/i.test(href)) return;
+    e.preventDefault();
+    openNewTab(a.href);
+  });
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();
