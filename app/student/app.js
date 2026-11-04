@@ -931,17 +931,27 @@
   /** .url 是 Windows 网页快捷方式（纯文本里写着 URL=…）：不能内嵌预览，
       服务端会直接跳到那个网址 */
   function matIsUrl(m) { return matExt(m) === 'url'; }
+  /** 资料行（今日「本课资料」与「资料」页共用）
+      命名统一（2026-11-05）：网页学习单（.html）和网页快捷方式（.url）走的是
+      同一条链路 —— 都进 /g/mat/<资料id>，由服务端分流后在新标签页打开；
+      原来一个叫「一键打开」一个叫「打开」，学生看不出差别，纯属两套叫法。
+      现在按钮只按「打开方式」分两档：
+        · 打开 = 离开本页 / 进新标签页（网页学习单、.url 快捷方式）
+        · 预览 = 留在本页，弹层里直接看（图片 / 音视频 / PDF / Office / 文本）
+      身份识别这类差别放进行内说明文字，不再占用按钮位。 */
   function resRow(m) {
     var web = matIsWeb(m), link = matIsUrl(m);
     var ok = m.url && matPreviewable(m);
-    var txt = link ? '点一下直接打开网址'
-      : (web ? '一键打开 · 自动带上你的学号姓名'
-        : (m.date ? esc(m.date) + ' 推送 · ' : '') + (ok ? '可在线预览' : '点击查看'));
-    var tag = link ? '打开' : (web ? '一键打开' : (ok ? '预览' : '打开'));
+    var txt = link ? '点一下直接打开网址（新标签页）'
+      : (web ? '点一下直接打开 · 自动带上你的学号姓名'
+        : (m.date ? esc(m.date) + ' 推送 · ' : '') + (ok ? '点开在本页预览' : (m.url ? '点开下载查看' : '老师已收回')));
+    var tag = (web || link) ? '打开' : (ok ? '预览' : (m.url ? '下载' : '已失效'));
+    /* 强调色只给「能直接打开」的那一档；本页预览用浅底，层级更清楚 */
+    var cls = (web || link) ? ' hot' : (ok ? ' done' : ' mut');
     return '<div class="hw res-row" data-mat="' + esc(m.id) + '"><div class="dot done"></div>' +
       '<div class="m"><b>' + esc(m.title || '资源') + '</b>' +
       '<span>' + txt + '</span></div>' +
-      '<div class="tag' + (web || link ? ' hot' : ' done') + '">' + tag + '</div></div>';
+      '<div class="tag' + cls + '">' + tag + '</div></div>';
   }
   function vCourses() {
     var gs = matGroups();

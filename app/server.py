@@ -98,7 +98,7 @@ CFG["update"].setdefault("interval_hours", 24) # 检查间隔（小时）
 PET_IDS = ["cat", "dog", "rabbit", "penguin", "panda", "dino", "unicorn", "dragon"]
 COND = threading.Condition()
 STARTED = time.time()
-VERSION = "2.0.8"
+VERSION = "2.0.9"
 ONLINE_WINDOW = 300      # 5 分钟内活跃算在线
 # 可内联直出的附件类型（其余一律按下载处理，防止同源执行脚本）
 _INLINE_EXTS = {"png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "pdf",
