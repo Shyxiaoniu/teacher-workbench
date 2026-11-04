@@ -6322,6 +6322,57 @@ body:has(.mini-bar) .corner-credit { display:none; }
 .cw-sec-t::before{content:'';width:4px;height:14px;background:var(--brand-primary);border-radius:3px}
 .cw-empty{text-align:center;color:var(--text-secondary);font-size:13.5px;padding:26px 0}
 
+/* ===== 课程资料 · 资源管理器布局（2026-11-04 改版） =====
+   左侧树形目录（课程文件夹）+ 右侧文件列表，替换原「归到课节 + 全页上传区」。 */
+.cw-explorer{display:flex;gap:12px;align-items:stretch;min-height:320px}
+.cw-tree{flex:0 0 218px;max-width:218px;border:1px solid var(--border);border-radius:11px;
+  background:var(--bg-page);padding:8px;display:flex;flex-direction:column;gap:2px;
+  max-height:560px;overflow:auto}
+.cw-tree-h{font-size:11.5px;font-weight:700;color:var(--text-secondary);
+  padding:2px 6px 6px;display:flex;align-items:center;gap:5px}
+.cw-tree-item{display:flex;align-items:center;gap:7px;padding:7px 9px;border-radius:9px;
+  cursor:pointer;font-size:13px;color:var(--text-primary);border:1px solid transparent;
+  transition:.13s;min-width:0}
+.cw-tree-item:hover{background:var(--brand-soft)}
+.cw-tree-item.on{background:var(--brand-soft);border-color:var(--brand-primary);
+  color:var(--brand-primary);font-weight:700}
+.cw-tree-item .ti-ic{flex:none;font-size:14px}
+.cw-tree-item .ti-nm{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cw-tree-item .ti-n{flex:none;font-size:10.5px;color:var(--text-secondary);
+  background:var(--bg-surface);border:1px solid var(--border);border-radius:7px;padding:1px 6px}
+.cw-tree-item.on .ti-n{color:var(--brand-primary);border-color:var(--brand-primary)}
+.cw-tree-item .ti-ops{flex:none;display:none;gap:2px}
+.cw-tree-item:hover .ti-ops{display:flex}
+.cw-tree-item.on .ti-ops{display:flex}
+.cw-tree-item .ti-ops button{border:0;background:transparent;color:var(--text-secondary);
+  cursor:pointer;font-size:12px;padding:1px 3px;border-radius:5px;font-family:inherit;line-height:1}
+.cw-tree-item .ti-ops button:hover{color:var(--brand-primary);background:var(--bg-surface)}
+.cw-tree-item .ti-ops button.ti-del:hover{color:var(--status-error,#E24B4A);background:var(--error-soft)}
+.cw-tree-new{margin-top:6px;border-top:1px dashed var(--border);padding-top:8px}
+.cw-tree-new button{width:100%;border:1px dashed var(--border);background:transparent;
+  color:var(--text-secondary);border-radius:9px;padding:7px;font-size:12.5px;cursor:pointer;
+  font-family:inherit;transition:.13s}
+.cw-tree-new button:hover{border-color:var(--brand-primary);color:var(--brand-primary)}
+.cw-main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:0}
+/* 选中文件夹后的内联拖拽上传条（替代原全页大上传区） */
+.cw-drop-inline{border:1.5px dashed var(--border);border-radius:11px;padding:13px 14px;
+  text-align:center;color:var(--text-secondary);cursor:pointer;transition:.15s;margin-bottom:10px}
+.cw-drop-inline .t{font-size:13px;font-weight:600}
+.cw-drop-inline .s{font-size:11.5px;margin-top:3px}
+.cw-drop-inline:hover,.cw-drop-inline.over{border-color:var(--brand-primary);
+  background:var(--brand-soft);color:var(--brand-primary)}
+@media (max-width:900px){
+  .cw-explorer{flex-direction:column}
+  .cw-tree{flex:none;max-width:none;max-height:200px}
+}
+/* 列表视图：类型 / 修改时间列（资源管理器口径，7 列） */
+.cw-list-h,.cw-lrow{grid-template-columns:24px 30px minmax(0,1fr) 76px 84px 100px auto}
+.cw-lrow .mt{font-size:11.5px;color:var(--text-secondary);white-space:nowrap}
+@media (max-width:900px){
+  .cw-list-h,.cw-lrow{grid-template-columns:24px 26px minmax(0,1fr) 84px auto}
+  .cw-list-h .tp,.cw-lrow .tp,.cw-list-h .mt,.cw-lrow .mt{display:none}
+}
+
 /* ===== 课件页 · 页签（资料夹 / 课件库） ===== */
 .cw-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px}
 .cw-tab{display:flex;flex-direction:column;gap:2px;align-items:flex-start;
@@ -7056,8 +7107,8 @@ const NAV = [
   { id:'timetable', name:'课表', icon:'calendar' },
   /* 考勤页已删除（2026-11-01 v2）：考勤统计并入座位表页，#attendance 旧链接 302 到座位表 */
   /* 进度 / 值日 / 分组 / 德育 已并入班级页（2026-11-01），活动页已删除并入上课页 */
-  { id:'guide',  name:'上课', icon:'guide' },
-  { id:'courseware', name:'课件', icon:'book' },
+  { id:'guide',  name:'大屏', icon:'guide' },
+  { id:'courseware', name:'课程资料', icon:'book' },
   { id:'homework', name:'作业', icon:'pen' },
   { id:'scores', name:'成绩', icon:'chart' },
   { id:'typing', name:'打字', icon:'keyboard' },
@@ -10974,9 +11025,9 @@ const CLS_PICK_ROUTES = { seats:1, timetable:1, students:1, homework:1,
 const PAGE_SEARCH_ROUTES = { students:1, seats:1 };
 /** 顶栏大标题：内容区旧 .page-title 已删，只保留这一份 */
 const PAGE_TITLES = { seats:'座位表', timetable:'课表', students:'学生与家长',
-                      homework:'作业收交', scores:'成绩', guide:'上课 · 课程下发与收集',
+                      homework:'作业收交', scores:'成绩', guide:'大屏 · 下发与数据收集',
                       classes:'班级', settings:'设置', todos:'个人待办',
-                      tools:'工具', courseware:'课件 · 课件库' };
+                      tools:'工具', courseware:'教学 · 课程资料' };
 function topTitleFor(route) {
   return PAGE_TITLES[route] ||
     ((NAV.find(n => n.id === route) || {}).name || '');
@@ -11380,8 +11431,8 @@ function renderContent(opts = {}) {
    ============================================================ */
 const FOLD_TITLE = {
   home: '首页说明', seats: '座位表说明', timetable: '课表说明', attendance: '考勤说明',
-  guide: '上课说明',
-  courseware: '课件使用说明', homework: '作业说明', scores: '成绩说明', morality: '德育说明',
+  guide: '大屏说明',
+  courseware: '课程资料说明', homework: '作业说明', scores: '成绩说明', morality: '德育说明',
   groups: '分组说明', progress: '进度说明', duty: '值日说明', students: '学生说明',
   classes: '班级说明', todos: '待办说明', tools: '工具说明', activity: '活动说明',
   settings: '设置说明'
@@ -15346,25 +15397,25 @@ async function delStudentsMulti(ids) {
 window.delStudentsMulti = delStudentsMulti;
 
 /* ============================================================
-   上课（原「导学单」页 · 2026-11-04 改版：直接关联课件库课程）
+   大屏（原「上课」页 · 2026-11-04 改版：课程资料 + 学习单 + 数据收集）
    ------------------------------------------------------------
-   教师端不再编辑导学单内容，也不再单独建「活动」：
-   · 课程列表直接来自课件库（/api/cw/config），选中课程即自动
-     匹配 / 创建同名收集任务（act_task，标题 = 课程名）；
-   · 交互式学习单由教师用课程提交 API 自行设计（自定义网页
-     注入登录 / 逐题提交后部署），选好课程即按班级自动发放；
+   · 课程列表直接来自「课程资料」文件夹（/api/cw/config），文件夹名
+     即课程名，选中课程即自动匹配 / 创建同名收集任务（act_task）；
+   · 学习单三选一：下方设计器刚生成的页面 > 课程资料里的网页文件
+     （①卡片「学习单」下拉，下发时自动注入本班学生信息）> 默认模板
+     （仅文件上传 + 提交，自动附班级 / 学号 / 姓名）；
    · 下发按班级进行：每个班只看得到、只交得了本班被下发的课程；
-   · 学生端「今日」对应课程里出现学习单入口，提交直达课程接口；
+   · 学生端只能在线查看课程资料副本与打开学习单，不能改文件；
    · 发放记录走 activity_pushes 表，与其它业务表同一条同步链路；
-   · 学生提交的数据 / 作品由工作台自动归档到课件库对应课程目录。
+   · 学生提交的数据 / 作品由工作台自动归档到课程资料对应文件夹。
    ============================================================ */
 function renderGuidePage() {
   return `
   <div class="notice">
     选好课程即完成发放（<b>按班级进行</b>：每个班只看得到、只交得了本班被下发的课程）：
-    学生打开「今日」，在本班对应课程里进入交互式学习单，提交直达课程数据接口。
-    下方可实时查看<b>数据大屏</b>与<b>学生作品</b>；
-    学生提交的数据与作品会自动归档到课件库对应课程目录。
+    学生打开「今日」，在本班对应课程里进入学习单或查看课程资料副本（仅在线查看）。
+    下方<b>数据大屏</b>实时显示本班提交（自动附学号 / 姓名）；
+    学生提交的数据与作品会自动归档到课程资料对应文件夹。
   </div>
   ${renderActivity()}`;
 }
@@ -15687,13 +15738,6 @@ function renderActivity() {
   .act-subcfg-inp{flex:1 1 auto;min-width:120px;padding:6px 9px;border:1px solid var(--border,#DDE5E1);border-radius:8px;font-size:13px;background:var(--bg-surface,#fff);color:var(--text-primary);box-sizing:border-box}
   /* 2026-11-04：活动管理弹窗下线（选课直接自动建任务），相关样式移除 */
 </style>
-  <div class="notice" data-foldable data-fold-title="课程说明">
-    上课页<b>直接关联课件库里的课程</b>（如「第1课人工智能」），不再单独建活动：
-    ① 选课程 → ② 设计 / 部署交互式学习单 → ③ 下发到班级。
-    选一门课件库课程，系统自动建立同名的数据收集任务；
-    下发<b>按班级进行</b>：每个班只看得到、只交得了本班被下发的课程。
-    学生提交的数据与作品由工作台自动归档到课件库对应课程目录。
-  </div>
   ${actClassBarHtml()}
   <div class="act-wrap">
     <div class="act-bar">
@@ -15704,19 +15748,23 @@ function renderActivity() {
     </div>
 
     <div class="act-card">
-      <div class="act-card-h">① 选择课程（列表来自课件库）</div>
+      <div class="act-card-h">① 选择课程（文件夹名即课程名，来自「课程资料」）</div>
       <div class="act-task-row">
         <select id="actTaskSel" class="act-sel" onchange="actSelectTask()" style="max-width:480px"><option value="">加载中…</option></select>
       </div>
+      <div class="act-task-row" style="margin-top:8px">
+        <span class="act-muted" style="font-size:12.5px;font-weight:600;white-space:nowrap">学习单：</span>
+        <select id="actSheetSel" class="act-sel" onchange="actSheetChange()" style="max-width:480px"><option value="">默认学习单（文件上传 + 提交）</option></select>
+      </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px">
-        <span class="act-muted" style="font-size:12px">选好课程即自动发放给当前班级；也可在下方自己写交互式学习单页面</span>
+        <span class="act-muted" style="font-size:12px">下发后学生端「今日」对应课程里出现入口，只能在线查看与提交</span>
       </div>
       <div id="actPubHint" class="act-roster-hint" style="display:none"></div>
     </div>
 
     <div class="act-card">
-      <div class="act-card-h">② 设计交互式学习单（课程提交 API）</div>
-      <div class="act-muted" style="margin-bottom:10px">上传一份网页文件（.html）或用默认模板，系统会自动接入课程提交接口，并注入学生的<b>学号 / 姓名 / 班级</b>：学生从学生端打开时自动识别身份；直接打开链接时输入学号，姓名与班级自动匹配本班名单。网页里每个「题目块」都会自动长出独立的提交按钮，每个按钮在数据大屏有专属的数据显示窗口。部署后点①里的课程即可下发给学生。</div>
+      <div class="act-card-h">② 自定义学习单（可选，默认模板已够用）</div>
+      <div class="act-muted" style="margin-bottom:10px">想自己设计学习单再点这里：上传一份网页文件（.html）或用默认模板，系统会自动接入课程提交接口，并注入学生的<b>学号 / 姓名 / 班级</b>。网页里每个「题目块」都会自动长出独立的提交按钮，每个按钮在大屏有专属的数据显示窗口。设计好后点「下发」即生效；也可以直接在 ① 的「学习单」下拉里选课程资料里现成的网页文件。</div>
       <div class="act-cust-row">
         <label class="btn btn-ghost btn-sm" style="cursor:pointer">📤 上传网页文件<input id="actCustFile" type="file" accept=".html,.htm" style="display:none" onchange="actCustomLoadFile(event)"></label>
         <button class="btn btn-ghost btn-sm" onclick="actCustomUseDefault()">📝 用默认模板</button>
@@ -15729,7 +15777,7 @@ function renderActivity() {
       <div class="act-cust-row">
         <button class="btn btn-primary btn-sm" id="actCustGen" onclick="actCustomGenerate()">⚙ 生成页面</button>
         <button class="btn btn-ghost btn-sm" id="actCustView" onclick="actCustomView()" title="把生成的页面临时部署并打开真实预览（含测试提交能力，可验证与数据大屏同步）">👁 查看</button>
-        <button class="btn btn-ghost btn-sm" id="actCustSaveLib" onclick="actCustomSaveLib()" title="把当前设计的 HTML 原稿存进课件库课程目录（_学习单 子文件夹），同名覆盖更新">💾 保存到课件库</button>
+        <button class="btn btn-ghost btn-sm" id="actCustSaveLib" onclick="actCustomSaveLib()" title="把当前设计的 HTML 原稿存进课程资料对应文件夹（_学习单 子文件夹），同名覆盖更新">💾 保存到课程资料</button>
         <button class="btn btn-ghost btn-sm" id="actCustClear" onclick="actCustomClear()">清空</button>
         <button class="btn btn-primary btn-sm" id="actPubOpenBtn" onclick="actOpenPublishDialog()" title="选择班级并下发到学生端「今日」（可一次发多个班）">📤 下发</button>
         <span id="actCustStatus" class="act-muted"></span>
@@ -15817,8 +15865,75 @@ window.renderActClassInfo = renderActClassInfo;
    「任务标题或关联课程 = 课程名」匹配；没有就自动创建一个同名任务。
    下发 / 提交 / 大屏 / 归档链路全部不变，只是任务跟着课程走。 */
 let actTaskList = [];      // 收集任务（后端 act_task，标题 = 课程名）
-let actCourseNames = [];   // 课件库课程名列表（下拉框选项）
+let actCourseNames = [];   // 课程资料文件夹名列表（下拉框选项）
 let actActiveCourse = '';  // 当前选中的课程名（归档到课程目录用它）
+let actSheetFile = null;   // 老师选中的学习单网页（课程资料里的 .html 文件）；null = 默认模板
+
+/** 学习单下拉：默认模板 + 当前课程文件夹里的网页文件（2026-11-04 大屏改版） */
+async function actLoadSheets(course) {
+  const sel = document.getElementById('actSheetSel');
+  if (!sel) return;
+  const def = '<option value="">默认学习单（文件上传 + 提交）</option>';
+  actSheetFile = null;
+  if (!course) { sel.innerHTML = def; return; }
+  try {
+    const j = await cwReq('list?course=' + encodeURIComponent(course));
+    const htmls = (j.files || []).filter(f => !f.archived && /\.html?$/i.test(f.name || ''));
+    sel.innerHTML = def + htmls.map(f =>
+      '<option value="' + esc(f.id) + '">' + esc(f.name) + '</option>').join('');
+  } catch (e) { sel.innerHTML = def; }
+}
+window.actLoadSheets = actLoadSheets;
+
+/** 切换学习单：已发放的课程立即重新部署，学生端重新打开即新页面 */
+async function actSheetChange() {
+  const sel = document.getElementById('actSheetSel');
+  const id = sel ? sel.value : '';
+  const opt = sel && sel.selectedOptions && sel.selectedOptions[0];
+  actSheetFile = id ? { id: id, name: (opt && opt.textContent || '').trim() } : null;
+  const t = actTaskList.find(x => x.task_id === actActiveId);
+  const cls = actCurClass();
+  if (!t || cls == null || !actActiveCourse) return;
+  const row = actPushOf(cls, t.task_id);
+  if (!row || row.status === 'draft') return;   // 还没发放：下次下发时生效
+  try {
+    const okd = await actDeploySheet(t, actActiveCourse);
+    toast(okd ? '学习单已切换为「' + (actSheetFile ? actSheetFile.name : '默认模板') + '」：学生端重新打开即生效'
+              : '学习单部署失败，请重试');
+  } catch (e) { toast(e.message || '部署失败'); }
+}
+window.actSheetChange = actSheetChange;
+
+/** 把当前所选学习单（设计器生成页 > 课程资料网页 > 默认模板）部署为该任务的提交页 */
+async function actDeploySheet(t, course) {
+  let deployHtml = null;
+  if (actGeneratedPage && actGeneratedPageTask === t.task_id) {
+    deployHtml = actGeneratedPage;   // 老师刚在下方设计器里「生成」的页面，最优先
+  } else if (actSheetFile) {
+    /* 课程资料里的网页文件：每次下发都重新拉取部署，文件更新后学生端拿到的也是新版 */
+    try {
+      const fr = await fetch(CW_API + 'file?id=' + encodeURIComponent(actSheetFile.id) + '&dl=0', { cache: 'no-store' });
+      if (fr.ok) deployHtml = actBuildCustomPage(await fr.text());
+    } catch (e) {}
+  } else {
+    /* 默认学习单：保持原口径——服务端还没有页（或还是占位页）才部署，不覆盖教师设计页 */
+    try {
+      const probe = await fetch('/api/custom?task=' + encodeURIComponent(t.task_id));
+      const curHtml = probe.ok ? await probe.text() : '';
+      if (!curHtml.trim() || curHtml.indexOf('老师还没有配置自定义提交页') !== -1) {
+        deployHtml = actBuildCustomPage(actCustomDefaultTpl().replace(/\{\{COURSE\}\}/g, course || '课堂'));
+      }
+    } catch (e) {}
+  }
+  if (!deployHtml) return false;
+  const dep = await fetch('/api/custom', { method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ task: t.task_id, html: deployHtml }) });
+  const dj = await dep.json().catch(() => ({}));
+  return !!(dep.ok && dj.ok);
+}
+window.actDeploySheet = actDeploySheet;
+
 async function actLoadTaskList() {
   const sel = document.getElementById('actTaskSel');
   if (!sel) return;
@@ -15834,7 +15949,7 @@ async function actLoadTaskList() {
       .map(c => String(c.name || '').trim()).filter(Boolean);
     actTaskList = ((results[1] || {}).tasks) || [];
     if (!actCourseNames.length) {
-      sel.innerHTML = '<option value="">（课件库还没有课程，请先到「教学 · 课件」上传资料建课节）</option>';
+      sel.innerHTML = '<option value="">（课程资料还没有文件夹，请先到「教学 · 课程资料」新建并上传）</option>';
       actActiveId = null; actActiveCourse = ''; actRenderDash(); actPubRepaint(); return;
     }
     sel.innerHTML = actCourseNames.map(n =>
@@ -15843,6 +15958,7 @@ async function actLoadTaskList() {
     const curTask = actTaskList.find(t => String(t.task_id) === String(actActiveId));
     const defCourse = (curTask && (curTask.course || curTask.title)) || actActiveCourse || '';
     sel.value = actCourseNames.indexOf(defCourse) >= 0 ? defCourse : actCourseNames[0];
+    await actLoadSheets(sel.value);   // 学习单下拉跟着课程走
     await actSelectTask(true);   // 程序性选中：不触发发放，只有老师主动换选才发放
   } catch (e) {
     /* 数据服务没启动时浏览器只会给一句 "Failed to fetch"，
@@ -15862,7 +15978,9 @@ async function actSelectTask(silent) {
   if (!sel) return;
   const course = sel.value;
   if (!course) { actActiveId = null; actActiveCourse = ''; actRenderDash(); if (silent) actPubRepaint(); return; }
+  const courseChanged = course !== actActiveCourse;
   actActiveCourse = course;
+  if (courseChanged) await actLoadSheets(course);   // 换课程 → 学习单下拉重载（默认模板 + 本文件夹网页）
   // 找绑定了这门课的收集任务（标题或关联课程字段匹配）；没有就自动建一个同名任务
   let t = actTaskList.find(x =>
     String(x.title || '').trim() === course || String(x.course || '').trim() === course);
@@ -15926,29 +16044,14 @@ async function actPublishCurrent() {
     // 课程归属（2026-11-04 改版）：选的就是课件库课程，直接用它
     //（提交数据归档到课程目录也靠它）；旧数据没有时再走自动匹配兜底
     let course = actActiveCourse || (cwLinkOf(t.task_id) || {}).course || '';
-    /* 页面部署（2026-11-04 修正）：老师刚「生成」过的新页面（同一活动）
-       必须先部署再下发——原逻辑只探测服务端有没有页，有就跳过，
-       改版学习单永远发不出去，学生端一直打开旧文件。
-       没生成过页面时沿用原口径：没有自定义页才部署默认模板，
-       服务端已有页且老师没重新生成 → 不动，绝不覆盖教师设计页。 */
+    /* 页面部署（2026-11-04 大屏改版）：统一走 actDeploySheet——
+       · 老师刚在设计器「生成」的页面最优先（同一任务）；
+       · 学习单下拉选了课程资料里的网页 → 拉文件内容注入身份后部署；
+       · 默认学习单 → 服务端还没有页时部署默认模板（不覆盖教师设计页）。
+       注意走同源：/api/custom 要教师会话 cookie。 */
     try {
-      let deployHtml = null;
-      if (actGeneratedPage && actGeneratedPageTask === t.task_id) {
-        deployHtml = actGeneratedPage;
-      } else {
-        const probe = await fetch('/api/custom?task=' + encodeURIComponent(t.task_id));
-        const curHtml = probe.ok ? await probe.text() : '';
-        if (!curHtml.trim() || curHtml.indexOf('老师还没有配置自定义提交页') !== -1) {
-          deployHtml = actBuildCustomPage(actCustomDefaultTpl());
-        }
-      }
-      if (deployHtml) {
-        const dep = await fetch('/api/custom', { method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ task: t.task_id, html: deployHtml }) });
-        const dj = await dep.json().catch(() => ({}));
-        if (dep.ok && dj.ok) toast('已为该课程部署学习单页面（可在下方自定义设计后重新生成）');
-      }
+      const dep = await actDeploySheet(t, course);
+      if (dep) toast('已部署学习单页面：' + (actSheetFile ? actSheetFile.name : '默认模板'));
     } catch (e) {}
     const now = new Date().toISOString().slice(0, 16).replace('T', ' ');
     let row;
@@ -16298,23 +16401,30 @@ window.actCustomSaveLib = actCustomSaveLib;
 
 // 默认模板：自带「每题提交按钮」示例 + 外链跳转（被「用默认模板」使用）
 function actCustomDefaultTpl() {
+  /* 默认学习单（2026-11-04 大屏改版）：只保留「文件上传 + 提交」。
+     {{COURSE}} 占位符在部署时替换成实际课程名（文件夹名）；学生身份
+     （班级 / 学号 / 姓名）由系统注入，提交时自动附带，无需学生填写。 */
   return [
 '<!doctype html>',
 '<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">',
-'<title>课堂学习页</title>',
-'<style>body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;max-width:680px;margin:24px auto;padding:0 16px;color:#1A2E28;line-height:1.7}',
-'.act-q{border:1px solid #DDE5E1;border-radius:14px;padding:14px 16px;margin:14px 0}',
-'label{display:block;font-weight:600;margin:10px 0 4px}',
-'input,textarea{width:100%;padding:10px;border:1px solid #cfe3dc;border-radius:10px;box-sizing:border-box;font-size:14px}',
-'.ext{background:#E1F5EE;border:1px dashed #0F6E56;border-radius:12px;padding:12px 14px;margin:14px 0}</style></head>',
+'<title>{{COURSE}} · 课堂学习单</title>',
+'<style>body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;max-width:640px;margin:24px auto;padding:0 16px;color:#1A2E28;line-height:1.75}',
+'.act-q{border:1px solid #DDE5E1;border-radius:14px;padding:16px 18px;margin:16px 0;background:#FBFDFC}',
+'.hint{background:#E1F5EE;border:1px dashed #0F6E56;border-radius:12px;padding:11px 14px;margin:14px 0;font-size:13.5px}',
+'label{display:block;font-weight:600;margin:12px 0 5px}',
+'input,textarea{width:100%;padding:10px;border:1px solid #cfe3dc;border-radius:10px;box-sizing:border-box;font-size:14px;font-family:inherit}',
+'.tip{font-size:12px;color:#5F6E68;margin-top:4px}</style></head>',
 '<body>',
-'<h1>课堂探究学习单</h1><p>请先登录，再按题目逐一提交。每道题有独立提交按钮，老师能在数据大屏看到每一题的提交情况。</p>',
-'<div class="act-q" data-btn="第1题 · 我的发现"><h3>第 1 题：写出你的发现</h3>',
-'<label>发现内容</label><textarea name="发现内容" rows="3" placeholder="写下你的观察与想法"></textarea></div>',
-'<div class="act-q" data-btn="第2题 · 我的作品"><h3>第 2 题：作品说明</h3>',
-'<label>作品说明</label><input name="作品说明" placeholder="一句话介绍你的作品">',
-'<label>作品文件</label><input type="file" name="作品文件"></div>',
-'<div class="ext" data-ext-url="https://www.example.com/reference"><b>参考资料</b><br>点击下方的按钮可一键跳转到外部参考资料页面。</div>',
+'<h1>{{COURSE}} · 课堂学习单</h1>',
+'<p>完成后请在下方<b>选择文件提交</b>，可一次选多个；系统会自动附上你的班级、学号与姓名，不用手填。</p>',
+'<div class="hint">💡 支持 作业文档、图片、演示文稿等常见格式；提交后老师会在大屏上看到你的提交记录。</div>',
+'<div class="act-q" data-btn="提交作业" data-allow-empty="1">',
+'<label>课堂作业文件</label>',
+'<input type="file" name="作业文件" multiple>',
+'<div class="tip">可按住 Ctrl 一次选择多个文件</div>',
+'<label>备注（选填）</label>',
+'<input name="备注" placeholder="有问题或想对老师说的话，可以写在这里">',
+'</div>',
 '</body></html>'
   ].join('\n');
 }
@@ -16323,7 +16433,7 @@ function actCustomLoadFile(e) {
   const f = e.target.files && e.target.files[0]; if (!f) return;
   f.text().then(t => { const el = document.getElementById('actCustHtml'); if (el) el.value = t; actCustStatus('已载入：' + f.name); actRenderFileCfg(); });
 }
-function actCustomUseDefault() { const el = document.getElementById('actCustHtml'); if (el) el.value = actCustomDefaultTpl(); actCustStatus('已载入默认模板（含每题提交按钮）；下方「文件题设置」可配置是否允许空文件提交'); actRenderFileCfg(); }
+function actCustomUseDefault() { const el = document.getElementById('actCustHtml'); if (el) el.value = actCustomDefaultTpl(); actCustStatus('已载入默认学习单（文件上传 + 提交）；把 {{COURSE}} 换成实际课程名即可定制'); actRenderFileCfg(); }
 function actCustStatus(t, cls) { const el = document.getElementById('actCustStatus'); if (el) { el.textContent = t || ''; el.className = 'act-muted' + (cls ? (' ' + cls) : ''); } }
 function actCustomClear() { const el = document.getElementById('actCustHtml'); if (el) el.value = ''; actCustStatus('已清空'); actRenderFileCfg(); }
 
@@ -33565,58 +33675,48 @@ window.cwConfigCached = cwConfigCached;
 
 function cwLibPanelHtml() {
   return `
-  <div class="notice" data-fold-title="📚 课件库说明">所有资料统一<b>上传到服务器</b>存储（不再支持加载本地文件夹）。上传时把课件归到某一「课节」；课节和文件都可随时改名、删除。上传只认上面<b>「归到课节」一个入口</b>：填已有课节名或输入新名字（没有会自动新建）。<b>浏览可切「缩略图 / 列表 / 紧凑」三种视图</b>：缩略图看封面、列表核对大小与推送状态、紧凑一屏扫几十个。勾选多个文件后点「一键下发」，可一次发给一个或多个班；单份文件也可以直接点卡片上的「⬇ 推送」。下发后学生端「今日」页的「课件库」里就能查看和使用，推送错了可在「推送记录」里一键撤回。</div>
+  <div class="notice" data-fold-title="📁 课程资料说明">所有资料统一<b>上传到服务器</b>存储。左侧是课程文件夹（树形目录），点开即右侧列出文件——<b>名称 / 类型 / 大小 / 修改时间</b>一目了然；选好文件夹后点「⬆ 上传」或把文件直接拖进来。文件夹与文件都可<b>重命名 / 删除</b>。勾选多个文件可批量删除或一键下发给班级；学生端只能在线查看副本，动不了这里的任何文件。下发错了可在「推送记录」里一键撤回。</div>
   <div class="cw-wrap">
 
     <div class="cw-card">
-      <div class="cw-card-h">📚 课件库
+      <div class="cw-card-h">📁 课程资料
         <span class="sp"></span>
         <span class="cw-badge gray" id="cwCountBadge">读取中…</span>
         <button class="btn btn-ghost btn-sm" onclick="cwReload()">↻ 刷新</button>
       </div>
       <div class="cw-muted" id="cwRootMeta" style="margin:2px 0 10px"></div>
 
-      <div class="cw-row" style="margin-bottom:10px">
-        <span style="font-size:13px;font-weight:600;white-space:nowrap">归到课节</span>
-        <input class="cw-inp" id="cwCourseInput" list="cwCourseList" spellcheck="false"
-               placeholder="选一个已有课节，或直接输入新课节名（例如：第4课 AI听音识传说）">
-        <datalist id="cwCourseList"></datalist>
-      </div>
-      <div class="cw-drop" id="cwDrop" onclick="document.getElementById('cwFileInput').click()">
-        <div class="big">📚</div>
-        <div class="t">点这里选文件，或把文件直接拖进来</div>
-        <div class="s">文件会上传到服务器统一存储 · 支持 图片 / Word / Excel / PPT / PDF / 视频 / 音频 / 文本 · 单个最大 300MB · 可一次选多个</div>
-      </div>
-      <input type="file" id="cwFileInput" multiple style="display:none">
-      <div id="cwUploadMsg"></div>
-
-      <div style="display:flex;align-items:center;margin:16px 0 8px">
-        <div style="font-size:13px;font-weight:600;color:var(--text-primary)">📂 课程资料</div>
-        <span style="flex:1"></span>
-        <button class="btn btn-ghost btn-sm" onclick="cwNewCourse()">＋ 新建空课节</button>
-      </div>
-      <div id="cwCourseGrid"><div class="cw-empty">读取中…</div></div>
-
-      <!-- 浏览视图 + 多选（2026-11-03）：选定课节后才出现 -->
-      <div class="cw-toolbar" id="cwToolbar" hidden>
-        <div class="cw-seg" role="group" aria-label="浏览视图">
-          <button type="button" data-view="grid" onclick="cwSetView('grid')">▦ 缩略图</button>
-          <button type="button" data-view="list" onclick="cwSetView('list')">☰ 列表</button>
-          <button type="button" data-view="compact" onclick="cwSetView('compact')">▪ 紧凑</button>
+      <!-- 资源管理器布局（2026-11-04 改版）：左侧树形目录 + 右侧文件列表 -->
+      <div class="cw-explorer" id="cwExplorer">
+        <div class="cw-tree" id="cwTree"><div class="cw-empty">读取中…</div></div>
+        <div class="cw-main">
+          <div class="cw-toolbar" id="cwToolbar" hidden>
+            <button class="btn btn-primary btn-sm" id="cwUpBtn" onclick="document.getElementById('cwFileInput').click()">⬆ 上传到当前文件夹</button>
+            <div class="cw-seg" role="group" aria-label="浏览视图">
+              <button type="button" data-view="grid" onclick="cwSetView('grid')">▦ 缩略图</button>
+              <button type="button" data-view="list" onclick="cwSetView('list')">☰ 列表</button>
+              <button type="button" data-view="compact" onclick="cwSetView('compact')">▪ 紧凑</button>
+            </div>
+            <label class="cw-selall"><input type="checkbox" id="cwSelAll" onchange="cwSelAllToggle(this.checked)"> 全选本文件夹</label>
+            <span class="cw-muted" id="cwToolbarHint"></span>
+          </div>
+          <div class="cw-selbar" id="cwSelBar" hidden>
+            <span>已选 <b id="cwSelCount">0</b> 个文件</span>
+            <span class="cw-muted" id="cwSelNames"></span>
+            <span class="sp"></span>
+            <button class="btn btn-sm" data-batch="1" onclick="cwPushDialog(this)">⬇ 一键下发给班级</button>
+            <button class="btn btn-sm cw-sel-del" id="cwSelDelBtn" onclick="cwDeleteSelected()">🗑 删除所选项</button>
+            <button class="btn btn-ghost btn-sm" onclick="cwSelClear()">清除选择</button>
+          </div>
+          <div class="cw-drop cw-drop-inline" id="cwDrop" hidden onclick="document.getElementById('cwFileInput').click()">
+            <div class="t">把文件拖到这里，或点这里选择文件</div>
+            <div class="s">支持 图片 / Word / Excel / PPT / PDF / 视频 / 音频 / 文本 · 单个最大 300MB · 可一次选多个</div>
+          </div>
+          <input type="file" id="cwFileInput" multiple style="display:none">
+          <div id="cwUploadMsg"></div>
+          <div id="cwFileArea"></div>
         </div>
-        <label class="cw-selall"><input type="checkbox" id="cwSelAll" onchange="cwSelAllToggle(this.checked)"> 全选本课节</label>
-        <span class="cw-muted" id="cwToolbarHint"></span>
       </div>
-      <div class="cw-selbar" id="cwSelBar" hidden>
-        <span>已选 <b id="cwSelCount">0</b> 个文件</span>
-        <span class="cw-muted" id="cwSelNames"></span>
-        <span class="sp"></span>
-        <button class="btn btn-sm" data-batch="1" onclick="cwPushDialog(this)">⬇ 一键下发给班级</button>
-        <button class="btn btn-sm cw-sel-del" id="cwSelDelBtn" onclick="cwDeleteSelected()">🗑 删除所选项</button>
-        <button class="btn btn-ghost btn-sm" onclick="cwSelClear()">清除选择</button>
-      </div>
-
-      <div id="cwFileArea"></div>
     </div>
 
     <div class="cw-card">
@@ -33911,8 +34011,8 @@ if (window.ResizeObserver) {
 async function cwReload() {
   cwState.loadedLib = true;
   cwPaintPushed();
-  const grid = document.getElementById('cwCourseGrid');
-  if (grid) grid.innerHTML = '<div class="cw-empty">读取中…</div>';
+  const tree = document.getElementById('cwTree');
+  if (tree) tree.innerHTML = '<div class="cw-empty">读取中…</div>';
   try {
     const cfg = await cwConfigCached(true);
     cwState.cfg = cfg;
@@ -33922,19 +34022,19 @@ async function cwReload() {
       cwPaintBlocked(cfg);
       return;
     }
-    cwPaintCourses();
+    cwPaintTree();
     if (cwState.course) {
       const still = cwState.courses.some(c => c.name === cwState.course);
       if (still) await cwPickCourse(cwState.course, true);
       else { cwState.course = ''; cwPaintFiles(null); }
     } else if (cwState.courses.length) {
-      await cwPickCourse(cwState.courses[0].name, true);   // 进来先展开第一门，少点一次
+      await cwPickCourse(cwState.courses[0].name, true);   // 进来先展开第一个文件夹，少点一次
     } else {
       cwPaintFiles(null);
     }
   } catch (e) {
     cwState.err = e.message || String(e);
-    if (grid) grid.innerHTML = '<div class="cw-empty">' + esc(cwState.err) + '</div>';
+    if (tree) tree.innerHTML = '<div class="cw-empty">' + esc(cwState.err) + '</div>';
     const meta = document.getElementById('cwRootMeta');
     if (meta) meta.innerHTML = '<span style="color:var(--status-error)">' + esc(cwState.err) + '</span>';
   }
@@ -33943,13 +34043,13 @@ window.cwReload = cwReload;
 
 /* 课件库只对教师账号开放：未登录 / 学生打开时给出明确提示，而不是一个空白页 */
 function cwPaintBlocked(cfg) {
-  const grid = document.getElementById('cwCourseGrid');
+  const tree = document.getElementById('cwTree');
   const area = document.getElementById('cwFileArea');
   if (area) area.innerHTML = '';
-  if (!grid) return;
-  grid.innerHTML = '<div class="cw-warn" style="margin-top:0">'
-    + '🔒 <b>课件库只对教师账号开放。</b><br>'
-    + (cfg && cfg.msg ? esc(cfg.msg) : '请先在教师端登录，再回到这里管理课件。')
+  if (!tree) return;
+  tree.innerHTML = '<div class="cw-warn" style="margin-top:0">'
+    + '🔒 <b>课程资料只对教师账号开放。</b><br>'
+    + (cfg && cfg.msg ? esc(cfg.msg) : '请先在教师端登录，再回到这里管理资料。')
     + '</div>';
 }
 async function cwAllowLan(on) {
@@ -33967,51 +34067,79 @@ window.cwAllowLan = cwAllowLan;
 function cwPaintRoot() {
   const c = cwState.cfg || {};
   const cnt = document.getElementById('cwCountBadge');
-  if (cnt) cnt.textContent = '共 ' + (c.total || 0) + ' 个文件 · ' + (cwState.courses.length) + ' 个课节';
+  if (cnt) cnt.textContent = '共 ' + (c.total || 0) + ' 个文件 · ' + (cwState.courses.length) + ' 个文件夹';
   const meta = document.getElementById('cwRootMeta');
   if (meta) {
-    let h = '所有资料统一存储在<b>服务器</b>上：这里上传的课件、活动里归档的学生作品都在同一个课件库中，'
-      + '按课节分目录存放。元数据（推送记录、课程匹配）随工作台数据一起备份。';
+    let h = '所有资料统一存储在<b>服务器</b>上：这里上传的课件、活动里归档的学生作品都在同一个资料库中，'
+      + '按课程文件夹分目录存放。元数据（推送记录、课程匹配）随工作台数据一起备份。';
     if (c.error) h += '<br><span style="color:var(--status-error)">⚠ ' + esc(c.error) + '</span>';
     meta.innerHTML = h;
   }
-  const inp = document.getElementById('cwCourseInput');
-  if (inp && !inp.dataset.dirty) {
-    if (!inp.value && cwState.course) inp.value = cwState.course;
-  }
-  const dl = document.getElementById('cwCourseList');
-  if (dl) dl.innerHTML = cwLessonDatalist();
 }
 
-function cwPaintCourses() {
-  const grid = document.getElementById('cwCourseGrid');
-  if (!grid) return;
+/* 左侧树形目录（2026-11-04 资源管理器改版）：课程文件夹列表 */
+function cwPaintTree() {
+  const tree = document.getElementById('cwTree');
+  if (!tree) return;
   if (!cwState.courses.length) {
-    grid.innerHTML = '<div class="cw-empty">还没有课程资料。上面选个文件上传，就会自动按课程建好文件夹。</div>';
+    tree.innerHTML = '<div class="cw-empty" style="padding:18px 6px">还没有课程文件夹</div>'
+      + '<div class="cw-tree-new"><button onclick="cwNewCourse()">＋ 新建课程文件夹</button></div>';
     return;
   }
-  grid.innerHTML = '<div class="cw-courses">' + cwState.courses.map(c => {
-    const on = c.name === cwState.course ? ' on' : '';
-    return '<div class="cw-course' + on + '" data-course="' + esc(c.name) + '" onclick="cwPickCourse(this.dataset.course)">'
-      + '<div class="nm">' + esc(c.name) + '</div>'
-      + '<div class="mt">' + c.count + ' 个文件' + (c.size_text ? ' · ' + esc(c.size_text) : '') + '</div>'
-      + (c.loose ? '<span class="new">无归属</span>' : '')
-      + (c.loose ? '' : '<span class="cw-crn" title="课节改名" data-c="' + esc(c.name) + '"'
-          + ' onclick="event.stopPropagation();cwRenameCourse(this.dataset.c)">✎</span>')
-      + '</div>';
-  }).join('') + '</div>';
+  tree.innerHTML = '<div class="cw-tree-h">🗂 课程文件夹</div>'
+    + cwState.courses.map(c => {
+      const loose = !!c.loose;
+      const ops = loose ? ''
+        : '<span class="ti-ops">'
+          + '<button type="button" title="重命名" onclick="event.stopPropagation();cwRenameCourse(this.dataset.c)" data-c="' + esc(c.name) + '">✎</button>'
+          + '<button type="button" class="ti-del" title="删除整个文件夹" onclick="event.stopPropagation();cwDeleteCourse(this.dataset.c)" data-c="' + esc(c.name) + '">🗑</button>'
+          + '</span>';
+      return '<div class="cw-tree-item' + (c.name === cwState.course ? ' on' : '') + '"'
+        + ' data-course="' + esc(c.name) + '" onclick="cwPickCourse(this.dataset.course)"'
+        + ' title="' + esc(c.name + '（' + c.count + ' 个文件）') + '">'
+        + '<span class="ti-ic">' + (loose ? '📥' : '📁') + '</span>'
+        + '<span class="ti-nm">' + esc(c.name) + '</span>'
+        + '<span class="ti-n">' + c.count + '</span>'
+        + ops + '</div>';
+    }).join('')
+    + '<div class="cw-tree-new"><button onclick="cwNewCourse()">＋ 新建课程文件夹</button></div>';
 }
+window.cwPaintTree = cwPaintTree;
+
+/* 删除整个课程文件夹（2026-11-04）：确认后递归删除，推送记录一并撤回 */
+async function cwDeleteCourse(name) {
+  const oldN = String(name || '');
+  if (!oldN || oldN === '未分课程') { toast('「未分课程」是散文件的默认归属，不能删除'); return; }
+  const c = cwState.courses.find(x => x.name === oldN) || {};
+  const tip = '删除课程文件夹「' + oldN + '」？\n\n里面的 ' + (c.count || 0) + ' 个文件会一并删除'
+    + '（不进回收站，无法恢复）。'
+    + '\n\n已下发给学生的推送记录也会一并撤回。';
+  if (!(await uiConfirm(tip, { title: '删除课程文件夹', okText: '删除' }))) return;
+  try {
+    const r = await cwReq('delete_course', { name: oldN });
+    if (!r.ok) throw new Error(r.msg || '删除失败');
+    /* 该文件夹的推送记录一并撤回：文件都没了，学生端不能留打不开的卡片 */
+    dbSet('materials', (dbT('materials') || []).map(m =>
+      (!m.deleted && m.from === 'courseware' && String(m.lesson || '') === oldN)
+        ? Object.assign({}, m, { deleted: 1 }) : m));
+    cwPaintPushed();
+    toast(r.msg || '已删除');
+    if (cwState.course === oldN) cwState.course = '';
+    cwCfgCache = { at: 0, data: null };
+    await cwReload();
+  } catch (e) { toast(e.message || '删除失败'); }
+}
+window.cwDeleteCourse = cwDeleteCourse;
 
 async function cwPickCourse(name, keep) {
   /* 换课节时勾选清空：不同课节的文件混在一份"已选"里，下发时容易发错 */
   const changed = String(name || '') !== String(cwState.course || '');
   cwState.course = name || '';
   if (changed) { cwState.sel = new Set(); cwState.selLast = -1; }
-  document.querySelectorAll('.cw-course').forEach(el => {
+  /* 树形目录选中态（2026-11-04 资源管理器改版） */
+  document.querySelectorAll('.cw-tree-item').forEach(el => {
     el.classList.toggle('on', el.dataset.course === cwState.course);
   });
-  const inp = document.getElementById('cwCourseInput');
-  if (inp && !keep) { inp.value = cwState.course; delete inp.dataset.dirty; }
   const area = document.getElementById('cwFileArea');
   if (area) area.innerHTML = '<div class="cw-empty">读取文件…</div>';
   try {
@@ -34173,10 +34301,11 @@ function cwFileCard(f, idx) {
     +   '</div></div></div>';
 }
 
-/* —— 视图 2：列表（一行一个，看大小 / 状态 / 批量勾选最顺） —— */
+/* —— 视图 2：列表（一行一个，名称 / 类型 / 大小 / 修改时间，资源管理器口径） —— */
 function cwListHead() {
   return '<div class="cw-list-h"><span></span><span></span><span>文件</span>'
-    + '<span class="sz">大小</span><span class="st">状态</span><span style="text-align:right">操作</span></div>';
+    + '<span class="tp">类型</span><span class="sz">大小</span><span class="mt">修改时间</span>'
+    + '<span style="text-align:right">操作</span></div>';
 }
 function cwListRow(f, idx) {
   const kind = f.kind || cwKindOf(f.name);
@@ -34187,7 +34316,7 @@ function cwListRow(f, idx) {
       + ' onclick="event.stopPropagation();cwPushDialog(this)">' + (sent ? '✓ 已推送' : '⬇ 推送') + '</button>',
     '<button title="重命名" onclick="event.stopPropagation();cwRenameLocal(this)">✎</button>',
     '<button title="下载" onclick="event.stopPropagation();cwDownloadLocal(this)">⬇</button>',
-    f.archived ? '' : '<button title="换到别的课节" onclick="event.stopPropagation();cwMoveLocal(this)">➡</button>',
+    f.archived ? '' : '<button title="移到别的文件夹" onclick="event.stopPropagation();cwMoveLocal(this)">➡</button>',
     '<button class="cw-del" title="删除" onclick="event.stopPropagation();cwDeleteLocal(this)">🗑</button>'
   ].join('');
   return '<div class="cw-lrow' + selCls + '" data-id="' + esc(f.id) + '" data-kind="' + esc(kind) + '" onclick="cwPreviewLocal(this)">'
@@ -34195,9 +34324,10 @@ function cwListRow(f, idx) {
     + '<span class="ic">' + fileTypeIcon(f.name, 17) + '</span>'
     + '<span style="min-width:0"><span class="fn">' + esc(f.name) + '</span>'
     +   '<span class="sub">' + esc(CW_KIND_NAME[kind] || '文件')
-    +   (f.archived ? ' · 活动归档' : '') + '</span></span>'
+    +   (f.archived ? ' · 活动归档' : (sent ? ' · 已推送' : '')) + '</span></span>'
+    + '<span class="tp">' + esc(CW_KIND_NAME[kind] || '文件') + '</span>'
     + '<span class="sz">' + esc(f.size_text || '—') + '</span>'
-    + '<span class="st' + (sent ? ' on' : '') + '">' + (sent ? '已推送' : (f.archived ? '归档' : '未推送')) + '</span>'
+    + '<span class="mt">' + esc(f.mtime || '—') + '</span>'
     + '<span class="op">' + ops + '</span></div>';
 }
 
@@ -34228,19 +34358,25 @@ function cwFilesBox(list) {
 function cwPaintFiles(files) {
   const area = document.getElementById('cwFileArea');
   if (!area) return;
-  /* 选中的文件必须还在当前课节里，否则切换课节后"已选 3 个"却找不到是哪个 */
+  const drop = document.getElementById('cwDrop');
+  /* 选中的文件必须还在当前文件夹里，否则切换文件夹后"已选 3 个"却找不到是哪个 */
   const alive = new Set((files || []).map(f => String(f.id)));
   Array.from(cwState.sel).forEach(id => { if (!alive.has(String(id))) cwState.sel.delete(id); });
   if (!cwState.course) {
+    if (drop) drop.hidden = true;
     area.innerHTML = cwState.courses.length
-      ? '<div class="cw-empty">选上面任意一门课程，查看里面的课件；点文件即可在线打开。' +
-        '选好后可切「列表 / 紧凑」视图，勾选多个文件一次性下发。</div>'
-      : '';
+      ? '<div class="cw-empty">在左侧选一个课程文件夹，查看里面的文件；点文件即可在线打开。</div>'
+      : '<div class="cw-empty" style="padding:40px 0">'
+        + '<div style="font-size:34px;margin-bottom:10px">📁</div>'
+        + '<div style="font-size:14.5px;font-weight:700;color:var(--text-primary);margin-bottom:6px">还没有课程文件夹</div>'
+        + '<div style="margin-bottom:14px">先在左侧「＋ 新建课程文件夹」建一个（例如：第1课 走进人工智能），再往里面上传文件。</div>'
+        + '<button class="btn btn-primary" onclick="cwNewCourse()">＋ 新建课程文件夹</button></div>';
     cwToolbarSync();
     return;
   }
+  if (drop) drop.hidden = false;
   if (!files || !files.length) {
-    area.innerHTML = '<div class="cw-empty">「' + esc(cwState.course) + '」还没有文件。上面拖几个文件进来就存好了。</div>';
+    area.innerHTML = '<div class="cw-empty">「' + esc(cwState.course) + '」还没有文件。点上方「⬆ 上传」或把文件拖进来就存好了。</div>';
     cwToolbarSync();
     return;
   }
@@ -34449,21 +34585,18 @@ async function cwRenameCourse(name) {
 }
 window.cwRenameCourse = cwRenameCourse;
 
-/* 上传：逐个读成 base64 再发（新手点一次就好，不让他管目录结构） */
+/* 上传：逐个读成 base64 再发（一次请求只传一个文件，大文件也好定位失败原因） */
 async function cwUpload(fileList) {
   const files = Array.from(fileList || []);
   if (!files.length) return;
-  /* 2026-11-04 简化：课节只认「归到课节」一个入口，不再弹窗追问。
-     输入框为空时回落到当前选中的课节；两个都没有就明确提示，不猜。 */
-  const inp = document.getElementById('cwCourseInput');
-  let course = ((inp && inp.value) || '').trim() || (cwState.course || '').trim();
+  /* 2026-11-04 资源管理器改版：上传目标 = 左侧当前选中的课程文件夹 */
+  const course = (cwState.course || '').trim();
   const msg = document.getElementById('cwUploadMsg');
   if (!course) {
-    if (msg) msg.innerHTML = '<div class="cw-warn">先在上方「归到课节」里选择或输入一个课节名，再上传。</div>';
-    toast('先填写「归到课节」再上传');
+    if (msg) msg.innerHTML = '<div class="cw-warn">先在左侧选择或新建一个课程文件夹，再上传。</div>';
+    toast('先选择课程文件夹再上传');
     return;
   }
-  if (inp && inp.value.trim() !== course) inp.value = course;
   if (msg) msg.innerHTML = '<div class="cw-ok">正在上传 <b>' + files.length + '</b> 个文件到「' + esc(course) + '」…</div>';
   let done = 0, failedAll = [];
   /* 2026-11-04：改为一次请求只传一个文件。原来一批最多 6 个文件合一个
@@ -34491,7 +34624,7 @@ async function cwUpload(fileList) {
       + (failedAll.length > 4 ? ' …' : '') + '</span>'
     : '';
   if (msg) msg.innerHTML = '<div class="' + (done ? 'cw-ok' : 'cw-warn') + '">'
-    + (done ? ('✓ 已上传 <b>' + done + '</b> 个文件到「' + esc(course) + '」。点下面的课程卡片就能看到。')
+    + (done ? ('✓ 已上传 <b>' + done + '</b> 个文件到「' + esc(course) + '」，右侧列表已刷新。')
             : '✗ 没有文件被保存。') + failTxt + '</div>';
   try {
     await cwReload();
@@ -34694,9 +34827,7 @@ async function cwOpenCourseFolder() {
   if (state.route === 'courseware') {
     cwState.course = course;
     await cwPickCourse(course);
-    const inp = document.getElementById('cwCourseInput');
-    if (inp) { inp.value = course; delete inp.dataset.dirty; }
-    toast('已定位到课程目录：' + course);
+    toast('已定位到课程文件夹：' + course);
     return;
   }
   cwState.pendingCourse = course;

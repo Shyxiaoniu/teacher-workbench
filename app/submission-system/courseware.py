@@ -886,6 +886,24 @@ def rename_or_move(rel, course=None, new_name=None):
         return {"ok": False, "msg": "操作失败：%s" % e}
 
 
+def delete_course(name):
+    """删除整个课程文件夹（2026-11-04 资源管理器改版）。
+    递归删除，不可恢复；「未分课程」是散文件的伪归属，不能删。"""
+    name = str(name or "").strip()
+    if not name or name == "未分课程":
+        return {"ok": False, "msg": "请选择要删除的课程文件夹"}
+    folder = abs_of(safe_course(name), must_exist=True)
+    if not folder or not os.path.isdir(folder):
+        return {"ok": False, "msg": "课程文件夹「%s」不存在" % safe_course(name)}
+    if os.path.normpath(folder) == os.path.normpath(root_dir()):
+        return {"ok": False, "msg": "不能删除课件根目录"}
+    try:
+        shutil.rmtree(folder)
+        return {"ok": True, "msg": "已删除课程文件夹「%s」" % name}
+    except Exception as e:
+        return {"ok": False, "msg": "删除失败：%s" % e}
+
+
 def rename_course(old, new):
     """课节（课程）改名：重命名根目录下的课程文件夹。
     子目录（_学习单 / _活动作品 等）整个跟着走，推送记录与课程匹配

@@ -1159,6 +1159,10 @@ class Handler(BaseHTTPRequestHandler):
             # 课节（课程）改名（2026-11-04）：整个课程文件夹重命名
             res = CW.rename_course(data.get("old"), data.get("new"))
             return self._send_json(res, 200 if res.get("ok") else 400)
+        if path == "/api/cw/delete_course":
+            # 删除整个课程文件夹（2026-11-04 资源管理器改版，递归删除）
+            res = CW.delete_course(data.get("name"))
+            return self._send_json(res, 200 if res.get("ok") else 400)
         if path == "/api/cw/archive":
             res = CW.archive_items(data.get("course"), data.get("activity"),
                                    data.get("base") or "", data.get("items") or [])
