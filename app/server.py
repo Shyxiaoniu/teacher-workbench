@@ -98,7 +98,7 @@ CFG["update"].setdefault("interval_hours", 24) # 检查间隔（小时）
 PET_IDS = ["cat", "dog", "rabbit", "penguin", "panda", "dino", "unicorn", "dragon"]
 COND = threading.Condition()
 STARTED = time.time()
-VERSION = "2.0.3"
+VERSION = "2.0.4"
 ONLINE_WINDOW = 300      # 5 分钟内活跃算在线
 # 可内联直出的附件类型（其余一律按下载处理，防止同源执行脚本）
 _INLINE_EXTS = {"png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "pdf",
@@ -1401,6 +1401,29 @@ class Handler(LEG.Handler):
                         or str(t.get("course") or "").strip() == course):
                     task = str(t.get("task_id") or "")
                     break
+
+        # 学习单优先（2026-11-04）：这份文件如果是本课程「设为学习单」的那一份，
+        # 而且老师已经按班下发过，就直接走课堂活动闸门 /g/act/<push_id> —— 那条
+        # 链路 302 到 /submit/custom.html，由 submission 注入提交运行时（登录浮层
+        # 自动摘除、每题提交按钮、提交到数据大屏）。直接开 /cw/ 原始文件会落进
+        # 页面自带的「预览模式」兜底：没有真提交按钮、不能上报，学生只能干看。
+        if course and task:
+            try:
+                sheet_rel = str(LEG.CW.sheet_of(course) or "").strip("/")
+            except Exception:
+                sheet_rel = ""
+            if sheet_rel and sheet_rel == fid.strip("/"):
+                push = None
+                for p in STORE.table_rows("activity_pushes"):
+                    if (not p.get("deleted")
+                            and str(p.get("class_id") or "") == str(r.get("class_id") or "")
+                            and str(p.get("task_id") or "") == task
+                            and str(p.get("status") or "published") == "published"):
+                        push = p
+                        break
+                if push:
+                    return self._activity_gate(r, str(push.get("id") or ""))
+
         cls_name = self._class_name(r.get("class_id"))
         tok = new_gticket({
             "sid": str(r.get("id") or ""),

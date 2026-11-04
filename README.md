@@ -3,7 +3,7 @@
 > 给班主任和任课老师用的一套**班级工作台**：教师端与学生端共用一个网页入口，
 > 数据全部存在自己的服务器上，不依赖任何第三方云服务。
 
-当前版本：**2.0.3**（版本号唯一代码源：`app/server.py` 的 `VERSION`）
+当前版本：**2.0.4**（版本号唯一代码源：`app/server.py` 的 `VERSION`）
 
 ```
 http://<服务器局域网 IP>:8080/        ← Docker 部署的入口；直接运行时是 :20020
@@ -376,7 +376,7 @@ docker compose up -d --build
 
 | # | 文件 | 位置 |
 |---|---|---|
-| 1 | `app/server.py` | `VERSION = "2.0.3"` —— **唯一代码源** |
+| 1 | `app/server.py` | `VERSION = "2.0.4"` —— **唯一代码源** |
 | 2 | `.env.example` | `IMAGE_TAG=2.0` |
 | 3 | `docker-compose.yml` | `image: …:${IMAGE_TAG:-2.0}`（init 与 workbench **两处**） |
 | 4 | `README.md` | 文首「当前版本」 |

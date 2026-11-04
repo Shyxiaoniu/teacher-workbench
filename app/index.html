@@ -5146,6 +5146,36 @@ body:has(.mini-bar) .corner-credit { display:none; }
   background:var(--bg-page); padding:1px 5px; border-radius:4px;
   border:1px solid var(--border); font-size:10.5px;
 }
+/* ---------- 说明收纳：问号 → 点开小气泡（2026-11-04） ----------
+   原则（牛哥要求）：页面只留「一眼就要做的事」，成段说明收进 ? 里，
+   点一下在原位弹小气泡，不跳页、不遮全屏；再点一下 / 点外面自动收起。 */
+.hq {
+  display:inline-flex; align-items:center; justify-content:center;
+  width:16px; height:16px; padding:0; margin-left:6px; flex:none;
+  border:1px solid var(--border); border-radius:50%; background:transparent;
+  color:var(--text-secondary); font-size:11px; font-weight:700; line-height:1;
+  cursor:pointer; vertical-align:middle; transition:.15s;
+}
+.hq:hover { border-color:var(--brand-primary); color:var(--brand-primary); }
+.hq.on { background:var(--brand-primary); border-color:var(--brand-primary); color:#fff; }
+.hq-pop {
+  position:fixed; z-index:6200; width:min(92vw,430px); max-height:62vh; overflow:auto;
+  padding:12px 34px 12px 14px; border:1px solid var(--border); border-radius:12px;
+  background:var(--bg-surface); color:var(--text-primary);
+  box-shadow:0 14px 40px rgba(0,0,0,.22); font-size:12.5px; line-height:1.75;
+  animation:hqIn .12s ease-out;
+}
+@keyframes hqIn { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:none; } }
+.hq-pop b { font-weight:600; }
+.hq-pop code {
+  background:var(--bg-page); padding:1px 5px; border-radius:4px;
+  border:1px solid var(--border); font-size:11px;
+}
+.hq-pop .hq-x {
+  position:absolute; top:5px; right:7px; padding:2px 4px; border:0; background:transparent;
+  color:var(--text-secondary); font-size:15px; line-height:1; cursor:pointer;
+}
+.hq-pop .hq-x:hover { color:var(--text-primary); }
 .top-search { position:relative; flex:1; max-width:300px; }
 .top-search input {
   width:100%; padding:7px 11px 7px 30px; font-size:13px;
@@ -7735,6 +7765,157 @@ function toast(msg) {
   document.body.appendChild(d);
   setTimeout(() => d.remove(), 2400);
 }
+
+/* ============================================================
+   说明收纳 · 问号 + 小气泡（2026-11-04）
+   用法：hq('backup')            → 渲染一个问号按钮（挂 onclick）
+        hqShow(btn, 'backup')   → 直接打开（也支持按钮 data-hq）
+   文案集中放在 HQ_TEXT 里，别散落到各处；凡是「必须直说才不影响
+   使用」的短句留在页面上，成段解释一律收进来。
+   ============================================================ */
+const HQ_TEXT = {
+  /* —— 设置 · 数据与备份 —— */
+  backup: ''
+    + '<b>一键导出</b>：点一次、设一个备份密码，就把<b>服务端 + 本机</b>的全部数据打包成一个 '
+    + '<b>.cwbackup</b> 加密文件 —— 班级、学生、考勤、作业、成绩、课堂活动发放、座位、教师账号、'
+    + '学生登录密码、打字练习成绩与金币装扮、学生作品附件，加上浏览器里的界面设置与待办。<br>'
+    + '<b>一键恢复</b>：新设备装好工作台并登录后，选择这个文件、输入同一个备份密码，两边的数据'
+    + '一起还原，导完自动刷新即可继续上课，不用重新建班、不用重发学生密码（端口等本机属性不搬运）。<br>'
+    + '<b>出错会直接说明原因</b>：文件不完整 / 密码不对 / 备份数据量明显少于本机 / 服务端未启动 / '
+    + '登录已失效，都会弹出明确提示，并且<b>失败时不改动任何数据</b>；备份数据量远小于本机时会先'
+    + '拦下来，确认要覆盖才继续。<br>'
+    + '<b>资料包</b>：课件库里的文件本身（PDF / 图片 / 视频 / 表格…）体积大，默认用「资料包」单独'
+    + '打包；单个超过 10MB 或合计超过 40MB 的学生作品附件不会进全量备份，导出时会点名提示。<br>'
+    + '旧版纯本机备份（.json / 旧 .cwbackup）仍可从这里恢复。<b>清空本机数据不可撤销</b>，建议先导出留底。',
+  /* —— 设置 · 账号与密码 —— */
+  pwd: ''
+    + '<b>密保验证改密</b>：忘记当前密码也能改 —— 回答密保问题 → 直接设新密码，数据不动。'
+    + '这是推荐方式，密码改了之后其它设备上的登录会被踢下线。<br>'
+    + '<b>密保问题</b>建议设成只有你自己知道答案的题（如“我小学班主任姓什么”）；答案只存加密哈希，'
+    + '连老师自己也看不到原文。<br>'
+    + '<b>两者都忘了</b>：在服务器上执行 '
+    + '<code>docker compose exec workbench python launch.py --reset-password</code> '
+    + '清空口令重新设置，数据不丢。',
+  /* —— 设置 · 周次 —— */
+  term: ''
+    + '首页顶栏和课表标题会同步显示这里的周次。导入的教学安排表<b>每行一条</b>，形如 '
+    + '<code>第3周 09-15~09-21 期中复习</code>（支持 .txt / .csv，也可直接粘贴）。',
+  /* —— 设置 · 待办提醒 —— */
+  todo: ''
+    + '到点后：页面顶部弹出提醒条（列出逾期和今天到期的任务）＋ 系统通知（点了「开启系统通知」才有）。'
+    + '<b>页面没开着的时候不会提醒</b>。待办只存在当前浏览器里，不参与服务端同步。',
+  /* —— 资料页 —— */
+  cw: ''
+    + '所有资料统一上传到服务器存储。左侧是<b>课程文件夹</b>（树形目录），点开即右侧列出文件——'
+    + '名称 / 类型 / 大小 / 修改时间一目了然；选好文件夹后点「⬆ 上传」或把文件直接拖进来。'
+    + '文件夹与文件都可重命名、移动、删除。<br>'
+    + '网页（.html）会显示内容缩略图；Office 文档由服务端现场渲染封面。'
+    + '在这里点「推送」即可把文件下发给班级，学生端「资料」里点一下直接打开。',
+  /* —— 大屏 · 发放 —— */
+  guidePush: ''
+    + '选好课程即完成发放（按班级进行：每个班只看得到、只交得了本班被下发的课程）：'
+    + '学生打开「今日」或「资料」，在本班对应课程里进入学习单或查看资料副本（仅在线查看）。<br>'
+    + '下方数据大屏实时显示本班提交（自动附学号 / 姓名），点学生可看详情。',
+  /* —— 大屏 · 自定义学习单 —— */
+  guideCustom: ''
+    + '想自己设计学习单就点这里：上传一份网页文件（.html）或用默认模板，系统会自动接入课程提交接口，'
+    + '并注入学生的学号 / 姓名 / 班级。网页里每个「题目块」都会自动长出独立的提交按钮，'
+    + '每个按钮在大屏有独立的数据窗口。',
+  /* —— 大屏 · 题目块约定 —— */
+  guideConv: ''
+    + '约定：把每道题包进一个<b>题目块</b> —— <code>&lt;div class="act-q" data-btn="第1题"&gt;…题目与输入框…&lt;/div&gt;</code>，'
+    + '系统按题目块逐题生成提交按钮；要让学生一键跳转外链，加 '
+    + '<code>&lt;div data-ext-url="https://…"&gt;链接说明&lt;/div&gt;</code>。<br>'
+    + '页面里没有题目块、或取消勾选「每题单独提交按钮」时，整页只保留一个提交按钮。',
+  /* —— 作业页 —— */
+  hw: ''
+    + '按课程发布作业，实时看提交率与未交名单。点「收作业」逐生记录；'
+    + '<b>红色</b>=已截止 / 剩 1 天，<b>黄色</b>=剩 2-3 天。<br>'
+    + '点概览卡、作业卡或面板里的状态标签，可直接查看对应状态的学生。',
+  /* —— 成绩页 —— */
+  score: ''
+    + '点表头排序，点科目切单科视图，点学生行看详情；点分数格可直接录入 / 修改。'
+    + '筛选与对比已统一到「分析报告」页，这里不重复。',
+  /* —— 班级页 —— */
+  cls: ''
+    + '班级名 / 教室点一下就能改；导入名单支持 CSV（首行表头：学号、姓名、性别、家长姓名、手机号），'
+    + '按学号自动去重更新；「清空座位」只清座位与小组，<b>不删学生</b>。',
+  /* —— 学生页 —— */
+  stu: ''
+    + '<b>隐私保护</b>：家长电话默认打码，点「显示全部号码」才看完整号码；'
+    + '导出时默认也是打码的（开着「显示全部号码」再导出才会含完整号码，请留意保存位置）。<br>'
+    + '这些信息只存在班级工作台的服务器上，不会上传给任何第三方。',
+  /* —— 工具页 —— */
+  tools: ''
+    + '<b>课堂三件套</b>：随机点名、计时器、番茄钟都在本地运行，<b>不联网也能用</b>。<br>'
+    + '下面的「我的工具」可以放常用网站和二维码（比如作业提交链接），点「＋ 添加工具」就行。<br>'
+    + '数据备份与迁移已统一收进 ⚙ 系统设置 → 数据与备份（全量加密导出 / 一键恢复）。',
+  /* —— 设置 · 外观主题 —— */
+  theme: ''
+    + '开「夜间」后，当前色调会自动切换到对应的暗夜配色（森野→墨绿夜、雾紫→暗紫夜…）。'
+    + '<b>状态色不随主题变</b>：出勤永远绿、旷课永远红、迟到永远黄，换色调不影响判读。',
+  /* —— 座位页 —— */
+  mor: ''
+    + '记分一共 <b>4 处入口</b>，数据完全同一套，挑顺手的用：<br>'
+    + '① <b>德育页</b>（选一批学生 + 一个项目，全班批量最快）<br>'
+    + '② <b>座位表</b> 点学生 → 德育<br>'
+    + '③ 学生详情 → 自定义加减分<br>'
+    + '④ 分组页整组 +1',
+  seat: ''
+    + '点学生可考勤 / 德育；<b>拖动</b>卡片到另一张卡互换座位，拖到空位把学生搬过去。'
+    + '右键卡片或空格可以标记请假、调座位。'
+};
+
+
+const hq = (key, title) => '<button type="button" class="hq" data-hq="' + key
+  + '" title="' + esc(title || '看说明')
+  + '" aria-label="看说明" onclick="event.stopPropagation();hqShow(this,\'' + key + '\')">?</button>';
+
+let _hqPop = null, _hqBtn = null;
+function _hqOutside(e) {
+  if (!_hqPop) return;
+  if (_hqPop.contains(e.target) || e.target === _hqBtn) return;
+  hqClose();
+}
+function hqClose() {
+  if (_hqPop) { _hqPop.remove(); _hqPop = null; }
+  if (_hqBtn) { _hqBtn.classList.remove('on'); _hqBtn = null; }
+  document.removeEventListener('click', _hqOutside, true);
+  window.removeEventListener('resize', hqClose);
+  window.removeEventListener('scroll', hqClose, true);
+}
+function hqShow(btn, key) {
+  const html = HQ_TEXT[key];
+  if (!html) return;
+  const same = _hqBtn === btn;
+  hqClose();
+  if (same) return;                       // 再点同一个问号 = 收起
+  const pop = document.createElement('div');
+  pop.className = 'hq-pop';
+  pop.innerHTML = '<button type="button" class="hq-x" aria-label="关闭">×</button>' + html;
+  document.body.appendChild(pop);
+
+  // 定位：默认贴在按钮下方居中；下方不够就翻到上方；左右夹在视口内
+  const r = btn.getBoundingClientRect();
+  const w = pop.offsetWidth, h = pop.offsetHeight;
+  let left = r.left + r.width / 2 - w / 2;
+  left = Math.max(8, Math.min(left, window.innerWidth - w - 8));
+  let top = r.bottom + 8;
+  if (top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 8);
+  pop.style.left = left + 'px';
+  pop.style.top = top + 'px';
+
+  btn.classList.add('on');
+  _hqPop = pop; _hqBtn = btn;
+  pop.querySelector('.hq-x').onclick = hqClose;
+  setTimeout(() => {
+    document.addEventListener('click', _hqOutside, true);
+    window.addEventListener('resize', hqClose);
+    window.addEventListener('scroll', hqClose, true);
+  }, 0);
+}
+window.hqShow = hqShow;
+window.hqClose = hqClose;
 
 /* ============================================================
    统一弹窗 · uiConfirm / uiPrompt / uiAlert
@@ -15495,11 +15676,8 @@ window.delStudentsMulti = delStudentsMulti;
    ============================================================ */
 function renderGuidePage() {
   return `
-  <div class="notice">
-    选好课程即完成发放（<b>按班级进行</b>：每个班只看得到、只交得了本班被下发的课程）：
-    学生打开「今日」，在本班对应课程里进入学习单或查看资料副本（仅在线查看）。
-    下方<b>数据大屏</b>实时显示本班提交（自动附学号 / 姓名）；
-    学生提交的数据与作品会自动归档到资料对应文件夹。
+  <div class="notice" style="display:flex;align-items:center;gap:2px">
+    选好课程即按班发放；学生端在「资料」里点开就能用。${hq('guidePush', '发给谁 · 学生怎么打开 · 数据去哪了')}
   </div>
   ${renderActivity()}`;
 }
@@ -15832,24 +16010,22 @@ function renderActivity() {
     </div>
 
     <div class="act-card">
-      <div class="act-card-h" style="display:flex;align-items:center;gap:10px">自定义学习单
+      <div class="act-card-h" style="display:flex;align-items:center;gap:10px">自定义学习单${hq('guideCustom', '学习单怎么来 · 系统会自动做什么')}
         <span style="flex:1"></span>
         <button class="btn btn-ghost btn-sm" id="actCustToggleBtn" onclick="actCustToggle()" title="${actCustOpen ? '收起自定义学习单设计区' : '展开后可上传/编写自己的学习单网页'}">${actCustOpen ? '－ 收起' : '＋ 新增自定义学习单'}</button>
       </div>
       <div class="act-task-row" style="margin-bottom:10px">
         <span class="act-muted" style="font-size:12.5px;font-weight:600;white-space:nowrap">课程：</span>
         <select id="actTaskSel" class="act-sel" onchange="actSelectTask()" style="max-width:480px"><option value="">加载中…</option></select>
-        <span class="act-muted" style="font-size:12px">＝ 资料里的课程文件夹名；选好就建好收集任务，学生端按这个名字收</span>
+        <span class="act-muted" style="font-size:12px">＝ 资料里的课程文件夹名</span>
       </div>
       <div id="actPubHint" class="act-roster-hint" style="display:none"></div>
       <div id="actCustBody"${actCustOpen ? '' : ' hidden'}>
-      <div class="act-muted" style="margin-bottom:10px">想自己设计学习单再点这里：上传一份网页文件（.html）或用默认模板，系统会自动接入课程提交接口，并注入学生的<b>学号 / 姓名 / 班级</b>。网页里每个「题目块」都会自动长出独立的提交按钮，每个按钮在大屏有专属的数据显示窗口。设计好后点「下发」即生效。</div>
       <div class="act-cust-row">
         <label class="btn btn-ghost btn-sm" style="cursor:pointer">📤 上传网页文件<input id="actCustFile" type="file" accept=".html,.htm" style="display:none" onchange="actCustomLoadFile(event)"></label>
         <button class="btn btn-ghost btn-sm" onclick="actCustomUseDefault()">📝 用默认模板</button>
-        <label class="act-act" style="cursor:pointer"><input id="actCustPerQ" type="checkbox" checked style="margin:0" onchange="actRenderFileCfg()"> 每题单独提交按钮</label>
+        <label class="act-act" style="cursor:pointer"><input id="actCustPerQ" type="checkbox" checked style="margin:0" onchange="actRenderFileCfg()"> 每题单独提交按钮${hq('guideConv', '题目块写法（进阶）')}</label>
       </div>
-      <div class="act-cust-tip">约定：把每道题包进一个「题目块」——<code>&lt;div class="act-q" data-btn="第1题"&gt;…题目与输入框…&lt;/div&gt;</code>，系统按题目块逐题生成提交按钮；要让学生一键跳转外链，加 <code>&lt;div data-ext-url="https://…"&gt;链接说明&lt;/div&gt;</code>。页面里没有题目块、或取消勾选「每题单独提交按钮」时，整页只保留一个提交按钮。</div>
       <textarea id="actCustHtml" class="act-cust-edit" spellcheck="false" placeholder="在此粘贴/编辑网页 HTML，或点「上传网页文件」「用默认模板」" oninput="actFileCfgDebounced()"></textarea>
       <div id="actFileCfg" class="act-filecfg"></div>
       <div id="actSubmitCfg" class="act-filecfg act-subcfg"></div>
@@ -30380,9 +30556,8 @@ const DEMO_RENDER = {
     }).join('') || '<div class="empty"><div class="empty-title">没有符合条件的作业</div></div>';
 
     return `
-    <div class="notice">
-      按课程发布作业，实时看提交率与未交名单。点「收作业」逐生记录，红色=已截止/剩 1 天，黄色=剩 2-3 天。
-      <b>点概览卡、作业卡或面板里的状态标签，可直接查看对应状态的学生。</b>
+    <div class="notice" style="display:flex;align-items:center;gap:2px">
+      按课程发布作业，实时看提交率与未交名单；<b>红</b>=已截止 / 剩 1 天，<b>黄</b>=剩 2-3 天。${hq('hw', '怎么看未交名单 · 怎么收作业')}
     </div>
 
     <div class="hw-sum stagger">
@@ -30657,14 +30832,9 @@ const DEMO_RENDER = {
     setTimeout(drawMorCharts, 60);
 
     return `
-    <div class="notice" data-no-fold>
+    <div class="notice" data-no-fold style="display:flex;align-items:center;gap:2px">
       ${esc(clsName)} · 数据范围：<b>${esc(rng.label)}</b>（${esc(dateWithWeek(rng.from, true))} ~ ${esc(dateWithWeek(rng.to, true))}）。
-      这里记的每一分，座位表角标、学生面板、成绩页的德育列都会同步看到。
-    </div>
-    <div class="notice" data-foldable data-fold-title="记分入口（4 处，数据同一套）">
-      <span class="dim" style="font-size:12px">记分一共 4 处入口，数据完全同一套，挑顺手的用：
-      ① <b>本页</b>（选一批学生 + 一个项目，全班批量最快）② <b>座位表</b>点学生 → 德育
-      ③ 学生详情 → 自定义加减分 ④ 分组页整组 +1。</span>
+      这里记的每一分，座位表角标、学生面板、成绩页的德育列都会同步。${hq('mor', '记分入口有 4 处，数据同一套')}
     </div>
 
     ${morFbar}
@@ -30907,9 +31077,8 @@ const DEMO_RENDER = {
     <div class="notice" data-no-fold>
       ${esc(clsName)} · 选一场考试看成绩表与排名；<b>多条件筛选、小组 / 学生 / 考试对比、报告导出</b>都在「分析报告」里。
     </div>
-    <div class="notice" data-foldable data-fold-title="成绩表操作说明">
-      <b>点表头排序，点科目切单科视图，点学生行看详情</b>；
-      点分数格可直接录入/修改（预览模式只改内存）。筛选与对比已统一到分析报告页，不在这里重复。
+    <div class="notice" style="display:flex;align-items:center;gap:2px">
+      点表头排序、点科目切单科视图、点分数格直接录入。${hq('score', '还能怎么用这张表')}
     </div>
 
     ${guardBanner}
@@ -31471,9 +31640,8 @@ const DEMO_RENDER = {
       </div>`;
     }).join('');
     return `
-    <div class="notice">
-      班级名/教室点一下就能改；<b>导入名单</b>支持 CSV（首行表头：学号、姓名、性别、家长姓名、手机号），
-      按学号自动去重更新；「清空座位」只清座位与小组，不删学生。
+    <div class="notice" style="display:flex;align-items:center;gap:2px">
+      班级名 / 教室点一下就能改。${hq('cls', '导入名单格式 · 清空座位会删什么')}
     </div>
     <div class="cls-tools">
       <button class="btn btn-primary" style="width:auto;padding:8px 18px;font-size:13px"
@@ -31531,9 +31699,8 @@ const DEMO_RENDER = {
         ${plan.length ? `<button class="btn btn-ghost btn-sm" style="width:auto" type="button"
           onclick="uiConfirm('清除已导入的教学安排？',{title:'清除安排',okText:'清除'}).then(function(ok){if(ok)saveTermCfg({plan:null})})">清除安排</button>` : ''}
       </div>
-      <div class="term-hint">
-        首页顶栏和课表标题会同步显示这里的周次。导入的教学安排表每行一行，形如
-        <code>第3周 09-15~09-21 期中复习</code>（支持 .txt / .csv，也可直接粘贴）。
+      <div class="term-hint" style="display:flex;align-items:center;gap:2px">
+        首页顶栏与课表会同步显示这里的周次。${hq('term', '周次怎么算 · 教学安排表格式')}
       </div>
       ${plan.length ? `
       <div class="acc-title" style="margin-top:14px">已导入的教学安排</div>
@@ -31573,8 +31740,8 @@ const DEMO_RENDER = {
             onclick="setMode('${m}')">${THEME_MODE_NAMES[m]}</button>`).join('')}
       </div>
       <div style="font-size:11px;color:var(--text-secondary);margin-top:12px;
-                  padding-top:10px;border-top:1px solid var(--border)">
-        开「夜间」后，当前色调会自动切换到对应的暗夜配色（森野→墨绿夜、雾紫→暗紫夜…）。状态色不随主题变：出勤永远绿、旷课永远红、迟到永远黄。
+                  padding-top:10px;border-top:1px solid var(--border);display:flex;align-items:center;gap:2px">
+        夜间会自动换成对应暗夜配色，状态色不变。${hq('theme', '夜间模式 · 状态色怎么算')}
       </div>
     </div>
 
@@ -31592,9 +31759,8 @@ const DEMO_RENDER = {
         <button class="btn btn-sm" type="button" style="width:auto"
           onclick="remindTestNow()">试一次</button>
       </div>
-      <div class="term-hint">
-        到点后：页面顶部弹出提醒条（列出逾期和今天到期的任务）＋ 系统通知（点了「开启系统通知」才有）。
-        <b>页面没开着的时候不会提醒</b>。待办只存在当前浏览器里，不参与服务端同步。
+      <div class="term-hint" style="display:flex;align-items:center;gap:2px">
+        页面开着才会提醒；待办只存本机。${hq('todo', '提醒怎么弹 · 为什么会漏')}
       </div>
     </div>
 
@@ -31683,7 +31849,7 @@ const DEMO_RENDER = {
 
       <div style="height:1px;background:var(--border);margin:14px 0 12px"></div>
 
-      <div style="font-size:14px;font-weight:500;margin-bottom:10px">数据与备份（换设备 / 重装用）</div>
+      <div style="font-size:14px;font-weight:500;margin-bottom:10px">数据与备份（换设备 / 重装用）${hq('backup', '备份包含什么 · 怎么恢复 · 有哪些限制')}</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-primary" style="width:auto;padding:8px 16px;font-size:13px"
           onclick="exportFullData()">一键导出全量备份</button>
@@ -31698,22 +31864,6 @@ const DEMO_RENDER = {
         <button class="btn btn-sm" type="button" style="width:auto"
           onclick="dbClearLocalAsk()">清空本机数据</button>
       </div>
-      <div class="term-hint">
-        · <b>一键导出</b>：点一次、设一个备份密码，就把<b>服务端 + 本机</b>的全部数据打包成一个
-        <b>.cwbackup</b> 加密文件 —— 班级、学生、考勤、作业、成绩、课堂活动发放、座位、教师账号、
-        学生登录密码、打字练习成绩与金币装扮、学生作品附件，加上浏览器里的界面设置与待办。<br>
-        · <b>一键恢复</b>：新设备装好工作台并登录后，选择这个文件、输入同一个备份密码，
-        两边的数据一起还原，导完自动刷新即可继续上课，不用重新建班、不用重发学生密码
-        （端口等本机属性不搬运）。<br>
-        · <b>出错会直接说明原因</b>：文件不完整 / 密码不对 / 备份数据量明显少于本机 /
-        服务端未启动 / 登录已失效，都会弹出明确提示，并且<b>失败时不改动任何数据</b>。
-        备份数据量远小于本机时会先拦下来，确认要覆盖才继续。<br>
-        · <b>资料包</b>：课件库里的文件本身（PDF / 图片 / 视频 / 表格…）体积大，
-        默认目标是用「资料包」单独打包；单个超过 10MB 或合计超过 40MB 的学生作品附件
-        不会进全量备份，导出时会点名提示。<br>
-        · 旧版纯本机备份（.json / 旧 .cwbackup）仍可从这里恢复。<br>
-        · 清空本机数据不可撤销，建议先导出留底。
-      </div>
     </div>
 
     <div class="card" id="updCard">
@@ -31725,7 +31875,7 @@ const DEMO_RENDER = {
     </div>
 
     <div class="card">
-      <div style="font-size:14px;font-weight:500;margin-bottom:4px">账号与密码</div>
+      <div style="font-size:14px;font-weight:500;margin-bottom:4px">账号与密码${hq('pwd', '改密方式 · 密保说明 · 密码全忘了怎么办')}</div>
       <div class="set-line" style="border-bottom:none;padding-bottom:0">
         <span class="set-k">当前账号</span>
         <b id="acctUser" style="font-size:14px">teacher</b>
@@ -31740,13 +31890,6 @@ const DEMO_RENDER = {
           onclick="acctQaEditUI()">设置 / 修改密保问题</button>
         <button class="btn btn-sm" type="button" style="width:auto"
           onclick="acctLogoutAsk()">退出登录</button>
-      </div>
-      <div class="term-hint">
-        · <b>密保验证改密</b>：忘记当前密码也能改 —— 回答密保问题 → 直接设新密码，数据不动。
-        这是推荐方式，密码改了之后其它设备上的登录会被踢下线。<br>
-        · <b>密保问题</b>建议设成只有你自己知道答案的题（如“我小学班主任姓什么”）；答案只存加密哈希，
-        连老师自己也看不到原文。<br>
-        · 两者都忘了：在服务器上执行 <code>docker compose exec workbench python launch.py --reset-password</code> 清空口令重新设置，数据不丢。
       </div>
     </div>
 
@@ -31824,10 +31967,8 @@ const DEMO_RENDER = {
     }
 
     return `
-    <div class="notice">
-      <strong>隐私保护</strong> · 家长电话默认打码，点「显示全部号码」才看完整号码；
-      导出时默认也是打码的（开着「显示全部号码」再导出才会含完整号码，请留意保存位置）。
-      这些信息只存在班级工作台的服务器上，不会上传给任何第三方。
+    <div class="notice" style="display:flex;align-items:center;gap:2px">
+      家长电话默认打码，导出同样打码。${hq('stu', '号码怎么显示 · 会不会外传')}
     </div>
     <div class="stu-toolbar">
       <button class="btn btn-primary" style="width:auto;padding:7px 14px;font-size:12px"
@@ -32175,10 +32316,8 @@ const DEMO_RENDER = {
         </div>
       </div>`;
     return `
-    <div class="notice">
-      <strong>课堂三件套</strong> · 随机点名、计时器、番茄钟都在本地运行，不联网也能用。
-      下面的<b>我的工具</b>可以放常用网站和二维码（比如作业提交链接），点「＋ 添加工具」就行。<br>
-      <b>数据备份与迁移</b>已统一收进 ⚙ 系统设置 → 数据与备份（全量加密导出 / 一键恢复）。
+    <div class="notice" style="display:flex;align-items:center;gap:2px">
+      课堂三件套在本地运行，<b>不联网也能用</b>；「我的工具」可放常用网站与二维码。${hq('tools', '工具页还有什么')}
     </div>
 
     <div class="tl-sec">
@@ -32718,7 +32857,7 @@ const sid = st ? st.id : '';
           <span class="lg-item"><b class="mk mk-mor up">+2</b>德育加分</span>
           <span class="lg-item"><b class="mk mk-mor dn">-1</b>德育扣分</span>
           <span class="lg-sep"></span>
-          <span class="lg-item">点学生可考勤 / 德育；拖动卡片到另一张卡互换、拖到空位搬过去</span>
+          <span class="lg-item" style="display:inline-flex;align-items:center">怎么操作${hq('seat', '考勤 · 拖动换座 · 请假')}</span>
         </div>
 
         ${panel}
@@ -33888,7 +34027,9 @@ window.cwConfigCached = cwConfigCached;
 
 function cwLibPanelHtml() {
   return `
-  <div class="notice" data-fold-title="📁 资料说明">所有资料统一<b>上传到服务器</b>存储。左侧是课程文件夹（树形目录），点开即右侧列出文件——<b>名称 / 类型 / 大小 / 修改时间</b>一目了然；选好文件夹后点「⬆ 上传」或把文件直接拖进来。文件夹与文件都可<b>重命名 / 删除</b>，课程里还能<b>新建子文件夹</b>归类。勾选多个文件可批量删除 / 移动 / 一键下发给班级；学生端只能在线查看副本，动不了这里的任何文件。下发错了可在「推送记录」里一键撤回。</div>
+  <div class="notice" style="display:flex;align-items:center;gap:2px">
+    资料统一存在服务器上，按课程文件夹分类；勾选文件可批量删除 / 移动 / 下发。${hq('cw', '目录怎么用 · 学生端看到什么')}
+  </div>
   <div class="cw-wrap">
 
     <div class="cw-card">
@@ -34358,8 +34499,7 @@ function cwPaintRoot() {
   if (cnt) cnt.textContent = '共 ' + (c.total || 0) + ' 个文件 · ' + (cwState.courses.length) + ' 个文件夹';
   const meta = document.getElementById('cwRootMeta');
   if (meta) {
-    let h = '所有资料统一存储在<b>服务器</b>上：这里上传的课件、活动里归档的学生作品都在同一个资料库中，'
-      + '按课程文件夹分目录存放。元数据（推送记录、课程匹配）随工作台数据一起备份。';
+    let h = '资料存在<b>服务器</b>上，按课程文件夹分目录存放；推送记录与课程匹配随工作台数据一起备份。';
     if (c.error) h += '<br><span style="color:var(--status-error)">⚠ ' + esc(c.error) + '</span>';
     meta.innerHTML = h;
   }

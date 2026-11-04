@@ -957,11 +957,12 @@
     /* 一键打开（2026-11-04）：/g/mat/<资料id> 由服务端校验收件人后，把
        「票 + 学号/姓名/班级」挂到地址上再跳转 —— 网页学习单里的登录浮层
        会被自动摘掉，直接显示「已识别：X 班 · 姓名」。
-       .url（Windows 网页快捷方式）也在这一步解析出真实网址直接跳。 */
+       .url（Windows 网页快捷方式）也在这一步解析出真实网址直接跳。
+       ★ 网页 / .url 一律「点一下直接跳」，不再先弹预览弹窗再点第二次：
+         学习单要立刻能答题，中间隔一层预览纯属多余步骤（牛哥 2026-11-04）。 */
     var openUrl = '/g/mat/' + encodeURIComponent(m.id);
-    if (matIsUrl(m)) { window.open(openUrl, '_blank'); return; }
+    if (matIsUrl(m) || matIsWeb(m)) { window.location.href = openUrl; return; }
     var kind = matKind(m), e = matExt(m);
-    var web = matIsWeb(m);
     var pv = String(m.url).replace('/cw/', '/cwpv/');   // 预览闸门（Office 由服务端渲染）
     var dl = m.url;                                      // 原始文件（下载 / 新窗口）
     var body;
@@ -987,13 +988,11 @@
       '<div class="note">' + (m.lesson || m.subject ? esc(m.lesson || m.subject) + ' · ' : '') +
       (m.date ? esc(m.date) + ' 推送 · ' : '') + '在线查看，不用下载</div>' +
       body +
-      /* 网页文件：主按钮就是一键打开（带身份）；其它类型保留下载/新窗口 */
-      (web
-        ? '<a class="btn" style="display:block;text-align:center;text-decoration:none;margin-top:12px" href="' +
-          esc(openUrl) + '" target="_blank" rel="noopener">🚀 一键打开（自动识别你的账号）</a>'
-        : (kind === 'other' ? ''
-          : '<a class="btn line" style="display:block;text-align:center;text-decoration:none;margin-top:12px" href="' +
-            esc(dl) + '" target="_blank" rel="noopener">' + (isDoc ? '下载原文件' : '在新窗口打开') + '</a>')),
+      /* 网页 / .url 已在函数开头直接跳转，走不到这里；图片 / 音视频 / 文档
+         才需要这层预览，主按钮是「打开原文件」 */
+      (kind === 'other' ? ''
+        : '<a class="btn line" style="display:block;text-align:center;text-decoration:none;margin-top:12px" href="' +
+          esc(dl) + '" target="_blank" rel="noopener">' + (isDoc ? '下载原文件' : '在新窗口打开') + '</a>'),
       (kind === 'other') ? null : 'preview');
     var cl = $('#shClose'); if (cl) cl.onclick = hideSheet;
   }
