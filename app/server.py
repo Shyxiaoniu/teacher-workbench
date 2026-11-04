@@ -98,7 +98,7 @@ CFG["update"].setdefault("interval_hours", 24) # 检查间隔（小时）
 PET_IDS = ["cat", "dog", "rabbit", "penguin", "panda", "dino", "unicorn", "dragon"]
 COND = threading.Condition()
 STARTED = time.time()
-VERSION = "2.0.5"
+VERSION = "2.0.6"
 ONLINE_WINDOW = 300      # 5 分钟内活跃算在线
 # 可内联直出的附件类型（其余一律按下载处理，防止同源执行脚本）
 _INLINE_EXTS = {"png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "pdf",
@@ -1282,6 +1282,64 @@ class Handler(LEG.Handler):
         })
         return self._redirect(url + sep + qs)
 
+    def _signed_today(self, r):
+        """今天是否有有效签到（出勤/迟到/请假都算；缺勤不算）。
+
+        学习单入口（/g/act）与资料入口打开学习单（/g/mat）共用这一条闸门，
+        两个入口的判断标准必须完全一致，否则学生会发现「从资料点进去
+        不用签到、从今日点进去要签到」这种自相矛盾的行为。
+        """
+        d = time.strftime("%Y-%m-%d")
+        ok_st = ("checked", "late", "sick", "personal", "present", "early_leave")
+        return any(
+            str(a.get("status") or "") in ok_st
+            for a in STORE.table_rows("attendance")
+            if str(a.get("student_id")) == str(r.get("id"))
+            and str(a.get("date") or "") == d and not a.get("deleted"))
+
+    def _custom_page_ready(self, task):
+        """该活动是否已经部署过学习单页面（custom_templates 里有非空 HTML）。
+
+        为什么资料入口要先问这一句：学生最终打开的是
+        /submit/custom.html?task=…，服务端按 task 取这份已注入运行时的页面。
+        没部署过就只能拿到「老师还没有配置自定义提交页」的占位串 —— 那还不如
+        退回原始网页（虽然会有预览模式黄条，至少内容是对的）。
+        """
+        try:
+            cfg = LEG.get_config()
+            tpls = cfg.get("custom_templates") if isinstance(cfg, dict) else None
+            return bool(isinstance(tpls, dict) and str(tpls.get(task) or "").strip())
+        except Exception:
+            return False
+
+    def _sheet_entry_url(self, r, task, title=""):
+        """带身份票的 /submit/custom.html 链接（资料入口直通学习单用）。
+
+        和 _activity_gate 的跳转保持同一套参数：票由服务端签，页面凭票
+        提交（/api/v2/student/submit?t=…），学号姓名只用来显示。api 不带，
+        让页面自己问 /api/v2/act-api 拿本活动的提交地址。
+        """
+        cls_name = self._class_name(r.get("class_id"))
+        tok = new_gticket({
+            "sid": str(r.get("id") or ""),
+            "no": str(r.get("student_no") or ""),
+            "name": str(r.get("name") or ""),
+            "cls": cls_name,
+            "gid": "", "idx": 0, "task": task,
+        })
+        qs = urllib.parse.urlencode({
+            "class": cls_name,
+            "task": task,
+            "title": title or task,
+            "wbT": tok,
+            "wbSid": str(r.get("student_no") or ""),
+            "wbName": str(r.get("name") or ""),
+            "wbCls": cls_name,
+            "wbTask": task,
+            "wbBase": public_base(self.headers),
+        })
+        return public_base(self.headers) + "/submit/custom.html?" + qs
+
     def _activity_gate(self, r, push_id):
         """课堂活动学习单入口：/g/act/<push_id>（2026-11-03）。
 
@@ -1306,14 +1364,7 @@ class Handler(LEG.Handler):
                                         "老师还没发放或已收回，等老师重新开启后再打开。"), 403)
 
         # 签到闸门：出勤/迟到/请假都算有效签到；一笔都没有或缺勤 → 拦下
-        d = time.strftime("%Y-%m-%d")
-        ok_st = ("checked", "late", "sick", "personal", "present", "early_leave")
-        signed = any(
-            str(a.get("status") or "") in ok_st
-            for a in STORE.table_rows("attendance")
-            if str(a.get("student_id")) == str(r.get("id"))
-            and str(a.get("date") or "") == d and not a.get("deleted"))
-        if not signed:
+        if not self._signed_today(r):
             return self._html(_tip_page(
                 "请先签到",
                 "今天还没有你的签到记录，先回到学生端完成签到，再打开这门课的学习单。"), 403)
@@ -1405,11 +1456,15 @@ class Handler(LEG.Handler):
                     task = str(t.get("task_id") or "")
                     break
 
-        # 学习单优先（2026-11-04）：这份文件如果是本课程「设为学习单」的那一份，
-        # 而且老师已经按班下发过，就直接走课堂活动闸门 /g/act/<push_id> —— 那条
-        # 链路 302 到 /submit/custom.html，由 submission 注入提交运行时（登录浮层
-        # 自动摘除、每题提交按钮、提交到数据大屏）。直接开 /cw/ 原始文件会落进
-        # 页面自带的「预览模式」兜底：没有真提交按钮、不能上报，学生只能干看。
+        # 学习单优先（2026-11-04 / 2026-11-05 补 draft 直通）：这份文件如果是
+        # 本课程「设为学习单」的那一份，就绝不能再回 /cw 原始文件 ——
+        # 那个页面自带「预览模式」兜底（没有平台注入的提交按钮就显示黄条
+        # 「提交仅作演示、不会真正上报」），学生看到会以为学习单坏了。
+        #   ① 该班有已发放（published）的记录 → 走 /g/act，签到 + 发放校验齐全；
+        #   ② 已关闭（closed）→ 明确告诉学生被老师关了；
+        #   ③ 从没发放过 / 已收回（draft）→ 网页既然推给了本班，就该能答题，
+        #      直通 /submit/custom.html（带票，真提交按钮、提交进数据大屏）。
+        #      这种情况在「老师只推送了资料、没在学习单入口下发」时很常见。
         if course and task:
             try:
                 sheet_rel = str(LEG.CW.sheet_of(course) or "").strip("/")
@@ -1420,12 +1475,22 @@ class Handler(LEG.Handler):
                 for p in STORE.table_rows("activity_pushes"):
                     if (not p.get("deleted")
                             and str(p.get("class_id") or "") == str(r.get("class_id") or "")
-                            and str(p.get("task_id") or "") == task
-                            and str(p.get("status") or "published") == "published"):
+                            and str(p.get("task_id") or "") == task):
                         push = p
                         break
-                if push:
+                st = str(push.get("status") or "published") if push else ""
+                if push and st == "published":
                     return self._activity_gate(r, str(push.get("id") or ""))
+                if st == "closed":
+                    return self._html(_tip_page(
+                        "这份学习单已关闭",
+                        "老师暂时关闭了这份学习单，等老师重新开启后再打开。"), 403)
+                if self._custom_page_ready(task):
+                    if not self._signed_today(r):
+                        return self._html(_tip_page(
+                            "请先签到",
+                            "今天还没有你的签到记录，先回到学生端完成签到，再打开这门课的学习单。"), 403)
+                    return self._redirect(self._sheet_entry_url(r, task, course))
 
         cls_name = self._class_name(r.get("class_id"))
         tok = new_gticket({

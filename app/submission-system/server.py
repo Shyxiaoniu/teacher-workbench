@@ -25,6 +25,10 @@ import shutil
 import threading
 import datetime
 import urllib.parse
+# 注意：_custom_html 里有个同名局部变量 html（页面 HTML 字符串），
+# 所以这里必须用别名导入——`import html` 会被局部变量遮蔽，
+# 写成 html.escape(...) 会抛 "'str' object has no attribute 'escape'"。
+import html as _htmlmod
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import courseware as CW
@@ -954,7 +958,7 @@ class Handler(BaseHTTPRequestHandler):
                 if isinstance(cc, dict):
                     course = str(cc.get(task) or "")
             course = course or "课堂"
-            safe = html.escape(course)
+            safe = _htmlmod.escape(course)
             html = html.replace("{{COURSE}}", safe).replace("{{course}}", safe)
         return html
 

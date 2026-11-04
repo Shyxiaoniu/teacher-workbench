@@ -16136,6 +16136,7 @@ let actTaskList = [];      // 收集任务（后端 act_task，标题 = 课程�
 let actCourseNames = [];   // 资料文件夹名列表（下拉框选项）
 let actActiveCourse = '';  // 当前选中的课程名（归档到课程目录用它）
 let actSheetFile = null;   // 老师选中的学习单网页（资料里的 .html 文件）；null = 默认模板
+let actSheetUsedName = ''; // 上一次部署实际用了哪份页面（toast 用，便于老师确认）
 
 /** 学习单下拉：默认模板 + 当前课程文件夹里的网页文件（2026-11-04 大屏改版）
     资料里「设为学习单」的网页自动预选（2026-11-04）：老师不用每次重新挑 */
@@ -16180,16 +16181,39 @@ async function actSheetChange() {
 }
 window.actSheetChange = actSheetChange;
 
+/** 课程资料里被「设为学习单」的那份网页（courseware 配置的 sheets 映射）。
+    2026-11-05：大屏把「学习单」下拉整块下线后，actLoadSheets 里的自动预选
+    也跟着没了（它第一句就是 getElementById('actSheetSel') 判空返回），
+    actSheetFile 永远是 null —— 于是「下发」一律部署默认模板，老师精心做的
+    学习单网页根本没被用上，学生端要么看到默认模板，要么（从资料点进去）
+    看到原始页的「预览模式」黄条。这个函数把「设为学习单」重新接回部署链路。 */
+async function actSheetOf(course) {
+  if (!course) return '';
+  try {
+    const j = await cwReq('list?course=' + encodeURIComponent(course));
+    const sheet = String(j.sheet || '');
+    if (!sheet) return '';
+    const htmls = (j.files || []).filter(f => !f.archived && /\.html?$/i.test(f.name || ''));
+    return htmls.some(f => String(f.id) === sheet) ? sheet : '';
+  } catch (e) { return ''; }
+}
+window.actSheetOf = actSheetOf;
+
 /** 把当前所选学习单（设计器生成页 > 资料网页 > 默认模板）部署为该任务的提交页 */
 async function actDeploySheet(t, course) {
   let deployHtml = null;
+  actSheetUsedName = '';
+  // 没有下拉了：先把「资料里设为学习单」的那份找出来，等价于以前下拉的默认选中
+  let sheetId = actSheetFile ? actSheetFile.id : '';
+  if (!sheetId) sheetId = await actSheetOf(course || t.course || t.title);
   if (actGeneratedPage && actGeneratedPageTask === t.task_id) {
     deployHtml = actGeneratedPage;   // 老师刚在下方设计器里「生成」的页面，最优先
-  } else if (actSheetFile) {
+    actSheetUsedName = '设计器刚生成的页面';
+  } else if (sheetId) {
     /* 资料里的网页文件：每次下发都重新拉取部署，文件更新后学生端拿到的也是新版。
        {{COURSE}} 在这里统一替换（资料里的网页可以是「通用模板」，一门课存一份） */
     try {
-      const fr = await fetch(CW_API + 'file?id=' + encodeURIComponent(actSheetFile.id) + '&dl=0', { cache: 'no-store' });
+      const fr = await fetch(CW_API + 'file?id=' + encodeURIComponent(sheetId) + '&dl=0', { cache: 'no-store' });
       if (fr.ok) deployHtml = actBuildCustomPage(
         actFillCourseVars(await fr.text(), course || t.course || t.title));
     } catch (e) {}
@@ -16201,6 +16225,7 @@ async function actDeploySheet(t, course) {
       if (!curHtml.trim() || curHtml.indexOf('老师还没有配置自定义提交页') !== -1) {
         deployHtml = actBuildCustomPage(
           actFillCourseVars(actCustomDefaultTpl(), course || t.course || t.title));
+        actSheetUsedName = '默认模板';
       }
     } catch (e) {}
   }
@@ -16344,7 +16369,7 @@ async function actPublishCurrent() {
        注意走同源：/api/custom 要教师会话 cookie。 */
     try {
       const dep = await actDeploySheet(t, course);
-      if (dep) toast('已部署学习单页面：' + (actSheetFile ? actSheetFile.name : '默认模板'));
+      if (dep) toast('已部署学习单页面：' + (actSheetUsedName || '默认模板'));
     } catch (e) {}
     const now = new Date().toISOString().slice(0, 16).replace('T', ' ');
     let row;
