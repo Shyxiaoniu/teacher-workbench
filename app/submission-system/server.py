@@ -1092,7 +1092,20 @@ class Handler(BaseHTTPRequestHandler):
             files = CW.list_files(course) if course else CW.all_files()[0]
             # 该课程被「设为学习单」的网页文件 id（前端据此打标 + 大屏预选）
             sheet = CW.sheet_of(course) if course else ""
-            return self._send_json({"ok": True, "course": course, "files": files, "sheet": sheet})
+            # 课程内的一级子文件夹（2026-11-04 新建文件夹功能）：树里挂在课程下
+            subs = []
+            if course and course != "未分课程":
+                cdir = CW.abs_of(CW.safe_course(course))
+                if cdir and os.path.isdir(cdir):
+                    try:
+                        subs = sorted([n for n in os.listdir(cdir)
+                                       if not n.startswith(".") and n.lower() not in CW._IGNORE
+                                       and os.path.isdir(os.path.join(cdir, n))],
+                                      key=lambda x: x.lower())
+                    except Exception:
+                        subs = []
+            return self._send_json({"ok": True, "course": course, "files": files,
+                                    "sheet": sheet, "subs": subs})
         if path == "/api/cw/file":
             full = CW.abs_of(arg("id"), must_exist=True)
             if not full or not os.path.isfile(full):
@@ -1164,7 +1177,7 @@ class Handler(BaseHTTPRequestHandler):
                 left -= len(chunk)
             return self._send_json({"ok": False,
                                     "msg": "文件太大（单个上限 %s）" % CW.human_size(CW.MAX_UPLOAD)}, 413)
-        res = CW.save_stream(course, name, self.rfile, length)
+        res = CW.save_stream(course, name, self.rfile, length, sub=arg("sub"))
         return self._send_json(res, 200 if res.get("ok") else 400)
 
     def _cw_post(self, path, u, data):
@@ -1190,7 +1203,20 @@ class Handler(BaseHTTPRequestHandler):
             return self._send_json({"ok": ok2, "msg": msg, "root": (cfg or {}).get("root", "")},
                                    200 if ok2 else 400)
         if path == "/api/cw/upload":
-            res = CW.save_upload(data.get("course") or "未分课程", data.get("files") or [])
+            res = CW.save_upload(data.get("course") or "未分课程", data.get("files") or [],
+                                 sub=data.get("sub") or "")
+            return self._send_json(res, 200 if res.get("ok") else 400)
+        if path == "/api/cw/new_folder":
+            # 课程内新建子文件夹（2026-11-04）
+            res = CW.new_folder(data.get("course"), data.get("name"))
+            return self._send_json(res, 200 if res.get("ok") else 400)
+        if path == "/api/cw/rmdir":
+            # 删除课程内的空子文件夹（非空拒绝）
+            res = CW.rmdir_folder(data.get("course"), data.get("name"))
+            return self._send_json(res, 200 if res.get("ok") else 400)
+        if path == "/api/cw/move_files":
+            # 课程内整理文件：选中文件移进 / 移出子文件夹
+            res = CW.move_files(data.get("course"), data.get("ids") or [], data.get("sub") or "")
             return self._send_json(res, 200 if res.get("ok") else 400)
         if path == "/api/cw/delete":
             res = CW.delete_file(data.get("id"))

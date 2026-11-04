@@ -642,9 +642,31 @@ def unique_path(folder, name):
         i += 1
 
 
-def save_upload(course, files):
+def course_sub_dir(course, sub, create=False):
+    """课程内的一级子文件夹 → 绝对路径；sub 为空 = 课程根目录。
+    「未分课程」是根目录散文件的伪归属，不允许在里面建子文件夹
+    （否则会变成一个新的"课程"出现在树里，语义混乱）。"""
+    course = str(course or "").strip()
+    if not course or course == "未分课程":
+        return None
+    base = abs_of(safe_course(course))
+    if not base:
+        return None
+    sub = str(sub or "").strip()
+    if not sub:
+        return base
+    folder = abs_of(safe_course(course) + "/" + safe_name(sub))
+    if folder and create and not os.path.isdir(folder):
+        try:
+            os.makedirs(folder, exist_ok=True)
+        except Exception:
+            return None
+    return folder
+
+
+def save_upload(course, files, sub=""):
     import base64
-    folder = abs_of(safe_course(course))
+    folder = course_sub_dir(course, sub, create=True)
     if not folder:
         return {"ok": False, "msg": "课程名不合法"}
     try:
@@ -681,7 +703,7 @@ def save_upload(course, files):
             "msg": ("已上传 %d 个文件" % len(saved)) if saved else "没有文件被保存"}
 
 
-def save_stream(course, name, stream, length):
+def save_stream(course, name, stream, length, sub=""):
     """流式直传落盘（2026-11-04）：请求体就是文件原始字节，边收边写。
 
     走 base64 JSON 的 save_upload 要在浏览器里把整个文件读成字符串再翻倍
@@ -689,7 +711,7 @@ def save_stream(course, name, stream, length):
     Memory」）。这里从请求流按 256KB 分块写盘，浏览器用 fetch body=File
     流式发送，前后端内存占用都是常数级。
     """
-    folder = abs_of(safe_course(course))
+    folder = course_sub_dir(course, sub, create=True)
     if not folder:
         return {"ok": False, "msg": "课程名不合法"}
     try:
@@ -1063,6 +1085,100 @@ def rename_course(old, new):
                 "old": safe_course(old), "new": dst_name}
     except Exception as e:
         return {"ok": False, "msg": "改名失败：%s" % e}
+
+
+def new_folder(course, name):
+    """课程内新建一级子文件夹（2026-11-04）：归类课件用。"""
+    course = str(course or "").strip()
+    nm = safe_name(name)
+    if not course or course == "未分课程":
+        return {"ok": False, "msg": "请先选择一个课程文件夹（「未分课程」不支持建子文件夹）"}
+    if not str(name or "").strip():
+        return {"ok": False, "msg": "请填写文件夹名"}
+    folder = abs_of(safe_course(course) + "/" + nm)
+    if not folder:
+        return {"ok": False, "msg": "文件夹名不合法"}
+    if os.path.exists(folder):
+        return {"ok": False, "msg": "「%s」里已经有叫「%s」的文件夹了" % (safe_course(course), nm)}
+    try:
+        os.makedirs(folder)
+        return {"ok": True, "msg": "已在「%s」里新建文件夹「%s」" % (safe_course(course), nm), "sub": nm}
+    except Exception as e:
+        return {"ok": False, "msg": "创建失败：%s" % e}
+
+
+def rmdir_folder(course, name):
+    """删除课程内的空子文件夹（非空拒绝，防止误删一整个分类）。"""
+    course = str(course or "").strip()
+    nm = safe_name(name)
+    if not course or course == "未分课程" or not str(name or "").strip():
+        return {"ok": False, "msg": "请选择要删除的文件夹"}
+    folder = abs_of(safe_course(course) + "/" + nm, must_exist=True)
+    if not folder or not os.path.isdir(folder):
+        return {"ok": False, "msg": "文件夹「%s」不存在" % nm}
+    try:
+        os.rmdir(folder)                     # 只删空目录，非空会抛 OSError
+        return {"ok": True, "msg": "已删除空文件夹「%s」" % nm}
+    except OSError:
+        return {"ok": False, "msg": "「%s」不是空的——先移走或删除里面的文件再删文件夹" % nm}
+    except Exception as e:
+        return {"ok": False, "msg": "删除失败：%s" % e}
+
+
+def move_files(course, ids, sub):
+    """课程内整理文件（2026-11-04）：sub='' 移回课程根目录，sub=名称 → 移进该子文件夹。
+    「设为学习单」的标记若指向被移动的文件，路径同步更新，标记不失效。"""
+    course = str(course or "").strip()
+    if not course or course == "未分课程":
+        return {"ok": False, "msg": "「未分课程」是散文件的伪归属，不支持文件夹整理"}
+    base = abs_of(safe_course(course))
+    if not base:
+        return {"ok": False, "msg": "课程名不合法"}
+    sub_name = safe_name(sub) if str(sub or "").strip() else ""
+    dst_dir = os.path.join(base, sub_name) if sub_name else base
+    moved, failed = [], []
+    for rid in (ids or []):
+        full = abs_of(rid, must_exist=True)
+        nm = os.path.basename(str(rid or "")) or "文件"
+        if not full or not os.path.isfile(full):
+            failed.append({"name": nm, "msg": "文件不存在"})
+            continue
+        try:
+            inside = os.path.commonpath([os.path.normpath(base),
+                                         os.path.normpath(full)]) == os.path.normpath(base)
+        except ValueError:
+            inside = False
+        if not inside:
+            failed.append({"name": nm, "msg": "不是本课程的文件"})
+            continue
+        if os.path.normpath(os.path.dirname(full)) == os.path.normpath(dst_dir):
+            failed.append({"name": nm, "msg": "已在这个文件夹里"})
+            continue
+        try:
+            os.makedirs(dst_dir, exist_ok=True)
+            target = unique_path(dst_dir, os.path.basename(full))
+            old_rel = rel_of(full)
+            shutil.move(full, target)
+            new_rel = rel_of(target)
+            moved.append({"name": os.path.basename(target), "id": new_rel})
+            # 学习单标记跟着文件走（rel 变了就同步，标记不丢）
+            try:
+                cfg = load_cfg()
+                sheets = cfg.get("sheets") if isinstance(cfg.get("sheets"), dict) else {}
+                hit = False
+                for k, v in sheets.items():
+                    if str(v) == old_rel:
+                        sheets[k] = new_rel
+                        hit = True
+                if hit:
+                    cfg["sheets"] = sheets
+                    save_cfg(cfg)
+            except Exception:
+                pass
+        except Exception as e:
+            failed.append({"name": nm, "msg": "移动失败：%s" % e})
+    return {"ok": bool(moved) or not failed, "moved": moved, "failed": failed,
+            "msg": ("已移动 %d 个文件" % len(moved)) if moved else "没有文件被移动"}
 
 
 def set_root(new_root, move):

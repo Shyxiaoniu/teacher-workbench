@@ -25,7 +25,7 @@ INCLUDE_DIRS = ["app", "docker"]
 # docs 只带 md（截图约 5 MB，本地留着就行）
 INCLUDE_DOC_GLOB = ".md"
 # 根目录散文件
-INCLUDE_FILES = ["README.md", "LICENSE", "THIRD-PARTY-NOTICES.md",
+INCLUDE_FILES = ["README.md", "LICENSE",
                  ".env.example", "docker-compose.yml", "Dockerfile"]
 
 # 任意层级出现即跳过
@@ -75,16 +75,15 @@ NOTES = """# {name} · 发行说明
 | `app/` | 工作台主程序：服务端、教师端页面、学生端、打字练习、提交系统、图标、启动脚本（课堂活动已内嵌） |
 | `docker/` | Docker 部署用的入口脚本与 nginx 网关配置 |
 | `Dockerfile` / `docker-compose.yml` / `.env.example` | 容器化部署三件套 |
-| `docs/` | 使用与设计文档，以及文档里引用的功能截图（`docs/shots/` 下 app / student / student-pc 三个目录） |
-| `README.md` | 完整使用说明：功能、部署、建班、一堂课的用法、备份换机、常见问题 |
+| `docs/` | 文档引用的功能截图（`docs/shots/` 下 app / student / student-pc 三个目录；说明文档已整合进 README） |
+| `README.md` | 完整使用说明（项目唯一说明文档）：功能、架构、部署、建班、课堂流程、备份换机、在线更新、常见问题、许可声明 |
 | `LICENSE` | 本项目的 MIT 许可证（Copyright (c) 2026 Shyxiaoniu） |
-| `THIRD-PARTY-NOTICES.md` | 第三方组件与许可清单 |
 
 ## 一点五、许可提醒（转发前请看一眼）
 
 MIT 的义务只有一条：**再分发时保留版权声明与许可全文**。所以把这个包发给同事、传到网盘、
-或放进自己的仓库时，**请不要删除 `LICENSE` 和 `THIRD-PARTY-NOTICES.md`**。
-详见 `THIRD-PARTY-NOTICES.md` 与 `README.md` 第十节。
+或放进自己的仓库时，**请不要删除 `LICENSE` 和 `README.md` 里的许可与声明部分**。
+详见 `README.md`「十二、许可与声明」。
 
 ## 二、怎么启动
 

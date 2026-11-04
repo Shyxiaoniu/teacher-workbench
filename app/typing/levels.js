@@ -1,24 +1,24 @@
 /* ============================================================
    打字冒险岛 · 无限关卡引擎（levels.js）
-   确定性伪随机：同一 (篇章, 卷号, 关号) 在任何机器上生成的内容
-   完全一致 —— 学生换机器、换浏览器，关卡不变；服务端也能按同
-   一套规则复核星级。
+   伪随机种子：(篇章, 卷号, 关号, 文章, 尝试号 nonce) 共同决定。
+   2026-11-04 起 genLevel 支持 nonce：调用方每次进关传一个随机
+   nonce，重玩 / 重置 / 刷新都会换一套内容；不传（=0）保持旧
+   确定性（第 6 篇章读文章仍按句序推进，不参与随机）。
    依赖：typing-data.js（先加载）
    ============================================================ */
 window.TL = (function () {
   'use strict';
 
-  /* ---------------- 确定性随机 ---------------- */
-  function hashSeed(a, b, c, d) {
+  /* ---------------- 伪随机种子（变参：全参与混合） ---------------- */
+  function hashSeed() {
     var h = 2166136261 >>> 0;
-    function mix(s) {
-      s = String(s);
+    for (var ai = 0; ai < arguments.length; ai++) {
+      var s = String(arguments[ai] == null ? '' : arguments[ai]);
       for (var i = 0; i < s.length; i++) {
         h ^= s.charCodeAt(i);
         h = Math.imul(h, 16777619);
       }
     }
-    mix(a); mix(b); mix(c); mix(d || '');
     return h >>> 0;
   }
   function mulberry32(seed) {
@@ -131,10 +131,11 @@ window.TL = (function () {
        type='keys' → items:[{k, hint}]，逐键作答
        type='text' → text:'...'，逐字作答
      speedLine：两星速度线（字/分）；timeLimit：秒 */
-  function genLevel(stage, chapter, level, grades, articleId) {
+  function genLevel(stage, chapter, level, grades, articleId, nonce) {
     var TD = window.TD;
-    /* 文章维度参与种子：同一篇文章的第 3 卷第 5 关，在哪台机器上都一样 */
-    var rng = mulberry32(hashSeed('wb-typing', stage, chapter, level, articleId || ''));
+    /* 文章维度 + 尝试号参与种子：nonce 每次进关随机 → 重玩/重置/刷新
+       内容都不同；不传 nonce（读文章模式）则同一关内容恒定 */
+    var rng = mulberry32(hashSeed('wb-typing', stage, chapter, level, articleId || '', nonce || 0));
     var boss = isBoss(level);
     /* 篇章元信息按 id 取，不能用数组下标 —— 新增篇章后 id 与顺序不再一致
        （小键盘 id=7 排在中文前面），用下标会取错篇章、甚至取到 undefined */

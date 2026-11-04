@@ -1930,15 +1930,24 @@ window.kbDebugFinger = function () {
              function (e) { return e.getAttribute('data-finger'); }) };
 };
 
+/* 关卡内容指纹（自动化校验用，2026-11-04）：直接读引擎此刻真正在跑的
+   那一份关卡数据，不重新生成——「重玩 / 重置 / 刷新后再进是否换了内容」
+   只能看 S.play.L 本身，另算一份等于没验。 */
+window.kbDebugLevel = function () {
+  return JSON.stringify((S.play && S.play.L) || null);
+};
+
 /* ---------------- 练习引擎 ---------------- */
 function startLevel(st, ch, lv) {
   clearPlayBindings();
   try {
     var grades = (S.config && S.config.grades) || [];
-    /* 第 6 篇章把「正在读的文章」带进引擎：同一篇文章同一关，
-       在哪台机器上都是同一句 */
+    /* 第 6 篇章把「正在读的文章」带进引擎：读文章按句序推进（第几关读
+       第几句），内容恒定不参与随机；其余篇章 2026-11-04 起每次进关
+       （重玩 / 重置 / 刷新后再进）都换一套随机内容，防止背顺序。 */
     var artId = (st === 6 && S.art.id) ? S.art.id : null;
-    var L = TL.genLevel(st, ch, lv, grades, artId);
+    var nonce = artId ? 0 : Math.floor(Math.random() * 0x7fffffff);
+    var L = TL.genLevel(st, ch, lv, grades, artId, nonce);
     /* 防御：关卡数据生成异常（阶段越界 / 文本缺失等）时，给出明确错误而不是白屏或卡死 */
     if (!L || !L.type) throw new Error('关卡数据生成失败（stage=' + st + ' chapter=' + ch + ' level=' + lv + '）');
     if (L.type === 'keys' && !Array.isArray(L.items)) L.items = [];
@@ -1962,6 +1971,8 @@ function startLevel(st, ch, lv) {
     });
   }
 }
+/* 自动化校验入口（2026-11-04）：直接走真实进关流程，验「重玩是否换内容」 */
+window.startLevel = startLevel;
 /* ---------------- 课文区渲染 ----------------
    中文：逐字一列，默认只显示汉字；每个字把拼音写进 data-p（多音字靠
    pinyin.js 的词级覆盖），点击时气泡才弹出来 —— 拼音是「查」出来的，

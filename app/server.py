@@ -2357,7 +2357,7 @@ class Handler(LEG.Handler):
             pass
         self._serve_abs(out, download=True,
                         ctype="application/zip",
-                        name="课程资料包-%s.zip" % stamp)
+                        name="资料包-%s.zip" % stamp)
         return None
 
     def _import_files(self):
@@ -3422,6 +3422,17 @@ class Handler(LEG.Handler):
         old = STORE.get_row("attendance", rid) or {}
         first = str(old.get("checked_at") or "")
         old_status = str(old.get("status") or "")
+
+        # 教师强制锁（2026-11-04）：老师在座位表/学生面板手动强设的考勤状态
+        # （attendance.force=1）优先级最高——学生再怎么登录/签到都不改写，
+        # 直到教师解除强制。请假优先逻辑也一并被涵盖（强制就是最终态）。
+        if old.get("force"):
+            # 返回结构与正常签到一致（调用方 _student_checkin 会 **info 展开），
+            # 前端据 already=True 提示「本节课已经签过到了」，状态仍是老师那一笔。
+            return True, {"date": d, "period": period,
+                          "status": str(old.get("status") or ""),
+                          "period_label": (p or {}).get("label") or ("第 %s 节" % period),
+                          "checked_at": first, "already": True, "forced": True}
 
         # 课表闸门（2026-11-03 牛哥反馈）：本班这个时段没排课就不允许签到。
         # 以前只校验节次合法性与时间窗：课表没排课的日子（周末/无课日下午）
