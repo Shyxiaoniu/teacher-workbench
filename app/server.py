@@ -3160,10 +3160,11 @@ class Handler(LEG.Handler):
         「已经过去的最近一节」——新班级被记到上一节，还按上一节的开始
         时间算迟到（差了整整一个课间，10+ 分钟 → 全班 late）。
 
-        口径：
+        口径（2026-11-04 牛哥定版）：
         · 整点在某一节的时间窗里 → 就是那一节（各班一样）；
-        · 课间先看「下一节」：距上课 ≤45 分钟、且本班这一节有排课
-          → 记下一节（提前到机房 = 准时）；
+        · 课间先看「下一节」：上一节下课后（+1 分钟起）就算下一节的「课前」，
+          且本班这一节有排课 → 记下一节（提前到机房 = 准时），不再限 45 分钟；
+        · 当天第一节之前没有「上一节」，保留开始前 15 分钟的提前量；
         · 其余（放学后 / 本班课表没在用）→ 保持旧行为（上一节补签）。
         cid 为 None（无班级上下文）时等同 _current_period。
         """
@@ -3196,22 +3197,38 @@ class Handler(LEG.Handler):
             if s > cur:
                 nxt = r
                 break
-        if nxt is not None and cid is not None and mins(nxt.get("start_time")) - cur <= 45:
-            try:
-                p = int(float(nxt.get("seq") or nxt.get("id") or 0))
-            except Exception:
-                p = 0
-            if p and self._class_lesson_at(cid, dow, p) is True:
-                return nxt
+        if nxt is not None and cid is not None:
+            # 2026-11-04 定版：上一节下课后 1 分钟起就算下一节的课前，
+            # 不再限「45 分钟内开上」——9:40 下课 → 9:41 起可签下一节。
+            # cur 已在上一节结束之后（分钟为整数，cur > end 即 cur >= end+1）；
+            # 当天第一节之前没有「上一节」，保留开始前 15 分钟的提前量。
+            idx = rows.index(nxt)
+            if idx > 0:
+                pe = mins(rows[idx - 1].get("end_time"))
+                too_early = pe >= 0 and cur < pe + 1   # 保险，正常到不了
+            else:
+                s_n = mins(nxt.get("start_time"))
+                too_early = s_n >= 0 and cur < s_n - 15
+            if not too_early:
+                try:
+                    p = int(float(nxt.get("seq") or nxt.get("id") or 0))
+                except Exception:
+                    p = 0
+                if p and self._class_lesson_at(cid, dow, p) is True:
+                    return nxt
         past = [r for r in rows if mins(r.get("start_time")) >= 0
                 and mins(r.get("start_time")) <= cur]
         return past[-1] if past else rows[0]
 
     def _period_time_ok(self, r):
-        """签到时间窗校验：允许「开始前 15 分钟」到「结束后 30 分钟」（课间补签）。
+        """签到时间窗校验（2026-11-04 牛哥定版）。
 
-        返回 (ok, msg)。作息表里没填时间的节次不拦（老师没排作息就不约束）。
-        以前不校验时间：周六晚上也能把当天所有节挨个签到一遍。
+        窗口 = 「上一节下课 + 1 分钟」~「本节下课」：
+        · 上一节 9:40 下课 → 9:41 起就算这一节的课前，可以签到（提前到 = 准时）；
+        · 本节一下课立即截止，课后不再开放补签（需要补签让老师在考勤页登记）；
+        · 当天第一节之前没有「上一节」，保留开始前 15 分钟的提前量；
+        · 作息表里没填时间的节次不拦（老师没排作息就不约束）。
+        返回 (ok, msg)。
         """
         if not r:
             return True, ""
@@ -3226,10 +3243,41 @@ class Handler(LEG.Handler):
             return True, ""
         cur = time.localtime().tm_hour * 60 + time.localtime().tm_min
         label = r.get("label") or ("第 %s 节" % (r.get("seq") or r.get("id") or "?"))
-        if cur < s - 15:
-            return False, "还没到%s（%s 开始），先不用签" % (label, r.get("start_time"))
-        if cur > e + 30:
-            return False, "%s 已结束（%s 下课），如需补签请让老师在考勤页登记" % (label, r.get("end_time"))
+        # 找本节之前最近一个有下课时间的节次：它的下课时间 +1 分钟 = 本节课前起点
+        try:
+            seq = float(r.get("seq") if r.get("seq") not in (None, "") else r.get("id"))
+        except Exception:
+            seq = -1.0
+        prev_end = None
+        try:
+            rows = sorted(
+                [x for x in STORE.table_rows("periods") if not x.get("deleted")],
+                key=lambda x: float(x.get("seq")
+                                    if x.get("seq") not in (None, "") else x.get("id")))
+        except Exception:
+            rows = []
+        for x in rows:
+            try:
+                xseq = float(x.get("seq")
+                             if x.get("seq") not in (None, "") else x.get("id"))
+            except Exception:
+                continue
+            if xseq >= seq:
+                break
+            pe = mins(x.get("end_time"))
+            if pe >= 0:
+                prev_end = pe
+        if prev_end is not None:
+            if cur < prev_end + 1:
+                pe_str = "%d:%02d" % (prev_end // 60, prev_end % 60)
+                return False, "%s 还没到签到时间（上一节 %s 下课，之后才算%s的课前）" % (
+                    label, pe_str, label)
+        else:
+            if cur < s - 15:
+                return False, "还没到%s（%s 开始），先不用签" % (label, r.get("start_time"))
+        if cur > e:
+            return False, "%s 已下课（%s），不能再签这一节了；如需补签请让老师在考勤页登记" % (
+                label, r.get("end_time"))
         return True, ""
 
     def _now_payload(self, cid=None):
@@ -3289,7 +3337,7 @@ class Handler(LEG.Handler):
                 return self._json({"ok": False, "msg": "没有这一节课"}, 400)
             if not (1 <= period <= 20):
                 return self._json({"ok": False, "msg": "节次超出范围"}, 400)
-            # 时间窗校验：还没开始 / 已结束（含课间补签窗口）都明确拒绝
+            # 时间窗校验：没到课前 / 已下课都明确拒绝（窗口见 _period_time_ok）
             for r in STORE.table_rows("periods"):
                 for k in ("seq", "id"):
                     try:

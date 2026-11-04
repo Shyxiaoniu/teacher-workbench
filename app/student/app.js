@@ -332,40 +332,41 @@
         ? (locked
             ? '<div class="tag mut" data-locked="1">学习单已关闭</div>'
             : '<div class="tag hot" data-act="/g/act/' + encodeURIComponent(push.id || '') + '" data-act-title="' +
-              esc(push.task_title || '课堂活动') + '">进学习单</div>')
+              esc(push.task_title || '课堂学习单') + '">进学习单</div>')
         : '<div class="tag mut">暂无学习单</div>';
       return '<div class="lesson' + (isNow ? ' now' : '') + (locked ? ' locked' : '') + '" ' +
         (push ? (locked
           ? 'data-locked="1"'
-          : 'data-act="/g/act/' + encodeURIComponent(push.id || '') + '" data-act-title="' + esc(push.task_title || '课堂活动') + '"') : '') + '>' +
+          : 'data-act="/g/act/' + encodeURIComponent(push.id || '') + '" data-act-title="' + esc(push.task_title || '课堂学习单') + '"') : '') + '>' +
         '<div class="t"><b>' + esc(p.label || ('第' + (p.seq || '') + '节')) + '</b>' + esc(st) + '</div>' +
         '<div class="m"><b>' + esc(c.name || l.course_name || '课程') + '</b>' +
         '<span>' + (push
-          ? (locked ? '老师已关闭，暂时无法打开' : ('课堂活动 · ' + esc(push.task_title || 'Interactive')))
+          ? (locked ? '老师已关闭，暂时无法打开' : ('课堂学习单 · ' + esc(push.task_title || 'Interactive')))
           : esc(l.room_override || c.location || '')) + '</span></div>' +
         gTag + '</div>';
     }).join('') : '<div class="empty">今天没有课，好好休息</div>';
 
-    /* 今日课堂活动（按日期，不依赖课表）：
-       周末 / 临时停课时课表里没课，按课程找活动的入口就没了——
-       这里按「日期 = 今天」单独列一区块，有课没课都能打开。 */
+    /* 今日课程学习单（按日期，不依赖课表）：
+       周末 / 临时停课时课表里没课，按课程找学习单的入口就没了——
+       这里按「日期 = 今天」单独列一区块，有课没课都能打开。
+       2026-11-04：只显示下发给本班的课程（服务端已按班投影）。 */
     var gds = pushes().filter(function (p) {
       return String(p.date || '') === todayStr();
     });
     var gdHtml = gds.length
-      ? '<div class="card"><h3>今日课堂活动<span class="more">' + gds.length + ' 个</span></h3>' +
+      ? '<div class="card"><h3>今日课程学习单<span class="more">' + gds.length + ' 个</span></h3>' +
         gds.map(function (p) {
           var locked = !pushOpen(p);
           return '<div class="lesson' + (locked ? ' locked' : '') + '" ' +
             (locked
               ? 'data-locked="1"'
-              : 'data-act="/g/act/' + encodeURIComponent(p.id || '') + '" data-act-title="' + esc(p.task_title || '课堂活动') + '"') + '>' +
-            '<div class="t"><b>' + esc(p.course || '课堂活动') + '</b></div>' +
-            '<div class="m"><b>' + esc(p.task_title || '课堂活动') + '</b>' +
+              : 'data-act="/g/act/' + encodeURIComponent(p.id || '') + '" data-act-title="' + esc(p.task_title || '课堂学习单') + '"') + '>' +
+            '<div class="t"><b>' + esc(p.course || '课堂学习单') + '</b></div>' +
+            '<div class="m"><b>' + esc(p.task_title || '课堂学习单') + '</b>' +
             '<span>' + (locked ? '老师已关闭，暂时无法打开' : '交互式学习单 · 点开作答并提交，提交后有状态提示') + '</span></div>' +
             (locked
               ? '<div class="tag mut" data-locked="1">已关闭</div>'
-              : '<div class="tag hot" data-act="/g/act/' + encodeURIComponent(p.id || '') + '" data-act-title="' + esc(p.task_title || '课堂活动') + '">打开学习单</div>') +
+              : '<div class="tag hot" data-act="/g/act/' + encodeURIComponent(p.id || '') + '" data-act-title="' + esc(p.task_title || '课堂学习单') + '">打开学习单</div>') +
             '</div>';
         }).join('') + '</div>'
       : '';
@@ -1466,7 +1467,7 @@
     var avg = pctN ? Math.round(pctSum / pctN * 10) / 10 : null;
     /* 一句话点评：只依据本人数据，不与他人比较排名 */
     var words = !list.length && !sc.length
-      ? '新学期刚开始，先在「今日」里签个到、看看今天的课堂活动吧！'
+      ? '新学期刚开始，先在「今日」里签个到、看看今天的课程学习单吧！'
       : (lateN > 0 ? '作业要抓紧啦，别让逾期拖了后腿，赶一赶就上来了！'
         : hwRate !== null && hwRate >= 90
           ? '作业又快又齐' + (avg != null && avg >= 85 ? '，成绩也稳稳的，继续保持！' : '，继续保持这个节奏！')

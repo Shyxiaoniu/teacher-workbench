@@ -10939,7 +10939,7 @@ const CLS_PICK_ROUTES = { seats:1, timetable:1, students:1, homework:1,
 const PAGE_SEARCH_ROUTES = { students:1, seats:1 };
 /** 顶栏大标题：内容区旧 .page-title 已删，只保留这一份 */
 const PAGE_TITLES = { seats:'座位表', timetable:'课表', students:'学生与家长',
-                      homework:'作业收交', scores:'成绩', guide:'上课 · 课堂活动',
+                      homework:'作业收交', scores:'成绩', guide:'上课 · 课程下发与收集',
                       classes:'班级', settings:'设置', todos:'个人待办',
                       tools:'工具', courseware:'课件 · 课件库' };
 function topTitleFor(route) {
@@ -15311,21 +15311,23 @@ async function delStudentsMulti(ids) {
 window.delStudentsMulti = delStudentsMulti;
 
 /* ============================================================
-   上课（原「导学单」页 · 2026-11-02 改版）
+   上课（原「导学单」页 · 2026-11-04 改版：直接关联课件库课程）
    ------------------------------------------------------------
-   教师端不再编辑导学单内容：
-   · 课堂活动列表来自「⚙ 活动管理」（/api/act/tasks）；
-   · 交互式学习单由教师用活动提交 API 自行设计（自定义网页
-     注入登录 / 逐题提交后部署），选好活动即自动发放给学生；
-   · 学生端「今日」对应课程里出现「进入课堂活动」，提交直达活动接口；
+   教师端不再编辑导学单内容，也不再单独建「活动」：
+   · 课程列表直接来自课件库（/api/cw/config），选中课程即自动
+     匹配 / 创建同名收集任务（act_task，标题 = 课程名）；
+   · 交互式学习单由教师用课程提交 API 自行设计（自定义网页
+     注入登录 / 逐题提交后部署），选好课程即按班级自动发放；
+   · 下发按班级进行：每个班只看得到、只交得了本班被下发的课程；
+   · 学生端「今日」对应课程里出现学习单入口，提交直达课程接口；
    · 发放记录走 activity_pushes 表，与其它业务表同一条同步链路；
    · 学生提交的数据 / 作品由工作台自动归档到课件库对应课程目录。
    ============================================================ */
 function renderGuidePage() {
   return `
   <div class="notice">
-    选好班级与活动即完成发放：学生打开「今日」，在对应课程里进入课堂活动
-    （交互式学习单），提交直达活动接口。
+    选好课程即完成发放（<b>按班级进行</b>：每个班只看得到、只交得了本班被下发的课程）：
+    学生打开「今日」，在本班对应课程里进入交互式学习单，提交直达课程数据接口。
     下方可实时查看<b>数据大屏</b>与<b>学生作品</b>；
     学生提交的数据与作品会自动归档到课件库对应课程目录。
   </div>
@@ -15648,29 +15650,14 @@ function renderActivity() {
   .act-subcfg-row{display:flex;align-items:center;gap:8px;font-size:13px;padding:5px 0}
   .act-subcfg-nm{flex:0 0 auto;max-width:42%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
   .act-subcfg-inp{flex:1 1 auto;min-width:120px;padding:6px 9px;border:1px solid var(--border,#DDE5E1);border-radius:8px;font-size:13px;background:var(--bg-surface,#fff);color:var(--text-primary);box-sizing:border-box}
-  /* ⚙ 活动管理弹窗（2026-11-03 · 自研后端） */
-  .act-admin{width:min(860px,94vw);max-width:none}
-  .act-form{display:grid;grid-template-columns:1fr 1fr;gap:10px 12px}
-  .act-form .full{grid-column:1 / -1}
-  .act-form label{display:block;font-size:12px;color:var(--text-secondary);margin-bottom:4px;font-weight:600}
-  .act-form input,.act-form textarea,.act-form select{width:100%;box-sizing:border-box;padding:7px 9px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg-surface);color:var(--text-primary);font-family:inherit}
-  .act-form textarea{resize:vertical;min-height:54px}
-  .act-list{display:flex;flex-direction:column;gap:8px}
-  .act-row{display:flex;gap:10px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--bg-surface)}
-  .act-main{min-width:0;flex:1 1 240px}
-  .act-main b{font-size:14px}
-  .act-meta{display:block;font-size:12px;color:var(--text-secondary);margin-top:2px;word-break:break-all}
-  .act-ops{display:flex;gap:6px;flex-wrap:wrap}
-  .act-ops .btn{padding:4px 9px;font-size:12px;width:auto}
-  .act-ops .act-del{color:var(--status-error,#E24B4A);border-color:var(--status-error,#E24B4A)}
-  .act-file-row{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-secondary);margin-top:4px}
+  /* 2026-11-04：活动管理弹窗下线（选课直接自动建任务），相关样式移除 */
 </style>
-  <div class="notice" data-foldable data-fold-title="活动说明">
-    课堂活动<b>已由工作台自己托管</b>：
-    点上方<b>「⚙ 活动管理」</b>新建 / 改名 / 删除活动、上传教学资料、导出提交数据。
-    交互式学习单由教师自行设计——写一份网页，系统自动注入学号 / 姓名登录与逐题提交，
-    数据直接进工作台的活动库。选好活动即完成发放：学生端「今日」对应课程里出现
-    「进入课堂活动」。学生提交的数据与作品由工作台自动归档到课件库对应课程目录。
+  <div class="notice" data-foldable data-fold-title="课程说明">
+    上课页<b>直接关联课件库里的课程</b>（如「第1课人工智能」），不再单独建活动：
+    ① 选课程 → ② 设计 / 部署交互式学习单 → ③ 下发到班级。
+    选一门课件库课程，系统自动建立同名的数据收集任务；
+    下发<b>按班级进行</b>：每个班只看得到、只交得了本班被下发的课程。
+    学生提交的数据与作品由工作台自动归档到课件库对应课程目录。
   </div>
   ${actClassBarHtml()}
   <div class="act-wrap">
@@ -15678,24 +15665,23 @@ function renderActivity() {
       <span class="act-dot" id="actDot"></span>
       <b id="actStatusText">检测中…</b>
       <span style="flex:1"></span>
-      <button class="btn btn-primary btn-sm" onclick="actAdminOpen()">⚙ 活动管理</button>
       <button class="btn btn-ghost btn-sm" onclick="actInit()">刷新</button>
     </div>
 
     <div class="act-card">
-      <div class="act-card-h">① 选择活动（列表来自「活动管理」）</div>
+      <div class="act-card-h">① 选择课程（列表来自课件库）</div>
       <div class="act-task-row">
         <select id="actTaskSel" class="act-sel" onchange="actSelectTask()" style="max-width:480px"><option value="">加载中…</option></select>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px">
-        <span class="act-muted" style="font-size:12px">选好活动即自动发放给当前班级；也可在下方自己写交互式学习单页面</span>
+        <span class="act-muted" style="font-size:12px">选好课程即自动发放给当前班级；也可在下方自己写交互式学习单页面</span>
       </div>
       <div id="actPubHint" class="act-roster-hint" style="display:none"></div>
     </div>
 
     <div class="act-card">
-      <div class="act-card-h">② 设计交互式学习单（活动提交 API）</div>
-      <div class="act-muted" style="margin-bottom:10px">上传一份网页文件（.html）或用默认模板，系统会自动接入活动提交接口，并注入学生的<b>学号 / 姓名 / 班级</b>：学生从学生端打开时自动识别身份；直接打开链接时输入学号，姓名与班级自动匹配本班名单。网页里每个「题目块」都会自动长出独立的提交按钮，每个按钮在数据大屏有专属的数据显示窗口。部署后点①里的活动即可发放给学生。</div>
+      <div class="act-card-h">② 设计交互式学习单（课程提交 API）</div>
+      <div class="act-muted" style="margin-bottom:10px">上传一份网页文件（.html）或用默认模板，系统会自动接入课程提交接口，并注入学生的<b>学号 / 姓名 / 班级</b>：学生从学生端打开时自动识别身份；直接打开链接时输入学号，姓名与班级自动匹配本班名单。网页里每个「题目块」都会自动长出独立的提交按钮，每个按钮在数据大屏有专属的数据显示窗口。部署后点①里的课程即可下发给学生。</div>
       <div class="act-cust-row">
         <label class="btn btn-ghost btn-sm" style="cursor:pointer">📤 上传网页文件<input id="actCustFile" type="file" accept=".html,.htm" style="display:none" onchange="actCustomLoadFile(event)"></label>
         <button class="btn btn-ghost btn-sm" onclick="actCustomUseDefault()">📝 用默认模板</button>
@@ -15737,6 +15723,16 @@ function actClassStudents(cls) {
   return (dbT('students') || []).filter(s => Number(s.class_id) === Number(cls));
 }
 function actSubMatchClass(sub, clsStus) {
+  /* 2026-11-04 按班级维度收集：学生从学生端打开学习单时，提交记录会带上
+     他所属的班级（cls → 归一化为「班级」字段）。这类记录直接按班级名比对，
+     重名 / 改名的学生也不会串班；没有班级字段的旧提交、或班级名和任何
+     一个班都对不上（手填不规范）时，才回退到姓名 / 学号匹配。 */
+  const subCls = String(sub['班级'] || '').trim();
+  if (subCls && actCurClsName) {
+    if (subCls === actCurClsName) return true;
+    const known = (dbT('classes') || []).some(c => String(c.name || '').trim() === subCls);
+    if (known) return false;   // 明确是别的班的提交，绝不按姓名硬凑进本班
+  }
   const no = String(sub['学号'] || sub['student_no'] || '').trim();
   const nm = String(sub['姓名'] || sub['name'] || '').trim();
   return clsStus.some(stu => {
@@ -15747,26 +15743,27 @@ function actSubMatchClass(sub, clsStus) {
     return false;
   });
 }
+let actCurClsName = '';   // 当前班级名（actRenderDash 里赋值，按班级收集比对用）
 function actClassBarHtml() {
   const classes = dbT('classes') || [];
   if (!classes.length) {
     return `<div class="act-card" style="border-color:var(--status-warning,#E0A900)">
       <div class="act-card-h">班级</div>
-      <div class="act-muted">还没有创建班级。请先在「班级」中添加班级与学生，再来收集活动数据。</div>
+      <div class="act-muted">还没有创建班级。请先在「班级」中添加班级与学生，再来收集课程数据。</div>
       <div style="margin-top:10px"><button class="btn btn-primary" onclick="goClasses()">去创建班级</button></div>
     </div>`;
   }
   const cur = actCurClass();
   if (cur == null) {
     return `<div class="act-card">
-      <div class="act-card-h">当前活动班级</div>
-      <div class="act-muted">本页「班级」下拉当前为「全部班级」。请选择一个具体班级，活动数据将按该班级匹配学生提交。</div>
+      <div class="act-card-h">当前收集班级</div>
+      <div class="act-muted">本页「班级」下拉当前为「全部班级」。请选择一个具体班级，课程数据将按该班级收集与统计。</div>
     </div>`;
   }
   const cls = classes.find(c => Number(c.id) === Number(cur));
   const stuN = actClassStudents(cur).length;
   return `<div class="act-card act-cls-bar">
-      <div class="act-card-h" style="margin:0">当前活动班级：<b>${esc(cls ? cls.name : '')}</b> · ${stuN} 名学生（用本页上方「班级」下拉切换）</div>
+      <div class="act-card-h" style="margin:0">当前收集班级：<b>${esc(cls ? cls.name : '')}</b> · ${stuN} 名学生（用本页上方「班级」下拉切换）</div>
     </div>`;
 }
 function renderActClassInfo() {
@@ -15779,51 +15776,83 @@ function renderActClassInfo() {
 }
 window.renderActClassInfo = renderActClassInfo;
 
-// 工作台启动后自动获取活动列表
-let actTaskList = [];
+/* ===================== ① 选择课程（2026-11-04 改版） =====================
+   课程列表直接来自课件库（/api/cw/config 的课程/课节），
+   不再有独立的「活动」实体：选中课程时在收集任务库里按
+   「任务标题或关联课程 = 课程名」匹配；没有就自动创建一个同名任务。
+   下发 / 提交 / 大屏 / 归档链路全部不变，只是任务跟着课程走。 */
+let actTaskList = [];      // 收集任务（后端 act_task，标题 = 课程名）
+let actCourseNames = [];   // 课件库课程名列表（下拉框选项）
+let actActiveCourse = '';  // 当前选中的课程名（归档到课程目录用它）
 async function actLoadTaskList() {
   const sel = document.getElementById('actTaskSel');
   if (!sel) return;
   sel.innerHTML = '<option value="">加载中…</option>';
   try {
-    const r = await fetch(actApiBase() + '/tasks', { mode: 'cors' });
-    if (!r.ok) throw new Error('读取活动列表失败（' + r.status + '）');
-    const j = await r.json();
-    const tasks = (j && j.tasks) || [];
-    actTaskList = tasks;
-    if (!tasks.length) { sel.innerHTML = '<option value="">（无可用活动）</option>'; actActiveId = null; actRenderDash(); actPubRepaint(); return; }
-    sel.innerHTML = tasks.map(t => '<option value="' + esc(t.task_id) + '">' + esc(t.title || t.task_id) + '</option>').join('');
-    const def = actActiveId || (tasks[0] && tasks[0].task_id);
-    if (def) sel.value = def;
-    actSelectTask(true);   // 程序性选中：不触发发放，只有老师主动换选才发放
+    const results = await Promise.all([
+      cwConfigCached(true).catch(() => null),
+      fetch(actApiBase() + '/tasks', { mode: 'cors' })
+        .then(r => { if (!r.ok) throw new Error('读取课程任务失败（' + r.status + '）'); return r.json(); })
+    ]);
+    const cfg = results[0];
+    actCourseNames = ((cfg && cfg.courses) || [])
+      .map(c => String(c.name || '').trim()).filter(Boolean);
+    actTaskList = ((results[1] || {}).tasks) || [];
+    if (!actCourseNames.length) {
+      sel.innerHTML = '<option value="">（课件库还没有课程，请先到「教学 · 课件」上传资料建课节）</option>';
+      actActiveId = null; actActiveCourse = ''; actRenderDash(); actPubRepaint(); return;
+    }
+    sel.innerHTML = actCourseNames.map(n =>
+      '<option value="' + esc(n) + '">' + esc(n) + '</option>').join('');
+    // 记住上次选的课程：actActiveId 存的是任务号，反查回课程名
+    const curTask = actTaskList.find(t => String(t.task_id) === String(actActiveId));
+    const defCourse = (curTask && (curTask.course || curTask.title)) || actActiveCourse || '';
+    sel.value = actCourseNames.indexOf(defCourse) >= 0 ? defCourse : actCourseNames[0];
+    await actSelectTask(true);   // 程序性选中：不触发发放，只有老师主动换选才发放
   } catch (e) {
     /* 数据服务没启动时浏览器只会给一句 "Failed to fetch"，
        老师看不出是网线、代理还是服务没开 */
     const raw = String((e && e.message) || e);
     const msg = /Failed to fetch|NetworkError|Load failed|fetch/i.test(raw)
-      ? '连不上活动接口（' + actApiBase() + '），请刷新页面重试'
+      ? '连不上课程接口（' + actApiBase() + '），请刷新页面重试'
       : raw;
     sel.innerHTML = '<option value="">加载失败：' + esc(msg) + '</option>';
-    actActiveId = null; actRenderDash(); actPubRepaint();
+    actActiveId = null; actActiveCourse = ''; actRenderDash(); actPubRepaint();
   }
 }
 window.actLoadTaskList = actLoadTaskList;
 
-function actSelectTask(silent) {
+async function actSelectTask(silent) {
   const sel = document.getElementById('actTaskSel');
   if (!sel) return;
-  const id = sel.value;
-  actActiveId = id || null;
+  const course = sel.value;
+  if (!course) { actActiveId = null; actActiveCourse = ''; actRenderDash(); if (silent) actPubRepaint(); return; }
+  actActiveCourse = course;
+  // 找绑定了这门课的收集任务（标题或关联课程字段匹配）；没有就自动建一个同名任务
+  let t = actTaskList.find(x =>
+    String(x.title || '').trim() === course || String(x.course || '').trim() === course);
+  if (!t) {
+    try {
+      const r = await fetch('/api/v2/teacher/activity/save', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ task_id: '', title: course, description: '', class_id: 0, course: course })
+      });
+      const j = await r.json();
+      if (j.ok && j.task) { t = j.task; actTaskList.push(t); }
+    } catch (e) {}
+  }
+  actActiveId = t ? String(t.task_id) : null;
   actRenderDash();
   if (silent) actPubRepaint();
-  else actPublishCurrent();   // 选好活动即发放：写入 activity_pushes，学生端今日可见
+  else actPublishCurrent();   // 选好课程即发放：写入 activity_pushes，学生端今日可见
 }
 window.actSelectTask = actSelectTask;
 
 /* ===================== 发放 / 收回（activity_pushes → 学生端「今日」） =====================
-   选好活动即发放：写入 activity_pushes 表（与业务表同一条同步链路），
-   学生端「今日」对应课程里出现「进入课堂活动」，打开即教师设计的交互式学习单
-   （/submit/custom.html 外壳 + 活动提交 API）。
+   选好课程即发放：写入 activity_pushes 表（与业务表同一条同步链路），
+   学生端「今日」对应课程里出现学习单入口，打开即教师设计的交互式学习单
+   （/submit/custom.html 外壳 + 课程提交 API）。
    未自定义页面时用默认模板自动部署一份，保证学生打开就有可用的提交页。 */
 function actPushes() { return dbT('activity_pushes') || []; }
 function actPushOf(cls, taskId) {
@@ -15836,7 +15865,7 @@ function actStudentSheetUrl(t, clsName) {
   return '/submit/custom.html?api=' + encodeURIComponent(apiPath)
     + '&class=' + encodeURIComponent(clsName || '')
     + '&task=' + encodeURIComponent(t.task_id)
-    + '&title=' + encodeURIComponent(t.title || t.task_id || '课堂活动');
+    + '&title=' + encodeURIComponent(t.title || t.task_id || '课堂学习单');
 }
 let actPublishing = false;
 async function actPublishCurrent() {
@@ -15859,15 +15888,9 @@ async function actPublishCurrent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ cls: clsName, students }) }).catch(() => {});
     } catch (e) {}
-    // 课程归属：沿用活动↔课程自动匹配（提交数据归档到课程目录也靠它）
-    let course = (cwLinkOf(t.task_id) || {}).course || '';
-    if (!course) {
-      try {
-        const cfg = await cwConfigCached();
-        const g = cwGuessCourse(t.title, cfg.courses || []);
-        if (g) { cwSaveLink(t.task_id, t.title, g.course, 'auto'); course = g.course; }
-      } catch (e) {}
-    }
+    // 课程归属（2026-11-04 改版）：选的就是课件库课程，直接用它
+    //（提交数据归档到课程目录也靠它）；旧数据没有时再走自动匹配兜底
+    let course = actActiveCourse || (cwLinkOf(t.task_id) || {}).course || '';
     /* 页面部署（2026-11-04 修正）：老师刚「生成」过的新页面（同一活动）
        必须先部署再下发——原逻辑只探测服务端有没有页，有就跳过，
        改版学习单永远发不出去，学生端一直打开旧文件。
@@ -15889,7 +15912,7 @@ async function actPublishCurrent() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ task: t.task_id, html: deployHtml }) });
         const dj = await dep.json().catch(() => ({}));
-        if (dep.ok && dj.ok) toast('已为该活动部署学习单页面（可在下方自定义设计后重新生成）');
+        if (dep.ok && dj.ok) toast('已为该课程部署学习单页面（可在下方自定义设计后重新生成）');
       }
     } catch (e) {}
     const now = new Date().toISOString().slice(0, 16).replace('T', ' ');
@@ -15932,7 +15955,7 @@ function actUnpublish(taskId, cls) {
   if (!hit) return;
   dbSet('activity_pushes', arr);
   try { syncMark('activity_pushes', hit); } catch (e) {}
-  toast('已收回：学生端不再显示这个活动');
+  toast('已收回：学生端不再显示这门课程');
   actPubRepaint();
 }
 window.actUnpublish = actUnpublish;
@@ -15992,7 +16015,7 @@ function actPaintPubHint() {
       + ' <button type="button" class="btn btn-ghost btn-sm" style="width:auto;padding:2px 9px;font-size:11.5px"'
       + ' onclick="actUnpublish(\'' + esc(String(t.task_id)) + '\')">收回</button>';
   } else {
-    hint.innerHTML = '⚠ 尚未发放：选好班级与活动后自动发放；也可先在下方设计好学习单再选活动。';
+    hint.innerHTML = '⚠ 尚未发放：选好班级与课程后自动发放；也可先在下方设计好学习单再选课程。';
   }
 }
 window.actPaintPubHint = actPaintPubHint;
@@ -16013,7 +16036,7 @@ function actPubChipsHtml() {
   const classes = dbT('classes') || [];
   if (!classes.length) return '<div class="act-muted">还没有班级，请先到「班级」创建。</div>';
   const t = actTaskList.find(x => x.task_id === actActiveId);
-  if (!t) return '<div class="act-muted">请先在 ① 选择活动，这里显示各班下发状态。</div>';
+  if (!t) return '<div class="act-muted">请先在 ① 选择课程，这里显示各班下发状态。</div>';
   const byCls = actPushByCls(t.task_id);
   return classes.map(c => {
     const row = byCls[String(c.id)];
@@ -16055,7 +16078,7 @@ window.actPubToggle = actPubToggle;
 /** 批量下发：先确保页面已部署（一次），再逐班写 activity_pushes + 推花名册 */
 async function actPublishBatch() {
   const t = actTaskList.find(x => x.task_id === actActiveId);
-  if (!t) { toast('请先在 ① 选择活动'); return; }
+  if (!t) { toast('请先在 ① 选择课程'); return; }
   const sel = Object.keys(actPubSel).filter(k => actPubSel[k]);
   if (!sel.length) { toast('请先勾选要下发的班级'); return; }
   const classes = dbT('classes') || [];
@@ -16085,15 +16108,8 @@ async function actPublishBatch() {
       if (!dep.ok || !dj.ok) { toast('✗ 学习单页面部署失败：' + (dj.msg || dep.status)); say(''); return; }
     }
   } catch (e) { toast('✗ 学习单页面部署失败：' + (e.message || e)); say(''); return; }
-  // ② 课程归属匹配（整批一次，归档用）
-  let course = (cwLinkOf(t.task_id) || {}).course || '';
-  if (!course) {
-    try {
-      const cfg = await cwConfigCached();
-      const g = cwGuessCourse(t.title || '', cfg.courses || []);
-      if (g) { cwSaveLink(t.task_id, t.title, g.course, 'auto'); course = g.course; }
-    } catch (e) {}
-  }
+  // ② 课程归属（整批一次，归档用）：选的就是课件库课程，直接用它
+  let course = actActiveCourse || String(t.course || '') || (cwLinkOf(t.task_id) || {}).course || '';
   // ③ 逐班写发放记录（每班 url 带本班班级名 + 花名册各推一份）
   const now = new Date().toISOString().slice(0, 16).replace('T', ' ');
   const ok = [], fail = [];
@@ -16146,282 +16162,6 @@ window.actPublishBatch = actPublishBatch;
 function actPubChipRevoke(clsId, taskId) { actUnpublish(taskId, clsId); }
 window.actPubChipRevoke = actPubChipRevoke;
 
-/* ===================== ⚙ 活动管理（2026-11-03 · 自研后端） =====================
-   新建 / 改名 / 导出 / 清空都在这里完成，不用再去别的后台。
-   现在收进教师端一个弹窗，身份直接用工作台会话：
-     列表 / 新建 / 改名 / 删除 / 清空提交 / 导出 CSV·JSON / 上传教学资料 / 导入旧数据。
-   后端：/api/v2/teacher/activity/*
-   数据落在工作台自己的库里，提交带班级·学号列（不再是塞在 JSON 里的字符串）。 */
-let actAdminTasks = [];
-let actAdminEditId = '';
-
-function actClassLabel(cid) {
-  const c = (dbT('classes') || []).find(x => String(x.id) === String(cid));
-  return c ? (c.name || '') : '';
-}
-
-function actAdminOpen() {
-  if (document.getElementById('actAdminOv')) return;
-  const ov = document.createElement('div');
-  ov.className = 'modal-ov';
-  ov.id = 'actAdminOv';
-  ov.style.zIndex = 4100;
-  const clsOpts = (dbT('classes') || []).map(c =>
-    `<option value="${esc(c.id)}">${esc(c.name || ('班级' + c.id))}</option>`).join('');
-  ov.innerHTML = `
-    <div class="modal act-admin" role="dialog" aria-modal="true">
-      <div class="modal-head">
-        <div>
-          <div class="modal-title">⚙ 活动管理</div>
-          <div class="modal-sub">课堂活动由工作台自己托管 · 一个账号全搞定</div>
-        </div>
-        <button type="button" class="act-pub-x" id="actAdminX" aria-label="关闭" title="关闭">✕</button>
-      </div>
-
-      <div class="modal-sec">
-        <div class="modal-lb" id="actFormTitle">新建活动</div>
-        <div class="act-form">
-          <div class="full">
-            <label>活动标题（学生端和大屏上显示的就是这个）</label>
-            <input id="actTitle" placeholder="例如：导学单 · 算法初识">
-          </div>
-          <div class="full">
-            <label>活动说明（可留空，只给老师看）</label>
-            <textarea id="actDesc" placeholder="这节课要做什么、注意事项…"></textarea>
-          </div>
-          <div>
-            <label>关联班级（可留空）</label>
-            <select id="actClass"><option value="">（不限班级）</option>${clsOpts}</select>
-          </div>
-          <div>
-            <label>课程名（可留空，用于学生端按课匹配）</label>
-            <input id="actCourse" placeholder="例如：信息科技">
-          </div>
-        </div>
-        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
-          <button class="btn btn-primary btn-sm" id="actSaveBtn" style="width:auto">保存</button>
-          <button class="btn btn-ghost btn-sm" id="actNewBtn" style="width:auto">清空表单</button>
-          <span style="flex:1"></span>
-          <span class="act-muted" id="actFormMsg" style="font-size:12px"></span>
-        </div>
-      </div>
-
-      <div class="modal-sec" style="border-bottom:none">
-        <div class="modal-lb">已有活动</div>
-        <div class="act-list" id="actAdminList">加载中…</div>
-      </div>
-
-      <div class="modal-acts">
-        <span style="flex:1"></span>
-        <button class="btn btn-ghost" id="actAdminClose" style="width:auto">关闭</button>
-      </div>
-    </div>`;
-  document.body.appendChild(ov);
-
-  const close = () => ov.remove();
-  const onKey = e => {
-    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); }
-  };
-  document.addEventListener('keydown', onKey, true);
-  ov.addEventListener('click', e => { if (e.target === ov) { document.removeEventListener('keydown', onKey, true); close(); } });
-  document.getElementById('actAdminX').onclick = () => { document.removeEventListener('keydown', onKey, true); close(); };
-  document.getElementById('actAdminClose').onclick = () => { document.removeEventListener('keydown', onKey, true); close(); };
-  document.getElementById('actSaveBtn').onclick = actAdminSave;
-  document.getElementById('actNewBtn').onclick = actAdminNew;
-  document.getElementById('actAdminList').addEventListener('click', actAdminOps);
-  actAdminLoad();
-}
-window.actAdminOpen = actAdminOpen;
-
-function actAdminFormMsg(s) {
-  const el = document.getElementById('actFormMsg');
-  if (el) el.textContent = s || '';
-}
-
-function actAdminNew() {
-  actAdminEditId = '';
-  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
-  set('actTitle', ''); set('actDesc', ''); set('actClass', ''); set('actCourse', '');
-  const t = document.getElementById('actFormTitle');
-  if (t) t.textContent = '新建活动';
-  actAdminFormMsg('');
-}
-
-async function actAdminLoad() {
-  const box = document.getElementById('actAdminList');
-  try {
-    const r = await fetch('/api/v2/teacher/activity/list', { credentials: 'same-origin' });
-    const j = await r.json();
-    if (!j.ok) throw new Error(j.msg || '读取失败');
-    actAdminTasks = j.tasks || [];
-    actAdminRender();
-  } catch (e) {
-    if (box) box.innerHTML = '<div class="act-muted">读取失败：' + esc(e.message || e) + '</div>';
-  }
-}
-
-function actAdminRender() {
-  const box = document.getElementById('actAdminList');
-  if (!box) return;
-  if (!actAdminTasks.length) {
-    box.innerHTML = '<div class="act-muted">还没有活动，先在上方新建一个。</div>';
-    return;
-  }
-  box.innerHTML = actAdminTasks.map(t => {
-    const cls = t.class_id ? actClassLabel(t.class_id) : '';
-    const atts = (t.attachments || []).map(a =>
-      `<div class="act-file-row">📎 <a href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.name)}</a>
-       <span>${(a.size / 1024).toFixed(0)} KB</span>
-       <button class="btn btn-ghost btn-sm" data-op="delfile" data-url="${esc(a.url)}">移除</button></div>`).join('');
-    return `<div class="act-row" data-id="${esc(t.task_id)}">
-      <div class="act-main">
-        <b>${esc(t.title)}</b>
-        <span class="act-meta">活动号 ${esc(t.task_id)} · ${t.count} 条提交${cls ? ' · ' + esc(cls) : ''}${t.created_at ? ' · ' + esc(t.created_at) : ''}</span>
-        ${atts}
-      </div>
-      <div class="act-ops">
-        <button class="btn btn-ghost btn-sm" data-op="view">数据</button>
-        <button class="btn btn-ghost btn-sm" data-op="csv">导出CSV</button>
-        <button class="btn btn-ghost btn-sm" data-op="json">导出JSON</button>
-        <button class="btn btn-ghost btn-sm" data-op="up">上传资料</button>
-        <button class="btn btn-ghost btn-sm" data-op="edit">编辑</button>
-        <button class="btn btn-ghost btn-sm" data-op="clear">清空提交</button>
-        <button class="btn btn-ghost btn-sm act-del" data-op="del">删除</button>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-async function actAdminOps(e) {
-  const btn = e.target.closest('button[data-op]');
-  if (!btn) return;
-  const row = btn.closest('.act-row');
-  const id = row && row.dataset.id;
-  const op = btn.dataset.op;
-  const t = actAdminTasks.find(x => x.task_id === id);
-  if (!t) return;
-  if (op === 'view') {
-    const ov = document.getElementById('actAdminOv'); if (ov) ov.remove();
-    const sel = document.getElementById('actTaskSel');
-    if (sel) sel.value = id;
-    actActiveId = id;
-    actRenderDash();
-    // 大屏容器是 #actPaneDash（数据大屏页签），滚动锚点不能指向不存在的 id
-    const dash = document.getElementById('actPaneDash');
-    if (dash) dash.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    return;
-  }
-  if (op === 'csv' || op === 'json') {
-    window.open('/api/v2/teacher/activity/export?task=' + encodeURIComponent(id) + '&format=' + op, '_blank');
-    return;
-  }
-  if (op === 'edit') {
-    actAdminEditId = id;
-    const set = (k, v) => { const el = document.getElementById(k); if (el) el.value = v; };
-    set('actTitle', t.title || ''); set('actDesc', t.description || '');
-    set('actClass', t.class_id || ''); set('actCourse', t.course || '');
-    const tt = document.getElementById('actFormTitle');
-    if (tt) tt.textContent = '编辑活动：' + (t.title || id);
-    document.getElementById('actTitle').focus();
-    return;
-  }
-  if (op === 'up') { actAdminUpload(id); return; }
-  if (op === 'delfile') {
-    const r = await fetch('/api/v2/teacher/activity/del-file', {
-      method: 'POST', credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ task_id: id, url: btn.dataset.url })
-    });
-    const j = await r.json();
-    toast(j.ok ? '资料已移除' : '移除失败');
-    actAdminLoad();
-    return;
-  }
-  if (op === 'clear') {
-    const ok = await uiConfirm('清空活动「' + esc(t.title) + '」的<b>全部提交数据</b>？<br>附件也会一起删掉，不可恢复。', { title: '清空提交', okText: '确认清空' });
-    if (!ok) return;
-    const r = await fetch('/api/v2/teacher/activity/clear', {
-      method: 'POST', credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ task_id: id })
-    });
-    const j = await r.json();
-    toast(j.ok ? ('已清空 ' + (j.deleted || 0) + ' 条') : (j.msg || '清空失败'));
-    actAdminLoad();
-    return;
-  }
-  if (op === 'del') {
-    const ok = await uiConfirm('删除活动「' + esc(t.title) + '」？<br>提交数据、附件、以及已经发给班级的发放记录都会一起删除，<b>不可恢复</b>。', { title: '删除活动', okText: '确认删除' });
-    if (!ok) return;
-    const r = await fetch('/api/v2/teacher/activity/delete', {
-      method: 'POST', credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ task_id: id })
-    });
-    const j = await r.json();
-    toast(j.ok ? '活动已删除' : (j.msg || '删除失败'));
-    actAdminNew();
-    actAdminLoad();
-  }
-}
-
-async function actAdminSave() {
-  const g = id => (document.getElementById(id) || {}).value || '';
-  const title = g('actTitle').trim();
-  if (!title) { actAdminFormMsg('标题不能为空'); return; }
-  const body = {
-    task_id: actAdminEditId || '',
-    title: title,
-    description: g('actDesc'),
-    class_id: g('actClass') ? Number(g('actClass')) : 0,
-    course: g('actCourse').trim()
-  };
-  const btn = document.getElementById('actSaveBtn');
-  if (btn) btn.disabled = true;
-  actAdminFormMsg('保存中…');
-  try {
-    const r = await fetch('/api/v2/teacher/activity/save', {
-      method: 'POST', credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
-    const j = await r.json();
-    if (!j.ok) throw new Error(j.msg || '保存失败');
-    toast(actAdminEditId ? '已保存' : '活动已创建');
-    actAdminNew();
-    actAdminLoad();
-    actLoadTaskList();          // 主页面下拉框同步
-  } catch (e) {
-    actAdminFormMsg('✗ ' + (e.message || e));
-  } finally {
-    if (btn) btn.disabled = false;
-  }
-}
-
-function actAdminUpload(taskId) {
-  const inp = document.createElement('input');
-  inp.type = 'file';
-  inp.multiple = true;
-  inp.onchange = async () => {
-    if (!inp.files || !inp.files.length) return;
-    const fd = new FormData();
-    for (const f of inp.files) fd.append('files', f, f.name);
-    toast('上传中…');
-    try {
-      const r = await fetch('/api/v2/teacher/activity/upload?task=' + encodeURIComponent(taskId), {
-        method: 'POST', credentials: 'same-origin', body: fd
-      });
-      const j = await r.json();
-      if (!j.ok) throw new Error(j.msg || '上传失败');
-      toast('已上传 ' + (j.files || []).length + ' 个资料');
-      actAdminLoad();
-    } catch (e) {
-      toast('上传失败：' + (e.message || e));
-    }
-  };
-  inp.click();
-}
-
 /* ===================== ③ 下发到班级 · 入口：改为「下发」按钮 + 弹窗 =====================
    整块下发逻辑（多选 / 状态跟踪 / 批量发放 / 单班收回）与原来完全一致，
    只是把原来页面上的 ③ 卡片收进一个弹窗：点「📤 下发」按钮 → 弹出班级列表，
@@ -16429,7 +16169,7 @@ function actAdminUpload(taskId) {
    确认 → 执行 actPublishBatch（逻辑零改动）；取消 / Esc / 点遮罩 → 不产生任何变更。 */
 function actOpenPublishDialog() {
   const t = actTaskList.find(x => x.task_id === actActiveId);
-  if (!t) { toast('请先在 ① 选择活动'); return; }
+  if (!t) { toast('请先在 ① 选择课程'); return; }
   const classes = dbT('classes') || [];
   if (!classes.length) { toast('还没有班级，请先到「班级」创建'); return; }
 
@@ -16441,7 +16181,7 @@ function actOpenPublishDialog() {
       <div class="modal-head">
         <div>
           <div class="modal-title">📤 下发到班级</div>
-          <div class="modal-sub">活动「${esc(t.title || t.task_id)}」· 学生端「今日」即时可见 · 可一次发多个班</div>
+          <div class="modal-sub">课程「${esc(t.title || t.task_id)}」· 学生端「今日」即时可见 · 可一次发多个班</div>
         </div>
         <button type="button" class="act-pub-x" aria-label="关闭" title="关闭">✕</button>
       </div>
@@ -16526,14 +16266,14 @@ function actCustomDefaultTpl() {
   return [
 '<!doctype html>',
 '<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">',
-'<title>课堂活动页</title>',
+'<title>课堂学习页</title>',
 '<style>body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;max-width:680px;margin:24px auto;padding:0 16px;color:#1A2E28;line-height:1.7}',
 '.act-q{border:1px solid #DDE5E1;border-radius:14px;padding:14px 16px;margin:14px 0}',
 'label{display:block;font-weight:600;margin:10px 0 4px}',
 'input,textarea{width:100%;padding:10px;border:1px solid #cfe3dc;border-radius:10px;box-sizing:border-box;font-size:14px}',
 '.ext{background:#E1F5EE;border:1px dashed #0F6E56;border-radius:12px;padding:12px 14px;margin:14px 0}</style></head>',
 '<body>',
-'<h1>课堂探究活动</h1><p>请先登录，再按题目逐一提交。每道题有独立提交按钮，老师能在数据大屏看到每一题的提交情况。</p>',
+'<h1>课堂探究学习单</h1><p>请先登录，再按题目逐一提交。每道题有独立提交按钮，老师能在数据大屏看到每一题的提交情况。</p>',
 '<div class="act-q" data-btn="第1题 · 我的发现"><h3>第 1 题：写出你的发现</h3>',
 '<label>发现内容</label><textarea name="发现内容" rows="3" placeholder="写下你的观察与想法"></textarea></div>',
 '<div class="act-q" data-btn="第2题 · 我的作品"><h3>第 2 题：作品说明</h3>',
@@ -16677,7 +16417,7 @@ function actBuildCustomPage(html, opts) {
   // 登录浮层（固定全屏，未登录不能提交）
   const login = '<div id="actLogin" style="position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(15,46,40,.55)">'
     + '<div style="background:#fff;border-radius:16px;padding:22px 24px;width:min(92vw,380px);box-shadow:0 12px 40px rgba(0,0,0,.25)">'
-    + '<h2 style="margin:0 0 4px;color:#0F6E56;font-size:19px">进入活动页面</h2>'
+    + '<h2 style="margin:0 0 4px;color:#0F6E56;font-size:19px">进入学习单页面</h2>'
     + '<p id="actLoginMsg" style="font-size:13px;color:#5F6E68;margin:0 0 14px">请输入学号，系统将自动匹配你的姓名与班级。</p>'
     + '<label style="font-size:13px;font-weight:600">学号 *</label>'
     + '<input id="actSid" inputmode="numeric" placeholder="例如 20250301" style="width:100%;padding:10px 12px;border:1px solid #cfe3dc;border-radius:10px;font-size:15px;box-sizing:border-box">'
@@ -16780,7 +16520,7 @@ function actBuildCustomPage(html, opts) {
 var actGeneratedPage = null, actGeneratedPageTask = null;
 async function actCustomGenerate() {
   const t = actTaskList.find(x => x.task_id === actActiveId);
-  if (!t) { toast('请先在①选择活动'); return; }
+  if (!t) { toast('请先在①选择课程'); return; }
   const htmlEl = document.getElementById('actCustHtml');
   const raw = (htmlEl && htmlEl.value || '').trim();
   if (!raw) { toast('请先上传网页文件或点「用默认模板」'); return; }
@@ -16795,7 +16535,7 @@ async function actCustomGenerate() {
 // 查看：把生成的页面临时部署后，用真实地址打开预览（带「测试提交」按钮，可验证与数据大屏同步）
 async function actCustomView() {
   const t = actTaskList.find(x => x.task_id === actActiveId);
-  if (!t) { toast('请先在①选择活动'); return; }
+  if (!t) { toast('请先在①选择课程'); return; }
   let page = actGeneratedPage;
   if (!page) {
     const htmlEl = document.getElementById('actCustHtml');
@@ -16890,10 +16630,10 @@ async function actPing() {
     const j = await r.json().catch(() => ({}));
     if (!j || (!j.tasks && !j.success)) throw new Error('返回格式不对');
     dot.classList.add('on');
-    txt.textContent = '活动服务已就绪（工作台内置）';
+    txt.textContent = '课程收集服务已就绪（工作台内置）';
   } catch (e) {
     dot.classList.add('off');
-    txt.textContent = '活动服务异常，请刷新页面';
+    txt.textContent = '课程收集服务异常，请刷新页面';
   }
 }
 window.actPing = actPing;
@@ -16967,9 +16707,9 @@ async function actRenderDash() {
   const _keepSearch = !!(_ae && _ae.id === 'actRosterSearch');
   const _keepPos = _keepSearch ? _ae.selectionStart : null;
   const box = document.getElementById('actPaneDash'); if (!box) return;
-  if (!actActiveId) { box.removeAttribute('data-act-shell-task'); box.innerHTML = '<div class="act-muted">请先在上方绑定一个活动，再查看数据大屏。</div>'; actLastCount = -1; actStartPoll(); return; }
+  if (!actActiveId) { box.removeAttribute('data-act-shell-task'); box.innerHTML = '<div class="act-muted">请先在上方选择一门课程，再查看数据大屏。</div>'; actLastCount = -1; actStartPoll(); return; }
   const cls = actCurClass();
-  if (cls == null) { box.removeAttribute('data-act-shell-task'); box.innerHTML = '<div class="act-muted">请先在上方选择班级，再查看数据大屏。</div>'; actLastCount = -1; actStartPoll(); return; }
+  if (cls == null) { actCurClsName = ''; box.removeAttribute('data-act-shell-task'); box.innerHTML = '<div class="act-muted">请先在上方选择班级，再查看数据大屏。</div>'; actLastCount = -1; actStartPoll(); return; }
   const clsStus = actClassStudents(cls);
   if (!clsStus.length) { box.removeAttribute('data-act-shell-task'); box.innerHTML = '<div class="act-muted">该班级暂无学生，无法统计。请先在「班级」中添加学生。</div>'; actLastCount = -1; actStartPoll(); return; }
   // 仅当「活动任务」发生变化时重建外壳；否则只刷新默认大屏内容（避免切页/轮询丢状态）
@@ -16991,6 +16731,9 @@ async function actRenderDash() {
   const raw = (j.submissions || []).map(actParse).filter(Boolean).map(actNormSub);
   // 先按提交标识去重、再按提交时间升序（提交越晚排序越靠后）
   const subs = actDedupAsc(raw);
+  // 按班级收集（2026-11-04）：先把当前班级名交给匹配器，带班级字段的提交直接按班比对
+  const clsObjNow = (dbT('classes') || []).find(c => Number(c.id) === Number(cls));
+  actCurClsName = clsObjNow ? String(clsObjNow.name || '') : '';
   const matched = subs.filter(s => actSubMatchClass(s, clsStus));
   actLastMatched = matched;   // 供名单的搜索/排序/导出复用（轮询刷新后仍可用）
   dd.innerHTML = actDashboardHtml(j, subs, matched, clsStus, cls);
@@ -17054,11 +16797,11 @@ function actDashboardHtml(j, subs, matched, clsStus, cls) {
     : '<div class="act-miss"><div class="act-miss-t" style="color:var(--status-success,#1D9E75)">全班已交齐 ✅</div></div>';
   return ''
     + '<div class="act-dash-sticky">'
-    + '<div class="act-dash-hd"><div class="hd-bar"></div><div><div class="hd-t">活动数据大屏</div>'
-    + '<div class="hd-s">' + esc(j.task_title || actActiveId) + '　·　当前班级：<b>' + esc(String(clsName)) + '</b>　·　数据按本班匹配</div></div>'
+    + '<div class="act-dash-hd"><div class="hd-bar"></div><div><div class="hd-t">课程数据大屏</div>'
+    + '<div class="hd-s">' + esc(j.task_title || actActiveId) + '　·　当前班级：<b>' + esc(String(clsName)) + '</b>　·　按班级收集</div></div>'
   + '<div class="hd-r"><span class="act-dot ' + (submitted ? 'on' : 'off') + '"></span><span class="act-muted">' + (submitted ? '实时数据' : '暂无提交') + '</span>'
   + '<button class="btn btn-ghost btn-sm" onclick="actRenderDash()">刷新</button>'
-  + '<button class="btn btn-ghost btn-sm" onclick="actClearSubs()" title="清空本活动全部提交数据（不可恢复）">🗑 清空</button></div></div>'
+  + '<button class="btn btn-ghost btn-sm" onclick="actClearSubs()" title="清空本课程全部提交数据（不可恢复）">🗑 清空</button></div></div>'
     + '<div class="act-kpis">'
     + '<div class="act-kpi ok"><div class="lab">本班已提交</div><div class="val">' + submitted + '</div><div class="sub">提交数量</div></div>'
     + '<div class="act-kpi red"><div class="lab">未交人数</div><div class="val">' + notSub + '</div><div class="sub">尚未提交</div></div>'
@@ -17066,7 +16809,7 @@ function actDashboardHtml(j, subs, matched, clsStus, cls) {
     + '<div class="act-kpi"><div class="lab">班级总人数</div><div class="val">' + clsTotal + '</div><div class="sub">今日提交 ' + todayN + ' · 含文件 ' + attN + '</div></div>'
     + '</div></div>'
     + (matched.length === 0 && subs.length > 0
-        ? '<div class="act-warn">⚠ 本活动已收到 <b>' + subs.length + '</b> 份提交，但当前班级「<b>' + esc(String(clsName)) + '</b>」匹配到 <b>0</b> 份。'
+        ? '<div class="act-warn">⚠ 本课程已收到 <b>' + subs.length + '</b> 份提交，但当前班级「<b>' + esc(String(clsName)) + '</b>」匹配到 <b>0</b> 份。'
           + '常见原因：① 上方「选择班级」选错了；② 该班学生名单（学号 / 姓名）还没导入，或与学生填写的不一致。'
           + '可展开下方「本活动全部提交」核对原始数据。</div>'
         : '')
@@ -17084,18 +16827,18 @@ function actDashboardHtml(j, subs, matched, clsStus, cls) {
     + '<div class="act-sec"><h3>最近提交明细' + (matched.length ? '（近 12 条）' : '') + '</h3>' + actTableHtml(matched, 12) + '</div>'
     + actButtonWindowsHtml(matched)
     + (subs.length > matched.length
-        ? '<details class="act-allsubs"' + (actAllSubsOpen ? ' open' : '') + ' ontoggle="actAllSubsToggle(this.open)"><summary>本活动全部提交（' + subs.length + ' 份，不限班级，已去重）</summary>' + actTableHtml(subs, 0) + '</details>'
+        ? '<details class="act-allsubs"' + (actAllSubsOpen ? ' open' : '') + ' ontoggle="actAllSubsToggle(this.open)"><summary>本课程全部提交（' + subs.length + ' 份，不限班级，已去重）</summary>' + actTableHtml(subs, 0) + '</details>'
         : '');
 }
 window.actDashboardHtml = actDashboardHtml;
 
 // 数据大屏管理：一键清空 / 删除单条提交记录（教师已登录即可）
 async function actClearSubs() {
-  if (!actActiveId) { toast('请先选择活动'); return; }
-  // 弹窗里显示活动标题（而不是看不出含义的任务号），选不到时才退回任务号
+  if (!actActiveId) { toast('请先选择课程'); return; }
+  // 弹窗里显示课程标题（而不是看不出含义的任务号），选不到时才退回任务号
   const t = actTaskList.find(x => x.task_id === actActiveId);
   const tName = (t && String(t.title || '').trim()) || actActiveId;
-  const ok = await uiConfirm('确定清空活动「' + tName + '」的全部提交数据吗？此操作不可恢复。', { title: '一键清空数据' });
+  const ok = await uiConfirm('确定清空课程「' + tName + '」的全部提交数据吗？此操作不可恢复。', { title: '一键清空数据' });
   if (!ok) return;
   try {
     const r = await fetch('/api/v2/act-clear?task=' + encodeURIComponent(actActiveId), { method: 'POST' });
@@ -17105,7 +16848,7 @@ async function actClearSubs() {
   } catch (e) { toast('清空失败：' + e.message); }
 }
 async function actDelSub(id) {
-  if (!actActiveId) { toast('请先选择活动'); return; }
+  if (!actActiveId) { toast('请先选择课程'); return; }
   const ok = await uiConfirm('确定删除这条提交记录吗？', { title: '删除记录' });
   if (!ok) return;
   try {
