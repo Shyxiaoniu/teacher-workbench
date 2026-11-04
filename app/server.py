@@ -88,11 +88,11 @@ CFG["typing"].setdefault("grades", [])
 # 课堂活动配置（提交有效时长等；后端只有自研一种，不再有开关）
 if not isinstance(CFG.get("activity"), dict):
     CFG["activity"] = {}
-# 在线更新配置（2026-11-04）：更新源地址 / 访问令牌 / 自动检查
+# 在线更新配置（2026-11-04）：更新源地址 / 自动检查。
+# 仓库已公开，不再使用访问令牌（老配置里遗留的 token 字段会被忽略）。
 if not isinstance(CFG.get("update"), dict):
     CFG["update"] = {}
 CFG["update"].setdefault("url", "")            # 空 = 默认更新源（Gitee raw version.json）
-CFG["update"].setdefault("token", "")          # 私有仓库的访问令牌
 CFG["update"].setdefault("auto", True)         # 后台定时检查
 CFG["update"].setdefault("interval_hours", 24) # 检查间隔（小时）
 PET_IDS = ["cat", "dog", "rabbit", "penguin", "panda", "dino", "unicorn", "dragon"]
@@ -2538,8 +2538,9 @@ class Handler(LEG.Handler):
             u = CFG["update"]
             if "url" in body:
                 u["url"] = str(body.get("url") or "").strip()
-            if "token" in body:
-                u["token"] = str(body.get("token") or "").strip()
+            # 访问令牌已随仓库公开下线（2026-11-04）：请求里带 token 也忽略，
+            # 并清掉老配置里遗留的值，避免设置页出现「已配置令牌」的错觉
+            u.pop("token", None)
             if "auto" in body:
                 u["auto"] = bool(body.get("auto"))
             if "interval_hours" in body:

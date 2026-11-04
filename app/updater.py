@@ -59,8 +59,7 @@ def _net_msg(e, what):
     if isinstance(e, urllib.error.HTTPError):
         code = e.code
         if code in (401, 403):
-            return ("%s失败：更新源需要访问权限（HTTP %d）。仓库是私有库的话，"
-                    "去设置里填访问令牌（Gitee/GitHub 私人令牌）。" % (what, code))
+            return "%s失败：更新源拒绝访问（HTTP %d），检查更新源地址是否正确。" % (what, code)
         if code == 404:
             return "%s失败：更新源上没找到文件（HTTP 404），检查更新源地址是否正确。" % what
         if code == 429:
@@ -78,20 +77,11 @@ def _net_msg(e, what):
     return "%s失败：%s" % (what, e)
 
 
-def _fetch(url, token="", timeout=CHECK_TIMEOUT, what="请求"):
-    """带令牌与超时的 GET。Gitee 用 access_token 参数，其它用 Bearer 头。
+def _fetch(url, timeout=CHECK_TIMEOUT, what="请求"):
+    """带超时的 GET。仓库已公开（2026-11-04），不再需要访问令牌。
     返回未关闭的响应流（调用方负责读完并 close）——不能 with 后再 return，
     那样返回的已经是关闭的响应，读出来全是空字节（2026-11-04 踩过）。"""
-    req_url = url
-    headers = {"User-Agent": "workbench-updater"}
-    if token:
-        host = urllib.parse.urlparse(url).netloc.lower()
-        if "gitee" in host:
-            sep = "&" if "?" in url else "?"
-            req_url = url + sep + "access_token=" + urllib.parse.quote(token)
-        else:
-            headers["Authorization"] = "Bearer " + token
-    req = urllib.request.Request(req_url, headers=headers)
+    req = urllib.request.Request(url, headers={"User-Agent": "workbench-updater"})
     try:
         return urllib.request.urlopen(req, timeout=timeout)
     except urllib.error.HTTPError:
@@ -186,9 +176,8 @@ class Updater:
                 self.state["phase"] = "checking"
                 self.state["last_error"] = ""
                 url = self._manifest_url(uc)
-                token = str(uc.get("token") or "").strip()
                 try:
-                    r = _fetch(url, token, CHECK_TIMEOUT, "检查更新")
+                    r = _fetch(url, CHECK_TIMEOUT, "检查更新")
                     try:
                         raw = r.read().decode("utf-8", "replace")
                     finally:
@@ -254,7 +243,6 @@ class Updater:
                 raise UpdateError(r.get("msg") or "检查更新失败")
             m = self.state.get("manifest") or {}
             manifest_url = self._manifest_url(uc)
-            token = str(uc.get("token") or "").strip()
             if not is_newer(m.get("version"), self.version):
                 raise UpdateError("当前已是最新版本，无需更新。")
 
@@ -265,7 +253,7 @@ class Updater:
             dl = os.path.join(self.dir, "download.zip")
             self._set_prog("download", 0, "连接更新源…")
             try:
-                r = _fetch(zip_url, token, DL_TIMEOUT, "下载安装包")
+                r = _fetch(zip_url, DL_TIMEOUT, "下载安装包")
             except UpdateError:
                 raise
             except Exception as e:
@@ -461,7 +449,6 @@ class Updater:
                 "installed": self.state.get("installed"),
                 "config": {
                     "url": self._manifest_url(uc),
-                    "has_token": bool(str(uc.get("token") or "").strip()),
                     "auto": bool(uc.get("auto", True)),
                     "interval_hours": int(uc.get("interval_hours") or 24),
                     "default_url": DEFAULT_MANIFEST_URL,

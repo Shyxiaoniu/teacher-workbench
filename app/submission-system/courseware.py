@@ -886,6 +886,35 @@ def rename_or_move(rel, course=None, new_name=None):
         return {"ok": False, "msg": "操作失败：%s" % e}
 
 
+def rename_course(old, new):
+    """课节（课程）改名：重命名根目录下的课程文件夹。
+    子目录（_学习单 / _活动作品 等）整个跟着走，推送记录与课程匹配
+    由前端拿到返回后自行同步（materials.lesson / courseware_links.course）。"""
+    old = str(old or "").strip()
+    new = str(new or "").strip()
+    if not old or not new:
+        return {"ok": False, "msg": "请填写新的课节名"}
+    if old == "未分课程":
+        return {"ok": False, "msg": "「未分课程」是散文件的默认归属，不能改名"}
+    src = abs_of(safe_course(old), must_exist=True)
+    if not src or not os.path.isdir(src):
+        return {"ok": False, "msg": "课节「%s」不存在" % safe_course(old)}
+    dst_name = safe_course(new)
+    if dst_name == safe_course(old):
+        return {"ok": False, "msg": "新名字和现在一样"}
+    dst = abs_of(dst_name)
+    if not dst:
+        return {"ok": False, "msg": "课节名不合法"}
+    if os.path.exists(dst):
+        return {"ok": False, "msg": "已经有叫「%s」的课节了，换一个名字" % dst_name}
+    try:
+        os.rename(src, dst)
+        return {"ok": True, "msg": "已改名为「%s」" % dst_name,
+                "old": safe_course(old), "new": dst_name}
+    except Exception as e:
+        return {"ok": False, "msg": "改名失败：%s" % e}
+
+
 def set_root(new_root, move):
     """切换课件根目录。返回 (ok, cfg, msg)"""
     raw = str(new_root or "").strip().strip('"').strip("'")

@@ -6109,6 +6109,12 @@ body:has(.mini-bar) .corner-credit { display:none; }
 .cw-course .mt{font-size:12px;color:var(--text-secondary);margin-top:6px}
 .cw-course .new{position:absolute;top:9px;right:10px;font-size:11px;color:#8A5A10;
   background:#FFF6E9;border:1px solid #F0C36D;border-radius:999px;padding:1px 7px}
+/* 课节改名入口（2026-11-04）：卡片右上角小铅笔 */
+.cw-course .cw-crn{position:absolute;top:8px;right:8px;width:24px;height:24px;border-radius:8px;
+  display:grid;place-items:center;font-size:13px;font-style:normal;color:var(--text-secondary);
+  background:var(--bg-surface);border:1px solid var(--border);cursor:pointer;opacity:0;transition:.15s}
+.cw-course:hover .cw-crn{opacity:1}
+.cw-course .cw-crn:hover{color:var(--brand-primary);border-color:var(--brand-primary)}
 
 /* 文件网格 */
 .cw-files{display:flex;flex-wrap:wrap;gap:12px;margin-top:4px}
@@ -32579,10 +32585,10 @@ function updRender() {
   if (s.installed && s.installed.to_version) {
     h += `<div class="term-hint" style="margin-top:8px">上次更新：v${esc(s.installed.from_version)} → v${esc(s.installed.to_version)}（${_updFmtTime(s.installed.ts)}）</div>`;
   }
-  /* 更新源设置（折叠） */
+  /* 更新源设置（折叠）。仓库已公开（2026-11-04），不再需要访问令牌。 */
   const c = s.config || {};
   h += `<details style="margin-top:12px">
-    <summary style="cursor:pointer;font-size:12.5px;color:var(--text-secondary);list-style:none">▸ 更新源设置${c.has_token ? '（已配置令牌）' : ''}</summary>
+    <summary style="cursor:pointer;font-size:12.5px;color:var(--text-secondary);list-style:none">▸ 更新源设置</summary>
     <div style="margin-top:8px;display:flex;flex-direction:column;gap:8px">
       <label class="hwp-row" style="margin:0"><span class="set-k" style="width:auto;flex:none">检查开关</span>
         <input type="checkbox" id="updAuto" ${c.auto ? 'checked' : ''}>
@@ -32593,10 +32599,6 @@ function updRender() {
       <label class="hwp-row" style="margin:0;align-items:flex-start"><span class="set-k" style="width:auto;flex:none;padding-top:6px">源地址</span>
         <input id="updUrl" class="fl-inp" style="flex:1;min-width:0" value="${esc(c.url || '')}"
           placeholder="${esc(c.default_url || '')}（留空用默认）"></label>
-      <label class="hwp-row" style="margin:0"><span class="set-k" style="width:auto;flex:none">访问令牌</span>
-        <input id="updToken" class="fl-inp" type="password" style="flex:1;min-width:0"
-          placeholder="${c.has_token ? '已保存（留空表示不修改）' : '私有仓库填 Gitee/GitHub 私人令牌'}"></label>
-      <div class="term-hint">令牌只保存在本机服务端配置里，不会上传。Gitee 令牌在「设置 → 私人令牌」生成，勾 <b>projects</b> 权限即可。</div>
       <div><button class="btn btn-sm" type="button" style="width:auto" onclick="updSaveCfg()">保存设置</button></div>
     </div>
   </details>`;
@@ -32605,6 +32607,19 @@ function updRender() {
 
 async function updCheck() {
   toast('正在检查更新…');
+  /* 先把页面上可见的设置（源地址/开关/间隔）存下去再检查，
+     避免「填了源地址没点保存，检查还用旧配置」的困惑（2026-11-04） */
+  try {
+    const g = id => { const el = document.getElementById(id); return el ? el.value : null; };
+    const cfg = {
+      auto: !!(document.getElementById('updAuto') || {}).checked,
+      interval_hours: parseInt(g('updInterval') || '24', 10) || 24,
+      url: (g('updUrl') || '').trim(),
+    };
+    await fetch('/api/v2/update/config', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cfg) });
+  } catch (e) { /* 设置保存失败不挡检查 */ }
   try {
     const r = await fetch('/api/v2/update/check', {
       method: 'POST', credentials: 'same-origin',
@@ -32718,10 +32733,7 @@ async function updSaveCfg() {
     auto: !!(document.getElementById('updAuto') || {}).checked,
     interval_hours: parseInt(g('updInterval') || '24', 10) || 24,
   };
-  const url = (g('updUrl') || '').trim();
-  const token = (g('updToken') || '').trim();
-  body.url = url;
-  if (token) body.token = token;      // 留空 = 不改已保存的令牌
+  body.url = (g('updUrl') || '').trim();
   try {
     const r = await fetch('/api/v2/update/config', {
       method: 'POST', credentials: 'same-origin',
@@ -33571,20 +33583,17 @@ window.cwConfigCached = cwConfigCached;
 
 function cwLibPanelHtml() {
   return `
-  <div class="notice" data-fold-title="📚 课件库说明">所有资料统一<b>上传到服务器</b>存储（不再支持加载本地文件夹）。上传时把课件归到某一「课节」；教师端可随时改名、换课节、删除（增删改查）。<b>浏览可切「缩略图 / 列表 / 紧凑」三种视图</b>：缩略图看封面、列表核对大小与推送状态、紧凑一屏扫几十个。勾选多个文件后点「一键下发」，可一次发给一个或多个班；单份文件也可以直接点卡片上的「⬇ 推送」。下发后学生端「今日」页的「课件库」里就能查看和使用，推送错了可在「推送记录」里一键撤回。</div>
+  <div class="notice" data-fold-title="📚 课件库说明">所有资料统一<b>上传到服务器</b>存储（不再支持加载本地文件夹）。上传时把课件归到某一「课节」；课节和文件都可随时改名、删除。上传只认上面<b>「归到课节」一个入口</b>：填已有课节名或输入新名字（没有会自动新建）。<b>浏览可切「缩略图 / 列表 / 紧凑」三种视图</b>：缩略图看封面、列表核对大小与推送状态、紧凑一屏扫几十个。勾选多个文件后点「一键下发」，可一次发给一个或多个班；单份文件也可以直接点卡片上的「⬇ 推送」。下发后学生端「今日」页的「课件库」里就能查看和使用，推送错了可在「推送记录」里一键撤回。</div>
   <div class="cw-wrap">
 
     <div class="cw-card">
-      <div class="cw-card-h">☁ 服务器存储
+      <div class="cw-card-h">📚 课件库
         <span class="sp"></span>
         <span class="cw-badge gray" id="cwCountBadge">读取中…</span>
         <button class="btn btn-ghost btn-sm" onclick="cwReload()">↻ 刷新</button>
       </div>
-      <div class="cw-muted" id="cwRootMeta" style="margin-top:2px"></div>
-    </div>
+      <div class="cw-muted" id="cwRootMeta" style="margin:2px 0 10px"></div>
 
-    <div class="cw-card">
-      <div class="cw-card-h">⬆ 上传课件</div>
       <div class="cw-row" style="margin-bottom:10px">
         <span style="font-size:13px;font-weight:600;white-space:nowrap">归到课节</span>
         <input class="cw-inp" id="cwCourseInput" list="cwCourseList" spellcheck="false"
@@ -33598,11 +33607,10 @@ function cwLibPanelHtml() {
       </div>
       <input type="file" id="cwFileInput" multiple style="display:none">
       <div id="cwUploadMsg"></div>
-    </div>
 
-    <div class="cw-card">
-      <div class="cw-card-h">📂 课程资料
-        <span class="sp"></span>
+      <div style="display:flex;align-items:center;margin:16px 0 8px">
+        <div style="font-size:13px;font-weight:600;color:var(--text-primary)">📂 课程资料</div>
+        <span style="flex:1"></span>
         <button class="btn btn-ghost btn-sm" onclick="cwNewCourse()">＋ 新建空课节</button>
       </div>
       <div id="cwCourseGrid"><div class="cw-empty">读取中…</div></div>
@@ -33884,6 +33892,14 @@ function cwBindLibDrop() {
   }
 }
 
+/* 全局拖拽兜底（2026-11-04 修复「选文件上传后跳到报错页」）：
+   文件拖拽松手时只要落点不在上传框里，浏览器默认会把拖的文件当成
+   要打开的网页直接加载——课件、视频、HTML 全都会变成一个「报错页面」。
+   在 window 上拦掉默认行为后，拖到哪都不会跳页；上传框自己的
+   drop 处理器仍会先触发、正常收文件。 */
+window.addEventListener('dragover', e => e.preventDefault());
+window.addEventListener('drop', e => e.preventDefault());
+
 async function cwReload() {
   cwState.loadedLib = true;
   cwPaintPushed();
@@ -33972,6 +33988,8 @@ function cwPaintCourses() {
       + '<div class="nm">' + esc(c.name) + '</div>'
       + '<div class="mt">' + c.count + ' 个文件' + (c.size_text ? ' · ' + esc(c.size_text) : '') + '</div>'
       + (c.loose ? '<span class="new">无归属</span>' : '')
+      + (c.loose ? '' : '<span class="cw-crn" title="课节改名" data-c="' + esc(c.name) + '"'
+          + ' onclick="event.stopPropagation();cwRenameCourse(this.dataset.c)">✎</span>')
       + '</div>';
   }).join('') + '</div>';
 }
@@ -34350,19 +34368,54 @@ async function cwNewCourse() {
 }
 window.cwNewCourse = cwNewCourse;
 
+/* ---------- 课节改名（2026-11-04 新增） ----------
+   课节建好后（上传时随手输入的名字容易打错）也能改：
+   服务端重命名课程文件夹，前端同步推送记录与课程匹配里的课节名。 */
+function cwSyncCourseName(oldN, newN) {
+  /* 推送记录 materials.lesson：学生端按课节展示，改名后必须跟着走 */
+  const mats = (dbT('materials') || []).map(m =>
+    (!m.deleted && String(m.lesson || '') === oldN) ? Object.assign({}, m, { lesson: newN }) : m);
+  dbSet('materials', mats);
+  /* 活动 ↔ 课程匹配 courseware_links.course：保存学习单时按它定位 */
+  const links = (dbT('courseware_links') || []).map(x =>
+    String(x.course || '') === oldN ? Object.assign({}, x, { course: newN, updated_at: cwNowStr() }) : x);
+  dbSet('courseware_links', links);
+}
+window.cwSyncCourseName = cwSyncCourseName;
+
+async function cwRenameCourse(name) {
+  const oldN = String(name || '');
+  if (!oldN || oldN === '未分课程') { toast('「未分课程」是散文件的默认归属，不能改名'); return; }
+  const nv = await uiPrompt('把课节「' + oldN + '」改名为：\n（文件夹会整个重命名，里面的文件不动；已下发的记录同步更新）',
+    { title: '课节改名', value: oldN });
+  if (!nv || !nv.trim() || nv.trim() === oldN) return;
+  try {
+    const r = await cwReq('rename_course', { old: oldN, new: nv.trim() });
+    if (!r.ok) { toast(r.msg || '改名失败'); return; }
+    cwSyncCourseName(oldN, r.new);
+    toast(r.msg || '已改名');
+    if (cwState.course === oldN) cwState.course = r.new;
+    cwCfgCache = { at: 0, data: null };
+    await cwReload();
+  } catch (e) { toast(e.message || '改名失败'); }
+}
+window.cwRenameCourse = cwRenameCourse;
+
 /* 上传：逐个读成 base64 再发（新手点一次就好，不让他管目录结构） */
 async function cwUpload(fileList) {
   const files = Array.from(fileList || []);
   if (!files.length) return;
+  /* 2026-11-04 简化：课节只认「归到课节」一个入口，不再弹窗追问。
+     输入框为空时回落到当前选中的课节；两个都没有就明确提示，不猜。 */
   const inp = document.getElementById('cwCourseInput');
-  let course = ((inp && inp.value) || '').trim();
-  if (!course) {
-    course = await uiPrompt('这些文件归到哪门课程？\n（填课程名，没有会自动新建；建议用「第几课 + 课题」命名）', { title: '选择课程', value: cwState.course || '' });
-    if (!course || !course.trim()) return;
-    course = course.trim();
-    if (inp) inp.value = course;
-  }
+  let course = ((inp && inp.value) || '').trim() || (cwState.course || '').trim();
   const msg = document.getElementById('cwUploadMsg');
+  if (!course) {
+    if (msg) msg.innerHTML = '<div class="cw-warn">先在上方「归到课节」里选择或输入一个课节名，再上传。</div>';
+    toast('先填写「归到课节」再上传');
+    return;
+  }
+  if (inp && inp.value.trim() !== course) inp.value = course;
   if (msg) msg.innerHTML = '<div class="cw-ok">正在上传 <b>' + files.length + '</b> 个文件到「' + esc(course) + '」…</div>';
   let done = 0, failedAll = [];
   const CHUNK = Math.max(1, Math.min(6, files.length));

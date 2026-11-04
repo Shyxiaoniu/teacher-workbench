@@ -113,8 +113,14 @@ SETUP_BODY = """
 <div class="card" style="max-width:480px;margin:5vh auto 0">
   <div class="brand">__LOGO__<div><div style="font-weight:750;font-size:15px">班级工作台</div>
   <div style="font-size:12px;color:#849690">首次启动 · 只需设置一次</div></div></div>
-  <h1>创建管理员账号</h1>
-  <p class="sub">这个账号保护教师端和全部学生数据，只保存在服务端，不上传第三方、不联外网。</p>
+  <div id="setupTitle">
+    <h1>创建管理员账号</h1>
+    <p class="sub">这个账号保护教师端和全部学生数据，只保存在服务端，不上传第三方、不联外网。</p>
+  </div>
+  <div id="loginTitle" style="display:none">
+    <h1>教师登录</h1>
+    <p class="sub">用已有的管理员账号进入工作台。</p>
+  </div>
   <form id="f">
     <label>账号</label>
     <input id="user" type="text" autocomplete="username" value="teacher" autofocus>
@@ -132,6 +138,18 @@ SETUP_BODY = """
     <div class="err" id="err">__MSG__</div>
     <button style="width:100%;margin-top:8px" id="btn">创建并进入</button>
   </form>
+  <form id="lg" style="display:none">
+    <label>账号</label>
+    <input id="luser" type="text" autocomplete="username" value="teacher" autofocus>
+    <label>密码</label>
+    <input id="lpwd" type="password" autocomplete="current-password" placeholder="密码">
+    <div class="err" id="lerr"></div>
+    <button style="width:100%;margin-top:8px" id="lbtn">进入工作台</button>
+  </form>
+  <div style="margin-top:14px;font-size:13px;text-align:center">
+    <a href="javascript:void 0" id="swLogin" style="color:#0F6E56;text-decoration:none">已有账号？直接登录 →</a>
+    <a href="javascript:void 0" id="swSetup" style="display:none;color:#0F6E56;text-decoration:none">← 还没有账号？创建一个</a>
+  </div>
   <div class="tip">密保答案只保存加密后的哈希，连老师自己也看不到原文。<br>
   学生不用这个账号：他们在 <code>/s/</code> 选择班级、学号，
   输入你设置的初始密码（默认 <b>123456</b>）即可进入，只能看到自己的数据。</div>
@@ -155,6 +173,34 @@ document.getElementById('f').onsubmit = async function(e){
   if(j.ok){location.href='/teacher/';return;}
   err.textContent=j.msg||'创建失败'; btn.disabled=false; btn.textContent='创建并进入';
 };
+/* 已有账号直接登录（2026-11-04）：首次设置页可切换到登录表单。
+   典型场景：数据/配置已经在服务器上、账号是之前设好的，不需要再建一个。 */
+(function(){
+  var show=function(login){
+    document.getElementById('f').style.display=login?'none':'block';
+    document.getElementById('setupTitle').style.display=login?'none':'block';
+    document.getElementById('lg').style.display=login?'block':'none';
+    document.getElementById('loginTitle').style.display=login?'block':'none';
+    document.getElementById('swLogin').style.display=login?'none':'inline';
+    document.getElementById('swSetup').style.display=login?'inline':'none';
+    document.getElementById('lerr').textContent='';
+    document.getElementById('err').textContent='';
+    (login?document.getElementById('luser'):document.getElementById('user')).focus();
+  };
+  document.getElementById('swLogin').onclick=function(){show(true);};
+  document.getElementById('swSetup').onclick=function(){show(false);};
+  document.getElementById('lg').onsubmit = async function(e){
+    e.preventDefault();
+    var err=document.getElementById('lerr'), btn=document.getElementById('lbtn');
+    err.textContent=''; btn.disabled=true; btn.textContent='验证中…';
+    var r=await fetch('/api/v2/auth/teacher',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({username:document.getElementById('luser').value.trim(),
+                           password:document.getElementById('lpwd').value})});
+    var j=await r.json().catch(function(){return {};});
+    if(j.ok){location.href='/teacher/';return;}
+    err.textContent=j.msg||'账号或密码不正确'; btn.disabled=false; btn.textContent='进入工作台';
+  };
+})();
 </script>"""
 
 
