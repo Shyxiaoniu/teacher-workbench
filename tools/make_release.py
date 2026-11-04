@@ -53,7 +53,8 @@ call "app\\启动教师端.bat" %*
 """
 
 STARTER_SH = """#!/bin/bash
-# 解压后双击运行；首次可能需要 chmod +x 启动工作台.command
+# 解压后双击运行（包内已带可执行权限位）
+# 若系统仍提示没有权限：终端 cd 到本目录执行  chmod +x 启动工作台.command app/启动教师端.command
 cd "$(dirname "$0")"
 exec ./app/启动教师端.command "$@"
 """
@@ -96,6 +97,11 @@ MIT 的义务只有一条：**再分发时保留版权声明与许可全文**。
 
 前置：Python 3.9 或更高（Windows 安装时勾选 **Add Python to PATH**）。
 若拿到的是带 runtime 的版本，无需另装 Python。
+
+> macOS 提示：包内启动脚本已带可执行权限。若系统仍提示「没有权限」或拒绝打开，
+> 在终端 `cd` 到解压目录执行 `chmod +x 启动工作台.command app/启动教师端.command`；
+> 若提示「无法验证开发者」（联网下载的包有隔离标记），改为右键 → 打开，
+> 或在 系统设置 → 隐私与安全性 里点「仍要打开」。
 
 ### 方式二：Docker（推荐长期使用）
 
@@ -223,16 +229,32 @@ def main():
         z.writestr(name + "/发行说明.md", notes.encode("utf-8"))
 
         zi = zipfile.ZipInfo(name + "/启动工作台.bat")
-        zi.external_attr = 0o644 << 16
+        zi.external_attr = 0o100644 << 16
+        zi.compress_type = zipfile.ZIP_DEFLATED   # ZipInfo 不继承 ZipFile 压缩设置
         z.writestr(zi, STARTER_BAT.replace("\n", "\r\n").encode("gbk", "replace"))
 
         zi = zipfile.ZipInfo(name + "/启动工作台.command")
-        zi.external_attr = 0o755 << 16
+        zi.external_attr = 0o100755 << 16
+        zi.compress_type = zipfile.ZIP_DEFLATED
         z.writestr(zi, STARTER_SH.encode("utf-8"))
 
+        # Windows 上打包：NTFS 没有 Unix 执行位，z.write() 默认不会写权限。
+        # 不补的话，解压到 macOS 后 .command/.sh 全部不可执行——顶层启动器
+        # 能双击，但它 exec 的 app/启动教师端.command 会报「没有权限」。
+        # external_attr 高 16 位 = Unix 权限；0o100755 的前导 0o10 是「普通文件」
+        # 类型位，部分解压工具没有类型位会整段忽略权限。
+        exec_rels = {"app/启动教师端.command", "app/启动教师端.sh",
+                     "app/submission-system/run.command", "docker/entrypoint.sh"}
         for rel in files:
             full = os.path.join(ROOT, rel.replace("/", os.sep))
-            z.write(full, name + "/" + rel)
+            zi = zipfile.ZipInfo(name + "/" + rel)
+            zi.compress_type = zipfile.ZIP_DEFLATED
+            if rel in exec_rels:
+                zi.external_attr = 0o100755 << 16
+            else:
+                zi.external_attr = 0o100644 << 16
+            with open(full, "rb") as fh:
+                z.writestr(zi, fh.read())
 
     total = sum(os.path.getsize(os.path.join(ROOT, r.replace("/", os.sep))) for r in files)
     print("版本 %s ｜ 日期 %s" % (version, args.date))
