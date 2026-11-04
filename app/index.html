@@ -15771,7 +15771,8 @@ let actActiveId = null;
 /* 大屏「提交名单」的搜索/排序状态（轮询重渲染时保持） */
 let actRosterKw = '';
 let actRosterSort = 'time-asc';
-let actLastMatched = [];          // 当前大屏的本班匹配结果（供搜索/排序/导出复用）
+let actLastMatched = [];          // 当前大屏的本班匹配结果（一人一条，供搜索/排序/导出复用）
+let actTaskLayout = {};           // 这份学习单的结构：{buttons:[…], questions:[…]}（下发时扫描存下的）
 function actLsGet(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }
 function actLsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
 function actApiBase() {
@@ -15992,6 +15993,31 @@ function renderActivity() {
   .act-warn b{color:#B45309}
   .act-allsubs{margin-top:16px;border:1px dashed var(--border);border-radius:12px;padding:12px 16px;background:var(--bg-surface)}
   .act-allsubs summary{cursor:pointer;font-weight:bold;font-size:14px;color:var(--brand-primary);margin-bottom:8px}
+
+  /* 逐任务收集窗口（2026-11-05）：一份学习单里有几个提交按钮就开几个窗口，
+     窗口内同一名学生只出现一次；问卷题在窗口里直接给出选项分布。 */
+  .act-wins{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:14px}
+  .act-win{border:1px solid var(--border);border-radius:12px;padding:13px 15px;background:var(--bg-surface)}
+  .act-win-hd{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:10px;
+    padding-bottom:9px;border-bottom:1px solid var(--border)}
+  .act-win-hd b{font-size:14px;color:var(--text-primary);line-height:1.4}
+  .act-win-hd .n{font-size:12px;color:var(--text-secondary);white-space:nowrap}
+  .act-win-hd .n em{font-style:normal;color:var(--brand-primary);font-weight:700;font-size:16px;margin:0 2px}
+  .act-win-list{display:flex;flex-direction:column;gap:6px}
+  .act-win-row{display:flex;align-items:baseline;gap:8px;font-size:13.5px;color:var(--text-primary);
+    background:var(--brand-soft);border-radius:9px;padding:6px 11px}
+  .act-win-row .no{font-size:12px;color:var(--text-secondary)}
+  .act-win-row .ts{margin-left:auto;font-size:12px;color:var(--text-secondary);font-variant-numeric:tabular-nums}
+  .act-win-empty{color:var(--text-secondary);font-size:13px;padding:16px 0;text-align:center}
+  .act-qstat{margin-top:12px;border-top:1px dashed var(--border);padding-top:11px}
+  .act-qstat-t{font-size:13px;font-weight:700;color:var(--text-primary);margin-bottom:9px;
+    display:flex;gap:8px;align-items:baseline;line-height:1.5}
+  .act-qstat-t span{font-weight:400;font-size:12px;color:var(--text-secondary);white-space:nowrap}
+  .act-opt{display:grid;grid-template-columns:minmax(64px,1.1fr) 2fr auto;align-items:center;gap:9px;margin-bottom:7px;font-size:12.5px}
+  .act-opt-l{color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .act-opt-track{display:block;height:9px;border-radius:5px;background:var(--brand-soft);overflow:hidden}
+  .act-opt-fill{display:block;height:100%;border-radius:5px;background:var(--brand-primary);transition:width .5s}
+  .act-opt-v{color:var(--text-secondary);font-variant-numeric:tabular-nums;white-space:nowrap}
   .act-allsubs[open] summary{margin-bottom:12px}
 
   /* ===== ④ 自定义上传（教师自制网页模板） ===== */
@@ -16259,9 +16285,18 @@ async function actDeploySheet(t, course) {
     } catch (e) {}
   }
   if (!deployHtml) return false;
+  /* 下发即登记结构（2026-11-05）：把「这份学习单有几个提交按钮、每题有哪些选项」
+     一起存到服务端，大屏就能给每个按钮预建一个收集窗口（还没人提交也显示）。
+     只在部署时算一次，大屏渲染不用反复解析 900KB 的页面。
+     perQ 要跟设计器里那次「生成」的选择一致，整页模式才不会按每题去切窗口。 */
+  let perQ = true;
+  if (actGeneratedPage && actGeneratedPageTask === t.task_id) perQ = actGeneratedPerQ !== false;
+  let layout = null;
+  try { layout = actScanLayout(deployHtml, perQ); } catch (e) { layout = null; }
   const dep = await fetch('/api/custom', { method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ task: t.task_id, html: deployHtml,
+                           layout: layout,
                            course: course || t.course || t.title || '' }) });
   const dj = await dep.json().catch(() => ({}));
   return !!(dep.ok && dj.ok);
@@ -17128,13 +17163,93 @@ function actBuildCustomPage(html, opts) {
   return doc;
 }
 
+/** 扫描学习单网页：这份页面下发给学生后会产生几个提交按钮、每题有哪些选项。
+ *
+ *  为什么要算这个（2026-11-05 牛哥反馈）：
+ *  大屏原来只能看「提交数据里出现过哪些按钮」，页面换了 / 还没人交就完全看不到
+ *  任务结构；同一学生先后交任务一、任务二时，两条记录全糊进同一个总表，看着像
+ *  「一个人交了三次」。下发时先把结构扫出来存好，大屏就能为每个按钮预建一个
+ *  独立收集窗口（0 份也显示），同一学生在每个窗口里只出现一次。
+ *
+ *  分支必须与 actBuildCustomPage 的注入逻辑严格一致，否则窗口名对不上真实按钮：
+ *    ① 任意块带 data-submit-label → 只为这些块生成按钮（其余块没有按钮）；
+ *    ② 没自定义标签、perQ 且存在 .act-q/.q-block → 每块一个按钮，
+ *       标签 = data-btn → 块标题 → 「第N题」；
+ *    ③ 其余 → 整页一个「提交整个页面」（记录里的「按钮」= 整页提交）。
+ */
+function actScanLayout(rawHtml, perQ) {
+  const out = { mode: 'perq', buttons: [], questions: [], hasQuiz: false, source: 'scan' };
+  let doc;
+  try { doc = new DOMParser().parseFromString(String(rawHtml || ''), 'text/html'); }
+  catch (e) { return out; }
+  if (!doc) return out;
+  // 注入后的页面里带着登录浮层和运行时脚本：先摘掉，否则学号输入框会被当成题目
+  doc.querySelectorAll('#actLogin, script, style, noscript').forEach(n => { if (n.parentNode) n.parentNode.removeChild(n); });
+  const blocks = Array.from(doc.querySelectorAll('.act-q, .q-block'));
+  const titleOf = el => {
+    const h = el.querySelector('h1,h2,h3,h4,h5');
+    return (h && (h.textContent || '').trim()) || '';
+  };
+  const addBtn = label => { label = String(label || '').trim(); if (label && out.buttons.indexOf(label) < 0) out.buttons.push(label); };
+  const scanQ = (el, btn, seq) => {
+    const title = titleOf(el) || ('第' + (seq + 1) + '题');
+    const choices = Array.from(el.querySelectorAll('input[type=radio],input[type=checkbox]'));
+    if (choices.length) {
+      const groups = {}, order = [];
+      choices.forEach(inp => {
+        const nm = String(inp.getAttribute('name') || '').trim();
+        if (!nm) return;
+        if (!groups[nm]) {
+          groups[nm] = { multiple: inp.type === 'checkbox', options: [] };
+          order.push(nm);
+        }
+        const v = String(inp.getAttribute('value') != null ? inp.getAttribute('value') : '').trim();
+        if (v && groups[nm].options.indexOf(v) < 0) groups[nm].options.push(v);
+      });
+      order.forEach(nm => out.questions.push({
+        btn: btn, title: title, kind: 'choice', name: nm,
+        multiple: groups[nm].multiple, options: groups[nm].options,
+      }));
+      out.hasQuiz = order.length > 0 || out.hasQuiz;
+      if (order.length) return;
+    }
+    Array.from(el.querySelectorAll('input[name],textarea[name]'))
+      .map(e => String(e.getAttribute('name') || '').trim())
+      .filter((v, i, a) => v && a.indexOf(v) === i)
+      .forEach(nm => out.questions.push({ btn: btn, title: title, kind: 'text', name: nm }));
+  };
+  const custom = blocks.filter(b => String(b.getAttribute('data-submit-label') || '').trim());
+  if (custom.length) {
+    out.mode = 'perq';
+    custom.forEach((b, i) => {
+      const label = String(b.getAttribute('data-submit-label') || '').trim();
+      addBtn(label);
+      scanQ(b, label, i);
+    });
+  } else if (perQ !== false && blocks.length) {
+    out.mode = 'perq';
+    blocks.forEach((b, i) => {
+      const label = String(b.getAttribute('data-btn') || '').trim() || titleOf(b) || ('第' + (i + 1) + '题');
+      addBtn(label);
+      scanQ(b, label, i);
+    });
+  } else {
+    out.mode = 'page';
+    addBtn('整页提交');
+    blocks.forEach((b, i) => scanQ(b, '整页提交', i));
+  }
+  out.updated_at = new Date().toISOString();
+  return out;
+}
+window.actScanLayout = actScanLayout;
+
 /* 2026-11-03：学生链接 / 复制按钮的显示已下线（发放统一走「下发」→ 学生端「今日」），
    actUpdateCustomLink / actCopyCustomLink 随之移除；actLanApi 暂无调用方，保留备用。 */
 
 // 生成页面（仅生成并暂存，不部署；部署由「查看」「下发」负责）
 // actGeneratedPageTask：暂存页属于哪个活动——下发时只对同一活动生效，
 // 防止老师切了活动后旧暂存页误部署到别的活动上。
-var actGeneratedPage = null, actGeneratedPageTask = null;
+var actGeneratedPage = null, actGeneratedPageTask = null, actGeneratedPerQ = true;
 async function actCustomGenerate() {
   const t = actTaskList.find(x => x.task_id === actActiveId);
   if (!t) { toast('请先在上面选一门课程'); return; }
@@ -17146,6 +17261,7 @@ async function actCustomGenerate() {
   actGeneratedPage = actBuildCustomPage(
     actFillCourseVars(raw, t.course || t.title || actActiveCourse), { perQ: perQ });
   actGeneratedPageTask = t.task_id;
+  actGeneratedPerQ = perQ;
   actRenderFileCfg();
   actCustStatus('✓ 已生成页面（' + (perQ ? '每题单独提交' : '整页一个提交') + '）。点「查看」预览，确认后点「下发」发给学生。', 'ok');
 }
@@ -17167,7 +17283,8 @@ async function actCustomView() {
   actGeneratedPageTask = actActiveId;
   actCustStatus('正在部署预览页…');
   try {
-    const r = await fetch('/api/custom', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task: actActiveId, html: page, course: t.course || t.title || actActiveCourse || '' }) });
+    const layView = (() => { try { return actScanLayout(page, true); } catch (e) { return null; } })();
+    const r = await fetch('/api/custom', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task: actActiveId, html: page, layout: layView, course: t.course || t.title || actActiveCourse || '' }) });
     const j = await r.json().catch(() => ({}));
     if (!r.ok || !j.ok) { actCustStatus('部署失败：' + (j.msg || r.status), 'err'); return; }
     actCustStatus('✓ 已部署预览页，正在打开（含「🧪 模拟测试提交」按钮）…', 'ok');
@@ -17179,35 +17296,83 @@ async function actCustomView() {
   } catch (e) { actCustStatus('✗ ' + e.message, 'err'); }
 }
 
-// 大屏：每个提交按钮一个数据显示窗口（按「按钮」字段分组）
-function actButtonWindowsHtml(subs) {
-  // 只把「逐题提交」的按钮开窗口；整页/测试提交不算逐题，统一走按姓名去重的总表
-  const withBtn = (subs || []).filter(s => {
-    const b = String(s['按钮'] || '').trim();
-    return b && b !== '整页提交' && b !== '测试提交';
+/* 任务收集窗口（2026-11-05 重做）
+ *  旧实现 = 从「已经提交上来的数据」反向分组：没人交就看不到任务结构、老师换过页面
+ *  窗口名还会过期；同一名学生交了几个任务，就在几个窗口各出现一次，看着像重复。
+ *  新实现 = 以「下发时扫描出的按钮清单」为准预建窗口（0 份也显示，老师能对上号），
+ *  窗口内按人去重只留最新一条；选择题直接把选项分布画出来。 */
+function actTaskWindowsHtml(allMatched, layout) {
+  const lay = (layout && typeof layout === 'object') ? layout : {};
+  const btns = Array.isArray(lay.buttons) ? lay.buttons.slice() : [];
+  const rows = allMatched || [];
+  // 数据里出现、但 layout 里没登记的按钮（老页面 / 老师临时改过网页）补在后面，绝不让数据漏掉
+  rows.forEach(s => {
+    const b = actTaskOf(s);
+    if (b && btns.indexOf(b) < 0) btns.push(b);
   });
-  if (!withBtn.length) return '';
-  const groups = {};
-  withBtn.forEach(s => { const b = String(s['按钮']).trim(); (groups[b] = groups[b] || []).push(s); });
-  const ignore = new Set(['学号', '姓名', '班级', '按钮', 'submitted_at', 'received_at', '_ip', 'attachment', '作品链接', 'file', '作品文件']);
-  const cards = Object.keys(groups).map(b => {
-    const list = groups[b];
-    const rows = list.map((s, i) => {
-      const kv = Object.keys(s).filter(k => !ignore.has(k) && s[k] != null && String(s[k]).trim() !== '')
-        .map(k => esc(k) + '：' + esc(String(s[k]))).join('　');
-      const sid = s._submission_id != null ? s._submission_id : '';
-      return '<div class="act-rst"><i class="ord">' + (i + 1) + '</i>'
-        + esc(actRosterName(s) || '—') + '<span class="no">' + esc(actRosterNo(s)) + '</span>'
-        + '<span class="ts">' + esc((actRosterTs(s) || '').slice(5) || '—') + '</span>'
-        + (kv ? '<div style="flex-basis:100%;font-size:12px;color:var(--text-secondary);line-height:1.5">' + kv + '</div>' : '')
-        + (sid !== '' ? '<button class="act-del-btn act-del" onclick="actDelSub(\'' + sid + '\')">删除</button>' : '')
-        + '</div>';
-    }).join('');
-    return '<div class="act-sec"><h3>' + esc(b) + ' <span style="font-weight:400;color:var(--text-secondary);font-size:12px">· 已提交 ' + list.length + ' 份</span></h3>'
-      + '<div class="act-roster">' + (rows || '<div class="act-empty">—</div>') + '</div></div>';
+  const taskBtns = btns.filter(b => b && b !== '整页提交');
+  // 只有「一份学习单里确实有多个提交按钮」才开窗口区：
+  // 整页提交 / 只有一个按钮时，窗口和下面的学生名单完全重复，没有意义。
+  if (taskBtns.length < 2) return '';
+  const cards = taskBtns.map(b => {
+    const one = actDedupByPerson(rows.filter(s => actTaskOf(s) === b));  // 同窗口内一人一条
+    const list = one.length
+      ? one.map((s, i) =>
+        '<div class="act-win-row"><i style="font-style:normal;font-weight:700;color:var(--brand-primary)">' + (i + 1) + '</i>'
+        + '<b style="font-weight:600">' + esc(actRosterName(s) || '—') + '</b>'
+        + '<span class="no">' + esc(actRosterNo(s)) + '</span>'
+        + '<span class="ts">' + esc((actRosterTs(s) || '').slice(5) || '—') + '</span></div>').join('')
+      : '<div class="act-win-empty">这个任务还没有人提交</div>';
+    return '<div class="act-win"><div class="act-win-hd"><b>' + esc(b) + '</b>'
+      + '<span class="n">已交 <em>' + one.length + '</em> 人</span></div>'
+      + '<div class="act-win-list">' + list + '</div>'
+      + actQuizStatsHtml(one, lay, b)
+      + '</div>';
   }).join('');
-  return '<div class="act-sec"><h3>逐题提交 · 数据显示窗口（每个提交按钮一个）</h3><div class="act-grid2">' + cards + '</div></div>';
+  return '<div class="act-sec"><h3>任务收集窗口（每个提交按钮一个）</h3>'
+    + '<div class="act-note">这份学习单里有 <b>' + taskBtns.length + '</b> 个提交按钮，下面按按钮分成 '
+    + taskBtns.length + ' 个窗口。同一名学生在同一个窗口里只出现一次；交了几个任务，就在几个窗口里各有一条。</div>'
+    + '<div class="act-wins">' + cards + '</div></div>';
 }
+window.actTaskWindowsHtml = actTaskWindowsHtml;
+
+/* 问卷 / 选择题统计（2026-11-05）：每道选择题给出「选项 → 人数 · 占比」。
+ *  选项全集来自下发时扫描的 layout —— 0 人选的选项也要列出来，
+ *  老师一眼能看出「全班是不是都选了同一项」；提交里出现的额外取值补在后面，不丢数据。 */
+function actQuizStatsHtml(rows, layout, btn) {
+  const qs = ((layout && layout.questions) || []).filter(q =>
+    q && q.kind === 'choice' && (!q.btn || String(q.btn) === String(btn)));
+  if (!qs.length) return '';
+  return qs.map((q, qi) => {
+    const counts = {}, extra = [];
+    let answered = 0;
+    (rows || []).forEach(s => {
+      const v = s[q.name];
+      const arr = Array.isArray(v) ? v : (v == null ? [] : [v]);
+      const picked = arr.map(x => String(x).trim()).filter(Boolean);
+      if (picked.length) answered++;
+      picked.forEach(k => {
+        if (!(k in counts)) { counts[k] = 0; if ((q.options || []).indexOf(k) < 0) extra.push(k); }
+        counts[k]++;
+      });
+    });
+    const opts = (q.options || []).concat(extra);
+    if (!opts.length) return '';
+    const lines = opts.map(o => {
+      const c = counts[o] || 0;
+      const pct = answered ? Math.round(c / answered * 100) : 0;
+      return '<div class="act-opt" title="' + esc(o) + '：' + c + ' 人">'
+        + '<span class="act-opt-l">' + esc(o) + '</span>'
+        + '<span class="act-opt-track"><i class="act-opt-fill" style="width:' + pct + '%"></i></span>'
+        + '<span class="act-opt-v">' + c + (answered ? ' · ' + pct + '%' : '') + '</span></div>';
+    }).join('');
+    return '<div class="act-qstat"><div class="act-qstat-t">' + esc(q.title || ('第' + (qi + 1) + '题'))
+      + '<span>' + answered + ' 人作答' + (q.multiple ? '（多选）' : '') + '</span></div>' + lines + '</div>';
+  }).join('');
+}
+window.actQuizStatsHtml = actQuizStatsHtml;
+/* 兼容旧调用名 */
+function actButtonWindowsHtml(subs) { return actTaskWindowsHtml(subs, actTaskLayout); }
 
 /* 数据大屏 / 学生作品 两个页签的切换（提交收集已按需求移除 2026-11-02） */
 function actSwitchTab(which) {
@@ -17307,6 +17472,44 @@ function actDedupAsc(rows) {
   });
   return kept;
 }
+/* 这条提交属于哪个提交按钮（任务）。「整页提交」是任务（整页模式只有一个），
+   「测试提交」不是 —— 老师点「模拟一条测试提交」造的数据不该出现在任何窗口里。 */
+function actTaskOf(s) {
+  const b = String((s && s['按钮']) || '').trim();
+  return b === '测试提交' ? '' : b;
+}
+/* 按人合并：同一学生的多次提交收成一条（2026-11-05）
+   —— _tasks 记他交过哪几个任务（窗口标题用）、_count 记原始条数、
+      _submission_id 取最新那条（删除按钮删的就是最新记录）。 */
+function actDedupByPerson(rows) {
+  const m = new Map();
+  (rows || []).forEach(r => {
+    const k = actRosterNo(r) || actRosterName(r) || ('_' + m.size);
+    const btn = actTaskOf(r);
+    const cur = m.get(k);
+    if (!cur) {
+      const c = Object.assign({}, r);
+      c._tasks = btn ? [btn] : [];
+      c._count = 1;
+      m.set(k, c);
+      return;
+    }
+    if (btn && cur._tasks.indexOf(btn) < 0) cur._tasks.push(btn);
+    cur._count = (cur._count || 1) + 1;
+    if (String(r.submitted_at || '') >= String(cur.submitted_at || '')) {
+      const tasks = cur._tasks, cnt = cur._count, sid = cur._submission_id;
+      const merged = Object.assign({}, r);
+      merged._tasks = tasks;
+      merged._count = cnt;
+      if (merged._submission_id == null) merged._submission_id = sid;
+      m.set(k, merged);
+    }
+  });
+  return Array.from(m.values()).sort((a, b) => {
+    const ta = String(a.submitted_at || ''), tb = String(b.submitted_at || '');
+    return ta < tb ? -1 : ta > tb ? 1 : 0;
+  });
+}
 function actAttachments(s) { const a = s && s.attachment; if (!a) return []; if (typeof a === 'string') return [a]; if (Array.isArray(a)) return a; return []; }
 /* 附件地址补全：相对路径拼上接口前缀，绝对 URL 原样使用 */
 function actAttUrl(a) {
@@ -17348,16 +17551,23 @@ async function actRenderDash() {
   // 按班级收集（2026-11-04）：先把当前班级名交给匹配器，带班级字段的提交直接按班比对
   const clsObjNow = (dbT('classes') || []).find(c => Number(c.id) === Number(cls));
   actCurClsName = clsObjNow ? String(clsObjNow.name || '') : '';
+  actTaskLayout = (j && j.layout && typeof j.layout === 'object') ? j.layout : {};
   const matched = subs.filter(s => actSubMatchClass(s, clsStus));
-  actLastMatched = matched;   // 供名单的搜索/排序/导出复用（轮询刷新后仍可用）
-  dd.innerHTML = actDashboardHtml(j, subs, matched, clsStus, cls);
+  /* 一人一条（2026-11-05）：同一学生先后交任务一、任务二时，subs 里是两条不同
+     按钮的记录（这是对的，要分进各自的任务窗口）。但顶部 KPI、学生作品、提交
+     名单是「按人」的口径 —— 一个人出现三次会被当成重复提交。这里按人合并成
+     一条（保留最新一次的时间/附件，_tasks 记他交过哪几个任务），逐题明细仍从
+     matched 走任务窗口。 */
+  const people = actDedupByPerson(matched);
+  actLastMatched = people;   // 供名单的搜索/排序/导出复用（轮询刷新后仍可用）
+  dd.innerHTML = actDashboardHtml(j, subs, people, clsStus, cls, matched);
   if (_keepSearch) {         // 还原搜索框焦点与光标，避免轮询刷新打断输入
     const el = document.getElementById('actRosterSearch');
     if (el) { try { el.focus(); if (_keepPos != null) el.setSelectionRange(_keepPos, _keepPos); } catch (e) {} }
   }
-  actDrawCharts(j, matched);
-  cwPaintRecent(matched);    // 大屏里的「最近作品」小条
-  if (cwWorksVisible()) cwPaintWorks(matched);   // 作品页签开着就一起刷新
+  actDrawCharts(j, people);
+  cwPaintRecent(people);     // 大屏里的「最近作品」小条（一人一张，不重复）
+  if (cwWorksVisible()) cwPaintWorks(people);   // 作品页签开着就一起刷新
   cwArchiveTick();           // 匹配了课程就增量归档（节流，不打扰课堂）
   actStartPoll();
 }
@@ -17386,7 +17596,8 @@ function actStartPoll() {
 }
 window.actRenderDash = actRenderDash;
 
-function actDashboardHtml(j, subs, matched, clsStus, cls) {
+function actDashboardHtml(j, subs, matched, clsStus, cls, allMatched) {
+  /* matched = 按人去重后的一人一条；allMatched = 每条按钮各自的原始提交（分任务窗口用） */
   const clsTotal = clsStus.length;
   // 已提交按「去重后的学号」统计，避免同一学生多次提交导致提交率超过 100%
   const subKeys = new Set();
@@ -17427,6 +17638,7 @@ function actDashboardHtml(j, subs, matched, clsStus, cls) {
           + '可展开下方「本活动全部提交」核对原始数据。</div>'
         : '')
     + '<div class="act-sec"><h3>本班提交趋势（按日）</h3><canvas id="actChartTrend" width="320" height="170"></canvas></div>'
+    + actTaskWindowsHtml(allMatched || matched, actTaskLayout)
     + '<div class="act-sec"><h3>学生作品</h3>'
     +   '<div id="actRecentBox"></div></div>'
     + '<div class="act-sec"><h3>提交名单（本班）</h3>'
@@ -17438,8 +17650,7 @@ function actDashboardHtml(j, subs, matched, clsStus, cls) {
     +   '</div>'
     +   '<div class="act-roster" id="actRosterList">' + rosterHtml + '</div>' + missHtml + '</div>'
     + '<div class="act-sec"><h3>最近提交明细' + (matched.length ? '（近 12 条）' : '') + '</h3>' + actTableHtml(matched, 12) + '</div>'
-    + actButtonWindowsHtml(matched)
-    + (subs.length > matched.length
+    + (subs.length > (allMatched || matched).length
         ? '<details class="act-allsubs"' + (actAllSubsOpen ? ' open' : '') + ' ontoggle="actAllSubsToggle(this.open)"><summary>本课程全部提交（' + subs.length + ' 份，不限班级，已去重）</summary>' + actTableHtml(subs, 0) + '</details>'
         : '');
 }
@@ -17508,9 +17719,16 @@ function actRosterRows(list) {
 function actRosterChipsHtml(rv) {
   if (!rv.total) return '<div class="act-empty">本班暂无提交记录。</div>';
   if (!rv.rows.length) return '<div class="act-empty">没有匹配「' + esc(rv.kw) + '」的学生</div>';
+  const taskTag = s => {
+    const t = (s && s._tasks) || [];
+    if (!t.length) return '';
+    const txt = t.length > 1 ? (t.length + ' 个任务') : t[0];
+    return '<span class="no" title="已提交：' + esc(t.join(' · ')) + '">✓ ' + esc(txt) + '</span>';
+  };
   return rv.rows.map((s, i) => '<span class="act-rst"><i class="ord">' + (i + 1) + '</i>'
     + esc(actRosterName(s) || '—')
     + '<span class="no">' + esc(actRosterNo(s)) + '</span>'
+    + taskTag(s)
     + '<span class="ts">' + esc((actRosterTs(s) || '').slice(5) || '—') + '</span></span>').join('');
 }
 
@@ -17537,9 +17755,11 @@ function actExportRosterCsv() {
   const rv = actRosterRows(actLastMatched);
   if (!rv.rows.length) { toast('当前没有可导出的记录'); return; }
   const cell = v => { const s = String(v == null ? '' : v); return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
-  const head = ['序号', '学号', '姓名', '提交时间', '作品标题', '作品简介'];
+  const head = ['序号', '学号', '姓名', '已交任务', '提交时间', '作品标题', '作品简介'];
   const body = rv.rows.map((s, i) => [
-    i + 1, actRosterNo(s), actRosterName(s), actRosterTs(s),
+    i + 1, actRosterNo(s), actRosterName(s),
+    ((s && s._tasks) || []).join(' / ') || actTaskOf(s) || '',
+    actRosterTs(s),
     s['作品标题'] || s.title || '', s['作品简介'] || s.desc || ''
   ].map(cell).join(','));
   const csv = '\ufeff' + [head.map(cell).join(',')].concat(body).join('\r\n');
@@ -17568,9 +17788,14 @@ function actTableHtml(subs, limit) {
   const rows = (limit && limit > 0) ? subs.slice().reverse().slice(0, limit) : subs.slice();
   // 2026-11-04：同一学习单下有多个任务（逐题提交）时，同一学生会交多条记录，
   // 只显示姓名分不清是哪个任务的 —— 只要列表里出现「任务级」提交就加一列任务名。
-  // 「整页提交 / 测试提交」不是任务，不显示也不触发这一列。
+  // 2026-11-05：名单改成一人一条后，这一列显示他交过的全部任务（_tasks）。
   const isTaskBtn = b => b && b !== '整页提交' && b !== '测试提交';
-  const btnOf = s => { const b = String(s['按钮'] || '').trim(); return isTaskBtn(b) ? b : ''; };
+  const btnOf = s => {
+    const list = (s && s._tasks) || [];
+    if (list.length) return list.join(' · ');
+    const b = String(s['按钮'] || '').trim();
+    return isTaskBtn(b) ? b : '';
+  };
   const hasTaskCol = rows.some(s => btnOf(s));
   return `<div style="overflow-x:auto"><table class="act-tb"><thead><tr><th>姓名</th><th>学号</th>${hasTaskCol ? '<th>任务</th>' : ''}<th>作品标题</th><th>简介</th><th>文件</th><th>时间</th><th>操作</th></tr></thead><tbody>${
     rows.map(s => {

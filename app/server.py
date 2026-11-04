@@ -98,7 +98,7 @@ CFG["update"].setdefault("interval_hours", 24) # 检查间隔（小时）
 PET_IDS = ["cat", "dog", "rabbit", "penguin", "panda", "dino", "unicorn", "dragon"]
 COND = threading.Condition()
 STARTED = time.time()
-VERSION = "2.0.9"
+VERSION = "2.0.10"
 ONLINE_WINDOW = 300      # 5 分钟内活跃算在线
 # 可内联直出的附件类型（其余一律按下载处理，防止同源执行脚本）
 _INLINE_EXTS = {"png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "pdf",
@@ -1312,6 +1312,23 @@ class Handler(LEG.Handler):
         except Exception:
             return False
 
+    def _task_layout(self, task):
+        """这份学习单有几个提交按钮、每题有哪些选项（2026-11-05）。
+
+        下发（actDeploySheet）时前端把页面扫一遍，结果随 /api/custom 存进
+        config.json 的 custom_layout[task]；这里读出来交给数据大屏 ——
+        大屏据此为每个提交按钮预建一个收集窗口，并给选择题算选项分布。
+        老页面（从没经过新下发）没有这份数据 → 返回 {}，大屏退回
+        「按已提交数据里的按钮分组」，行为与旧版一致，不会白屏。
+        """
+        try:
+            cfg = LEG.get_config()
+            lays = cfg.get("custom_layout") if isinstance(cfg, dict) else None
+            lay = lays.get(str(task)) if isinstance(lays, dict) else None
+            return lay if isinstance(lay, dict) else {}
+        except Exception:
+            return {}
+
     def _sheet_entry_url(self, r, task, title=""):
         """带身份票的 /submit/custom.html 链接（资料入口直通学习单用）。
 
@@ -1722,6 +1739,7 @@ class Handler(LEG.Handler):
             subs = ACT.submissions(task)
             return self._json({"ok": True, "submissions": subs, "task_id": task,
                                "task_title": t["title"],
+                               "layout": self._task_layout(task),
                                "total_submissions": len(subs)})
         if path == "/api/v2/teacher/activity/list":
             # 活动管理页：活动列表 + 每条的提交数 + 教学资料附件

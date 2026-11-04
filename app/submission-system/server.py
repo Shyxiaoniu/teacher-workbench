@@ -829,6 +829,11 @@ class Handler(BaseHTTPRequestHandler):
                     course = str(data.get("course") or "").strip()
                     if course:
                         cfg.setdefault("custom_course", {})[task] = course
+                    # 学习单结构（2026-11-05）：下发时前端扫出「几个提交按钮 / 每题
+                    # 有哪些选项」，大屏据此给每个按钮预建收集窗口、给选择题算分布。
+                    lay = data.get("layout")
+                    if isinstance(lay, dict):
+                        cfg.setdefault("custom_layout", {})[task] = lay
                 else:
                     cfg["custom_html"] = data["html"]
                 save_json(CONFIG_PATH, cfg)
