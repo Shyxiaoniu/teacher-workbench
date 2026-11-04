@@ -215,6 +215,10 @@ body.embed .play-wrap{min-height:calc(100vh - 20px)}
 .kb-blk.kb-dim{opacity:.24;filter:grayscale(.55);transition:opacity .2s}
 .kb-blk.kb-focus{filter:drop-shadow(0 0 9px rgba(232,161,60,.45))}
 .text-wrap{position:relative;flex:0 0 auto;margin-top:8px}
+/* 长文（整篇文章）模式：课文区自己滚动，不把整页撑爆；字号略收一档，
+   屏幕上能多看到几行，打字时不用频繁滚动找位置（2026-11-04） */
+.text-wrap.long .text-line{max-height:min(42vh,420px);overflow:auto;justify-content:flex-start}
+.text-wrap.long .ch .hz{font-size:23px;line-height:27px}
 .text-line{background:var(--paper);border:2px solid var(--line);
   /* 顶部留 24px：这是拼音气泡的"停靠带"，气泡落在框内而不是压到上面的标题栏 */
   border-radius:16px;padding:24px 12px 9px;min-height:64px;
@@ -1458,23 +1462,23 @@ function levelName(stage, boss) {
   if (stage.id === 7) return '小键盘';
   if (stage.id === 8) return '中英混排';
   if (stage.id === 5) return '打词语';
-  if (stage.id === 6) return '读一句';
+  if (stage.id === 6) return '读全文';
   return '输入挑战';
 }
 function artBar() {
   var a = (window.TA) ? TA.get(S.art.id) : null;
   if (!a) return '';
   var ch = S.map.chapter;
-  var at = ((ch - 1) * 10) % a.count;       /* 本卷第 1 关从第几句开始 */
-  var left = a.count - at;
   return '<div class="art-bar">' +
     '<span class="ab-ic">📖</span>' +
     '<div class="ab-main">' +
       '<div class="ab-t"><b>' + esc(a.title) + '</b>' +
         '<span class="ab-type">' + esc(a.typeName) + '</span>' +
         '<span class="ab-hard">' + starsHtml(a.hard) + '</span></div>' +
+      /* 2026-11-04 起不再按句切关：每一关都从文章开头整篇连续打，
+         这里只报篇幅，不再写"从第 N 句开始、还剩 M 句" */
       '<div class="ab-meta">' + esc(a.author || '') + ' · ' + a.count + ' 句 / ' + a.chars + ' 字' +
-        ' · 本卷从第 ' + (at + 1) + ' 句开始，还剩 ' + left + ' 句' + '</div>' +
+        ' · 整篇连续练习' + '</div>' +
     '</div>' +
     '<button class="btn line sm" id="artOpen">换一篇</button>' +
   '</div>';
@@ -2051,7 +2055,7 @@ function renderPlay() {
   } else {
     var isCn = L.mode === 'cn';
     body = imeBarHtml() +
-      '<div class="text-wrap" id="textWrap">' +
+      '<div class="text-wrap' + (L.long ? ' long' : '') + '" id="textWrap">' +
         '<div class="text-line' + (isCn ? '' : ' en-line') + '" id="textLine">' +
           textHtml(L.text, P.idx, false) + '</div>' +
         '<div class="py-pop" id="pyPop" hidden></div></div>' +
@@ -2069,7 +2073,9 @@ function renderPlay() {
             '</div>' +
           '</div>'
         : '') +
-      kbDiagram() + legendRow() + handsDiagram() +
+      /* 长文（整篇文章）不显示键盘与指法图：屏幕空间全留给课文本身
+         （2026-11-04 牛哥定版：整篇连续练习，练习界面不再显示键盘和指法） */
+      (L.long ? '' : kbDiagram() + legendRow() + handsDiagram()) +
       '<div class="prog-row"><div class="progress-track"><div class="progress-fill" style="width:0%"></div></div>' +
         (isCn ? '<span class="tb-count" id="tbCount">0 / ' + L.text.length + '</span>' : '') + '</div>';
   }
@@ -2876,8 +2882,12 @@ function loadLb() {
 }
 function viewLb() {
   var tabs = [['week', '⭐ 本周星光'], ['total', '🏆 累计总星'], ['speed', '⚡ 手速之王']];
+  /* 标题里的班级名用「榜单实际所属班级」（S.lb.class_name，来自接口返回）。
+     2026-11-04 牛哥反馈：教师练习模式下标题写 S.me.class_name，那是**老师
+     自己的班**（三年1班），跟下拉里选的班（七1班）对不上，看着像数据错乱。 */
   return '<div class="lb-card">' +
-    '<div class="lb-title">' + esc(S.me.class_name) + ' · 打字排行榜</div>' +
+    '<div class="lb-title" id="lbTitle">' +
+      esc(S.lb.class_name || S.me.class_name || '') + ' · 打字排行榜</div>' +
     '<div class="lb-sub">每周一星光榜自动清零，坚持每天练一点，榜上见！</div>' +
     '<div class="lb-tabs">' + tabs.map(function (t) {
       return '<button class="' + (S.lb.scope === t[0] ? 'on' : '') + '" data-lbscope="' + t[0] + '">' + t[1] + '</button>';
@@ -2888,6 +2898,9 @@ function viewLb() {
 function paintLb() {
   var box = $('#lbRows');
   if (!box) return;
+  /* 标题跟着榜单数据一起刷新（切班 / 切榜单后班级名必须同步变） */
+  var tt = $('#lbTitle');
+  if (tt) tt.textContent = (S.lb.class_name || S.me.class_name || '') + ' · 打字排行榜';
   if (!S.lb.rows.length) {
     box.innerHTML = '<div class="lb-empty">这周还没有人上榜，第一个通关的人就是你！</div>';
     return;

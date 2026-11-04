@@ -3,7 +3,7 @@
    布局：左侧侧边栏 + 右侧主内容区，窄屏（≤860px）侧栏收起换底部 Tab。
    页签精简为三个（v2.x 的 概览/成绩/考勤 页全部收进左下角账号卡
    弹出的个人信息面板 #suPop，含学习摘要 + 成绩/考勤/德育明细弹层）：
-   · 今日   = 签到 + 今日课程（每节课的交互式学习单入口）+ 待交作业 + 值日
+   · 今日   = 签到 + 本课下发的资料 + 待交作业 + 值日
    · 作业   = 本班全部作业与我的提交状态（已提交·待批改 / 已批改 / 逾期）
    · 课程   = 老师设置的课程 + 每门课的资源文件，点击在线预览
               （/cw/<id> 闸门按登录身份 + 本班 + 已下发放行，内联输出，
@@ -201,29 +201,11 @@
   /* （materials/materialById 已随 2026-11-02 导学单移除而删除；
      课件库推送走 cwPushed()。） */
 
-  /* ---------------- 课堂活动（交互式学习单） ----------------
-     教师在「上课」页选好活动即发放，记录在 activity_pushes 表；
-     服务端只下发本班已发放的行（收回 / 草稿学生端不可见，口径与教师端一致）。
-     打开即教师设计的交互式学习单（/submit/custom.html 外壳 + 活动提交 API）。 */
-  function pushOpen(p) {
-    return String((p && p.status) || 'published') === 'published';
-  }
-  function pushes() {
-    return T('activity_pushes').filter(function (p) {
-      var st = String(p.status || 'published');
-      return st === 'published' || st === 'closed';   // closed：学生可见，但打不开
-    });
-  }
-  /* 某门课的发放活动（按课程名匹配；同课多次发放取最新） */
-  function pushOfCourse(courseName, dateStr) {
-    var hit = pushes().filter(function (p) {
-      return courseName && String(p.course || '') === String(courseName) &&
-        (!dateStr || String(p.date || '') === String(dateStr));
-    });
-    if (!hit.length) return null;
-    var open = hit.filter(pushOpen);   // 同一课程有多份时，优先能打开的那份
-    return open.length ? open[open.length - 1] : hit[hit.length - 1];
-  }
+  /* ---------------- 课堂活动（已下线，2026-11-04） ----------------
+     旧版今日页按课表罗列每节课、按课程名匹配 activity_pushes 给「进学习单」
+     入口。牛哥定版（2026-11-04）：那块按课表的模块整体下线，只展示老师下发的资料，
+     所以 pushOpen / pushes / pushOfCourse 一并删除（activity_pushes 数据保留，
+     教师端历史推送记录仍可查，只是学生端不再有这套入口）。 */
   /* 课件库（2026-11-01 v2）：老师在工作台课件页点「推送」的课件，按班同步。
      原来放在导学单详情里，导学单移除后改为「今日」页独立入口。 */
   function cwPushed() {
@@ -313,74 +295,35 @@
     });
   }
 
+  /** 今天下发的资料（2026-11-04 改版）：
+      旧版按课表罗列每节课 + 学习单入口，学生看到的是一堆「暂无学习单」；
+      现在只列老师真正下发的资料，**当前节次课程名对应的排最前**——一进页面
+      就是这节课要用的东西。今天没发过就退回到最近下发的几份，不给空白页。 */
+  function todayMats() {
+    var d = todayStr();
+    var list = cwPushed().filter(function (m) { return String(m.date || '') === d; });
+    var fresh = list.length > 0;
+    if (!list.length) list = cwPushed().slice(0, 6);
+    var cur = (S.now && S.now.course) ? String(S.now.course) : '';
+    if (cur) {
+      list = list.slice().sort(function (a, b) {
+        var ka = String(a.lesson || a.subject || '') === cur ? 0 : 1;
+        var kb = String(b.lesson || b.subject || '') === cur ? 0 : 1;
+        return ka - kb;
+      });
+    }
+    return { list: list, fresh: fresh };
+  }
+
   function vToday() {
-    var d = new Date();
-    var pm = periodMap(), cm = courseMap();
-    var ls = lessonsOf(todayIdx());
-    var now = d.getHours() * 60 + d.getMinutes();
     var seat = mySeat();
     var sp = mySeatPos();
     var duty = myDutyToday();
     var hwTodo = todoHomeworks();
-    var usedPushIds = {};
-
-    var lessonHtml = ls.length ? ls.map(function (l) {
-      var p = pm[l.period_id] || {}, c = cm[l.course_id] || {};
-      var st = p.start_time || '', et = p.end_time || '';
-      var isNow = st && et && now >= toMin(st) && now <= toMin(et);
-      var push = pushOfCourse(c.name || l.course_name || '', todayStr());
-      if (push && push.id) usedPushIds[String(push.id)] = 1;
-      var locked = push && !pushOpen(push);
-      var gTag = push
-        ? (locked
-            ? '<div class="tag mut" data-locked="1">学习单已关闭</div>'
-            : '<div class="tag hot" data-act="/g/act/' + encodeURIComponent(push.id || '') + '" data-act-title="' +
-              esc(push.task_title || '课堂学习单') + '">进学习单</div>')
-        : '<div class="tag mut">暂无学习单</div>';
-      return '<div class="lesson' + (isNow ? ' now' : '') + (locked ? ' locked' : '') + '" ' +
-        (push ? (locked
-          ? 'data-locked="1"'
-          : 'data-act="/g/act/' + encodeURIComponent(push.id || '') + '" data-act-title="' + esc(push.task_title || '课堂学习单') + '"') : '') + '>' +
-        '<div class="t"><b>' + esc(p.label || ('第' + (p.seq || '') + '节')) + '</b>' + esc(st) + '</div>' +
-        '<div class="m"><b>' + esc(c.name || l.course_name || '课程') + '</b>' +
-        '<span>' + (push
-          ? (locked ? '老师已关闭，暂时无法打开' : ('课堂学习单 · ' + esc(push.task_title || 'Interactive')))
-          : esc(l.room_override || c.location || '')) + '</span></div>' +
-        gTag + '</div>';
-    }).join('') : '<div class="empty">今天没有课，好好休息</div>';
-
-    /* 2026-11-04 牛哥要求：单独那块「今日课堂活动 / 今日课程学习单」删掉，
-       学习单入口全部收进上面的「今日课程」卡里——
-       课表格子按课程名匹配到的那条直接显示「进学习单」；
-       课表里没课（周末、临时停课）或课程名对不上的，作为额外一行
-       接在今日课程列表末尾，入口不丢。 */
-    var todayPushes = pushes().filter(function (x) {
-      return String(x.date || '') === todayStr();
-    });
-    var extraPushes = todayPushes.filter(function (x) {
-      return !usedPushIds[String(x.id)];
-    });
-    var extraHtml = extraPushes.map(function (x) {
-      var locked = !pushOpen(x);
-      return '<div class="lesson extra' + (locked ? ' locked' : '') + '" ' +
-        (locked
-          ? 'data-locked="1"'
-          : 'data-act="/g/act/' + encodeURIComponent(x.id || '') + '" data-act-title="' +
-            esc(x.task_title || '课堂学习单') + '"') + '>' +
-        '<div class="t"><b>学习单</b><span>今日</span></div>' +
-        '<div class="m"><b>' + esc(x.course || '课堂学习单') + '</b>' +
-        '<span>' + (locked
-          ? '老师已关闭，暂时无法打开'
-          : '交互式学习单 · ' + esc(x.task_title || '点开作答并提交')) + '</span></div>' +
-        (locked
-          ? '<div class="tag mut" data-locked="1">已关闭</div>'
-          : '<div class="tag hot" data-act="/g/act/' + encodeURIComponent(x.id || '') +
-            '" data-act-title="' + esc(x.task_title || '课堂学习单') + '">进学习单</div>') +
-        '</div>';
-    }).join('');
-    if (extraHtml) lessonHtml += extraHtml;
-
-    /* 课程资源已独立成「课程」页（v3.0.0），今日页不再重复放课件库入口 */
+    var tm = todayMats();
+    var matsHtml = tm.list.length
+      ? tm.list.map(resRow).join('')
+      : '<div class="empty">老师还没有下发资料，下发后会直接出现在这里</div>';
 
     var hwHtml = hwTodo.length ? hwTodo.slice(0, 4).map(function (h) {
       return '<div class="hw" data-hw="' + esc(h.id) + '"><div class="dot"></div>' +
@@ -428,8 +371,8 @@
       : '';
 
     return '<div class="stat-grid">' +
-      '<div class="stat"><div class="stat-num">' + ls.length + '<small>节</small></div>' +
-      '<div class="stat-label">今日课程</div></div>' +
+      '<div class="stat"><div class="stat-num">' + tm.list.length + '<small>份</small></div>' +
+      '<div class="stat-label">' + (tm.fresh ? '今日资料' : '最近资料') + '</div></div>' +
       '<div class="stat"><div class="stat-num">' + hwTodo.length + '<small>项</small></div>' +
       '<div class="stat-label">待交作业</div></div>' +
       /* 座位卡点一下直接进座位表（2026-11-03）；排号用座位表的显示排，
@@ -442,7 +385,8 @@
       ckHtml +
       typingHtml +
       '<div class="cols2">' +
-      '<div class="card"><h3>今日课程<span class="more">点课进学习单</span></h3>' + lessonHtml + '</div>' +
+      '<div class="card"><h3>' + (tm.fresh ? '本课资料' : '最近下发的资料') +
+        '<span class="more">点一下直接打开</span></h3>' + matsHtml + '</div>' +
       (S.flags.homework ? '<div class="card"><h3>待交作业<span class="more">' + hwTodo.length + ' 项</span></h3>' + hwHtml + '</div>' : '') +
       (duty.length ? '<div class="card"><h3>今天我值日</h3>' + duty.map(function (x) {
         return '<div class="hw"><div class="dot done"></div><div class="m"><b>' + esc(x.area || '值日') + '</b>' +
@@ -572,7 +516,9 @@
   var NAV = [
     { id: 'today', name: '今日', ic: '☀' },
     { id: 'homework', name: '作业', ic: '✎', flag: 'homework' },
-    { id: 'courses', name: '科目', ic: '📚' },
+    /* 2026-11-04 牛哥定版：原「科目」改为「资料」——只列老师下发的资料，
+       不再显示课表里的科目（课表那套对学生不再有意义）。 */
+    { id: 'courses', name: '资料', ic: '📁' },
     /* 座位表（2026-11-03）：与教师端同一张图，讲台固定朝上，自己高亮 */
     { id: 'seat', name: '座位', ic: '🪑' },
     /* 打字冒险岛：老师开放后显示，站内 iframe 内嵌（2026-11-02） */
@@ -582,7 +528,7 @@
   var TITLES = {
     today: ['今日', '签到 · 课堂学习单 · 要交的作业'],
     homework: ['我的作业', '全部作业与提交状态 · 点一条查看详情'],
-    courses: ['我的科目', '老师发布的各科资料 · 点击即可在线预览'],
+    courses: ['我的资料', '老师下发的资料 · 点一下直接打开，不用下载'],
     seat: ['我的座位', '座位表 · 讲台固定在上方 · 高亮你自己的位置'],
     typing: ['打字冒险岛', '闯关练打字 · 赢星星 · 孵宠物 · 上排行榜']
   };
@@ -667,17 +613,9 @@
     // 今日页「打字冒险岛」入口卡 → 站内切到打字页（2026-11-02）
     var tgo = document.querySelector('[data-typing-go]');
     if (tgo) tgo.onclick = function () { go('typing'); };
-    // 课堂活动入口（课程行或标签上都可点）：新开交互式学习单
-    document.querySelectorAll('[data-act],[data-locked]').forEach(function (el) {
-      el.onclick = function (ev) {
-        ev.stopPropagation();
-        if (el.getAttribute('data-locked')) { toast('老师已关闭这份学习单，等老师重新开启后再打开'); return; }
-        var url = el.getAttribute('data-act');
-        if (!url) { toast('这个活动暂时打不开，等老师重新发放'); return; }
-        window.open(url, '_blank');
-      };
-    });
-    // 课程页 / 各处资源行：点开在线预览（/cw/ 闸门内联输出，不用下载）
+    /* 课堂活动入口（data-act / data-locked）已随按课表的旧模块下线
+       （2026-11-04）：学生端不再有按课节的学习单入口，只留资料打开。 */
+    // 资料页 / 今日「本课资料」：点开在线预览或一键打开
     document.querySelectorAll('[data-mat]').forEach(function (el) {
       el.onclick = function () { openMatSheet(el.getAttribute('data-mat')); };
     });
@@ -932,38 +870,20 @@
       '</div>';
     return html;
   }
-  /* ---------------- 视图：课程（v3.0.0 新增） ----------------
-     展示老师设置的课程 + 每门课推送的资源文件；资源走 /cw/<id> 闸门，
-     服务端按「登录身份 + 本班 + 已下发」放行并内联输出，浏览器直接
-     预览（PDF / 图片 / 音视频 / 文本），不需要下载。 */
-  /** 本班课程列表：课表里出现过的课程优先，只推过资源也补进来 */
-  function myCourses() {
-    var cm = courseMap(), names = [], seen = {};
-    T('lessons').filter(function (l) { return Number(l.class_id) === S.me.class_id; })
-      .forEach(function (l) {
-        var c = cm[l.course_id] || {};
-        var nm = c.name || l.course_name || '';
-        if (nm && !seen[nm]) { seen[nm] = 1; names.push({ name: nm, location: c.location || '' }); }
-      });
+  /* ---------------- 视图：资料（2026-11-04 改版） ----------------
+     旧版按课表列科目，学生看到的是一堆空壳（语文/信息科技…）；
+     现在改成「资料」：只列老师真正下发的资料，按**课程资料名称**分组
+     （老师下发时不再选课节，直接取文件所属的课程文件夹名，两边名称必然一致）。
+     文件仍走 /cw/<id> 闸门：服务端按「登录身份 + 本班 + 已下发」放行。 */
+  /** 按课程资料名分组：[{name, mats:[...]}]，没有课程名的归到「其他资料」 */
+  function matGroups() {
+    var map = {}, order = [];
     cwPushed().forEach(function (m) {
-      var k = String(m.lesson || m.subject || '');
-      if (k && !seen[k]) { seen[k] = 1; names.push({ name: k, location: '' }); }
+      var k = String(m.lesson || m.subject || '').trim() || '其他资料';
+      if (!map[k]) { map[k] = []; order.push(k); }
+      map[k].push(m);
     });
-    return names;
-  }
-  function matsOfCourse(name) {
-    return cwPushed().filter(function (m) {
-      return String(m.lesson || m.subject || '') === String(name);
-    });
-  }
-  /** 归不进任何课程的推送（没写课节 / 课节名不在课表）→「其他资料」 */
-  function otherMats() {
-    var seen = {};
-    myCourses().forEach(function (c) { seen[c.name] = 1; });
-    return cwPushed().filter(function (m) {
-      var k = String(m.lesson || m.subject || '');
-      return !k || !seen[k];
-    });
+    return order.map(function (k) { return { name: k, mats: map[k] }; });
   }
   /** 浏览器能不能直接预览：按文件名扩展判断（推送记录的 title 就是原始文件名） */
   var MAT_IMG = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg', 'avif'];
@@ -988,34 +908,40 @@
     return 'other';
   }
   function matPreviewable(m) { return matKind(m) !== 'other'; }
+  /** 网页类（html/htm）：一键打开时走 /g/mat/<id>，服务端把学生身份挂上去，
+      页面自动识别「你是谁」，不用再填学号姓名 */
+  function matIsWeb(m) {
+    var e = matExt(m);
+    return e === 'html' || e === 'htm';
+  }
+  /** .url 是 Windows 网页快捷方式（纯文本里写着 URL=…）：不能内嵌预览，
+      服务端会直接跳到那个网址 */
+  function matIsUrl(m) { return matExt(m) === 'url'; }
   function resRow(m) {
+    var web = matIsWeb(m), link = matIsUrl(m);
     var ok = m.url && matPreviewable(m);
+    var txt = link ? '点一下直接打开网址'
+      : (web ? '一键打开 · 自动带上你的学号姓名'
+        : (m.date ? esc(m.date) + ' 推送 · ' : '') + (ok ? '可在线预览' : '点击查看'));
+    var tag = link ? '打开' : (web ? '一键打开' : (ok ? '预览' : '打开'));
     return '<div class="hw res-row" data-mat="' + esc(m.id) + '"><div class="dot done"></div>' +
       '<div class="m"><b>' + esc(m.title || '资源') + '</b>' +
-      '<span>' + (m.date ? esc(m.date) + ' 推送 · ' : '') + (ok ? '可在线预览' : '点击查看') + '</span></div>' +
-      '<div class="tag done">' + (ok ? '预览' : '打开') + '</div></div>';
+      '<span>' + txt + '</span></div>' +
+      '<div class="tag' + (web || link ? ' hot' : ' done') + '">' + tag + '</div></div>';
   }
   function vCourses() {
-    var cs = myCourses();
+    var gs = matGroups();
     var html = '<div class="stat-grid">' +
-      statCard(cs.length, '我的科目') + statCard(cwPushed().length, '资源文件') + '</div>';
-    if (!cs.length) {
-      return html + emptyBox('还没有科目', '老师在教师端排好课表、推送资源后，这里就会亮起来');
+      statCard(gs.length, '资料分组') + statCard(cwPushed().length, '资料文件') + '</div>';
+    if (!gs.length) {
+      return html + emptyBox('还没有资料', '老师在教师端「资料」里点「推送」后，这里就会出现');
     }
     html += '<div class="cols2">';
-    cs.forEach(function (c) {
-      var mats = matsOfCourse(c.name);
-      html += '<div class="card course-card"><h3><span class="cc-name">' + esc(c.name) + '</span>' +
-        '<span class="more">' + (c.location ? esc(c.location) + ' · ' : '') + mats.length + ' 份资源</span></h3>' +
-        (mats.length ? mats.map(resRow).join('')
-          : '<div class="empty slim">这门课还没有资源，老师上传后会出现在这里</div>') +
-        '</div>';
+    gs.forEach(function (g) {
+      html += '<div class="card course-card"><h3><span class="cc-name">' + esc(g.name) + '</span>' +
+        '<span class="more">' + g.mats.length + ' 份资料</span></h3>' +
+        g.mats.map(resRow).join('') + '</div>';
     });
-    var others = otherMats();
-    if (others.length) {
-      html += '<div class="card"><h3><span class="cc-name">其他资料</span>' +
-        '<span class="more">' + others.length + ' 份</span></h3>' + others.map(resRow).join('') + '</div>';
-    }
     html += '</div>';
     return html;
   }
@@ -1028,7 +954,14 @@
   function openMatSheet(id) {
     var m = cwPushed().filter(function (x) { return String(x.id) === String(id); })[0];
     if (!m || !m.url) { toast('这份资源暂时打不开，可能已被老师收回'); return; }
+    /* 一键打开（2026-11-04）：/g/mat/<资料id> 由服务端校验收件人后，把
+       「票 + 学号/姓名/班级」挂到地址上再跳转 —— 网页学习单里的登录浮层
+       会被自动摘掉，直接显示「已识别：X 班 · 姓名」。
+       .url（Windows 网页快捷方式）也在这一步解析出真实网址直接跳。 */
+    var openUrl = '/g/mat/' + encodeURIComponent(m.id);
+    if (matIsUrl(m)) { window.open(openUrl, '_blank'); return; }
     var kind = matKind(m), e = matExt(m);
+    var web = matIsWeb(m);
     var pv = String(m.url).replace('/cw/', '/cwpv/');   // 预览闸门（Office 由服务端渲染）
     var dl = m.url;                                      // 原始文件（下载 / 新窗口）
     var body;
@@ -1054,8 +987,13 @@
       '<div class="note">' + (m.lesson || m.subject ? esc(m.lesson || m.subject) + ' · ' : '') +
       (m.date ? esc(m.date) + ' 推送 · ' : '') + '在线查看，不用下载</div>' +
       body +
-      '<a class="btn line" style="text-align:center;text-decoration:none;margin-top:12px" href="' +
-      esc(dl) + '" target="_blank" rel="noopener">' + (isDoc ? '下载原文件' : '在新窗口打开') + '</a>',
+      /* 网页文件：主按钮就是一键打开（带身份）；其它类型保留下载/新窗口 */
+      (web
+        ? '<a class="btn" style="display:block;text-align:center;text-decoration:none;margin-top:12px" href="' +
+          esc(openUrl) + '" target="_blank" rel="noopener">🚀 一键打开（自动识别你的账号）</a>'
+        : (kind === 'other' ? ''
+          : '<a class="btn line" style="display:block;text-align:center;text-decoration:none;margin-top:12px" href="' +
+            esc(dl) + '" target="_blank" rel="noopener">' + (isDoc ? '下载原文件' : '在新窗口打开') + '</a>')),
       (kind === 'other') ? null : 'preview');
     var cl = $('#shClose'); if (cl) cl.onclick = hideSheet;
   }

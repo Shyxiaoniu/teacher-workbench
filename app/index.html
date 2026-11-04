@@ -6214,23 +6214,27 @@ body:has(.mini-bar) .corner-credit { display:none; }
 .cw-file .thumb .ico{font-size:34px;line-height:1}
 .cw-file .thumb video{width:100%;height:100%;object-fit:cover;background:#000}
 /* 内容缩略图（2026-11-04）：网页 / PDF / Office 预览页按 0.4 倍缩进
-   172×104 的封面框里（430×260 → ×0.4），只当封面看不许交互 */
-.cw-file .thumb iframe.wv{width:430px;height:260px;border:0;background:#fff;display:block;
-  transform:scale(.4);transform-origin:0 0;pointer-events:none}
+   172×104 的封面框里（430×260 → ×0.4），只当封面看不许交互。
+   ⚠️ 必须绝对定位到左上角：.thumb 是 flex 居中，iframe 布局尺寸 430×260
+   远大于 172×104，居中会把内容推到四边被 overflow 裁掉——真实浏览器里
+   看到的就是一片空白（2026-11-04 牛哥第二次反馈的根因）。 */
+.cw-file .thumb iframe.wv{position:absolute;left:0;top:0;width:430px;height:260px;border:0;
+  background:#fff;display:block;transform:scale(.4);transform-origin:0 0;pointer-events:none}
 .cw-file .ft{padding:8px 10px 10px}
 .cw-file .fn{font-size:12.5px;color:var(--text-primary);line-height:1.45;word-break:break-all;
   overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .cw-file .fm{font-size:11.5px;color:var(--text-secondary);margin-top:4px;display:flex;gap:6px;flex-wrap:wrap}
-.cw-file .acts{position:absolute;top:6px;left:34px;right:6px;display:flex;gap:3px;opacity:0;transition:.15s;
-  flex-wrap:wrap;justify-content:flex-end}
-.cw-file:hover .acts{opacity:1}
+/* 操作按钮（2026-11-04 重排）：原来是绝对定位压在缩略图上（top:6px），
+   172px 的卡塞 6 个按钮必然溢出、盖住勾选框和标题。现在挪到卡片底部
+   文件名下面，静态流式布局、自动换行，常显不闪。 */
+.cw-file .acts{display:flex;gap:4px;margin-top:7px;flex-wrap:wrap;align-items:center;justify-content:flex-start}
 /* 2026-11-02 统一图标风格：与工作台 .icon-btn 同款（描边浅色底、品牌色悬停、
    按压缩放），替换原来的半透明黑底白字，保证与各模块视觉一致 */
 .cw-file .acts button{
   box-sizing:border-box;border:1px solid var(--border);background:var(--bg-surface);
-  color:var(--text-primary);border-radius:8px;width:26px;height:26px;cursor:pointer;
-  font-size:12.5px;line-height:1;display:flex;align-items:center;justify-content:center;
-  font-family:inherit;padding:0;white-space:nowrap;flex:none;
+  color:var(--text-primary);border-radius:8px;width:24px;height:24px;cursor:pointer;
+  font-size:12px;line-height:1;display:flex;align-items:center;justify-content:center;
+  font-family:inherit;padding:0;white-space:nowrap;flex:none;max-width:100%;
   transition:background .16s ease,transform .15s ease,border-color .15s ease,color .15s ease;
   box-shadow:0 1px 4px rgba(0,0,0,.10);
 }
@@ -6239,7 +6243,7 @@ body:has(.mini-bar) .corner-credit { display:none; }
 /* 危险操作（删除）：悬停转红色，与全项目「清除/撤回」类按钮同语义 */
 .cw-file .acts button.cw-del:hover{background:var(--error-soft);border-color:var(--status-error);color:var(--status-error)}
 /* 「⬇ 推送」比其他图标按钮宽，未推送时即带品牌色底提示可点；已推送显示对勾并常亮 */
-.cw-file .acts button.cw-send{width:auto;padding:0 7px;font-size:11px;font-weight:600;gap:2px;
+.cw-file .acts button.cw-send{width:auto;padding:0 5px;font-size:10.5px;font-weight:600;gap:2px;
   background:var(--brand-soft);border-color:var(--brand-primary);color:var(--brand-primary)}
 .cw-file .acts button.cw-send:hover{background:var(--brand-primary);color:#fff}
 .cw-file .acts button.sent{background:var(--brand-primary);border-color:var(--brand-primary);color:#fff;opacity:.92;cursor:default}
@@ -6371,6 +6375,14 @@ body:has(.mini-bar) .corner-credit { display:none; }
   border:1px solid var(--border);border-radius:8px;padding:5px 9px;cursor:pointer;background:var(--bg-page)}
 .cw-push-cls label.on{border-color:var(--brand-primary);background:var(--brand-soft);color:var(--brand-primary);font-weight:600}
 .cw-push-cls input{width:14px;height:14px;accent-color:var(--brand-primary);margin:0;cursor:pointer}
+/* 「归到课程」展示行（2026-11-04）：取消手工选课节后，告诉老师这些文件会
+   按哪个课程资料名归组——名称只读，来自资料库文件夹，学生端按同名分组 */
+.cw-push-own{margin-top:12px;border:1px dashed var(--border);border-radius:10px;padding:9px 11px;
+  font-size:12.5px;color:var(--text-secondary);line-height:1.9;max-height:120px;overflow:auto}
+.cw-push-own .k{display:block;font-weight:600;color:var(--text-primary);margin-bottom:2px}
+.cw-push-own .v{display:inline-block;background:var(--brand-soft);color:var(--brand-primary);
+  border-radius:6px;padding:0 7px;margin-right:6px;font-weight:600}
+.cw-push-own .f{color:var(--text-secondary)}
 .cw-sec-t::before{content:'';width:4px;height:14px;background:var(--brand-primary);border-radius:3px}
 .cw-empty{text-align:center;color:var(--text-secondary);font-size:13.5px;padding:26px 0}
 
@@ -15820,27 +15832,18 @@ function renderActivity() {
     </div>
 
     <div class="act-card">
-      <div class="act-card-h">① 选择课程（文件夹名即课程名，来自「资料」）</div>
-      <div class="act-task-row">
-        <select id="actTaskSel" class="act-sel" onchange="actSelectTask()" style="max-width:480px"><option value="">加载中…</option></select>
-      </div>
-      <div class="act-task-row" style="margin-top:8px">
-        <span class="act-muted" style="font-size:12.5px;font-weight:600;white-space:nowrap">学习单：</span>
-        <select id="actSheetSel" class="act-sel" onchange="actSheetChange()" style="max-width:480px"><option value="">默认学习单（文件上传 + 提交）</option></select>
-      </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px">
-        <span class="act-muted" style="font-size:12px">下发后学生端「今日」对应课程里出现入口，只能在线查看与提交</span>
-      </div>
-      <div id="actPubHint" class="act-roster-hint" style="display:none"></div>
-    </div>
-
-    <div class="act-card">
-      <div class="act-card-h" style="display:flex;align-items:center;gap:10px">② 自定义学习单（可选，默认模板已够用）
+      <div class="act-card-h" style="display:flex;align-items:center;gap:10px">自定义学习单
         <span style="flex:1"></span>
         <button class="btn btn-ghost btn-sm" id="actCustToggleBtn" onclick="actCustToggle()" title="${actCustOpen ? '收起自定义学习单设计区' : '展开后可上传/编写自己的学习单网页'}">${actCustOpen ? '－ 收起' : '＋ 新增自定义学习单'}</button>
       </div>
+      <div class="act-task-row" style="margin-bottom:10px">
+        <span class="act-muted" style="font-size:12.5px;font-weight:600;white-space:nowrap">课程：</span>
+        <select id="actTaskSel" class="act-sel" onchange="actSelectTask()" style="max-width:480px"><option value="">加载中…</option></select>
+        <span class="act-muted" style="font-size:12px">＝ 资料里的课程文件夹名；选好就建好收集任务，学生端按这个名字收</span>
+      </div>
+      <div id="actPubHint" class="act-roster-hint" style="display:none"></div>
       <div id="actCustBody"${actCustOpen ? '' : ' hidden'}>
-      <div class="act-muted" style="margin-bottom:10px">想自己设计学习单再点这里：上传一份网页文件（.html）或用默认模板，系统会自动接入课程提交接口，并注入学生的<b>学号 / 姓名 / 班级</b>。网页里每个「题目块」都会自动长出独立的提交按钮，每个按钮在大屏有专属的数据显示窗口。设计好后点「下发」即生效；也可以直接在 ① 的「学习单」下拉里选资料里现成的网页文件。</div>
+      <div class="act-muted" style="margin-bottom:10px">想自己设计学习单再点这里：上传一份网页文件（.html）或用默认模板，系统会自动接入课程提交接口，并注入学生的<b>学号 / 姓名 / 班级</b>。网页里每个「题目块」都会自动长出独立的提交按钮，每个按钮在大屏有专属的数据显示窗口。设计好后点「下发」即生效。</div>
       <div class="act-cust-row">
         <label class="btn btn-ghost btn-sm" style="cursor:pointer">📤 上传网页文件<input id="actCustFile" type="file" accept=".html,.htm" style="display:none" onchange="actCustomLoadFile(event)"></label>
         <button class="btn btn-ghost btn-sm" onclick="actCustomUseDefault()">📝 用默认模板</button>
@@ -15936,7 +15939,7 @@ function renderActClassInfo() {
 }
 window.renderActClassInfo = renderActClassInfo;
 
-/* ===================== ① 选择课程（2026-11-04 改版） =====================
+/* ===================== 课程选择（2026-11-04 已并入自定义学习单区块） =====================
    课程列表直接来自课件库（/api/cw/config 的课程/课节），
    不再有独立的「活动」实体：选中课程时在收集任务库里按
    「任务标题或关联课程 = 课程名」匹配；没有就自动创建一个同名任务。
@@ -16267,7 +16270,7 @@ function actPubChipsHtml() {
   const classes = dbT('classes') || [];
   if (!classes.length) return '<div class="act-muted">还没有班级，请先到「班级」创建。</div>';
   const t = actTaskList.find(x => x.task_id === actActiveId);
-  if (!t) return '<div class="act-muted">请先在 ① 选择课程，这里显示各班下发状态。</div>';
+  if (!t) return '<div class="act-muted">请先在上面选一门课程，这里显示各班下发状态。</div>';
   const byCls = actPushByCls(t.task_id);
   return classes.map(c => {
     const row = byCls[String(c.id)];
@@ -16309,7 +16312,7 @@ window.actPubToggle = actPubToggle;
 /** 批量下发：先确保页面已部署（一次），再逐班写 activity_pushes + 推花名册 */
 async function actPublishBatch() {
   const t = actTaskList.find(x => x.task_id === actActiveId);
-  if (!t) { toast('请先在 ① 选择课程'); return; }
+  if (!t) { toast('请先在上面选一门课程'); return; }
   const sel = Object.keys(actPubSel).filter(k => actPubSel[k]);
   if (!sel.length) { toast('请先勾选要下发的班级'); return; }
   const classes = dbT('classes') || [];
@@ -16390,7 +16393,7 @@ window.actPubChipRevoke = actPubChipRevoke;
    确认 → 执行 actPublishBatch（逻辑零改动）；取消 / Esc / 点遮罩 → 不产生任何变更。 */
 function actOpenPublishDialog() {
   const t = actTaskList.find(x => x.task_id === actActiveId);
-  if (!t) { toast('请先在 ① 选择课程'); return; }
+  if (!t) { toast('请先在上面选一门课程'); return; }
   const classes = dbT('classes') || [];
   if (!classes.length) { toast('还没有班级，请先到「班级」创建'); return; }
 
@@ -16802,7 +16805,7 @@ function actBuildCustomPage(html, opts) {
 var actGeneratedPage = null, actGeneratedPageTask = null;
 async function actCustomGenerate() {
   const t = actTaskList.find(x => x.task_id === actActiveId);
-  if (!t) { toast('请先在①选择课程'); return; }
+  if (!t) { toast('请先在上面选一门课程'); return; }
   const htmlEl = document.getElementById('actCustHtml');
   const raw = (htmlEl && htmlEl.value || '').trim();
   if (!raw) { toast('请先上传网页文件或点「用默认模板」'); return; }
@@ -16817,7 +16820,7 @@ async function actCustomGenerate() {
 // 查看：把生成的页面临时部署后，用真实地址打开预览（带「测试提交」按钮，可验证与数据大屏同步）
 async function actCustomView() {
   const t = actTaskList.find(x => x.task_id === actActiveId);
-  if (!t) { toast('请先在①选择课程'); return; }
+  if (!t) { toast('请先在上面选一门课程'); return; }
   let page = actGeneratedPage;
   if (!page) {
     const htmlEl = document.getElementById('actCustHtml');
@@ -33999,11 +34002,14 @@ async function cwPushDialog(btn) {
   if (!classes.length) { toast('还没有班级数据，先到「班级」页建班'); return; }
   const cur = curSeatClass();
   const defCls = String(cur || (classes[0] && classes[0].id) || '');
-  cwPushTmp = { cls: defCls ? [defCls] : [], lesson: cwState.course || '' };
-  const lessonOpts = cwLessonDatalist();
+  cwPushTmp = { cls: defCls ? [defCls] : [], lesson: '' };
   const fileLines = picked.map(f => '<div class="f">📎<span>' + esc(f.name) + '</span></div>').join('');
-  const html = '<div class="cw-muted" style="margin-bottom:9px">把 <b>' + picked.length + '</b> 个文件下发到学生端：'
-    + '学生登录后在「今日」页的「课件库」里查看、打开；随时可在「推送记录」里撤回。</div>'
+  /* 2026-11-04 牛哥定版：取消手工选课节。
+     学生端「资料」按**课程资料名称**分组，所以下发时直接用文件所在的
+     课程文件夹名（f.course）——名字来自资料库本身，两端必然一致；
+     手输课节名既容易打错，也会跟资料库对不上。 */
+  const html = '<div class="cw-muted" style="margin-bottom:9px">把 <b>' + picked.length + '</b> 个文件下发给学生端：'
+    + '学生登录后在「资料」页和「今日」页直接看到、点一下就能打开；随时可在「推送记录」里撤回。</div>'
     + '<div class="cw-push-sum">' + fileLines
     + (picked.length > 6 ? '<div style="margin-top:4px">…共 ' + picked.length + ' 个文件</div>' : '') + '</div>'
     + '<label class="fl-lbl" style="margin-top:12px">下发给哪些班（可多选）</label>'
@@ -34014,18 +34020,17 @@ async function cwPushDialog(btn) {
           + (on ? ' checked' : '') + ' onchange="cwPushTmpCls(this)">' + esc(c.name) + '</label>';
       }).join('')
     + '</div>'
-    + '<label class="fl-lbl" style="margin-top:12px">归属哪节课（学生端按课节展示，可改可清空）</label>'
-    + '<input class="fl-inp" id="cwPushLesson" list="cwPushLessonList" value="' + esc(cwPushTmp.lesson) + '"'
-    + ' oninput="cwPushTmp.lesson=this.value.trim()" placeholder="例如：第4课 AI听音识传说（可留空）">'
-    + '<datalist id="cwPushLessonList">' + lessonOpts + '</datalist>';
+    + '<div class="cw-push-own"><span class="k">归到课程</span>'
+    + picked.map(f => '<span class="v">' + esc(f.course || cwState.course || '未分课程') + '</span>'
+        + '<span class="f">' + esc(f.name) + '</span>').join('')
+    + '</div>';
   const ok = await uiDialog({
-    title: picked.length > 1 ? ('批量下发 ' + picked.length + ' 个文件') : '推送课件给学生',
+    title: picked.length > 1 ? ('批量下发 ' + picked.length + ' 个文件') : '推送资料给学生',
     html, okText: '下发', cancelText: '取消'
   });
   if (!ok) return;
   const clsIds = (cwPushTmp.cls || []).filter(Boolean);
   if (!clsIds.length) { toast('请至少选择一个班级'); return; }
-  const lesson = cwPushTmp.lesson || '';
   const arr = dbT('materials') || [];
   const d = today();
   const iso = new Date().toISOString();
@@ -34035,6 +34040,8 @@ async function cwPushDialog(btn) {
       const dup = arr.some(m => !m.deleted && m.from === 'courseware'
         && String(m.src_id) === String(f.id) && Number(m.class_id) === Number(cid));
       if (dup) { skipped++; return; }
+      /* 课程资料名称：文件自己所在的课程文件夹（批量勾选跨文件夹也各归各的） */
+      const lesson = String(f.course || cwState.course || '').trim();
       arr.push({
         id: 'mat' + Date.now() + '_' + added + '_' + Math.floor(Math.random() * 1000),
         class_id: cid,
@@ -34043,7 +34050,7 @@ async function cwPushDialog(btn) {
         url: '/cw/' + encodeURIComponent(f.id),
         subject: lesson,
         lesson: lesson,
-        note: '来自课件库' + (lesson ? ' · ' + lesson : ''),
+        note: '来自资料' + (lesson ? ' · ' + lesson : ''),
         from: 'courseware',
         src_id: f.id,
         date: d,
@@ -34056,7 +34063,7 @@ async function cwPushDialog(btn) {
   const clsName = id => ((dbT('classes').find(c => Number(c.id) === Number(id)) || {}).name) || '该班';
   const clsTxt = clsIds.map(clsName).join('、');
   if (added) {
-    toast('已下发 ' + added + ' 个文件到「' + clsTxt + '」：学生端「今日 · 课件库」即可打开'
+    toast('已下发 ' + added + ' 个文件到「' + clsTxt + '」：学生端「资料」即可打开'
       + (skipped ? '（另有 ' + skipped + ' 个此前已推送，已跳过）' : ''));
   } else {
     toast('这些文件都已经推送给所选班级了，可在「推送记录」里查看');
@@ -34067,16 +34074,10 @@ async function cwPushDialog(btn) {
 }
 window.cwPushDialog = cwPushDialog;
 
-/** 课节数据源：课件库的课程 + 课表课程，合并去重 */
-function cwLessonDatalist() {
-  const seen = {}; const out = [];
-  const add = n => { const k = String(n || '').trim(); if (k && !seen[k]) { seen[k] = 1; out.push(k); } };
-  (cwState.courses || []).forEach(c => add(c.name));
-  (dbT('courses') || []).forEach(c => add(c.name));
-  return out.map(n => '<option value="' + esc(n) + '">').join('');
-}
+/* 课节候选下拉（cwLessonDatalist）已删除（2026-11-04）：推送不再让老师手选
+   课节，课程资料名称直接取文件所属的课程文件夹，两端天然一致。 */
 
-/** 推送记录：全部 from='courseware' 的 materials，按班/课节列出，可撤回 */
+/** 推送记录：全部 from='courseware' 的 materials，按班/课程资料名列出，可撤回 */
 function cwPaintPushed() {
   const box = document.getElementById('cwPushList');
   if (!box) return;
@@ -34651,14 +34652,15 @@ function cwPickBox(f) {
    标记存在服务端配置里（cfg.sheets[课程]=文件路径），三种视图都显示入口；
    设好后「大屏」页选这门课时「学习单」下拉自动预选这份网页，下发即部署，
    学生打开时自动带上本班花名册（学号↔姓名匹配）。文件删除/移动后标记自动失效。 */
-function cwSheetBtn(f) {
+function cwSheetBtn(f, compact) {
   if (f.archived || !/\.html?$/i.test(f.name || '')) return '';
   const on = String(cwState.sheet || '') === String(f.id);
   return '<button class="cw-sheet-btn' + (on ? ' on' : '') + '" title="'
     + (on ? '已设为本课程的学习单：大屏下发时自动使用这份网页；再点一次可取消'
           : '设为本课程的学习单：大屏选这门课时自动选中，下发即部署给学生')
     + '" onclick="event.stopPropagation();cwSetSheet(this)">'
-    + (on ? '✓ 已设学习单' : '🗒 设学习单') + '</button>';
+    /* 卡片视图空间只够放图标（文字版会把 172px 的卡片撑到换三行） */
+    + (compact ? (on ? '✓' : '🗒') : (on ? '✓ 已设学习单' : '🗒 设学习单')) + '</button>';
 }
 async function cwSetSheet(btn) {
   const host = btn.closest('[data-id]');
@@ -34701,20 +34703,20 @@ function cwFileCard(f, idx) {
     + '<div class="thumb">' + thumb
     +   (f.archived ? '<span class="cw-tag">活动归档</span>' : '')
     +   (sent ? '<span class="cw-sent-dot">已推送</span>' : '')
-    +   '<div class="acts">'
-    +     sendBtn
-    +     cwSheetBtn(f)
-    +     '<button title="重命名" onclick="event.stopPropagation();cwRenameLocal(this)">✎</button>'
-    +     '<button title="下载" onclick="event.stopPropagation();cwDownloadLocal(this)">⬇</button>'
-    +     '<button title="换到别的课节" onclick="event.stopPropagation();cwMoveLocal(this)">➡</button>'
-    +     '<button class="cw-del" title="删除" onclick="event.stopPropagation();cwDeleteLocal(this)">🗑</button>'
-    +   '</div>'
     + '</div>'
     + '<div class="ft"><div class="fn">' + esc(f.name) + '</div>'
     +   '<div class="fm"><span>' + esc(CW_KIND_NAME[kind] || '文件') + '</span>'
     +   (f.size_text ? '<span>' + esc(f.size_text) + '</span>' : '')
     +   (sent ? '<span style="color:var(--brand-primary)">已推送</span>' : '')
     +   (kind === 'legacy' ? '<span style="color:#8A5A10">建议转存新格式</span>' : '')
+    +   '</div>'
+    +   '<div class="acts">'
+    +     sendBtn
+    +     cwSheetBtn(f, true)
+    +     '<button title="重命名" onclick="event.stopPropagation();cwRenameLocal(this)">✎</button>'
+    +     '<button title="下载" onclick="event.stopPropagation();cwDownloadLocal(this)">⬇</button>'
+    +     '<button title="换到别的课程/文件夹" onclick="event.stopPropagation();cwMoveLocal(this)">➡</button>'
+    +     '<button class="cw-del" title="删除" onclick="event.stopPropagation();cwDeleteLocal(this)">🗑</button>'
     +   '</div></div></div>';
 }
 
@@ -35116,7 +35118,7 @@ window.cwLinks = cwLinks; window.cwLinkOf = cwLinkOf; window.cwSaveLink = cwSave
 
 /* ============================================================
    大屏上的归属提示卡已移除（2026-11-04，牛哥定版）：
-   大屏顶部「① 选择课程」本身就是归属（课程 = 资料文件夹），
+   大屏顶部选中的课程本身就是归属（课程 = 资料文件夹），
    再摆一条归属下拉 / 解除匹配 / 查看课程目录属于重复功能。
    统一口径：归属在「资料」页管理（文件夹即课程）；大屏选定
    课程后写 courseware_links（actSelectTask），自动归档照常工作。

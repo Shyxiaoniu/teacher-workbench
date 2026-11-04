@@ -36,7 +36,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ${IMAGE_REPO:-teacher-workbench}:${IMAGE_TAG:-2.0.2}
+    image: ${IMAGE_REPO:-teacher-workbench}:${IMAGE_TAG:-2.0.3}
     container_name: teacher-workbench-init
     user: "0:0"
     entrypoint: ["/bin/sh", "-c"]
@@ -71,7 +71,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ${IMAGE_REPO:-teacher-workbench}:${IMAGE_TAG:-2.0.2}
+    image: ${IMAGE_REPO:-teacher-workbench}:${IMAGE_TAG:-2.0.3}
     container_name: teacher-workbench
     depends_on:
       init:

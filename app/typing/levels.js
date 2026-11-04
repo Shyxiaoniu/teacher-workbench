@@ -225,23 +225,20 @@ window.TL = (function () {
       var s8n = Math.min(1 + Math.floor((chapter - 1) / 4) + (boss ? 1 : 0), 2);
       L.text = sample(rng, s8pool, s8n).join('');
     } else {
-      /* 第 6 篇章：文章阅读 —— 从选定文章里按顺序往下读。
-         一关一句，一章 10 关正好一节；一轮读完（卷号×10 超过句子数）
-         就从文章开头再读一遍，但那时学生的手速已经不一样了。 */
+      /* 第 6 篇章：文章阅读 —— 2026-11-04 牛哥定版：取消「读一句」，
+         整篇文章连续练习（一关就是全文，越往后的卷速度线越高）。
+         L.long 让练习页收起键盘与指法图：长文要的是屏幕空间和手指记忆，
+         一直盯着键盘反而打不快。 */
       var art = (window.TA && window.TA.get) ? window.TA.get(articleId) : null;
       if (art && art.lines.length) {
         var lines = art.lines;
-        var at = ((chapter - 1) * 10 + (level - 1)) % lines.length;
-        L.text = lines[at];
-        if (boss) {
-          var s2 = lines[(at + 1) % lines.length];
-          if (s2 && s2 !== L.text) L.text += s2;
-        }
+        L.text = lines.join('');
         L.article = art.id;
         L.articleTitle = art.title;
         L.articleCount = lines.length;
-        L.readAt = at + 1;
-        L.topic = '第 ' + (at + 1) + ' 句';
+        L.readAt = 0;
+        L.long = true;
+        L.topic = '全文 · ' + lines.length + ' 句 / ' + L.text.length + ' 字';
       } else {
         var sent = cnSentPool(grades);
         L.text = pick(rng, sent);

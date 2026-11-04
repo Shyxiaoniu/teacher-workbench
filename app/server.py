@@ -98,7 +98,7 @@ CFG["update"].setdefault("interval_hours", 24) # 检查间隔（小时）
 PET_IDS = ["cat", "dog", "rabbit", "penguin", "panda", "dino", "unicorn", "dragon"]
 COND = threading.Condition()
 STARTED = time.time()
-VERSION = "2.0.2"
+VERSION = "2.0.3"
 ONLINE_WINDOW = 300      # 5 分钟内活跃算在线
 # 可内联直出的附件类型（其余一律按下载处理，防止同源执行脚本）
 _INLINE_EXTS = {"png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "pdf",
@@ -1200,6 +1200,10 @@ class Handler(LEG.Handler):
                                         "请回到学生端重新登录后再打开这个环节。"), 403)
 
         parts = [p for p in path.split("/") if p]
+        # 资料一键打开：/g/mat/<资料id>（2026-11-04）
+        # 老师下发的网页资料，学生点一下就能打开，身份自动挂在地址上。
+        if len(parts) >= 2 and parts[1] == "mat":
+            return self._material_gate(r, parts[2] if len(parts) > 2 else "")
         # 课堂活动学习单入口：/g/act/<push_id>（2026-11-03）
         # 与导学单同款机制：校验身份与签到状态后，把票和身份挂在 URL 上再跳。
         if len(parts) >= 2 and parts[1] == "act":
@@ -1337,6 +1341,84 @@ class Handler(LEG.Handler):
             "wbBase": public_base(self.headers),
         })
         return self._redirect(url + sep + qs)
+
+    def _material_gate(self, r, mid):
+        """资料一键打开：/g/mat/<资料id>（2026-11-04）。
+
+        学生端「资料」「今日」里点一条资料，就走这里，做三件事：
+        ① 校验：这条 materials 属于本班、没被老师收回；
+        ② 身份注入：签一张票，把票 + 学号/姓名/班级挂到资料地址上——
+           生成过的学习单网页会自己读这些参数，登录浮层直接摘掉、显示
+           「已识别：X 班 · 姓名」，学生不用再填一遍；
+        ③ .url（Windows 网页快捷方式）不是网页，不能内嵌预览：读出里面的
+           URL= 行直接跳过去——原来学生点开只能看到一段文件文本。
+        """
+        row = None
+        for m in STORE.table_rows("materials"):
+            if str(m.get("id")) == str(mid):
+                row = m
+                break
+        if (not row or row.get("deleted")
+                or str(row.get("class_id") or "") != str(r.get("class_id") or "")):
+            return self._html(_tip_page("找不到这份资料",
+                "它可能已被老师收回，或者不属于你所在的班级。"), 404)
+        url = str(row.get("url") or "").strip()
+        fid = ""
+        if url.startswith("/cw/"):
+            fid = urllib.parse.unquote(url[len("/cw/"):].strip("/"))
+        if not fid:
+            return self._html(_tip_page("这份资料没有可打开的地址",
+                "请让老师重新下发一次。"), 404)
+        full, err = self._courseware_resolve(fid)
+        if err:
+            return err
+
+        ext = _ext_of(full)
+        if ext in ("url", "website"):
+            target = ""
+            try:
+                with open(full, "r", encoding="utf-8-sig", errors="replace") as fh:
+                    for line in fh:
+                        line = line.strip()
+                        if line.upper().startswith("URL="):
+                            target = line[4:].strip()
+                            break
+            except Exception:
+                target = ""
+            if target.startswith("//"):
+                target = "https:" + target
+            if target.startswith("http://") or target.startswith("https://"):
+                return self._redirect(target)
+            return self._html(_tip_page("这个快捷方式里没有网址",
+                "它是 Windows 的网页快捷方式，但里面没写地址。请让老师换一份资料。"), 400)
+
+        # 课程收集任务：网页学习单提交后要能进数据大屏（按课程资料名找任务）
+        course = str(row.get("lesson") or row.get("subject") or "").strip()
+        task = ""
+        if course:
+            for t in ACT.tasks():
+                if (str(t.get("title") or "").strip() == course
+                        or str(t.get("course") or "").strip() == course):
+                    task = str(t.get("task_id") or "")
+                    break
+        cls_name = self._class_name(r.get("class_id"))
+        tok = new_gticket({
+            "sid": str(r.get("id") or ""),
+            "no": str(r.get("student_no") or ""),
+            "name": str(r.get("name") or ""),
+            "cls": cls_name,
+            "gid": "", "idx": 0, "task": task,
+        })
+        sep = "&" if "?" in url else "?"
+        qs = urllib.parse.urlencode({
+            "wbT": tok,
+            "wbSid": str(r.get("student_no") or ""),
+            "wbName": str(r.get("name") or ""),
+            "wbCls": cls_name,
+            "wbTask": task,
+            "wbBase": public_base(self.headers),
+        })
+        return self._redirect(public_base(self.headers) + url + sep + qs)
 
     # ------------------------------------------------------------------
     # 学生答题提交中转：POST /api/v2/student/submit?t=<票>
