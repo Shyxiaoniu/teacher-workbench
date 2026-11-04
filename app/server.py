@@ -98,7 +98,7 @@ CFG["update"].setdefault("interval_hours", 24) # 检查间隔（小时）
 PET_IDS = ["cat", "dog", "rabbit", "penguin", "panda", "dino", "unicorn", "dragon"]
 COND = threading.Condition()
 STARTED = time.time()
-VERSION = "2.0.4"
+VERSION = "2.0.5"
 ONLINE_WINDOW = 300      # 5 分钟内活跃算在线
 # 可内联直出的附件类型（其余一律按下载处理，防止同源执行脚本）
 _INLINE_EXTS = {"png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "pdf",
@@ -1035,7 +1035,10 @@ class Handler(LEG.Handler):
         self.send_header("Content-Type",
                          "image/x-icon" if name.endswith(".ico") else "image/png")
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "public, max-age=3600")
+        # 2026-11-05：图标不再让浏览器缓存 1 小时 —— 换图标 / 重建桌面快捷方式时
+        # 必须回源取到最新的那份，否则建出来的 .url 会一直挂着旧图标。
+        # （Windows Explorer 自己的图标缓存是客户端的事，改这里管不到，见 README。）
+        self.send_header("Cache-Control", "no-cache, max-age=0, must-revalidate")
         self.end_headers()
         self.wfile.write(body)
 
@@ -1873,6 +1876,21 @@ class Handler(LEG.Handler):
             return self._json({"ok": True, "classes": classes,
                                "enabled": bool(t.get("enabled")),
                                "grades": t.get("grades") or []})
+        if path == "/api/v2/typing/coin-admin":
+            # 教师端金币管理数据（2026-11-05）：各班学生余额 + 最近操作记录
+            if not self._is_teacher():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            classes = []
+            for c in STORE.table_rows("classes"):
+                if c.get("deleted"):
+                    continue
+                uids = [(st.get("id"), st.get("name", ""), st.get("student_no", ""))
+                        for st in STORE.table_rows("students")
+                        if not st.get("deleted") and str(st.get("class_id")) == str(c.get("id"))]
+                classes.append({"id": str(c.get("id")), "name": c.get("name", ""),
+                                "students": TYPING.students_coins(uids)})
+            return self._json({"ok": True, "classes": classes,
+                               "log": TYPING.coin_log(100)})
         return self._json({"ok": False, "msg": "未知接口"}, 404)
 
     def _sync_pull(self, qs):
@@ -2965,11 +2983,17 @@ class Handler(LEG.Handler):
             s = self._session()
             if not s or s["role"] != "student":
                 return self._json({"ok": False, "msg": "未登录"}, 401)
+            # bg / fx 缺省不传 = 保持原样（None）；传 '' = 取下来
+            kw = {}
+            if "bg" in body:
+                kw["bg"] = str(body.get("bg") or "")
+            if "fx" in body:
+                kw["fx"] = str(body.get("fx") or "")
             return self._json(TYPING.equip(str(s.get("student_id")),
                                            str(body.get("pet") or ""),
-                                           body.get("decos") or []))
+                                           body.get("decos") or [], **kw))
         if path == "/api/v2/typing/buy":
-            # 金币商店：kind = deco（装扮）/ item（道具）
+            # 金币/积分商店：kind = deco（装扮）/ item（道具）/ bg（背景）/ effect（特效）
             s = self._session()
             if not s or s["role"] != "student":
                 return self._json({"ok": False, "msg": "未登录"}, 401)
@@ -2982,10 +3006,58 @@ class Handler(LEG.Handler):
                 res = TYPING.buy_deco(uid, oid)
             elif kind == "item":
                 res = TYPING.buy_item(uid, oid)
+            elif kind == "bg":
+                res = TYPING.buy_bg(uid, oid)
+            elif kind == "effect":
+                res = TYPING.buy_effect(uid, oid)
             else:
                 res = {"ok": False, "msg": "未知的商品类型"}
             if res.get("ok"):
                 STORE.audit("student", "typing-buy", "%s:%s" % (kind, oid))
+            return self._json(res)
+        if path == "/api/v2/typing/draft":
+            # 练习草稿（2026-11-05）：学生端练习中自动保存当前关卡进度。
+            # 注意这里**不能**校验 enabled —— 教师把练习关掉的那一瞬间
+            # 恰恰是学生最需要把进度落盘的时刻（record 那时已拒收）。
+            s = self._session()
+            if not s or s["role"] != "student":
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            r = student_row(s.get("student_id"))
+            if not r:
+                return self._json({"ok": False, "msg": "学生档案不存在"}, 404)
+            return self._json(TYPING.save_draft(str(r.get("id")), body))
+        if path == "/api/v2/typing/admin-coins":
+            # 教师对学生/全班发放或扣除金币（2026-11-05）：
+            # 全局实时生效（学生端 12 秒内轮询到新余额），
+            # 操作记录进 typing.json 的 coin_log，随快照导入导出。
+            if not self._is_teacher():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            try:
+                delta = int(body.get("delta"))
+            except Exception:
+                return self._json({"ok": False, "msg": "金币数不合法"})
+            class_id = str(body.get("class_id") or "")
+            sid = str(body.get("student_id") or "")
+            note = str(body.get("note") or "")[:80]
+            if not class_id:
+                return self._json({"ok": False, "msg": "请先选择班级"})
+            targets = []
+            for st in STORE.table_rows("students"):
+                if st.get("deleted") or str(st.get("class_id")) != class_id:
+                    continue
+                if sid and str(st.get("id")) != sid:
+                    continue
+                targets.append((st.get("id"), st.get("name", "")))
+            if sid and not targets:
+                return self._json({"ok": False, "msg": "这个学生不在所选班级里"})
+            by = str((CFG.get("teacher") or {}).get("username") or "老师")
+            res = TYPING.adjust_coins(targets, delta, note, by)
+            if res.get("ok"):
+                STORE.audit("teacher", "typing-coins",
+                            "class=%s %s%s %s%d (%s)" % (
+                                class_id, ("uid=" + sid) if sid else "全班",
+                                (targets[0][1] if sid else "%d人" % res.get("count", 0)),
+                                "+" if delta > 0 else "", delta, note))
             return self._json(res)
         if path == "/api/v2/typing/use-item":
             s = self._session()

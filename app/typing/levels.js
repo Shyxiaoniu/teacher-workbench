@@ -233,6 +233,7 @@ window.TL = (function () {
       if (art && art.lines.length) {
         var lines = art.lines;
         L.text = lines.join('');
+        L.lines = lines;                 /* 逐行显示用（2026-11-05）：每行与原文一一对应 */
         L.article = art.id;
         L.articleTitle = art.title;
         L.articleCount = lines.length;
@@ -267,24 +268,39 @@ window.TL = (function () {
     return 1;
   }
 
-  /* 每关金币（2026-11-02 重定）
-     —— 为什么要改：原来「星数×10」意味着拿 1 星只有 10 金币，3 星 30，
-        差距太大，学生会为了金币反复刷同一个三星关，练习变成刷币。
+  /* 每关金币（2026-11-05 二次收紧）
+     —— 为什么要再改：全店商品涨价后（装扮 150 起、星光舞台 1000），
+        老的「首通 12~20」让金币来得太容易，商店一天就被买空。
         现在：
-          · 首通：8 + 星数×4（1 星 12 / 2 星 16 / 3 星 20），差距收窄；
-          · BOSS 首通额外 +15（推进度的奖励，不是刷的奖励）；
-          · 重复打：固定 3 金币（打得好也是 3）—— 承认「你又练了一遍」，
-            但绝不鼓励原地刷。
+            · 1 星不再发金币 —— 想赚钱必须打出 2 星以上（提高获取难度）；
+            · 首通 2 星 5 / 3 星 8，BOSS 首通再 +5；
+            · 重复打：每天每关只结算一次，2 金币（BOSS 3）。
      这份公式在 app/core/typing_store.py 里有一份同样的实现，两边必须同步改。 */
   function coinsFor(stars, level, repeat) {
     if (!stars) return 0;
-    if (repeat) return 3 + (isBoss(level) ? 5 : 0);
-    return 8 + stars * 4 + (isBoss(level) ? 15 : 0);
+    if (repeat) return isBoss(level) ? 3 : 2;
+    if (stars < 2) return 0;
+    return (stars >= 3 ? 8 : 5) + (isBoss(level) ? 5 : 0);
+  }
+
+  /* 每关积分（2026-11-05 新货币）
+     —— 积分只用来买「特效」（全店最贵的奢侈品），靠打出好成绩攒：
+        · 前面基础篇章（键位 1）一星 0 分 —— 基础关练会了就该往前走；
+        · 字母 2 / 单词 3 / 大小写 4 / 小键盘 7 每星 1 分；
+        · 中文 5 / 文章 6 / 混排 8 每星 2 分（越难越值钱）；
+        · 卷数每推进一卷 +1 分（难度补偿）；
+        · 重复打：每天每关只结算一次，2 星及以上给 1 分。
+     typing_store.py 的 pts_for 与此完全一致，两边必须同步改。 */
+  var PTS_STAGE = { 1: 0, 2: 1, 3: 1, 4: 1, 5: 2, 6: 2, 7: 1, 8: 2 };
+  function ptsFor(stars, stage, chapter, repeat) {
+    if (!stars) return 0;
+    if (repeat) return stars >= 2 ? 1 : 0;
+    return stars * (PTS_STAGE[stage] || 1) + Math.max(0, (chapter || 1) - 1);
   }
 
   return {
     genLevel: genLevel, starsFor: starsFor, speedLine: speedLine,
     difficulty: difficulty, levelFactor: levelFactor, topicOf: topicOf,
-    levelKey: levelKey, isBoss: isBoss, coinsFor: coinsFor
+    levelKey: levelKey, isBoss: isBoss, coinsFor: coinsFor, ptsFor: ptsFor
   };
 })();

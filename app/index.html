@@ -6479,11 +6479,23 @@ body:has(.mini-bar) .corner-credit { display:none; }
 .cw-sheet-btn:hover{color:var(--brand-primary)}
 .cw-sheet-btn.on{color:var(--brand-primary);font-weight:700}
 .cw-list .op .cw-sheet-btn{font-size:11.5px}
-/* 列表视图：类型 / 修改时间列（资源管理器口径，7 列） */
-.cw-list-h,.cw-lrow{grid-template-columns:24px 30px minmax(0,1fr) 76px 84px 100px auto}
+/* 列表视图：类型 / 修改时间列（资源管理器口径，7 列）
+   2026-11-05 修列错位：最后一列原来写 auto —— 表头（"操作"两个字 23px）
+   和每一行（6 个按钮 180px）是两张独立的 grid，auto 各算各的，
+   于是前 6 列整体错开半个屏。末列改成固定宽度，两张 grid 的列线才对得上。 */
+.cw-list-h,.cw-lrow{grid-template-columns:24px 30px minmax(0,1fr) 76px 88px 116px 184px}
 .cw-lrow .mt{font-size:11.5px;color:var(--text-secondary);white-space:nowrap}
+.cw-list-h>:last-child{text-align:right;padding-right:2px}
+/* 宽屏下列表已有独立「类型」列，第二行的「PDF·已推送」是重复信息，收掉让文件名更长 */
+@media (min-width:901px){.cw-lrow .sub{display:none}}
+/* 操作列按钮多，装不下时换行，绝不撑破固定列宽 */
+.cw-lrow .op{flex-wrap:wrap;row-gap:4px}
+@media (max-width:1180px){
+  .cw-list-h,.cw-lrow{grid-template-columns:24px 30px minmax(0,1fr) 76px 88px 184px}
+  .cw-list-h .mt,.cw-lrow .mt{display:none}
+}
 @media (max-width:900px){
-  .cw-list-h,.cw-lrow{grid-template-columns:24px 26px minmax(0,1fr) 84px auto}
+  .cw-list-h,.cw-lrow{grid-template-columns:24px 26px minmax(0,1fr) 84px 168px}
   .cw-list-h .tp,.cw-lrow .tp,.cw-list-h .mt,.cw-lrow .mt{display:none}
 }
 
@@ -16174,10 +16186,12 @@ async function actDeploySheet(t, course) {
   if (actGeneratedPage && actGeneratedPageTask === t.task_id) {
     deployHtml = actGeneratedPage;   // 老师刚在下方设计器里「生成」的页面，最优先
   } else if (actSheetFile) {
-    /* 资料里的网页文件：每次下发都重新拉取部署，文件更新后学生端拿到的也是新版 */
+    /* 资料里的网页文件：每次下发都重新拉取部署，文件更新后学生端拿到的也是新版。
+       {{COURSE}} 在这里统一替换（资料里的网页可以是「通用模板」，一门课存一份） */
     try {
       const fr = await fetch(CW_API + 'file?id=' + encodeURIComponent(actSheetFile.id) + '&dl=0', { cache: 'no-store' });
-      if (fr.ok) deployHtml = actBuildCustomPage(await fr.text());
+      if (fr.ok) deployHtml = actBuildCustomPage(
+        actFillCourseVars(await fr.text(), course || t.course || t.title));
     } catch (e) {}
   } else {
     /* 默认学习单：保持原口径——服务端还没有页（或还是占位页）才部署，不覆盖教师设计页 */
@@ -16185,14 +16199,16 @@ async function actDeploySheet(t, course) {
       const probe = await fetch('/api/custom?task=' + encodeURIComponent(t.task_id));
       const curHtml = probe.ok ? await probe.text() : '';
       if (!curHtml.trim() || curHtml.indexOf('老师还没有配置自定义提交页') !== -1) {
-        deployHtml = actBuildCustomPage(actCustomDefaultTpl().replace(/\{\{COURSE\}\}/g, course || '课堂'));
+        deployHtml = actBuildCustomPage(
+          actFillCourseVars(actCustomDefaultTpl(), course || t.course || t.title));
       }
     } catch (e) {}
   }
   if (!deployHtml) return false;
   const dep = await fetch('/api/custom', { method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ task: t.task_id, html: deployHtml }) });
+    body: JSON.stringify({ task: t.task_id, html: deployHtml,
+                           course: course || t.course || t.title || '' }) });
   const dj = await dep.json().catch(() => ({}));
   return !!(dep.ok && dj.ok);
 }
@@ -16260,6 +16276,11 @@ async function actSelectTask(silent) {
     } catch (e) {}
   }
   actActiveId = t ? String(t.task_id) : null;
+  /* course 字段口径（2026-11-05 核对）：act_task.course = 这门课在「资料」里的
+     文件夹名，也是学习单 {{COURSE}} 的取值来源。旧任务（2026-11-04 之前建的）
+     只有 title、没有 course，靠 title 兜底也能对，但归档 / 分组查询会漏。
+     这里就地补齐内存字段，后续读写都以 course 为准。 */
+  if (t && !String(t.course || '').trim()) t.course = course;
   // 课程归属统一入口（2026-11-04 定版）：① 里选的课程就是归属，
   // 同步写 courseware_links 给自动归档用；「课程归属」条已从大屏移除
   if (actActiveId) {
@@ -16749,7 +16770,18 @@ function actCustomLoadFile(e) {
   const f = e.target.files && e.target.files[0]; if (!f) return;
   f.text().then(t => { const el = document.getElementById('actCustHtml'); if (el) el.value = t; actCustStatus('已载入：' + f.name); actRenderFileCfg(); });
 }
-function actCustomUseDefault() { const el = document.getElementById('actCustHtml'); if (el) el.value = actCustomDefaultTpl(); actCustStatus('已载入默认学习单（文件上传 + 提交）；把 {{COURSE}} 换成实际课程名即可定制'); actRenderFileCfg(); }
+/* {{COURSE}} 占位符（2026-11-05 修）：
+   默认学习单模板的标题写的是 `{{COURSE}} · 课堂学习单`，部署时该换成课程名。
+   以前只有「直接下发默认模板」这一条路做了替换，老师如果在设计器里点
+   「用默认模板」→「生成页面」，HTML 原样存进模板，学生打开就看到
+   「{{COURSE}} · 课堂学习单」——花括号直接露在学生面前。
+   现在所有出口（生成 / 预览 / 下发 / 资料网页）都先过这一道。 */
+function actFillCourseVars(html, course) {
+  const name = esc(String(course || '').trim() || '课堂');
+  return String(html || '').replace(/\{\{COURSE\}\}/gi, name);
+}
+window.actFillCourseVars = actFillCourseVars;
+function actCustomUseDefault() { const el = document.getElementById('actCustHtml'); if (el) el.value = actCustomDefaultTpl(); actCustStatus('已载入默认学习单（文件上传 + 提交）；标题里的 {{COURSE}} 会在生成 / 下发时自动换成课程名'); actRenderFileCfg(); }
 function actCustStatus(t, cls) { const el = document.getElementById('actCustStatus'); if (el) { el.textContent = t || ''; el.className = 'act-muted' + (cls ? (' ' + cls) : ''); } }
 function actCustomClear() { const el = document.getElementById('actCustHtml'); if (el) el.value = ''; actCustStatus('已清空'); actRenderFileCfg(); }
 
@@ -16987,7 +17019,8 @@ async function actCustomGenerate() {
   if (!raw) { toast('请先上传网页文件或点「用默认模板」'); return; }
   const perQ = document.getElementById('actCustPerQ') ? document.getElementById('actCustPerQ').checked : true;
   actCustStatus('正在注入登录 / 提交逻辑…');
-  actGeneratedPage = actBuildCustomPage(raw, { perQ: perQ });
+  actGeneratedPage = actBuildCustomPage(
+    actFillCourseVars(raw, t.course || t.title || actActiveCourse), { perQ: perQ });
   actGeneratedPageTask = t.task_id;
   actRenderFileCfg();
   actCustStatus('✓ 已生成页面（' + (perQ ? '每题单独提交' : '整页一个提交') + '）。点「查看」预览，确认后点「下发」发给学生。', 'ok');
@@ -17003,13 +17036,14 @@ async function actCustomView() {
     const raw = (htmlEl && htmlEl.value || '').trim();
     if (!raw) { toast('请先点「用默认模板」或上传网页文件，再点「生成页面」'); return; }
     const perQ = document.getElementById('actCustPerQ') ? document.getElementById('actCustPerQ').checked : true;
-    page = actBuildCustomPage(raw, { perQ: perQ });
+    page = actBuildCustomPage(
+      actFillCourseVars(raw, t.course || t.title || actActiveCourse), { perQ: perQ });
     actGeneratedPage = page;
   }
   actGeneratedPageTask = actActiveId;
   actCustStatus('正在部署预览页…');
   try {
-    const r = await fetch('/api/custom', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task: actActiveId, html: page }) });
+    const r = await fetch('/api/custom', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task: actActiveId, html: page, course: t.course || t.title || actActiveCourse || '' }) });
     const j = await r.json().catch(() => ({}));
     if (!r.ok || !j.ok) { actCustStatus('部署失败：' + (j.msg || r.status), 'err'); return; }
     actCustStatus('✓ 已部署预览页，正在打开（含「🧪 模拟测试提交」按钮）…', 'ok');
@@ -34831,13 +34865,23 @@ function cwFileCard(f, idx) {
   const fid = encodeURIComponent(f.id);
   /* 缩略图按内容预览（2026-11-04）：图片/视频原生；网页和 PDF 直接内嵌
      实际文件（等比缩小成封面）；Office（pptx/docx/xlsx）走服务端
-     ooxml_preview 渲染端点（带缓存，第一次渲染后秒开）。 */
+     ooxml_preview 渲染端点（带缓存，第一次渲染后秒开）。
+     2026-11-05 牛哥反馈：PPT 卡片里不该塞整篇内容 —— Office 一律请求
+     cover=1，只渲染第一页（PPT 只取第 1 张幻灯片标题+副标题），
+     卡片上就只剩一张干净封面。 */
   if (kind === 'image') thumb = '<img src="' + esc(CW_API + 'file?id=' + fid) + '" alt="" loading="lazy" data-name="' + esc(f.name) + '" onerror="cwImgErr(this)">';
   else if (kind === 'video') thumb = '<video src="' + esc(CW_API + 'file?id=' + fid) + '" preload="metadata" muted></video>';
-  else if (kind === 'office') thumb = '<iframe class="wv" src="' + esc(CW_API + 'preview?id=' + fid + cwDarkQs()) + '" tabindex="-1" title="' + esc(f.name) + '"></iframe>';
+  else if (kind === 'office') thumb = '<iframe class="wv cover" src="' + esc(CW_API + 'preview?id=' + fid + '&cover=1' + cwDarkQs()) + '" tabindex="-1" scrolling="no" title="' + esc(f.name) + '"></iframe>';
   else if (kind === 'pdf' || (kind === 'text' && /\.html?$/i.test(f.name || ''))) thumb = '<iframe class="wv" src="' + esc(CW_API + 'file?id=' + fid + '&dl=0') + '" tabindex="-1" title="' + esc(f.name) + '"></iframe>';
   else thumb = '<span class="ico">' + fileTypeIcon(f.name, 36) + '</span>';
   const selCls = cwState.sel.has(String(f.id)) ? ' sel' : '';
+  /* Office 卡片：封面 + 文件名，上一行「文档 · 97.8 MB」对看封面没有帮助，收掉 */
+  const meta = kind === 'office' ? '' :
+    ('<div class="fm"><span>' + esc(CW_KIND_NAME[kind] || '文件') + '</span>'
+    + (f.size_text ? '<span>' + esc(f.size_text) + '</span>' : '')
+    + (sent ? '<span style="color:var(--brand-primary)">已推送</span>' : '')
+    + (kind === 'legacy' ? '<span style="color:#8A5A10">建议转存新格式</span>' : '')
+    + '</div>');
   return '<div class="cw-file' + selCls + '" data-id="' + esc(f.id) + '" data-kind="' + esc(kind) + '" onclick="cwPreviewLocal(this)">'
     + cwPickBox(f)
     + '<div class="thumb">' + thumb
@@ -34845,11 +34889,7 @@ function cwFileCard(f, idx) {
     +   (sent ? '<span class="cw-sent-dot">已推送</span>' : '')
     + '</div>'
     + '<div class="ft"><div class="fn">' + esc(f.name) + '</div>'
-    +   '<div class="fm"><span>' + esc(CW_KIND_NAME[kind] || '文件') + '</span>'
-    +   (f.size_text ? '<span>' + esc(f.size_text) + '</span>' : '')
-    +   (sent ? '<span style="color:var(--brand-primary)">已推送</span>' : '')
-    +   (kind === 'legacy' ? '<span style="color:#8A5A10">建议转存新格式</span>' : '')
-    +   '</div>'
+    +   meta
     +   '<div class="acts">'
     +     sendBtn
     +     cwSheetBtn(f, true)
@@ -34871,8 +34911,10 @@ function cwListRow(f, idx) {
   const sent = !f.archived && cwSentRow(f.id);
   const selCls = cwState.sel.has(String(f.id)) ? ' sel' : '';
   const ops = [
-    f.archived ? '' : '<button class="' + (sent ? 'sent' : '') + '" title="推送给班级"'
-      + ' onclick="event.stopPropagation();cwPushDialog(this)">' + (sent ? '✓ 已推送' : '⬇ 推送') + '</button>',
+    /* 列表里列宽金贵：已推送只留 ✓（提示写在 title 里），把宽度让给文件名 */
+    f.archived ? '' : '<button class="' + (sent ? 'sent' : '') + '" title="'
+      + (sent ? '已推送给班级，可在这里撤回重发' : '推送给某个班') + '"'
+      + ' onclick="event.stopPropagation();cwPushDialog(this)">' + (sent ? '✓' : '⬇ 推送') + '</button>',
     cwSheetBtn(f),
     '<button title="重命名" onclick="event.stopPropagation();cwRenameLocal(this)">✎</button>',
     '<button title="下载" onclick="event.stopPropagation();cwDownloadLocal(this)">⬇</button>',

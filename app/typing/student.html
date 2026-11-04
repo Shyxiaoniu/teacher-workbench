@@ -219,6 +219,37 @@ body.embed .play-wrap{min-height:calc(100vh - 20px)}
    屏幕上能多看到几行，打字时不用频繁滚动找位置（2026-11-04） */
 .text-wrap.long .text-line{max-height:min(42vh,420px);overflow:auto;justify-content:flex-start}
 .text-wrap.long .ch .hz{font-size:23px;line-height:27px}
+/* ===== 文章逐行视图（2026-11-05） =====
+   牛哥要求：文章练习的输入区改成逐行显示，每行与原文行一一对应。
+   一行一块：上行是原文（逐字状态色 + 闪烁光标），下行是该行的上屏回显
+   （打对的字填进对应格、没打到的透明占位），当前行整块高亮并自动滚到视野里。 */
+.art-box{position:relative;flex:1 1 auto;min-height:0;margin-top:8px;
+  display:flex;flex-direction:column;gap:5px;overflow:auto;
+  max-height:min(58vh,600px);padding:5px 4px 8px;
+  border:2px solid var(--line);border-radius:16px;background:var(--paper)}
+.art-row{display:flex;gap:9px;align-items:flex-start;flex:none;
+  border-radius:11px;padding:5px 8px 6px;border:1.5px solid transparent;transition:background .12s,border-color .12s}
+.art-row.on{background:var(--cur-bg);border-color:color-mix(in srgb,var(--brand) 45%,transparent)}
+.art-no{flex:none;width:24px;text-align:right;font-size:12px;font-weight:700;
+  color:var(--ink3);line-height:31px;font-variant-numeric:tabular-nums}
+.art-row.on .art-no{color:var(--brand)}
+.art-main{flex:1 1 auto;min-width:0}
+.art-orig{display:flex;flex-wrap:wrap;gap:2px 3px;align-content:flex-start}
+.art-orig .ch .hz{font-size:23px;line-height:29px}
+.art-orig.en-line{display:block;font-size:22px;line-height:1.62;letter-spacing:.6px;text-align:left}
+.art-echo{display:flex;flex-wrap:wrap;gap:1px 3px;min-height:20px;margin-top:2px;
+  border-top:1px dashed color-mix(in srgb,var(--line) 90%,transparent);padding-top:3px}
+.art-echo .ch .hz{font-size:19px;line-height:22px}
+.art-echo .ch.d .hz{color:transparent}
+.art-echo .ch.o .hz{color:var(--brand)}
+.art-echo .ch.sp{width:12px;height:15px}
+.art-echo .ch.sp.d{background:transparent;box-shadow:none}
+.art-echo .ch.sp.o{background:var(--cur-bg);box-shadow:none}
+.art-echo .ch.c::after{display:none}
+/* 长文模式下的输入条：只留一个窄条 + 说明，上屏内容已经在每一行下面了 */
+.typing-bar.slim{padding:5px 12px}
+.typing-bar.slim .tb-field{min-height:34px}
+.typing-bar.slim .tb-input{font-size:15px;line-height:24px}
 .text-line{background:var(--paper);border:2px solid var(--line);
   /* 顶部留 24px：这是拼音气泡的"停靠带"，气泡落在框内而不是压到上面的标题栏 */
   border-radius:16px;padding:24px 12px 9px;min-height:64px;
@@ -234,6 +265,15 @@ body.embed .play-wrap{min-height:calc(100vh - 20px)}
 .ch.o .hz{color:var(--ok)}
 .ch.e .hz{color:var(--bad);background:var(--bad-soft);box-shadow:0 2px 0 color-mix(in srgb,var(--bad) 45%,transparent)}
 .ch.c .hz{color:var(--ink);background:var(--cur-bg);box-shadow:0 2px 0 var(--brand)}
+/* 当前格闪烁光标（2026-11-05 牛哥要求「输入框里要有闪烁光标，明确当前输入位置」）：
+   真 <input> 的文字和光标都是透明的（视觉交给回显层），学生看不到自己在第几个字，
+   所以把光标画在「课文当前格」的右侧 —— 位置永远等于 P.idx，闪烁 1 秒一次。 */
+.ch.c{position:relative}
+.ch.c::after{content:'';position:absolute;right:-2px;top:2px;bottom:2px;width:2px;
+  border-radius:2px;background:var(--brand);animation:caretBlink 1.06s steps(1,end) infinite}
+.en-line .c::after{content:'';position:absolute;right:-2px;top:2px;bottom:2px;width:2px;
+  border-radius:2px;background:var(--brand);animation:caretBlink 1.06s steps(1,end) infinite}
+@keyframes caretBlink{0%,48%{opacity:1}52%,100%{opacity:0}}
 /* 空格占位：画成一个可见的浅色小方块，已打变绿、当前变暖色 ——
    中英混排里「QQ 练」中间那一格，学生以前完全看不出要按空格。 */
 .ch.sp{width:15px;height:20px;cursor:default;align-self:center;border-radius:5px;
@@ -549,6 +589,37 @@ body.embed .credit{display:none}
 .stage-nav:hover{background:#fff;transform:translateY(-50%) scale(1.1)}
 .stage-nav.prev{left:5px}
 .stage-nav.next{right:5px}
+/* ---- 出战特效（2026-11-05 经济系统）：纯 CSS 粒子动画，零外部资源 ----
+   .stage-fx 铺满舞台一层，粒子由 JS 按当前特效注入（fxLayer），
+   光环 / 极光两类用 ::before 就够，不用粒子。 */
+.stage-fx{position:absolute;inset:0;z-index:2;pointer-events:none;overflow:hidden;border-radius:inherit}
+.stage-fx .p{position:absolute;opacity:0;will-change:transform,opacity}
+.fx-sparkle .p{font-size:14px;animation:fxTwinkle 2.4s ease-in-out infinite}
+.fx-bubbles .p{width:14px;height:14px;border-radius:50%;border:1.5px solid rgba(140,200,255,.85);
+  background:radial-gradient(circle at 32% 30%,rgba(255,255,255,.95),rgba(170,215,255,.32) 62%,rgba(150,200,255,.06));
+  animation:fxBubble 4.2s ease-in infinite}
+.fx-hearts .p{font-size:14px;animation:fxHeart 3.6s ease-in-out infinite}
+.fx-snow .p{font-size:12px;animation:fxSnow 5.2s linear infinite}
+.fx-rainbow::before{content:'';position:absolute;left:50%;top:14px;width:132px;height:40px;transform:translateX(-50%);
+  border-radius:50%;background:conic-gradient(#FF6B6B,#FFB35C,#FFE066,#7BE382,#5CC9FF,#B28DFF,#FF6B6B);
+  filter:blur(4px) saturate(1.2);opacity:.8;animation:fxHue 3.4s linear infinite}
+.fx-aurora::before{content:'';position:absolute;inset:-24%;opacity:.55;filter:blur(22px);
+  background:linear-gradient(115deg,#63E6BE 0%,transparent 34%,#7FA7FF 55%,transparent 72%,#B78CFF 100%);
+  background-size:220% 100%;animation:fxAurora 8s ease-in-out infinite alternate}
+@keyframes fxTwinkle{0%,100%{opacity:0;transform:scale(.5)}45%,60%{opacity:1;transform:scale(1)}}
+@keyframes fxBubble{0%{opacity:0;transform:translateY(14px) scale(.6)}18%{opacity:.95}
+  100%{opacity:0;transform:translateY(-120px) scale(1.06)}}
+@keyframes fxHeart{0%{opacity:0;transform:translateY(6px) scale(.6)}25%{opacity:.95}
+  60%{opacity:.85;transform:translateY(-46px) scale(1) rotate(14deg)}
+  100%{opacity:0;transform:translateY(-92px) scale(.8) rotate(-10deg)}}
+@keyframes fxSnow{0%{opacity:0;transform:translateY(-10px)}12%{opacity:.95}
+  100%{opacity:.2;transform:translateY(150px)}}
+@keyframes fxHue{0%{filter:blur(4px) saturate(1.2) hue-rotate(0)}
+  100%{filter:blur(4px) saturate(1.2) hue-rotate(360deg)}}
+@keyframes fxAurora{0%{background-position:0% 0}100%{background-position:100% 0}}
+/* 背景商店预览小图 + 卡片选中态 */
+.bg-prev{height:56px;border-radius:10px;border:1px solid rgba(200,160,120,.25);margin-bottom:8px}
+.is-card.on{outline:2px solid var(--brand);outline-offset:1px}
 @keyframes p3FadeIn{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:scale(1)}}
 @keyframes p3PopIn{0%{opacity:0;transform:scale(.7) translateY(12px)}
   62%{opacity:1;transform:scale(1.07) translateY(-3px)}100%{opacity:1;transform:scale(1) translateY(0)}}
@@ -1183,9 +1254,10 @@ function uiToast(msg, tone) {
 var DEMO = {
   me: { id: 'demo', name: '演示同学', class_id: '0', class_name: '三年(1)班' },
   progress: {
-    stars: 26, week_stars: 12, coins: 180, eggs: 1,
+    stars: 26, week_stars: 12, coins: 180, pts: 120, eggs: 1,
     pets: ['cat', 'dog'], decos: ['hat-red', 'crown', 'sunglass'],
-    equip: { pet: 'cat', decos: ['hat-red'] },
+    bgs: ['meadow'], effects: [],
+    equip: { pet: 'cat', decos: ['hat-red'], bg: 'meadow', fx: '' },
     best: { 's1c1l1': { stars: 3, wpm: 34 }, 's1c1l2': { stars: 3, wpm: 31 }, 's1c1l3': { stars: 2, wpm: 27 },
             's1c1l4': { stars: 2, wpm: 26 }, 's1c1l5': { stars: 3, wpm: 36 }, 's1c1l6': { stars: 1, wpm: 22 },
             's1c1l7': { stars: 2, wpm: 28 }, 's1c1l8': { stars: 2, wpm: 29 }, 's1c1l9': { stars: 1, wpm: 24 },
@@ -1215,7 +1287,8 @@ function boot() {
       S.role = 'student'; S.demo = false;
       S.me = me.me; S.progress = me.progress; S.config = me.config || S.config;
       if (!S.progress.equip) S.progress.equip = { pet: '', decos: [] };
-      S.ranch = { pet: S.progress.equip.pet || '', decos: S.progress.equip.decos || [] };
+      S.ranch = ranchFromEquip(S.progress.equip);
+      startSyncLoop();
     } else {
       S.demo = true;
       S.me = DEMO.me; S.progress = JSON.parse(JSON.stringify(DEMO.progress));
@@ -1223,7 +1296,7 @@ function boot() {
         var saved = localStorage.getItem('wb-typing-demo');
         if (saved) { var p = JSON.parse(saved); if (p && p.best) S.progress = p; }
       } catch (e) {}
-      S.ranch = { pet: S.progress.equip.pet || '', decos: S.progress.equip.decos || [] };
+      S.ranch = ranchFromEquip(S.progress.equip);
       if (me && me.role === 'teacher') {
         /* 教师练习模式（2026-11-03）：老师用同一张地图练手，
            成绩默认只存本机；想跟学生比，可在页顶开关「计入班级排行榜」。
@@ -1293,6 +1366,13 @@ function maxChapter(st) {
   return ch;
 }
 
+/* 从服务端 equip 恢复牧场本地状态（宠物 / 装扮 / 背景 / 特效，2026-11-05）：
+   旧档案 equip 里没有 bg/fx 字段，这里统一兜底成 ''。 */
+function ranchFromEquip(equip) {
+  var e = equip || {};
+  return { pet: e.pet || '', decos: e.decos || [], bg: e.bg || '', fx: e.fx || '' };
+}
+
 /* ---------------- 渲染框架 ---------------- */
 function render() {
   var st = TD.titleFor(S.progress.stars || 0);
@@ -1303,6 +1383,7 @@ function render() {
       '<div class="meter">' +
         '<span class="chip">⭐ ' + (S.progress.stars || 0) + ' 星</span>' +
         '<span class="chip b">🪙 ' + (S.progress.coins || 0) + '</span>' +
+        '<span class="chip b">✨ ' + (S.progress.pts || 0) + '</span>' +
         '<span class="chip p">' + esc(st.name) + '</span>' +
         (S.progress.eggs ? '<span class="chip b">🥚 ×' + S.progress.eggs + '</span>' : '') +
         '<span class="pet-mini" title="出战宠物">' + (petSvg || '🐾') + '</span>' +
@@ -1943,6 +2024,26 @@ window.kbDebugLevel = function () {
 
 /* ---------------- 练习引擎 ---------------- */
 function startLevel(st, ch, lv) {
+  /* 断点续打（2026-11-05）：上次没打完的这一关（教师关闭练习时自动存过草稿），
+     3 天内再进来先问一句 —— 接着打，还是从头开始。 */
+  var dr = (!S.demo && S.role === 'student' && S.progress) ? (S.progress.draft || null) : null;
+  if (dr && dr.k === ('s' + st + 'c' + ch + 'l' + lv)
+      && (Date.now() / 1000 - (dr.ts || 0)) < 3 * 86400) {
+    uiConfirm({
+      title: '继续上次的进度？',
+      message: '这一关上次打到第 ' + ((dr.idx || 0) + 1) + ' 个字还没打完，已经自动帮你存好了（老师关闭练习时不会丢）。\n\n「确定」接着打；「取消」从头开始。'
+    }).then(function (ok) {
+      openLevel(st, ch, lv, ok ? dr : null);
+      if (!ok) api('/api/v2/typing/draft', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clear: 1 })
+      });
+    });
+    return;
+  }
+  openLevel(st, ch, lv, null);
+}
+function openLevel(st, ch, lv, dr) {
   clearPlayBindings();
   try {
     var grades = (S.config && S.config.grades) || [];
@@ -1963,8 +2064,20 @@ function startLevel(st, ch, lv) {
       errChar: null,   /* 当前敲错的字（红色就地标注，打对自动替换） */
       composing: false, composeText: '',
       /* 道具：本关内有效，进关前点「用」才会置 true */
-      buff: { hint: false, extra: false, shield: false, double: false }
+      buff: { hint: false, extra: false, shield: false, double: false },
+      resumeDur: 0     /* 断点续打补回的上次已用秒数（结算时计入用时） */
     };
+    /* 恢复草稿：文本直接还原成上次那份（随机关也续得上原内容），
+       键位课程关（type=keys）内容在 items 里，不支持续打 → 当新关。 */
+    if (dr && L.type === 'text' && dr.text) {
+      L.text = String(dr.text);
+      if (dr.lines && L.long) { L.lines = dr.lines; L._starts = null; }
+      L.timeLimit = Math.max(75, Math.round(L.text.length / (L.speedLine * 0.30)));
+      S.play.idx = Math.min(dr.idx || 0, L.text.length - 1);
+      S.play.errors = dr.err || 0;
+      S.play.keys = dr.keys || 0;
+      S.play.resumeDur = dr.dur || 0;
+    }
     renderPlay();
   } catch (err) {
     console.error('打开关卡失败：', err);
@@ -1981,18 +2094,20 @@ window.startLevel = startLevel;
    中文：逐字一列，默认只显示汉字；每个字把拼音写进 data-p（多音字靠
    pinyin.js 的词级覆盖），点击时气泡才弹出来 —— 拼音是「查」出来的，
    不是常驻的。英文：保持普通字符流（空格不会被 flex 吃掉）。 */
-function textHtml(text, idx, bad) {
+function textHtml(text, idx, bad, base) {
   var isCn = S.play && S.play.L && S.play.L.mode === 'cn';
+  base = base || 0;
   /* 当前格挂着敲错的字（2026-11-03 牛哥第二次反馈）：
      课文行**永远显示原文**，不把错字顶进来——顶掉了学生就看不见
      该打什么了。错字只在输入框回显层（echoHtml）里红色保留；
      课文行这边只把当前格标红（.e），提示"这个位置打错了"。 */
   var hasErr = !!(S.play && S.play.errChar);
-  var i, cls, s = '';
+  var i, g, cls, s = '';
   if (isCn && window.PY && PY.annotate) {
     var arr = PY.annotate(text);
     for (i = 0; i < arr.length; i++) {
-      cls = i < idx ? 'o' : (i === idx ? ((bad || (i === idx && hasErr)) ? 'e' : 'c') : 'd');
+      g = base + i;
+      cls = g < idx ? 'o' : (g === idx ? ((bad || (g === idx && hasErr)) ? 'e' : 'c') : 'd');
       /* 空格也要带状态：中英混排关里空格很多，原来只渲染一个空 span，
          学生根本看不出"这里要按一下空格"，只会以为两个字挨得近。 */
       if (arr[i].c === ' ') { s += '<span class="ch sp ' + cls + '"></span>'; continue; }
@@ -2003,7 +2118,8 @@ function textHtml(text, idx, bad) {
     return s;
   }
   for (i = 0; i < text.length; i++) {
-    cls = i < idx ? 'o' : (i === idx ? ((bad || (i === idx && hasErr)) ? 'e' : 'c') : 'd');
+    g = base + i;
+    cls = g < idx ? 'o' : (g === idx ? ((bad || (g === idx && hasErr)) ? 'e' : 'c') : 'd');
     /* 大写字母加 .up 角标（2026-11-04 牛哥反馈大小写分不清）：⇧ 画在字头顶，
        绝对定位不占布局宽度，回显层逐字对齐不受影响 */
     s += '<span class="' + cls + (/[A-Z]/.test(text[i]) ? ' up' : '') + '">' + esc(text[i]) + '</span>';
@@ -2014,15 +2130,17 @@ function textHtml(text, idx, bad) {
    区别只有两点 —— 没有「当前字」高亮，未输入的字交给 CSS 调成透明占位。
    结构一致是逐字对齐的根本：只要字符数和类名相同，flex 排出来的每个字宽度、
    换行位置就和课文一模一样。 */
-function echoHtml(text, idx) {
+function echoHtml(text, idx, base) {
   var errCh = (S.play && S.play.errChar) || '';
   var arr = (window.PY && PY.annotate) ? PY.annotate(text) : null;
-  var i, s = '', cls;
+  base = base || 0;
+  var i, g, s = '', cls;
   if (arr) {
     for (i = 0; i < arr.length; i++) {
-      cls = i < idx ? 'o' : 'd';
+      g = base + i;
+      cls = g < idx ? 'o' : 'd';
       if (arr[i].c === ' ') { s += '<span class="ch sp ' + cls + '"></span>'; continue; }
-      if (i === idx && errCh) {
+      if (g === idx && errCh) {
         s += '<span class="ch e"><span class="hz">' + esc(errCh) + '</span></span>';
         continue;
       }
@@ -2031,15 +2149,83 @@ function echoHtml(text, idx) {
     return s;
   }
   for (i = 0; i < text.length; i++) {
-    if (i === idx && errCh) { s += '<span class="e">' + esc(errCh) + '</span>'; continue; }
-    s += '<span class="' + (i < idx ? 'o' : 'd') + '">' + esc(text[i]) + '</span>';
+    g = base + i;
+    if (g === idx && errCh) { s += '<span class="e">' + esc(errCh) + '</span>'; continue; }
+    s += '<span class="' + (g < idx ? 'o' : 'd') + '">' + esc(text[i]) + '</span>';
   }
   return s;
 }
 function paintEcho() {
+  /* 文章逐行视图没有独立的输入回显层：每行下面的 .art-echo 就是回显 */
+  if (S.play && S.play.L && S.play.L.long && S.play.L.lines) { paintArt(); return; }
   var box = $('#tbEcho');
   if (!box || !S.play) return;
   box.innerHTML = echoHtml(S.play.L.text, S.play.idx);
+}
+
+/* ---------------- 文章逐行视图（2026-11-05） ----------------
+   每行一块：上行原文（逐字状态 + 光标），下行该行的上屏回显。
+   全局进度仍然只有 P.idx 一个数，行的边界由 lineStarts 换算 ——
+   结算用的准确率 / 速度 / 星级完全不受影响。 */
+function artLineStarts(L) {
+  if (L._starts && L._startsFor === L.text) return L._starts;
+  var arr = L.lines || [L.text], out = [], n = 0;
+  for (var i = 0; i < arr.length; i++) { out.push(n); n += arr[i].length; }
+  L._starts = out; L._startsFor = L.text;
+  return out;
+}
+function artLineOf(L, idx) {
+  var st = artLineStarts(L), lo = 0, hi = st.length - 1;
+  while (lo < hi) {
+    var mid = (lo + hi + 1) >> 1;
+    if (st[mid] <= idx) lo = mid; else hi = mid - 1;
+  }
+  return lo;
+}
+function artRowHtml(i) {
+  var L = S.play.L, P = S.play;
+  var line = (L.lines || [])[i] || '';
+  var base = artLineStarts(L)[i];
+  var isCn = L.mode === 'cn';
+  var on = P.idx >= base && P.idx < base + line.length;
+  return '<div class="art-row' + (on ? ' on' : '') + '" data-line="' + i + '">' +
+    '<span class="art-no">' + (i + 1) + '</span>' +
+    '<div class="art-main">' +
+      '<div class="art-orig' + (isCn ? '' : ' en-line') + '">' +
+        textHtml(line, P.idx, false, base) + '</div>' +
+      '<div class="art-echo">' + echoHtml(line, P.idx, base) + '</div>' +
+    '</div></div>';
+}
+/* 只重画「当前行」和「刚刚离开的那一行」：整篇上百行，每敲一个字全部重排会卡 */
+function paintArt() {
+  var L = S.play && S.play.L, P = S.play;
+  if (!L || !L.lines) return;
+  var cur = artLineOf(L, Math.min(P.idx, Math.max(0, L.text.length - 1)));
+  var need = [cur];
+  if (P._artPrev != null && P._artPrev !== cur) need.push(P._artPrev);
+  need.forEach(function (i) {
+    var row = document.querySelector('.art-row[data-line="' + i + '"]');
+    if (!row) return;
+    var line = L.lines[i] || '', base = artLineStarts(L)[i];
+    var o = row.querySelector('.art-orig'), e = row.querySelector('.art-echo');
+    if (o) o.innerHTML = textHtml(line, P.idx, false, base);
+    if (e) e.innerHTML = echoHtml(line, P.idx, base);
+  });
+  var rows = document.querySelectorAll('.art-row');
+  for (var k = 0; k < rows.length; k++) {
+    var on = Number(rows[k].getAttribute('data-line')) === cur;
+    if (on !== rows[k].classList.contains('on')) rows[k].classList.toggle('on', on);
+  }
+  P._artPrev = cur;
+  /* 当前行滚进可视区（只滚课文框，不带动整页） */
+  var box = document.getElementById('textWrap');
+  var row = document.querySelector('.art-row[data-line="' + cur + '"]');
+  if (box && row && box.scrollHeight > box.clientHeight + 4) {
+    var top = row.offsetTop - box.offsetTop;
+    if (top < box.scrollTop + 6 || top + row.offsetHeight > box.scrollTop + box.clientHeight - 6) {
+      box.scrollTop = Math.max(0, top - box.clientHeight / 3);
+    }
+  }
 }
 function renderPlay() {
   var P = S.play, L = P.L, stage = TD.stageById(L.stage) || TD.STAGES[0];
@@ -2054,21 +2240,31 @@ function renderPlay() {
       '<div class="progress-track"><div class="progress-fill" style="width:0%"></div></div>';
   } else {
     var isCn = L.mode === 'cn';
-    body = imeBarHtml() +
-      '<div class="text-wrap' + (L.long ? ' long' : '') + '" id="textWrap">' +
+    var isLong = !!(L.long && L.lines && L.lines.length);
+    /* 文章（整篇）走逐行视图：一行原文 + 一行该行回显，行行对应 */
+    var textBox = isLong
+      ? '<div class="art-box" id="textWrap">' +
+          L.lines.map(function (_, i) { return artRowHtml(i); }).join('') +
+          '<div class="py-pop" id="pyPop" hidden></div></div>'
+      : '<div class="text-wrap" id="textWrap">' +
         '<div class="text-line' + (isCn ? '' : ' en-line') + '" id="textLine">' +
           textHtml(L.text, P.idx, false) + '</div>' +
-        '<div class="py-pop" id="pyPop" hidden></div></div>' +
+        '<div class="py-pop" id="pyPop" hidden></div></div>';
+    body = imeBarHtml() +
+      textBox +
       (isCn
-        ? '<div class="typing-bar" id="typeBar">' +
+        ? '<div class="typing-bar' + (isLong ? ' slim' : '') + '" id="typeBar">' +
             '<div class="tb-field" id="tbField">' +
-              /* 回显层与课文共用同一套字符网格（同样的字号、字距、gap、居中、换行宽度），
-                 所以第 i 个字必然落在课文第 i 个字的正下方 —— 逐字同列，不靠 JS 算坐标 */
-              '<div class="tb-echo" id="tbEcho" aria-hidden="true">' + echoHtml(L.text, 0) + '</div>' +
+              /* 短课文：回显层与课文共用同一套字符网格，第 i 个字落在课文第 i 个字正下方。
+                 整篇文章：回显已经在每一行下面了，这里只留输入框（接收输入法） */
+              (isLong ? '' :
+                '<div class="tb-echo" id="tbEcho" aria-hidden="true">' + echoHtml(L.text, 0) + '</div>') +
               '<input class="tb-input" id="cnInput" autocomplete="off" autocorrect="off" ' +
                 'autocapitalize="off" spellcheck="false" placeholder=" " ' +
                 'aria-label="照着上面的课文打字，所打的字会出现在课文对应的位置">' +
-              '<span class="tb-ph" id="cnPh">照着上面的课文打字，打的字会出现在课文对应的位置</span>' +
+              '<span class="tb-ph" id="cnPh">' +
+                (isLong ? '在这里打字：打的字会填进上面当前那一行' : '照着上面的课文打字，打的字会出现在课文对应的位置') +
+              '</span>' +
               '<span class="tb-comp" id="tbComp" hidden></span>' +
             '</div>' +
           '</div>'
@@ -2155,7 +2351,11 @@ function paintIme() {
   var info = kbKeyInfo(ch, L.kbzone);
   var bits = '';
   if (L.kbzone === 'num' && info && info.num) {
-    bits = '<span class="sl">小键盘</span><kbd>' + esc(ch) + '</kbd>';
+    bits = '<span class="sl">小键盘</span><kbd>' + esc(ch) + '</kbd>' +
+      /* 等号/除号这类键学生常找不到：把位置直接说出来（2026-11-05） */
+      (ch === '=' ? '<span class="sl">右下角（Enter 旁边那颗）</span>'
+        : ch === '/' ? '<span class="sl">右上角 ÷ 那颗</span>'
+        : ch === '*' ? '<span class="sl">右上角 × 那颗</span>' : '');
   } else if (info && info.shift) {
     bits = '<span class="sl">按住</span><kbd>Shift</kbd><span class="sl">+</span>' +
       '<kbd>' + esc(String(ch).toUpperCase()) + '</kbd>';
@@ -2359,6 +2559,12 @@ function bindPlay() {
     'Comma': '<', 'Period': '>', 'Slash': '?' };
   function evChar(e) {
     var c = e.code, m;
+    /* 等号特判（2026-11-05 牛哥反馈「= 打不出来」）：
+       主键盘 =、小键盘 = 在不同键盘 / 驱动 / 输入法下，e.code 会分别给成
+       Equal、NumpadEqual、Unidentified，甚至空串 —— 只认物理键位必然有漏网。
+       而 e.key 此时一定是 '='（Shift+= 时 e.key 是 '+'，不会误判），
+       所以先按字符认一次，再走下面的键位映射。 */
+    if (e.key === '=') return '=';
     if (c) {
       if ((m = /^Key([A-Z])$/.exec(c))) return e.shiftKey ? m[1] : m[1].toLowerCase();
       if ((m = /^Digit([0-9])$/.exec(c))) return e.shiftKey ? KB_DIGIT_SHIFT[m[1]] : m[1];
@@ -2371,7 +2577,7 @@ function bindPlay() {
   }
   function begin() { if (!P.t0) { P.t0 = Date.now(); startTimer(); } }
   function livePaint() {
-    var el = Math.max(0.001, (Date.now() - P.t0) / 60000);
+    var el = Math.max(0.001, (Date.now() - P.t0) / 60000 + (P.resumeDur || 0) / 60);
     var done = P.idx;
     var spd = done / el;
     var ks = Math.max(P.keys, 1);
@@ -2402,6 +2608,11 @@ function bindPlay() {
     paintKb(cur.k);
   }
   function paintText(extraBad) {
+    if (S.play && S.play.L && S.play.L.long && S.play.L.lines) {
+      paintArt();
+      hidePyPop();
+      return;
+    }
     var line = $('#textLine');
     if (!line) return;
     line.innerHTML = textHtml(L.text, P.idx, !!extraBad);
@@ -2443,7 +2654,8 @@ function bindPlay() {
     if (P.done) return;
     P.done = true;
     stopTimer();
-    var dur = Math.max(3, (Date.now() - P.t0) / 1000);
+    /* 断点续打：上次已用的时间补回来，速度/用时口径才不失真 */
+    var dur = Math.max(3, (Date.now() - P.t0) / 1000 + (P.resumeDur || 0));
     var chars = total;
     var ks = Math.max(P.keys, chars);
     var acc = Math.min(100, Math.round(chars / ks * 1000) / 10);
@@ -2688,7 +2900,10 @@ function bindPlay() {
     clearAppClick();
     S._appClick = function () { if (!P.done) { cn.focus(); setCaret(); } };
     app.addEventListener('click', S._appClick);
-    $('#textLine').addEventListener('mousedown', function (e) {
+    /* 点生字查拼音：普通课文挂在 #textLine 上，逐行视图挂在 #textWrap 上
+       （逐行视图里没有单一的 #textLine，事件委托到整块课文区） */
+    var tapBox = $('#textLine') || $('#textWrap');
+    if (tapBox) tapBox.addEventListener('mousedown', function (e) {
       var ch = e.target.closest ? e.target.closest('.ch') : null;
       /* preventDefault：输入框不失焦，点完生字还能接着打 */
       if (ch) e.preventDefault();
@@ -2696,7 +2911,7 @@ function bindPlay() {
     });
     S._pyDown = function (e) {
       var t = e.target;
-      while (t) { if (t.id === 'textLine') return; t = t.parentNode; }
+      while (t) { if (t.id === 'textWrap') return; t = t.parentNode; }
       hidePyPop();
     };
     document.addEventListener('mousedown', S._pyDown);
@@ -2726,6 +2941,79 @@ function clearPlayBindings() {
   stopTimer();
 }
 
+/* ---------------- 练习草稿 + 全局同步（2026-11-05） ----------------
+   教师端关闭打字练习的那一刻，record 接口会拒收 —— 学生正在打的那一关
+   就这么丢，孩子最伤心。三条保障：
+   ① 练习中每 10 秒自动把「当前关卡草稿」发到服务端（切后台 / 关页面前也发）；
+   ② 12 秒轮询 /typing/me：一旦发现老师关了练习，立刻补发一次草稿，
+      弹提示并退回地图（进度不丢，重开后可续打）；
+   ③ 重新进这一关时询问「接着打 / 从头开始」。 */
+function draftFlushNow() {
+  var P = S.play;
+  if (!P || P.done || S.demo || S.role !== 'student') return;
+  var L = P.L;
+  var body = {
+    stage: P.stage, chapter: P.chapter, level: P.level,
+    idx: P.idx, err: P.errors || 0, keys: P.keys || 0,
+    dur: P.t0 ? (Date.now() - P.t0) / 1000 : 0,
+    text: L.text || '',
+    lines: (L.long && L.lines) ? L.lines : null
+  };
+  if (navigator.sendBeacon) {
+    try {
+      navigator.sendBeacon('/api/v2/typing/draft',
+        new Blob([JSON.stringify(body)], { type: 'application/json' }));
+      return;
+    } catch (e) {}
+  }
+  api('/api/v2/typing/draft', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+}
+function startSyncLoop() {
+  /* 练习中：每 10 秒自动存草稿（页面隐藏 / 关页前也立刻存一次） */
+  setInterval(function () {
+    if (S.play && !S.play.done && !document.hidden) draftFlushNow();
+  }, 10000);
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) draftFlushNow();
+  });
+  window.addEventListener('pagehide', function () { draftFlushNow(); });
+  /* 全局同步：教师发放/扣除金币、开关打字练习，学生端 12 秒内跟上。
+     练习中绝不整页重绘（会冲掉正在打的关卡），只在地图/牧场页刷余额。 */
+  setInterval(function () {
+    if (S.demo || S.role !== 'student' || document.hidden) return;
+    api('/api/v2/typing/me').then(function (me) {
+      if (!me || !me.ok) return;
+      var wasEnabled = !!(S.config && S.config.enabled);
+      var old = S.progress || {};
+      S.progress = me.progress;
+      if (!S.progress.equip) S.progress.equip = { pet: '', decos: [] };
+      S.config = me.config || S.config;
+      /* 老师把练习关了：先补发草稿，再弹提示退回地图 */
+      if (S.play && !S.play.done && !(S.config && S.config.enabled)) {
+        draftFlushNow();
+        clearPlayBindings();
+        S.view = 'map'; S.play = null;
+        render();
+        uiAlert({ title: '练习暂停了', tone: 'warn',
+          message: '老师暂时关闭了打字练习。\n你这一关的进度已经自动保存好，重新开放后回来接着打。' });
+        return;
+      }
+      var nowEnabled = !!(S.config && S.config.enabled);
+      if (nowEnabled !== wasEnabled) { render(); return; }
+      /* 只有余额真的变了才重绘，避免 12 秒一次的无谓跳动 */
+      if (S.view === 'ranch' || S.view === 'map') {
+        if ((old.coins || 0) !== (S.progress.coins || 0) ||
+            (old.pts || 0) !== (S.progress.pts || 0) ||
+            (old.stars || 0) !== (S.progress.stars || 0) ||
+            (old.eggs || 0) !== (S.progress.eggs || 0)) render();
+      }
+    });
+  }, 12000);
+}
+
 /* ---------------- 结算 ---------------- */
 function submitResult(payload, stars, wpm) {
   if (S.demo) {
@@ -2742,6 +3030,9 @@ function submitResult(payload, stars, wpm) {
       var addCoins = TL.coinsFor(stars, payload.level, false);
       if (payload.double) addCoins *= 2;
       pr.coins = (pr.coins || 0) + addCoins;
+      /* 积分公式同样与 levels.js / typing_store.py 一致 */
+      var addPts = TL.ptsFor(stars, payload.stage, payload.chapter, false);
+      pr.pts = (pr.pts || 0) + addPts;
       var pool = ['hat-red', 'crown', 'sunglass', 'glasses', 'scarf', 'bow', 'headset', 'bg-star'];
       var needs = [10, 20, 40, 60, 80, 100, 130, 160];
       var newDecos = [];
@@ -2760,13 +3051,16 @@ function submitResult(payload, stars, wpm) {
         });
       }
       showResult(stars, wpm, payload, { newBest: newBest, gained: gained, coins_gained: addCoins,
-        rewards: { egg: !!egg, decos: newDecos } });
+        pts_gained: addPts, rewards: { egg: !!egg, decos: newDecos } });
     } else {
       var rep = TL.coinsFor(stars, payload.level, true);
       if (payload.double) rep *= 2;
       pr.coins = (pr.coins || 0) + rep;
+      var repPts = TL.ptsFor(stars, payload.stage, payload.chapter, true);
+      pr.pts = (pr.pts || 0) + repPts;
       demoSave();
-      showResult(stars, wpm, payload, { newBest: false, gained: 0, coins_gained: rep, rewards: {} });
+      showResult(stars, wpm, payload, { newBest: false, gained: 0, coins_gained: rep,
+        pts_gained: repPts, rewards: {} });
     }
     return;
   }
@@ -2777,7 +3071,7 @@ function submitResult(payload, stars, wpm) {
     if (r && r.ok) {
       S.progress = r.stu;
       if (S.progress && !S.progress.equip) S.progress.equip = { pet: '', decos: [] };
-      S.ranch = { pet: S.progress.equip.pet || '', decos: S.progress.equip.decos || [] };
+      S.ranch = ranchFromEquip(S.progress.equip);
       showResult(r.stars, r.wpm, payload, r);
     } else {
       showResult(stars, wpm, payload, { error: (r && r.msg) || '成绩没有保存成功' });
@@ -2803,6 +3097,7 @@ function showResult(stars, wpm, payload, res) {
   }
   if (res.gained) rewardBits.push('⭐ 星数 + ' + res.gained);
   if (res.coins_gained) rewardBits.push('🪙 金币 + ' + res.coins_gained + (payload.double ? '（加倍卡 ×2）' : ''));
+  if (res.pts_gained) rewardBits.push('✨ 积分 + ' + res.pts_gained);
   if (payload.shield && stars > 0 && payload.acc < 90) rewardBits.push('🛡 容错卡生效：这次按通关算，下次试试不用道具');
   var hasNextCh = TL.isBoss(L.level) && stars > 0 && (L.chapter + 1 < 200);
   var mask = document.createElement('div');
@@ -2963,11 +3258,16 @@ function viewRanch() {
   var curDecos = S.ranch.decos || [];
   var pet = curPet ? TD.petById(curPet) : null;
   var owned = pr.pets || [];
+  /* 背景与特效（2026-11-05）：背景用内联 style 盖掉默认渐变；
+     默认背景（id=''）不写内联样式，夜间主题的深色舞台才不会被冲掉。 */
+  var bgCss = S.ranch.bg ? TD.bgById(S.ranch.bg).css : '';
   var side =
     '<div class="ranch-side">' +
       '<h3>🏪 我的牧场</h3>' +
       '<div class="stage-box' + (S.petSwap ? ' swapin' : '') + '" id="stageBox" ' +
+        (bgCss ? 'style="background:' + bgCss + '" ' : '') +
         'title="' + (owned.length > 1 ? '点一下换下一只伙伴' : '再去赢一颗宠物蛋，就能解锁更多伙伴') + '">' +
+        fxLayer(S.ranch.fx) +
         '<span class="stage-glow"></span>' +
         '<div class="stage-pet">' +
           ((pet && TD.petSvg(pet, curDecos, { act: 1 })) || '<div class="stage-empty">🐾</div>') +
@@ -2998,6 +3298,8 @@ function viewRanch() {
           '<div class="equip-hint">每个部位只能穿一件；「整套」会盖住上衣和下衣。</div>'
         : '<div class="equip-empty">🐾 还没有伙伴可打扮' +
           '<span>先去 BOSS 关赢一颗宠物蛋，孵出小伙伴就能试衣服了</span></div>') +
+      '<div class="equip-line" style="margin-top:8px">🖼 ' + esc(TD.bgById(S.ranch.bg).name) +
+        '　·　✨ ' + ((S.ranch.fx && TD.effectById(S.ranch.fx)) ? TD.effectById(S.ranch.fx).name : '无特效') + '</div>' +
       (pr.eggs > 0
         ? '<div class="egg-card"><span class="egg' + (S.eggOpening ? ' egg-open' : '') + '">' + eggSvg() + '</span>' +
           '<div class="egg-t">你有 ' + pr.eggs + ' 颗宠物蛋</div>' +
@@ -3020,7 +3322,7 @@ function viewRanch() {
   }).join('') + '</div>' +
     '<div class="ranch-tip">💡 点击伙伴即可切换出战；点牧场大图也能轮换，装扮会跟着它出现在练习页和排行榜上。</div>';
   return '<div class="ranch-grid">' + side + '<div>' + grid +
-    (pet ? wardrobe() : '') + itemShopBox() + '</div></div>';
+    (pet ? wardrobe() : '') + itemShopBox() + bgShopBox() + fxShopBox() + '</div></div>';
 }
 
 /* ---------------- 衣柜：按部位分架 ----------------
@@ -3089,6 +3391,133 @@ function itemShopBox() {
     }).join('') + '</div>' +
   '</div>';
 }
+
+/* ---------------- 背景商店（2026-11-05） ----------------
+   背景只改牧场舞台的「风景」，人人可买（不需要先有宠物），
+   预览小图直接用背景本身的 CSS 渐变，所见即所得。 */
+function bgShopBox() {
+  var pr = S.progress || {};
+  var owned = [''].concat(pr.bgs || []);
+  var cur = S.ranch.bg || '';
+  return '<div class="item-shop">' +
+    '<div class="is-head"><b>🖼 牧场背景</b>' +
+      '<span>金币购买 · 给伙伴换一片风景</span>' +
+      '<span class="w-coin">🪙 ' + (pr.coins || 0) + '</span></div>' +
+    '<div class="is-grid">' + TD.BACKGROUNDS.map(function (b) {
+      var has = owned.indexOf(b.id) >= 0;
+      var on = b.id === cur;
+      return '<div class="is-card' + (on ? ' on' : '') + '">' +
+        '<div class="bg-prev" style="background:' + b.css + '"></div>' +
+        '<div class="ic-top"><b>' + esc(b.name) + '</b></div>' +
+        (has
+          ? '<button class="btn sm" data-bgsel="' + esc(b.id) + '"' + (on ? ' disabled' : '') + '>' +
+              (on ? '使用中' : '换上') + '</button>'
+          : '<button class="btn sm" data-bgbuy="' + esc(b.id) + '" title="' +
+              esc(b.name + '：' + b.price + ' 金币') + '">🪙 ' + b.price + '</button>') +
+      '</div>';
+    }).join('') + '</div>' +
+  '</div>';
+}
+
+/* ---------------- 特效商店（2026-11-05） ----------------
+   积分购买（全店最贵）：积分靠打出好成绩攒 —— 基础键位篇 0 分、
+   越难的篇章每星越多。买下即自动开启，也可随时换回「无特效」。 */
+function fxShopBox() {
+  var pr = S.progress || {};
+  var owned = (pr.effects || []).slice();
+  var cur = S.ranch.fx || '';
+  var noneOn = !cur;
+  var cards = TD.EFFECTS.map(function (f) {
+    var has = owned.indexOf(f.id) >= 0;
+    var on = f.id === cur;
+    return '<div class="is-card' + (on ? ' on' : '') + '">' +
+      '<div class="ic-top"><span class="ic-ic">' + f.icon + '</span>' +
+        '<b>' + esc(f.name) + '</b></div>' +
+      '<div class="ic-desc">' + esc(f.desc) + '</div>' +
+      (has
+        ? '<button class="btn sm" data-fxsel="' + f.id + '"' + (on ? ' disabled' : '') + '>' +
+            (on ? '特效中' : '开启') + '</button>'
+        : '<button class="btn sm" data-fxbuy="' + f.id + '" title="' +
+            esc(f.name + '：' + f.price + ' 积分') + '">✨ ' + f.price + '</button>') +
+    '</div>';
+  }).join('');
+  return '<div class="item-shop">' +
+    '<div class="is-head"><b>✨ 出战特效</b>' +
+      '<span>积分购买 · 全店最贵的排面，跟着你的伙伴一起亮相</span>' +
+      '<span class="w-coin">✨ ' + (pr.pts || 0) + '</span></div>' +
+    '<div class="is-grid">' +
+      '<div class="is-card' + (noneOn ? ' on' : '') + '">' +
+        '<div class="ic-top"><span class="ic-ic">🚫</span><b>无特效</b></div>' +
+        '<div class="ic-desc">干干净净，专注练字</div>' +
+        '<button class="btn sm" data-fxsel=""' + (noneOn ? ' disabled' : '') + '>' +
+          (noneOn ? '特效中' : '关闭特效') + '</button>' +
+      '</div>' + cards + '</div>' +
+  '</div>';
+}
+/** 特效粒子层：按当前特效生成一小组绝对定位粒子（光环/极光靠 CSS ::before） */
+function fxLayer(fx) {
+  if (!fx) return '';
+  var out = '<span class="stage-fx fx-' + esc(fx) + '">';
+  var i;
+  if (fx === 'sparkle') {
+    for (i = 0; i < 7; i++)
+      out += '<span class="p" style="left:' + (8 + i * 13) + '%;top:' +
+        (12 + ((i * 29) % 62)) + '%;animation-delay:' + (i * .38) + 's">✨</span>';
+  } else if (fx === 'bubbles') {
+    for (i = 0; i < 6; i++)
+      out += '<span class="p" style="left:' + (10 + i * 15) + '%;bottom:' +
+        (4 + (i % 3) * 12) + 'px;animation-delay:' + (i * .9) + 's"></span>';
+  } else if (fx === 'hearts') {
+    for (i = 0; i < 5; i++)
+      out += '<span class="p" style="left:' + (16 + i * 16) + '%;bottom:16px;animation-delay:' +
+        (i * .75) + 's">💖</span>';
+  } else if (fx === 'snow') {
+    for (i = 0; i < 8; i++)
+      out += '<span class="p" style="left:' + (6 + i * 12) + '%;top:0;animation-delay:' +
+        (i * .65) + 's">❄️</span>';
+  }
+  return out + '</span>';
+}
+function buyBg(id) {
+  var b = TD.bgById(id);
+  if (!b || !b.id) return;
+  if (S.demo) {
+    S.progress.coins = Math.max(0, (S.progress.coins || 0) - b.price);
+    (S.progress.bgs = S.progress.bgs || []).push(id);
+    S.ranch.bg = id;
+    demoSave(); render();
+    uiToast('换上「' + b.name + '」啦', 'ok');
+    return;
+  }
+  api('/api/v2/typing/buy', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kind: 'bg', id: id })
+  }).then(function (r) {
+    if (r && r.ok) { S.progress = r.stu || S.progress; S.ranch.bg = id; render(); uiToast('换上「' + b.name + '」啦', 'ok'); }
+    else uiToast((r && r.msg) || '买不了', 'warn');
+  });
+}
+function buyFx(id) {
+  var f = TD.effectById(id);
+  if (!f) return;
+  if (S.demo) {
+    S.progress.pts = Math.max(0, (S.progress.pts || 0) - f.price);
+    (S.progress.effects = S.progress.effects || []).push(id);
+    S.ranch.fx = id;
+    demoSave(); render();
+    uiToast('「' + f.name + '」已开启，好闪！', 'ok');
+    return;
+  }
+  api('/api/v2/typing/buy', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kind: 'effect', id: id })
+  }).then(function (r) {
+    if (r && r.ok) { S.progress = r.stu || S.progress; S.ranch.fx = id; render(); uiToast('「' + f.name + '」已开启，好闪！', 'ok'); }
+    else uiToast((r && r.msg) || '买不了', 'warn');
+  });
+}
+function selectBg(id) { if (S.ranch.bg === id) return; S.ranch.bg = id; saveEquip(); render(); }
+function selectFx(id) { if (S.ranch.fx === (id || '')) return; S.ranch.fx = id || ''; saveEquip(); render(); }
 /** 在已拥有的伙伴之间轮换出战（dir = 1 下一只 / -1 上一只）。
     只有一只时摇一下舞台做提示，不弹窗打断。 */
 function cyclePet(dir) {
@@ -3173,6 +3602,19 @@ function bindRanch() {
   document.querySelectorAll('[data-buyitem]').forEach(function (b) {
     b.onclick = function () { buyItem(b.getAttribute('data-buyitem')); };
   });
+  /* 背景 / 特效（2026-11-05）：买与切换都在牧场页完成 */
+  document.querySelectorAll('[data-bgbuy]').forEach(function (b) {
+    b.onclick = function () { buyBg(b.getAttribute('data-bgbuy')); };
+  });
+  document.querySelectorAll('[data-bgsel]').forEach(function (b) {
+    b.onclick = function () { selectBg(b.getAttribute('data-bgsel')); };
+  });
+  document.querySelectorAll('[data-fxbuy]').forEach(function (b) {
+    b.onclick = function () { buyFx(b.getAttribute('data-fxbuy')); };
+  });
+  document.querySelectorAll('[data-fxsel]').forEach(function (b) {
+    b.onclick = function () { selectFx(b.getAttribute('data-fxsel') || ''); };
+  });
   /* 锁着的装扮：可点，但只解释「还差多少星」，不会穿上 */
   document.querySelectorAll('[data-deco-lock]').forEach(function (b) {
     b.onclick = function () {
@@ -3211,7 +3653,7 @@ function bindRanch() {
             if (me && me.ok) {
               S.progress = me.progress;
               if (!S.progress.equip) S.progress.equip = { pet: '', decos: [] };
-              S.ranch = { pet: S.progress.equip.pet || '', decos: S.progress.equip.decos || [] };
+              S.ranch = ranchFromEquip(S.progress.equip);
             }
             render();
             if (r.pet) setTimeout(function () { petHatched(r.pet); }, 60);
@@ -3232,7 +3674,8 @@ function saveEquip() {
   }
   api('/api/v2/typing/equip', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ pet: S.ranch.pet, decos: S.ranch.decos })
+    body: JSON.stringify({ pet: S.ranch.pet, decos: S.ranch.decos,
+                           bg: S.ranch.bg || '', fx: S.ranch.fx || '' })
   });
 }
 

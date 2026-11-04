@@ -820,6 +820,11 @@ class Handler(BaseHTTPRequestHandler):
                 if task:
                     tpls = cfg.setdefault("custom_templates", {})
                     tpls[task] = data["html"]
+                    # 记住这份学习单属于哪门课（2026-11-05）：{{COURSE}} 占位符
+                    # 在出页时还要用得上，存下来就不用每次重发一份 HTML。
+                    course = str(data.get("course") or "").strip()
+                    if course:
+                        cfg.setdefault("custom_course", {})[task] = course
                 else:
                     cfg["custom_html"] = data["html"]
                 save_json(CONFIG_PATH, cfg)
@@ -926,6 +931,12 @@ class Handler(BaseHTTPRequestHandler):
         带 task 时只认该活动的模板：查不到就回落「未配置」占位串——
         绝不能回落全局 custom_html，否则新活动会串出别的活动（或全局
         默认）页，教师端「有没有页」的探测也会失灵（2026-11-04）。
+
+        {{COURSE}} 占位符（2026-11-05）：默认学习单模板里写的是
+        `{{COURSE}} · 课堂学习单`，老师在设计器里点「用默认模板」
+        直接生成时不会被替换，学生看到的标题就变成了「{{COURSE}}」。
+        这里做最后一道兜底：出页时统一换成这门课的名字；连课程名
+        都查不到就退成「课堂」，绝不让花括号露到学生眼前。
         """
         cfg = get_config()
         html = ""
@@ -935,7 +946,17 @@ class Handler(BaseHTTPRequestHandler):
                 html = tpls.get(task, "")
         else:
             html = cfg.get("custom_html", "")
-        return html or "<!doctype html><meta charset='utf-8'><p>老师还没有配置自定义提交页。</p>"
+        html = html or "<!doctype html><meta charset='utf-8'><p>老师还没有配置自定义提交页。</p>"
+        if "{{COURSE}}" in html or "{{course}}" in html:
+            course = ""
+            if task:
+                cc = cfg.get("custom_course")
+                if isinstance(cc, dict):
+                    course = str(cc.get(task) or "")
+            course = course or "课堂"
+            safe = html.escape(course)
+            html = html.replace("{{COURSE}}", safe).replace("{{course}}", safe)
+        return html
 
     def _auth_ctx(self):
         role, _k = self._role()
@@ -1120,7 +1141,8 @@ class Handler(BaseHTTPRequestHandler):
                 # 这几种浏览器能直接显示，不必再包一层 HTML
                 return self._serve_abs(full)
             try:
-                page = CW.preview_html(full, os.path.basename(full), dark=(arg("dark") == "1"))
+                page = CW.preview_html(full, os.path.basename(full), dark=(arg("dark") == "1"),
+                                       cover=(arg("cover") == "1"))
             except Exception as e:
                 page = "<p>预览失败：%s</p>" % str(e)
             return self._send_text(page, "text/html; charset=utf-8")

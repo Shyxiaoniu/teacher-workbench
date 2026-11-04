@@ -447,7 +447,22 @@ window.TD = (function () {
       bw: 20.2, bh: 21.2, bcy: 87.2, hr: 23.4, hcy: 50.8 },
     { id: 'dragon',  name: '小龙哒哒',   mood: '键盘上的喷火龙，终极伙伴',
       c: '#F08C52', ear: 'horn', tail: 'dino', wing: 1, belly: '#FFD9A0', expr: 'wink', blush: 1,
-      bw: 24.6, bh: 19, bcy: 88.2, hr: 24.4, hcy: 52.4, tailTip: 1 }
+      bw: 24.6, bh: 19, bcy: 88.2, hr: 24.4, hcy: 52.4, tailTip: 1 },
+    /* ---- 2026-11-05 新增四只（经济系统扩容）：全部复用渲染器已有的
+       耳型 / 尾型 / 表情材质参数，不新增渲染分支 —— 图鉴更大，风格不散。 */
+    { id: 'hamster', name: '仓鼠球球',   mood: '腮帮子里藏着给你的小礼物',
+      c: '#EDC98F', ear: 'round', tail: 'puff', belly: '#FFF6DE', expr: 'happy',
+      blush: 1, whisker: 1,
+      bw: 25.8, bh: 21.2, bcy: 88.6, hr: 23.4, hcy: 51.8 },
+    { id: 'fox',     name: '狐狸阿赤',   mood: '手速快得像一阵红风',
+      c: '#E8834E', ear: 'cat', tail: 'curl', snout: '#8A4E22', brow: 1, expr: 'grin', blush: 1,
+      bw: 22.6, bh: 19.6, bcy: 89.2, hr: 24.6, hcy: 52.2 },
+    { id: 'frog',    name: '青蛙呱呱',   mood: '呱！这关我闭着眼也能过',
+      c: '#7EC96F', ear: 'none', tail: 'none', belly: '#F2FBE0', expr: 'grin', blush: 1,
+      bw: 24.2, bh: 22, bcy: 86.2, hr: 22.8, hcy: 47.8 },
+    { id: 'sheep',   name: '绵羊咩咩',   mood: '云朵一样的绒毛，抱一下',
+      c: '#F4EEE2', ear: 'long', tail: 'puff', belly: '#FFFFFF', expr: 'happy', blush: 1,
+      bw: 26.4, bh: 21.6, bcy: 87.8, hr: 23.8, hcy: 51.2 }
   ];
   /* 玩家的伙伴默认名（QQ 表情那种"给玩偶起名"的感觉）：
      牧场大标题用这个，宠物品种名退到副标题。 */
@@ -487,7 +502,7 @@ window.TD = (function () {
      ② act 是这只装扮对应的专属动作文案，act 的动画在 P3_STYLE 里，
         类名规则 .p3-svg.act-<id>，牧场里穿上就会播一遍。 */
   var DECOS = [
-    { id: 'hat-red',  name: '小红帽',   need: 10, cat: 'head', price: 60, act: '抬手敬了个礼', box: '31 2 58 40',
+    { id: 'hat-red',  name: '小红帽',   need: 10, cat: 'head', price: 150, act: '抬手敬了个礼', box: '31 2 58 40',
       svg: /* 帽身是一条完整的弧顶，不再用「双弧线」画 —— 上一版内外弧几乎平行，
              渲染出来是一圈细带，看着像戴了个发箍。 */
            '<path d="M36 34c0-15 10-23 24-23s24 8 24 23Z" fill="url(#{{p}}red)"/>' +
@@ -497,7 +512,7 @@ window.TD = (function () {
            '<ellipse cx="42" cy="33.6" rx="16" ry="2" fill="#fff" fill-opacity=".22"/>' +
            '<circle cx="59" cy="10" r="6.2" fill="url(#{{p}}cream)"/>' +
            '<ellipse cx="57" cy="8" rx="2" ry="1.6" fill="#fff" fill-opacity=".85"/>' },
-    { id: 'crown',    name: '黄金皇冠', need: 20, cat: 'head', price: 120, act: '挺起胸膛，威风了一下', box: '38 14 44 30',
+    { id: 'crown',    name: '黄金皇冠', need: 20, cat: 'head', price: 300, act: '挺起胸膛，威风了一下', box: '38 14 44 30',
       svg: '<path d="M42 37 46 19l8 10 6-14 6 14 8-10 4 18Z" fill="url(#{{p}}gold)" stroke="#B8891F" stroke-width="1.2" stroke-linejoin="round"/>' +
            '<path d="M45 33.5 48 22l6.5 8.5Z" fill="#fff" fill-opacity=".42"/>' +
            '<path d="M64 20.5l5 9.5-6 .6Z" fill="#FFF8DC" fill-opacity=".55"/>' +
@@ -506,7 +521,7 @@ window.TD = (function () {
            '<circle cx="59" cy="22" r=".9" fill="#fff" fill-opacity=".85"/>' +
            '<circle cx="49.5" cy="27.5" r="2.1" fill="url(#{{p}}gemB)"/>' +
            '<circle cx="70.5" cy="27.5" r="2.1" fill="url(#{{p}}gemG)"/>' },
-    { id: 'sunglass', name: '炫酷墨镜', need: 40, cat: 'face', price: 160, act: '酷酷地甩了下头', box: '29 43 60 24',
+    { id: 'sunglass', name: '炫酷墨镜', need: 40, cat: 'face', price: 400, act: '酷酷地甩了下头', box: '29 43 60 24',
       svg: /* 整体下移 3px：眼睛中心在 y=55.5、竖半径 6.1（下沿 61.6），
              原来的镜片只盖到 59，瞳孔下半截从镜片底下露出来。 */
            '<g transform="translate(0,3)">' +
@@ -518,7 +533,7 @@ window.TD = (function () {
            '<path d="M45 58l10-10.5" stroke="#fff" stroke-opacity=".22" stroke-width="2.6" stroke-linecap="round"/>' +
            '<path d="M67.5 58l10-10.5" stroke="#fff" stroke-opacity=".22" stroke-width="2.6" stroke-linecap="round"/>' +
            '</g>' },
-    { id: 'glasses',  name: '圆眼镜',   need: 60, cat: 'face', price: 150, act: '把眼镜往上推了推', box: '31 42 58 26',
+    { id: 'glasses',  name: '圆眼镜',   need: 60, cat: 'face', price: 380, act: '把眼镜往上推了推', box: '31 42 58 26',
       svg: '<circle cx="50" cy="54" r="8.2" fill="#DFF1FF" fill-opacity=".28"/>' +
            '<circle cx="70" cy="54" r="8.2" fill="#DFF1FF" fill-opacity=".28"/>' +
            '<circle cx="50" cy="54" r="8.2" fill="none" stroke="url(#{{p}}wood)" stroke-width="2.8"/>' +
@@ -527,7 +542,7 @@ window.TD = (function () {
            '<path d="M45.5 49.5q2-2.4 4.6-1.6" stroke="#fff" stroke-opacity=".8" stroke-width="1.8" fill="none" stroke-linecap="round"/>' +
            '<path d="M65.5 49.5q2-2.4 4.6-1.6" stroke="#fff" stroke-opacity=".7" stroke-width="1.8" fill="none" stroke-linecap="round"/>' +
            '<path d="M45 58.2a8.2 8.2 0 0 0 10 .4" stroke="#5C3A20" stroke-opacity=".3" stroke-width="1.4" fill="none"/>' },
-    { id: 'scarf',    name: '红围巾',   need: 80, cat: 'top', price: 200, act: '裹紧围巾打了个哆嗦', box: '36 66 52 38',
+    { id: 'scarf',    name: '红围巾',   need: 80, cat: 'top', price: 500, act: '裹紧围巾打了个哆嗦', box: '36 66 52 38',
       svg: /* 围巾必须贴着「脖子」而不是「身体」：头部是 r26 圆心 (60,53)，
              y=71 处头轮廓正好在 42~78 —— 所以带子上沿取 42→78，
              下沿再外扩 10px 落到身体上（y=81 时身体横跨 38~82），两端才不会悬空。
@@ -538,7 +553,7 @@ window.TD = (function () {
            '<path d="M48 79.5v7.5M54 81.5v7.5M60 82.4v7.5M66 81.5v7.5M72 79.5v7.5" stroke="#8E2A1D" stroke-opacity=".24" stroke-width="1.5" stroke-linecap="round"/>' +
            '<path d="M76 81l9.6 16.4-9 4.2-7.6-15.6Z" fill="url(#{{p}}redDark)"/>' +
            '<path d="M78.4 85l6 11" stroke="#FFC9B8" stroke-opacity=".34" stroke-width="2" stroke-linecap="round"/>' },
-    { id: 'bow',      name: '蝴蝶结',   need: 100, cat: 'head', price: 260, act: '开心地转了个圈', box: '36 14 48 30',
+    { id: 'bow',      name: '蝴蝶结',   need: 100, cat: 'head', price: 650, act: '开心地转了个圈', box: '36 14 48 30',
       svg: /* 两片水滴形缎面 + 中间结，缎面的高光沿弧线走，才有布的厚度。
              整体下移 5px：原来结心在 y=24，比头顶(27)还高，看着像浮在头上。 */
            '<g transform="translate(0,5)">' +
@@ -551,7 +566,7 @@ window.TD = (function () {
            '<circle cx="60" cy="24" r="6.2" fill="url(#{{p}}pinkDeep)"/>' +
            '<ellipse cx="58" cy="22" rx="2" ry="1.5" fill="#fff" fill-opacity=".82"/>' +
            '</g>' },
-    { id: 'headset',  name: '星耳机',   need: 130, cat: 'head', price: 300, act: '跟着音乐摇了起来', box: '24 17 66 52',
+    { id: 'headset',  name: '星耳机',   need: 130, cat: 'head', price: 750, act: '跟着音乐摇了起来', box: '24 17 66 52',
       svg: /* 头梁半径要等于头半径（r26）：上一版 q 到 -28 且左右各外扩到 34/86，
              头梁整个悬在头顶上方，像顶了个蓝色光环。现在头梁顶点 y=26（头顶点 27），
              耳罩跨在头轮廓上（左 28.4~41.6，右 78.4~91.6），才像真戴上。 */
@@ -569,7 +584,7 @@ window.TD = (function () {
            '<circle cx="85" cy="57" r=".9" fill="#BFE0FF" opacity=".7"/>' +
            '<circle cx="85" cy="60.4" r=".9" fill="#BFE0FF" opacity=".5"/>' +
            '<path d="M96 33l2.5 5.4 5.4 1.1-4.1 4 1 5.5-4.8-2.7" fill="url(#{{p}}gold)"/>' },
-    { id: 'bg-star',  name: '星光舞台',  need: 160, cat: 'suit', price: 400, act: '开心地蹦了两下', box: '4 4 112 112',
+    { id: 'bg-star',  name: '星光舞台',  need: 160, cat: 'suit', price: 1000, act: '开心地蹦了两下', box: '4 4 112 112',
       svg: '<circle cx="60" cy="62" r="53" fill="url(#{{p}}halo)"/>' +
            '<path d="M28 33l2.6 5.8 5.8 2.6-5.8 2.6-2.6 5.8-2.6-5.8-5.8-2.6 5.8-2.6Z" fill="url(#{{p}}gold)"/>' +
            '<path d="M97 43l1.9 4.2 4.2 1.9-4.2 1.9-1.9 4.2-1.9-4.2-4.2-1.9 4.2-1.9Z" fill="url(#{{p}}pink)"/>' +
@@ -579,7 +594,7 @@ window.TD = (function () {
     /* ---- 2026-11-02 新增：补齐「上衣 / 下衣 / 整套」三个部位 ----
        之前八件全是头饰和眼镜，学生换装等于只能换帽子；现在按部位分了
        五类，每个部位都有可选的衣服，才谈得上「搭配」。 */
-    { id: 'vest',     name: '小马甲',   need: 0, cat: 'top', price: 180,
+    { id: 'vest',     name: '小马甲',   need: 0, cat: 'top', price: 450,
       act: '低头整理了一下衣领', box: '30 70 60 40',
       svg: /* 两片前襟 + 后领，中间故意敞开露出肚子 —— 马甲穿在圆身上，
              全包起来会变成一件"背心袋"，反而看不出是衣服。 */
@@ -590,7 +605,7 @@ window.TD = (function () {
            '<path d="M50 82v20M70 82v20" stroke="#3C5B8A" stroke-opacity=".35" stroke-width="1.4" stroke-linecap="round"/>' +
            '<circle cx="60" cy="87" r="1.7" fill="url(#{{p}}gold)"/>' +
            '<circle cx="60" cy="95" r="1.7" fill="url(#{{p}}gold)"/>' },
-    { id: 'overall',  name: '背带裤',   need: 0, cat: 'bottom', price: 220,
+    { id: 'overall',  name: '背带裤',   need: 0, cat: 'bottom', price: 550,
       act: '得意地拍了拍裤兜', box: '34 72 52 42',
       svg: /* 裤体压在身体下半 + 两条背带跨过肩膀：背带是"背带裤"三个字
              唯一的辨识点，少了它就和一条蓝围裙没区别。 */
@@ -602,7 +617,7 @@ window.TD = (function () {
            '<circle cx="46" cy="93.4" r="1.7" fill="url(#{{p}}gold)"/>' +
            '<circle cx="74" cy="93.4" r="1.7" fill="url(#{{p}}gold)"/>' +
            '<path d="M41 96v10" stroke="#8FB6E8" stroke-opacity=".45" stroke-width="1.6" stroke-linecap="round"/>' },
-    { id: 'skirt',    name: '百褶裙',   need: 0, cat: 'bottom', price: 220,
+    { id: 'skirt',    name: '百褶裙',   need: 0, cat: 'bottom', price: 550,
       act: '转了半圈，裙摆飘起来', box: '30 85 60 32',
       svg: /* 腰头 + 展开的裙摆 + 五道褶线：褶线是百褶裙的命，画成
              一整片就是围裙。 */
@@ -610,7 +625,7 @@ window.TD = (function () {
            '<path d="M42 94h36l6.6 14.4q-24.6 7.4-49.2 0Z" fill="url(#{{p}}pink)"/>' +
            '<path d="M48 95.5l-2.6 13.6M54 95.5l-1.2 14.4M60 95.5v14.8M66 95.5l1.2 14.4M72 95.5l2.6 13.6" stroke="#C8558A" stroke-opacity=".28" stroke-width="1.5" stroke-linecap="round"/>' +
            '<path d="M44.5 96.6l-3.4 9.6" stroke="#fff" stroke-opacity=".5" stroke-width="2" stroke-linecap="round"/>' },
-    { id: 'robe',     name: '博士袍',   need: 0, cat: 'suit', price: 320,
+    { id: 'robe',     name: '博士袍',   need: 0, cat: 'suit', price: 800,
       act: '清了清嗓子，装成小博士', box: '26 66 68 46',
       svg: /* 整套服：一件盖住上半身和下半身的长袍，配 V 领和金色前襟。
              与上衣/下衣互斥 —— 穿整套时不用再挑上下装。 */
@@ -621,7 +636,34 @@ window.TD = (function () {
            '<path d="M36.5 95h47" stroke="#16263F" stroke-opacity=".45" stroke-width="3"/>' +
            '<rect x="55" y="92.6" width="10" height="5" rx="1.6" fill="url(#{{p}}gold)" opacity=".9"/>' +
            '<path d="M35 84q-2.6 5-2.6 10" stroke="#8FB6E8" stroke-opacity=".38" stroke-width="2.2" fill="none" stroke-linecap="round"/>' +
-           '<path d="M45 100.5v9M75 100.5v9" stroke="#16263F" stroke-opacity=".3" stroke-width="2" stroke-linecap="round"/>' }
+           '<path d="M45 100.5v9M75 100.5v9" stroke="#16263F" stroke-opacity=".3" stroke-width="2" stroke-linecap="round"/>' },
+
+    /* ---- 2026-11-05 新增三件（经济系统扩容）：补齐头饰 / 面饰 / 领口部位的
+       可选项。价格已随全店涨价同步抬高（与 typing_store.py DECO_PRICE 一致）。 */
+    { id: 'cap',      name: '棒球帽',   need: 0, cat: 'head', price: 320,
+      act: '压了压帽檐，蓄力待发', box: '28 6 76 40',
+      svg: '<path d="M36 35c0-15 10-24 24-24s24 9 24 24Z" fill="url(#{{p}}blue)"/>' +
+           '<path d="M44 28c3-9 9-13 16-13" stroke="#fff" stroke-opacity=".5" stroke-width="3.2" fill="none" stroke-linecap="round"/>' +
+           '<rect x="33" y="32" width="54" height="7" rx="3.5" fill="url(#{{p}}blueDark)"/>' +
+           '<path d="M84 35q13 1 15 6-9 4-17 2Z" fill="url(#{{p}}blueDark)"/>' +
+           '<circle cx="60" cy="14" r="3.6" fill="url(#{{p}}cream)"/>' +
+           '<ellipse cx="44" cy="34" rx="12" ry="1.8" fill="#fff" fill-opacity=".24"/>' },
+    { id: 'earmuffs', name: '雪绒耳罩', need: 0, cat: 'face', price: 260,
+      act: '耳朵暖暖的，心里也暖暖的', box: '18 22 84 40',
+      svg: '<path d="M34 52q0-25 26-25t26 25" fill="none" stroke="url(#{{p}}blueDark)" stroke-width="5" stroke-linecap="round"/>' +
+           '<path d="M36 49q2-20 24-20" stroke="#fff" stroke-opacity=".5" stroke-width="1.8" fill="none" stroke-linecap="round"/>' +
+           '<circle cx="30" cy="54" r="9.6" fill="url(#{{p}}cream)"/>' +
+           '<circle cx="90" cy="54" r="9.6" fill="url(#{{p}}cream)"/>' +
+           '<circle cx="27" cy="50.5" r="3" fill="#fff" fill-opacity=".6"/>' +
+           '<circle cx="87" cy="50.5" r="3" fill="#fff" fill-opacity=".6"/>' +
+           '<circle cx="33" cy="58" r="1.4" fill="#D9C8A6" opacity=".7"/>' +
+           '<circle cx="93" cy="58" r="1.4" fill="#D9C8A6" opacity=".7"/>' },
+    { id: 'bowtie',   name: '小红领结', need: 0, cat: 'top', price: 280,
+      act: '精神抖擞地立正站好', box: '40 64 40 24',
+      svg: '<path d="M60 76c-7-6-16-7-20-3-3 3-1 9 5 11 5 2 11 0 15-4Z" fill="url(#{{p}}red)"/>' +
+           '<path d="M60 76c7-6 16-7 20-3 3 3 1 9-5 11-5 2-11 0-15-4Z" fill="url(#{{p}}red)"/>' +
+           '<rect x="55.5" y="71.5" width="9" height="9" rx="3" fill="url(#{{p}}redDark)"/>' +
+           '<ellipse cx="57.5" cy="73.5" rx="2" ry="1.4" fill="#fff" fill-opacity=".6"/>' }
   ];
 
   /* ---------------- 装扮部位（同类互斥） ----------------
@@ -666,20 +708,64 @@ window.TD = (function () {
      所以四个道具全部只作用于「提示 / 限时 / 通关线 / 金币」，
      没有一件能改星级速度线 —— 想拿 2 星 3 星，手速还是得自己练出来。 */
   var ITEMS = [
-    { id: 'hint',   name: '指法提示卡', icon: '💡', price: 15, max: 3,
+    { id: 'hint',   name: '指法提示卡', icon: '💡', price: 30, max: 3,
       desc: '本关键盘与指法图常亮提示，找不到键时不用低头',
       tip: '不改星级，只是把提示留在屏幕上' },
-    { id: 'extra',  name: '加时卡',     icon: '⏳', price: 20, max: 3,
+    { id: 'extra',  name: '加时卡',     icon: '⏳', price: 45, max: 3,
       desc: '本关限时延长一半，慢慢打也来得及',
       tip: '限时只防卡死，速度线不变' },
-    { id: 'shield', name: '容错卡',     icon: '🛡', price: 35, max: 2,
+    { id: 'shield', name: '容错卡',     icon: '🛡', price: 80, max: 2,
       desc: '本关准确率 87% 也算通关，先过关再说',
       tip: '只放宽一星通关线，2 星 3 星标准一点没降' },
-    { id: 'double', name: '加倍卡',     icon: '✨', price: 25, max: 2,
+    { id: 'double', name: '加倍卡',     icon: '✨', price: 60, max: 2,
       desc: '本关金币翻倍，多练一会儿更划算',
       tip: '不影响星级与速度线' }
   ];
   function itemById(id) { for (var i = 0; i < ITEMS.length; i++) if (ITEMS[i].id === id) return ITEMS[i]; return null; }
+
+  /* ---------------- 牧场背景（金币购买，2026-11-05） ----------------
+     css 会整段写进牧场舞台 .stage-box 的 background —— 纯 CSS 渐变，
+     零外部资源。默认背景 '' 不收钱，人人都有；
+     其余按价格从草原到宇宙排，越贵越「远」。 */
+  var BACKGROUNDS = [
+    { id: '',        name: '默认暖光台', price: 0,
+      css: 'radial-gradient(118% 92% at 50% 6%,#FFFAF1 0%,#FBE9D7 46%,#F1D9C4 100%)' },
+    { id: 'meadow',  name: '青青草原', price: 200,
+      css: 'linear-gradient(180deg, #BFE6FF 0%, #D8F2D0 55%, #A8DB8E 100%)' },
+    { id: 'beach',   name: '阳光沙滩', price: 350,
+      css: 'linear-gradient(180deg, #8FD4FF 0%, #CBEFFF 45%, #FDEBB0 72%, #F0CE7E 100%)' },
+    { id: 'night',   name: '萤火星夜', price: 500,
+      css: 'radial-gradient(90% 70% at 50% 100%, #274A6D 0%, #16304F 55%, #0C1D33 100%)' },
+    { id: 'candy',   name: '糖果城堡', price: 800,
+      css: 'linear-gradient(160deg, #FFD9EC 0%, #E7C6FF 45%, #C3AEFF 100%)' },
+    { id: 'space',   name: '太空漫游', price: 1200,
+      css: 'radial-gradient(80% 60% at 30% 20%, #2A3A66 0%, #131C36 55%, #070B18 100%)' }
+  ];
+  function bgById(id) {
+    for (var i = 0; i < BACKGROUNDS.length; i++) if (BACKGROUNDS[i].id === (id || '')) return BACKGROUNDS[i];
+    return BACKGROUNDS[0];
+  }
+
+  /* ---------------- 出战特效（积分购买，2026-11-05） ----------------
+     参考 QQ 头像动态挂件：粒子 / 光环 / 全屏氛围三类，全部 CSS 动画实现
+     （学生.html 里 .stage-fx.fx-<id> 定义具体动画），零图片零外部资源。
+     积分靠打出好成绩攒（关卡越难积分越高），特效是全店最贵的奢侈品，
+     排面天花板。 */
+  var EFFECTS = [
+    { id: 'sparkle', name: '星光闪烁',  price: 200, icon: '✨',
+      desc: '伙伴身边星星一闪一闪' },
+    { id: 'bubbles', name: '梦幻泡泡',  price: 400, icon: '🫧',
+      desc: '泡泡从伙伴身边缓缓升起' },
+    { id: 'hearts',  name: '爱心环绕',  price: 650, icon: '💖',
+      desc: '粉红爱心围着伙伴转圈圈' },
+    { id: 'snow',    name: '漫天雪花',  price: 900, icon: '❄️',
+      desc: '细雪落在牧场舞台上' },
+    { id: 'rainbow', name: '彩虹光环',  price: 1400, icon: '🌈',
+      desc: '头顶一道旋转的彩虹光环' },
+    { id: 'aurora',  name: '极光帷幕',  price: 2000, icon: '🌌',
+      desc: '整个舞台流动着绿紫色极光' }
+  ];
+  function effectById(id) { for (var i = 0; i < EFFECTS.length; i++) if (EFFECTS[i].id === id) return EFFECTS[i]; return null; }
 
   /* ---------------- 称号（总星数升级） ---------------- */
   var TITLES = [
@@ -1311,6 +1397,8 @@ window.TD = (function () {
     S8_MAP: S8_MAP, S8_TOPIC: S8_TOPIC,
     PETS: PETS, DECOS: DECOS, TITLES: TITLES, PET_DEFAULT_NAME: PET_DEFAULT_NAME,
     DECO_CATS: DECO_CATS, ITEMS: ITEMS,
+    BACKGROUNDS: BACKGROUNDS, EFFECTS: EFFECTS,
+    bgById: bgById, effectById: effectById,
     STAR_RULE: STAR_RULE, GRADES: GRADES, GRADE_GROUP: GRADE_GROUP,
     petById: petById, decoById: decoById, titleFor: titleFor,
     catName: catName, slotClash: slotClash, equipDeco: equipDeco, itemById: itemById,

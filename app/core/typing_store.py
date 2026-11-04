@@ -32,26 +32,43 @@ DECO_NEEDS = [10, 20, 40, 60, 80, 100, 130, 160]
 # 同一部位只能穿一件；整套（suit）同时占上衣和下衣。
 DECO_CAT = {
     "hat-red": "head", "crown": "head", "bow": "head", "headset": "head",
-    "sunglass": "face", "glasses": "face",
-    "scarf": "top", "vest": "top",
+    "cap": "head",
+    "sunglass": "face", "glasses": "face", "earmuffs": "face",
+    "scarf": "top", "vest": "top", "bowtie": "top",
     "overall": "bottom", "skirt": "bottom",
     "bg-star": "suit", "robe": "suit",
 }
 
 # 装扮售价（与 typing-data.js 的 DECOS.price 一致）
 # 价格只在这里生效 —— 客户端传来的 price 一律不认，否则改一下请求就能白拿。
+# 2026-11-05 经济系统收紧：全店涨价（约 2.5 倍），金币收入同步调低。
 DECO_PRICE = {
-    "hat-red": 60, "crown": 120, "sunglass": 160, "glasses": 150,
-    "scarf": 200, "vest": 180, "overall": 220, "skirt": 220,
-    "bow": 260, "headset": 300, "robe": 320, "bg-star": 400,
+    "hat-red": 150, "crown": 300, "sunglass": 400, "glasses": 380,
+    "scarf": 500, "vest": 450, "overall": 550, "skirt": 550,
+    "bow": 650, "headset": 750, "robe": 800, "bg-star": 1000,
+    "cap": 320, "earmuffs": 260, "bowtie": 280,
 }
 
 # 道具价格与携带上限（与 typing-data.js 的 ITEMS 一致）
 ITEMS = {
-    "hint":   {"price": 15, "max": 3},
-    "extra":  {"price": 20, "max": 3},
-    "shield": {"price": 35, "max": 2},
-    "double": {"price": 25, "max": 2},
+    "hint":   {"price": 30, "max": 3},
+    "extra":  {"price": 45, "max": 3},
+    "shield": {"price": 80, "max": 2},
+    "double": {"price": 60, "max": 2},
+}
+
+# 牧场背景售价（金币，与 typing-data.js 的 BACKGROUNDS 一致）
+# '' 是默认草地，免费，不在表里 = 不可买也不需要买。
+BG_PRICE = {
+    "meadow": 200, "beach": 350, "night": 500,
+    "candy": 800, "space": 1200,
+}
+
+# 出战特效售价（积分，与 typing-data.js 的 EFFECTS 一致）
+# 特效是全店最贵的奢侈品：1 星积分在基础篇章为 0，攒 2000 分要打很久。
+EFFECT_PRICE = {
+    "sparkle": 200, "bubbles": 400, "hearts": 650,
+    "snow": 900, "rainbow": 1400, "aurora": 2000,
 }
 
 DEFAULT_RECORD = {
@@ -61,11 +78,15 @@ DEFAULT_RECORD = {
     "pets": [],            # 已拥有宠物 id
     "decos": [],           # 已解锁装扮 id
     "eggs": 0,             # 待孵化宠物蛋
-    "equip": {"pet": "", "decos": []},
+    "equip": {"pet": "", "decos": [], "bg": "", "fx": ""},
     "coins": 0,
+    "pts": 0,              # 积分（2026-11-05）：只用于购买特效
+    "bgs": [],             # 已拥有牧场背景 id
+    "effects": [],         # 已拥有特效 id
     "items": {},           # 道具库存 {hint:1, extra:2...}
     "pending": {},         # 已用但尚未结算的道具（double / shield）
-    "daily": {"d": "", "n": {}},   # 当天重复练习计次（防刷金币）
+    "daily": {"d": "", "n": {}},   # 当天重复练习计次（防刷金币/积分）
+    "draft": None,         # 练习中断草稿（教师关闭练习时学生进度不丢）
     "updated": 0
 }
 
@@ -73,15 +94,33 @@ DEFAULT_RECORD = {
 def coins_for(stars, level, repeat):
     """每关金币（与 levels.js 的 coinsFor 完全一致，两边必须同步改）
 
-    原来的「星数×10」让 1 星和 3 星差三倍，学生会为了金币反复刷同一个
-    三星关。现在首通 8+星×4（12/16/20），差距收窄；重复练固定 3，
-    且同一关每天只结算一次重复奖励 —— 承认「你又练了一遍」，但不鼓励刷。
+    2026-11-05 二次收紧：全店涨价后金币必须更难赚 ——
+      · 1 星不发金币（想赚钱打出 2 星以上）；
+      · 首通 2 星 5 / 3 星 8，BOSS 首通再 +5；
+      · 重复练每天每关只结算一次，2 金币（BOSS 3）。
     """
     if not stars:
         return 0
     if repeat:
-        return 3 + (5 if level == 10 else 0)
-    return 8 + stars * 4 + (15 if level == 10 else 0)
+        return 3 if level == 10 else 2
+    if stars < 2:
+        return 0
+    return (8 if stars >= 3 else 5) + (5 if level == 10 else 0)
+
+
+def pts_for(stars, stage, chapter, repeat):
+    """每关积分（与 levels.js 的 ptsFor 完全一致，两边必须同步改）
+
+    积分只用于购买特效（全店最贵）。难度越大越值钱：
+    基础键位篇（stage 1）为 0 分，防止刷基础关；
+    卷数每推进一卷 +1 分。重复练每天一次 1 分（需 2 星）。
+    """
+    if not stars:
+        return 0
+    if repeat:
+        return 1 if stars >= 2 else 0
+    table = {1: 0, 2: 1, 3: 1, 4: 1, 5: 2, 6: 2, 7: 1, 8: 2}
+    return stars * table.get(int(stage), 1) + max(0, int(chapter) - 1)
 
 
 def week_key(ts=None):
@@ -188,6 +227,7 @@ class TypingStore:
                         or (stars == prev["stars"] and wpm > prev["wpm"]))
             gained = 0
             coins = 0
+            pts = 0
             rewards = {"egg": False, "decos": []}
             if new_best:
                 gained = stars - (prev["stars"] if prev else 0)
@@ -196,6 +236,7 @@ class TypingStore:
                 stu["best"][key] = {"wpm": wpm, "acc": round(acc, 1),
                                     "stars": stars, "ts": int(time.time())}
                 coins = coins_for(stars, level, False)
+                pts = pts_for(stars, stage, chapter, False)
                 wk = week_key()
                 if stu["week"].get("k") != wk:
                     stu["week"] = {"k": wk, "stars": 0}
@@ -215,16 +256,23 @@ class TypingStore:
                         owned.append(did)
                         rewards["decos"].append(did)
             elif stars > 0:
-                # 重复练习：同一关每天只结算一次保底金币，刷不出币来
+                # 重复练习：同一关每天只结算一次保底金币/积分，刷不出币来
                 n = d["n"]
                 if n.get(key, 0) < 1:
                     n[key] = n.get(key, 0) + 1
                     coins = coins_for(stars, level, True)
+                    pts = pts_for(stars, stage, chapter, True)
             if coins:
                 # 加倍卡：本关金币 ×2（由 use_item 记在 pending 上，用完即清）
                 if pending.get("double"):
                     coins *= 2
                 stu["coins"] = stu.get("coins", 0) + coins
+            if pts:
+                stu["pts"] = stu.get("pts", 0) + pts
+            # 这一关打完了：练习草稿随之作废（只有草稿还停在「本关没打完」）
+            dr = stu.get("draft")
+            if isinstance(dr, dict) and dr.get("k") == key:
+                stu["draft"] = None
             stu["pending"] = {}
             stu["updated"] = int(time.time())
             try:
@@ -232,7 +280,8 @@ class TypingStore:
             except Exception:
                 pass
             return {"ok": True, "stars": stars, "new_best": new_best,
-                    "gained": gained, "coins_gained": coins, "rewards": rewards,
+                    "gained": gained, "coins_gained": coins, "pts_gained": pts,
+                    "rewards": rewards,
                     "wpm": wpm, "stu": self.summary(stu)}
 
     # ---------------- 学生进度 ----------------
@@ -240,8 +289,10 @@ class TypingStore:
         return {"stars": stu.get("stars", 0), "week_stars": stu["week"].get("stars", 0),
                 "pets": stu.get("pets", []), "decos": stu.get("decos", []),
                 "eggs": stu.get("eggs", 0), "equip": stu.get("equip", {}),
-                "coins": stu.get("coins", 0),
+                "coins": stu.get("coins", 0), "pts": stu.get("pts", 0),
+                "bgs": stu.get("bgs", []), "effects": stu.get("effects", []),
                 "items": stu.get("items", {}),
+                "draft": stu.get("draft"),
                 "best": stu.get("best", {})}
 
     def progress(self, uid):
@@ -278,7 +329,10 @@ class TypingStore:
             self._save()
             return {"ok": True, "pet": pet, "stu": self.summary(stu)}
 
-    def equip(self, uid, pet, decos):
+    def equip(self, uid, pet, decos, bg=None, fx=None):
+        """装备出战阵容：pet + 装扮（部位互斥）+ 牧场背景 bg + 出战特效 fx。
+        bg / fx 只允许穿「衣柜里已有的」；传 None 表示这一项保持不变，
+        传 '' 表示取下来（背景回到默认草地 / 特效关闭）。"""
         with self.lock:
             stu = self._stu(uid)
             if pet and pet not in stu["pets"]:
@@ -305,7 +359,18 @@ class TypingStore:
                         bad = True
                 if not bad:
                     kept.append(d)
-            stu["equip"] = {"pet": pet or "", "decos": kept}
+            ep = stu.get("equip") or {"pet": "", "decos": [], "bg": "", "fx": ""}
+            ep = {"pet": pet or "", "decos": kept,
+                  "bg": ep.get("bg", ""), "fx": ep.get("fx", "")}
+            if bg is not None:
+                if bg and bg not in stu.get("bgs", []):
+                    return {"ok": False, "msg": "还没有这个背景"}
+                ep["bg"] = str(bg)
+            if fx is not None:
+                if fx and fx not in stu.get("effects", []):
+                    return {"ok": False, "msg": "还没有这个特效"}
+                ep["fx"] = str(fx)
+            stu["equip"] = ep
             self._save()
             return {"ok": True, "equip": stu["equip"]}
 
@@ -351,6 +416,52 @@ class TypingStore:
             return {"ok": True, "stu": self.summary(stu), "item": item_id,
                     "count": have + 1}
 
+    def buy_bg(self, uid, bg_id):
+        """用金币买牧场背景，买下即自动换上。价格以服务端 BG_PRICE 为准。"""
+        if bg_id not in BG_PRICE:
+            return {"ok": False, "msg": "没有这个背景"}
+        with self.lock:
+            stu = self._stu(uid)
+            owned = stu.get("bgs", [])
+            if bg_id in owned:
+                return {"ok": False, "msg": "这个背景已经有了"}
+            coins = stu.get("coins", 0)
+            price = BG_PRICE[bg_id]
+            if coins < price:
+                return {"ok": False, "msg": "金币还差 %d 个" % (price - coins)}
+            stu["coins"] = coins - price
+            owned.append(bg_id)
+            stu["bgs"] = owned
+            ep = stu.get("equip") or {}
+            ep["bg"] = bg_id
+            stu["equip"] = ep
+            stu["updated"] = int(time.time())
+            self._save()
+            return {"ok": True, "stu": self.summary(stu), "bg": bg_id}
+
+    def buy_effect(self, uid, fx_id):
+        """用积分买出战特效，买下即自动开启。价格以服务端 EFFECT_PRICE 为准。"""
+        if fx_id not in EFFECT_PRICE:
+            return {"ok": False, "msg": "没有这个特效"}
+        with self.lock:
+            stu = self._stu(uid)
+            owned = stu.get("effects", [])
+            if fx_id in owned:
+                return {"ok": False, "msg": "这个特效已经有了"}
+            pts = stu.get("pts", 0)
+            price = EFFECT_PRICE[fx_id]
+            if pts < price:
+                return {"ok": False, "msg": "积分还差 %d 分，打出好成绩来攒" % (price - pts)}
+            stu["pts"] = pts - price
+            owned.append(fx_id)
+            stu["effects"] = owned
+            ep = stu.get("equip") or {}
+            ep["fx"] = fx_id
+            stu["equip"] = ep
+            stu["updated"] = int(time.time())
+            self._save()
+            return {"ok": True, "stu": self.summary(stu), "fx": fx_id}
+
     def use_item(self, uid, item_id):
         """消耗一个道具（进入关卡时用）。道具只影响本关，不写进档案。"""
         if item_id not in ITEMS:
@@ -372,6 +483,140 @@ class TypingStore:
             self._save()
             return {"ok": True, "stu": self.summary(stu), "item": item_id,
                     "count": have - 1}
+
+    # ---------------- 教师金币管理（2026-11-05） ----------------
+    COIN_LOG_MAX = 500
+
+    def _coin_log(self):
+        log = self.data.get("coin_log")
+        if not isinstance(log, list):
+            log = []
+            self.data["coin_log"] = log
+        return log
+
+    def adjust_coins(self, targets, delta, note, by):
+        """教师对学生（或全班）发放 / 扣除金币。
+
+        targets: [(uid, name), ...] —— 由 server.py 按 roster 解析；
+        delta: 正数发放、负数扣除（余额扣到 0 为止，不出现负数金币）；
+        note: 教师填写的操作说明；by: 操作教师名。
+        每一笔都记进 typing.json 的 coin_log（随快照整体导出导入，
+        换机不丢）；coin_log 只保留最近 500 条，防止无限膨胀。
+        """
+        try:
+            delta = int(delta)
+        except Exception:
+            return {"ok": False, "msg": "金币数不合法"}
+        if delta == 0:
+            return {"ok": False, "msg": "金币数不能为 0"}
+        if abs(delta) > 10000:
+            return {"ok": False, "msg": "一次最多操作 10000 金币"}
+        rows = []
+        with self.lock:
+            log = self._coin_log()
+            for uid, name in targets:
+                # 没练过的同学也必须发到：_stu 会把默认档案建出来，
+                # 等他第一次打开牧场时就能看到老师发的金币
+                stu = self._stu(str(uid))
+                before = stu.get("coins", 0)
+                after = max(0, before + delta)
+                real = after - before
+                stu["coins"] = after
+                stu["updated"] = int(time.time())
+                rows.append({"uid": str(uid), "name": name,
+                             "before": before, "after": after, "delta": real})
+                log.append({"ts": int(time.time()), "by": str(by or "老师"),
+                            "uid": str(uid), "name": name,
+                            "delta": real, "note": str(note or "")})
+            if len(log) > self.COIN_LOG_MAX:
+                del log[:len(log) - self.COIN_LOG_MAX]
+            if rows:
+                try:
+                    self._save()
+                except Exception:
+                    pass
+        if not rows:
+            return {"ok": False, "msg": "这个班里没有学生档案"}
+        return {"ok": True, "count": len(rows), "rows": rows}
+
+    def coin_log(self, limit=100):
+        """最近的金币操作记录（新的在前）。"""
+        with self.lock:
+            log = self.data.get("coin_log")
+            if not isinstance(log, list):
+                return []
+            return list(reversed(log[-int(limit):]))
+
+    def students_coins(self, uids):
+        """按 roster 顺序取每个学生的金币 / 积分余额（没有档案的按 0 算）。"""
+        out = []
+        with self.lock:
+            for uid, name, student_no in uids:
+                stu = self.data["students"].get(str(uid)) or {}
+                out.append({"id": str(uid), "name": name, "student_no": student_no,
+                           "coins": stu.get("coins", 0), "pts": stu.get("pts", 0)})
+        return out
+
+    # ---------------- 练习草稿（教师关闭练习时进度不丢，2026-11-05） ----
+    def save_draft(self, uid, body):
+        """学生端练习中自动保存的「当前关卡草稿」。
+
+        关键设计：教师把打字练习关掉时，record 接口会拒收，
+        但 draft 必须照收 —— 关练习恰恰是学生最需要存档的时刻。
+        text 存的是引擎此刻正在打的那份文本，恢复时直接还原，
+        随机生成的关卡也能续上原来那份内容。
+        """
+        if body.get("clear"):
+            # 学生主动「从头开始」：清掉这一关的草稿
+            with self.lock:
+                stu = self._stu(uid)
+                stu["draft"] = None
+                try:
+                    self._save()
+                except Exception:
+                    pass
+            return {"ok": True, "cleared": True}
+        try:
+            stage = int(body.get("stage", 0))
+            chapter = int(body.get("chapter", 0))
+            level = int(body.get("level", 0))
+            idx = int(body.get("idx", 0))
+        except Exception:
+            return {"ok": False, "msg": "草稿数据不完整"}
+        if not (1 <= stage <= 8) or chapter < 1 or not (1 <= level <= 10):
+            return {"ok": False, "msg": "关卡不存在"}
+        text = str(body.get("text") or "")
+        if not text or idx < 0 or idx > len(text):
+            return {"ok": False, "msg": "草稿内容为空"}
+        key = "s%dc%dl%d" % (stage, chapter, level)
+        draft = {"k": key, "stage": stage, "chapter": chapter, "level": level,
+                 "idx": idx,
+                 "err": int(body.get("err", 0) or 0),
+                 "keys": int(body.get("keys", 0) or 0),
+                 "dur": float(body.get("dur", 0) or 0),
+                 "lines": body.get("lines") or None,
+                 "text": text[:30000],
+                 "ts": int(time.time())}
+        with self.lock:
+            stu = self._stu(uid)
+            old = stu.get("draft")
+            # 只往前走：草稿回退（重打本关开头）时不覆盖更靠前的进度
+            if (isinstance(old, dict) and old.get("k") == key
+                    and old.get("idx", 0) > idx):
+                return {"ok": True, "kept": True}
+            stu["draft"] = draft
+            try:
+                self._save()
+            except Exception:
+                pass
+        return {"ok": True}
+
+    def clear_draft(self, uid):
+        with self.lock:
+            stu = self._stu(uid)
+            stu["draft"] = None
+            self._save()
+        return {"ok": True}
 
     # ---------------- 教师练习成绩（2026-11-03） ----------------
     def teacher_record(self, cid, name, body):
@@ -451,6 +696,11 @@ class TypingStore:
         out = {}
         with self.lock:
             for uid, stu in self.data["students"].items():
+                # 2026-11-05：教师给全班发金币也会把没练过的学生档案建出来
+                #（否则他们第一次打开牧场看不到余额）。这些 0 星档案
+                # 不能进排行榜 —— 保持「练过才上榜」的原有口径。
+                if not stu.get("best") and not stu.get("stars"):
+                    continue
                 if scope == "week":
                     v = stu["week"]["stars"] if stu.get("week", {}).get("k") == wk else 0
                 elif scope == "speed":

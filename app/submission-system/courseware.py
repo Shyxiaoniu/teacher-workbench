@@ -329,7 +329,7 @@ _S = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
 _R = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"
 
 
-def _docx_html(path):
+def _docx_html(path, cover=False):
     with zipfile.ZipFile(path) as z:
         xml = z.read("word/document.xml")
     tree = ET.fromstring(xml)
@@ -383,6 +383,16 @@ def _docx_html(path):
                     cells.append("<td>%s</td>" % (txt or "&nbsp;"))
                 rows.append("<tr>%s</tr>" % "".join(cells))
             ps.append("<table>%s</table>" % "".join(rows))
+    if cover:
+        # 封面只要「开头一小段」：标题 + 前 3 段，够认出是哪份文档
+        keep = []
+        for blk in ps:
+            if blk == '<div class="p-gap"></div>' and keep:
+                continue
+            keep.append(blk)
+            if len(keep) >= 4:
+                break
+        return "\n".join(keep) or "<p>（文档没有可显示的内容）</p>"
     return "\n".join(ps) or "<p>（文档没有可显示的内容）</p>"
 
 
@@ -405,7 +415,7 @@ def _col_index(ref):
     return n
 
 
-def _xlsx_html(path):
+def _xlsx_html(path, cover=False):
     with zipfile.ZipFile(path) as z:
         names = z.namelist()
         shared = []
@@ -463,14 +473,19 @@ def _xlsx_html(path):
                 continue
             head = rows[0]
             body = rows[1:]
+            if cover:
+                # 封面：只画第一张表的前 4 行，小卡片上不至于糊成一团
+                body = body[:3]
             out.append('<div class="sheet"><h3>%s</h3><div class="tblwrap"><table><tr>%s</tr>%s</table></div></div>'
                        % (html.escape(sname),
                           "".join("<th>%s</th>" % html.escape(x) for x in head),
                           "".join("<tr>%s</tr>" % "".join("<td>%s</td>" % html.escape(x) for x in r) for r in body)))
+            if cover:
+                break
         return "".join(out) or "<p>（表格是空的）</p>"
 
 
-def _pptx_html(path):
+def _pptx_html(path, cover=False):
     with zipfile.ZipFile(path) as z:
         slides = [n for n in z.namelist()
                   if re.match(r"ppt/slides/slide\d+\.xml$", n)]
@@ -485,6 +500,13 @@ def _pptx_html(path):
                     paras.append(t)
             if not paras:
                 continue
+            if cover:
+                # 封面 = 第一页。只留标题 + 最多 3 行正文（副标题/日期那种），
+                # 卡片缩略图要的是"这是哪份课件"的第一眼印象，不是全篇文字。
+                out.append('<div class="slide cover-slide"><h1>%s</h1>%s</div>'
+                           % (html.escape(paras[0]),
+                              "".join("<p>%s</p>" % html.escape(x) for x in paras[1:4])))
+                break
             title = paras[0]
             rest = paras[1:]
             out.append('<div class="slide"><div class="slide-no">第 %d 页</div><h3>%s</h3>%s</div>'
@@ -550,6 +572,39 @@ def _md_html(text):
     return "\n".join(out)
 
 
+PREVIEW_COVER_CSS = """
+/* 封面模式（2026-11-05）：只给卡片缩略图用。设计稿 430×260，
+   前端整体 scale(.4) 成 172×104 —— 所以这里按 430×260 排版，不滚动。 */
+html,body.cover{width:100%;height:100%;overflow:hidden}
+body.cover{margin:0;padding:0;max-width:none;display:flex;align-items:stretch;
+  background:#F6FBF9;font-size:15px;line-height:1.5}
+body.cover>div,body.cover>.slide{flex:1 1 auto;min-width:0}
+body.cover h1{font-size:27px;line-height:1.25;margin:0 0 10px;color:#0F6E56}
+body.cover h3{font-size:20px;margin:0 0 8px;color:#0F6E56}
+body.cover p{font-size:15px;line-height:1.55;margin:4px 0;color:#3C4A45;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+body.cover table{font-size:13px}
+body.cover .note{display:none}
+/* PPT 封面：整块深绿渐变 + 居中标题，像一张真封面 */
+body.cover .cover-slide{position:relative;border:0;border-radius:0;margin:0;
+  padding:34px 32px;display:flex;flex-direction:column;justify-content:center;
+  background:linear-gradient(135deg,#0F6E56 0%,#12876A 55%,#1AA37F 100%)}
+body.cover .cover-slide::after{content:'';position:absolute;right:-40px;bottom:-52px;
+  width:190px;height:190px;border-radius:50%;background:rgba(255,255,255,.09)}
+body.cover .cover-slide h1{color:#fff;font-size:28px;margin:0 0 12px;
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+body.cover .cover-slide p{color:rgba(255,255,255,.86);font-size:15px;margin:3px 0;
+  -webkit-line-clamp:1}
+/* 文档/表格封面：白底 + 顶部品牌色细条，露出一小段正文就够认 */
+body.cover .sheet{padding:22px 24px}
+body.cover .sheet+.sheet{display:none}
+body.cover>.p-gap{display:none}
+body.cover h1,body.cover p,body.cover table{margin-top:0}
+html.dark body.cover{background:#0B1210}
+html.dark body.cover h1,html.dark body.cover h3{color:#7FD9B8}
+html.dark body.cover p{color:#C9D6D1}
+"""
+
 PREVIEW_CSS = """
 :root{color-scheme:light dark}
 *{box-sizing:border-box}
@@ -593,8 +648,13 @@ html.dark .note{background:#2A2114;border-color:#6B5220;color:#E8C98A}
 """
 
 
-def preview_html(full, name, dark=False):
-    """把文件内容包成一张完整的 HTML 页（iframe 里显示，样式与主题隔离）"""
+def preview_html(full, name, dark=False, cover=False):
+    """把文件内容包成一张完整的 HTML 页（iframe 里显示，样式与主题隔离）
+
+    cover=True：只给「封面」—— 卡片缩略图用。Office 只取第一页内容，
+    不放提示条、不滚动；网页/PDF 这类原本就内嵌原文件的，只按首屏裁切。
+    这样 172px 的小卡片里看到的是一页干净的封面，而不是整篇文档的文字墙。
+    """
     e = ext_of(name)
     kind = kind_of(name)
     body = ""
@@ -602,12 +662,13 @@ def preview_html(full, name, dark=False):
     if kind == "office":
         try:
             if e == "docx":
-                body = _docx_html(full)
+                body = _docx_html(full, cover=cover)
             elif e == "xlsx":
-                body = _xlsx_html(full)
+                body = _xlsx_html(full, cover=cover)
             else:
-                body = _pptx_html(full)
-            note = "这是<b>内容预览</b>：文字、表格、幻灯片内容都能看，复杂排版（分栏、艺术字、动画）会简化。要看原样请点右上角「下载原件」。"
+                body = _pptx_html(full, cover=cover)
+            if not cover:
+                note = "这是<b>内容预览</b>：文字、表格、幻灯片内容都能看，复杂排版（分栏、艺术字、动画）会简化。要看原样请点右上角「下载原件」。"
         except Exception as ex:
             body = "<p>解析失败：%s</p>" % html.escape(str(ex))
             note = "这个文件可能已损坏，或不是标准的 Office 文件。"
@@ -621,8 +682,9 @@ def preview_html(full, name, dark=False):
         body = "<p>这个文件类型不支持内容预览。</p>"
     return ("<!doctype html><html lang=\"zh-CN\"%s><head><meta charset=\"utf-8\">"
             "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
-            "<style>%s</style></head><body>%s%s</body></html>"
-            % (' class="dark"' if dark else "", PREVIEW_CSS,
+            "<style>%s</style></head><body%s>%s%s</body></html>"
+            % (' class="dark"' if dark else "", PREVIEW_CSS + (PREVIEW_COVER_CSS if cover else ""),
+               ' class="cover"' if cover else "",
                ('<div class="note">%s</div>' % note) if note else "", body))
 
 
