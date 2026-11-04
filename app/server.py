@@ -98,7 +98,7 @@ CFG["update"].setdefault("interval_hours", 24) # 检查间隔（小时）
 PET_IDS = ["cat", "dog", "rabbit", "penguin", "panda", "dino", "unicorn", "dragon"]
 COND = threading.Condition()
 STARTED = time.time()
-VERSION = "2.0"
+VERSION = "2.0.1"
 ONLINE_WINDOW = 300      # 5 分钟内活跃算在线
 # 可内联直出的附件类型（其余一律按下载处理，防止同源执行脚本）
 _INLINE_EXTS = {"png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "pdf",
@@ -908,12 +908,6 @@ class Handler(LEG.Handler):
             # 课堂活动附件：URL 就是 /static/uploads/<活动>/<文件>，
             # 大屏、课件库归档、自定义页面都按这个前缀取，所以必须可访问。
             if path.startswith("/static/uploads/"):
-                return self._act_file(path)
-            # 兼容旧数据（2026-11-04）：QuickForm 时代的提交把附件地址存成
-            # /qf/static/uploads/…，QF 移除后这个前缀没了路由，历史提交的
-            # 预览图在大屏/作品页全部 404。file_path 本来就认旧前缀，这里
-            # 把路由也补上，新旧记录都能正常显示。
-            if path.startswith("/qf/static/uploads/"):
                 return self._act_file(path)
             if path.startswith("/teacher/"):
                 return self._teacher_static(path[len("/teacher/"):])

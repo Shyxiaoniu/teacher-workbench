@@ -3,7 +3,7 @@
 > 给班主任和任课老师用的一套**班级工作台**：教师端与学生端共用一个网页入口，
 > 数据全部存在自己的服务器上，不依赖任何第三方云服务。
 
-当前版本：**2.0**（版本号唯一代码源：`app/server.py` 的 `VERSION`）
+当前版本：**2.0.1**（版本号唯一代码源：`app/server.py` 的 `VERSION`）
 
 ```
 http://<服务器局域网 IP>:8080/        ← Docker 部署的入口；直接运行时是 :20020
@@ -298,7 +298,7 @@ docker compose up -d --build
 - 票据只存内存（重启即失效，学生重开一次学习单即可），默认 12 小时有效；
 - 学习单页面统一部署在 `/submit/custom.html?task=<任务号>`，页面存提交服务 `custom_templates`，改版随「下发」强制部署，该页 `Cache-Control: no-store`；
 - 签到闸门：今天一笔有效签到都没有（或缺勤）→ 学习单打不开，先回学生端签到；
-- 活动管理接口（教师端专用，走 `/api/v2/teacher/activity/*`）支持列表 / 导出 CSV·JSON / 删除 / 清空；旧 QuickForm 已移除，历史附件的 `/qf/static/uploads/` 前缀仍可预览。
+- 活动管理接口（教师端专用，走 `/api/v2/teacher/activity/*`）支持列表 / 导出 CSV·JSON / 删除 / 清空。
 
 ---
 
@@ -365,7 +365,7 @@ docker compose up -d --build
 
 | # | 文件 | 位置 |
 |---|---|---|
-| 1 | `app/server.py` | `VERSION = "2.0"` —— **唯一代码源** |
+| 1 | `app/server.py` | `VERSION = "2.0.1"` —— **唯一代码源** |
 | 2 | `.env.example` | `IMAGE_TAG=2.0` |
 | 3 | `docker-compose.yml` | `image: …:${IMAGE_TAG:-2.0}`（init 与 workbench **两处**） |
 | 4 | `README.md` | 文首「当前版本」 |
@@ -374,7 +374,9 @@ docker compose up -d --build
 不要跟着改的「版本」：`app/core/store.py` 的 `SCHEMA_VERSION`（表结构版本）、
 `app/backup.js` 的 `VER`（备份格式版本）。
 
-版本规则：主版本 = 数据表破坏性变更；次版本 = 新功能，数据完全兼容。
+版本规则（2026-11-04 定版）：以 **2.0** 为基线，**每次改动更新都在后面追加序号**
+（2.0.1 → 2.0.2 → 2.0.3 …），便于逐次追踪；主版本 / 次版本号只在数据表破坏性
+变更或大改版时才动。`app/updater.py::vtuple` 按段比较数字，2.0.1 > 2.0 判定天然成立。
 
 ### 发行包
 
@@ -455,8 +457,6 @@ python tools/make_release.py        # 构建发行包
 
 ### 第三方组件与许可声明
 
-- 早期版本曾集成 QuickForm（MIT，© 谢作如）作为课堂活动后端；自 2026-11-03 起
-  课堂活动由本项目自研实现，QuickForm 源码不再随本项目分发，相应许可义务终止。
 - Docker 基础镜像 `python:3.12-slim`（工作台主服务）与 `nginx:1.27-alpine`（统一入口网关）：
   基于 Debian，含 GPL/LGPL 组件（glibc、bash 等）。容器镜像属于「聚合」而非「衍生作品」，
   本项目源码的 MIT 许可不会传导到镜像内的 GPL 组件，反之亦然；仅在容器内使用、

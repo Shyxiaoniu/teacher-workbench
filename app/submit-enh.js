@@ -150,7 +150,7 @@
 
   function card(html) {
     return '<div class="se-card"><div class="se-h"><span class="n">④</span>提交设置</div>' +
-      '<div class="qf-muted">' + html + '</div></div>';
+      '<div class="se-muted">' + html + '</div></div>';
   }
 
   /* ---------------- 主卡片 ---------------- */
@@ -182,7 +182,7 @@
           (tpl.version
             ? E(tpl.name || '未命名') + ' · <b>' + nf + ' 个字段</b> · v' + tpl.version
             : '<b>还没配模板</b>（学生填的是经典表单：学号 / 姓名 / 标题 / 简介 / 文件）') +
-          '<div class="qf-muted">决定学生要填什么；改模板不影响已交的数据。</div>',
+          '<div class="se-muted">决定学生要填什么；改模板不影响已交的数据。</div>',
           '<button class="btn btn-ghost btn-sm" onclick="seOpenTpl()">编辑模板</button>' +
           '<button class="btn btn-ghost btn-sm" onclick="sePreset()">套预设</button>' +
           '<button class="btn btn-ghost btn-sm" onclick="sePreview()">学生视角</button>') +
@@ -191,14 +191,14 @@
           '必填 <b>' + (chk.block_on_fail === false ? '✗' : '✓') + '</b> · 文件名提醒 <b>' +
           (chk.warn_confirm === false ? '✗' : '✓') + '</b> · 内容级 <b>' +
           (chk.content_level ? '✓' : '✗') + '</b>' +
-          '<div class="qf-muted">阻止级直接拦；提醒级学生可「仍然提交」，结果只给你看，不进排名。</div>',
+          '<div class="se-muted">阻止级直接拦；提醒级学生可「仍然提交」，结果只给你看，不进排名。</div>',
           '<button class="btn btn-ghost btn-sm" onclick="seOpenCheck()">设置</button>') +
 
         row('素材',
           (SE.mats.length
             ? '已下发 <b>' + SE.mats.length + '</b> 个' + (bad ? ' · <b style="color:#E24B4A">' + bad + ' 个失效</b>' : '')
             : '还没下发素材') +
-          '<div class="qf-muted">学生页顶部会出现「📎 老师下发的素材」，可逐个下载。</div>',
+          '<div class="se-muted">学生页顶部会出现「📎 老师下发的素材」，可逐个下载。</div>',
           '<button class="btn btn-ghost btn-sm" onclick="seOpenMat()">管理</button>' +
           '<button class="btn btn-ghost btn-sm" onclick="seCheckMat()">体检</button>') +
 
@@ -209,19 +209,19 @@
               (SE.classOptions && SE.classOptions.length
                 ? '（系统里 ' + SE.classOptions.length + ' 个班：' + E(SE.classOptions.join('、')) + '）'
                 : '（系统里还没有导入班级名单）')) +
-          '<div class="qf-muted">决定学生提交时，班级是自动从名单里找，还是原样保留。在「编辑模板」里改。</div>',
+          '<div class="se-muted">决定学生提交时，班级是自动从名单里找，还是原样保留。在「编辑模板」里改。</div>',
           '<button class="btn btn-ghost btn-sm" onclick="seOpenTpl()">去设置</button>') +
 
         row('门户',
           '<code>' + E('/s/?task=' + SE.key) + '</code>' +
-          '<div class="qf-muted">一条链接：看任务 / 下素材 / 交作品 / 看自己交过什么。' +
+          '<div class="se-muted">一条链接：看任务 / 下素材 / 交作品 / 看自己交过什么。' +
           (sub.allow_late ? ' 已允许截止后补交。' : '') + '</div>',
           '<button class="btn btn-ghost btn-sm" onclick="seCopyPortal()">复制</button>' +
           '<button class="btn btn-primary btn-sm" onclick="seOpenPortal()">打开学生页</button>') +
 
         row('状态',
           (t.deadline ? ('截止 ' + E(t.deadline)) : '不限时间') +
-          '<div class="qf-muted">截止后学生只能看历史；需要补交就重新开放。</div>',
+          '<div class="se-muted">截止后学生只能看历史；需要补交就重新开放。</div>',
           '<button class="btn btn-ghost btn-sm" onclick="seOpenStatus()">改状态</button>' +
           '<button class="btn btn-ghost btn-sm" onclick="seExport()">导出核对报告</button>') +
       '</div>';
@@ -287,7 +287,7 @@
         '<div class="se-pane"><div class="se-ph">表单画布</div><div class="se-list" id="seList">' + listHtml() + '</div></div>' +
         '<div class="se-pane"><div class="se-ph">属性</div><div class="se-props" id="seProps">' + propsHtml() + '</div></div>' +
       '</div></div>' +
-      '<div class="se-mf"><span class="qf-muted" id="seTplMsg"></span><span style="flex:1"></span>' +
+      '<div class="se-mf"><span class="se-muted" id="seTplMsg"></span><span style="flex:1"></span>' +
         '<button class="btn btn-ghost btn-sm" onclick="seCloseModal()">取消</button>' +
         '<button class="btn btn-primary btn-sm" onclick="seSaveTpl()">保存模板</button></div>',
       false);
@@ -479,7 +479,7 @@
             C: '活动名称 / 过程照片（2-3 张）/ 一句话感受（≥20 字）'
           }[k];
           return '<div class="se-f" onclick="seApplyPreset(\'' + k + '\')"><span class="lb"><b>' + n + '</b><br>' +
-            '<span class="qf-muted">' + d + '</span></span><span class="tp">套用</span></div>';
+            '<span class="se-muted">' + d + '</span></span><span class="tp">套用</span></div>';
         }).join('') +
         '<div class="se-note">套预设会替换当前模板的字段（版本号 +1）。已有提交的数据不受影响。</div>' +
       '</div>' +
@@ -511,7 +511,7 @@
         '<button class="btn btn-ghost btn-sm" onclick="seMatAddStart()">＋ 从课件添加</button>' +
         '<button class="btn btn-ghost btn-sm" onclick="seCheckMat()">体检</button>') +
       '<div class="se-mb" id="seMatBody">' + matBody() + '</div>' +
-      '<div class="se-mf"><span class="qf-muted">引用：不占空间，源文件动了学生就拿新的；副本：复制一份，换机 / 拔盘也不失效。</span>' +
+      '<div class="se-mf"><span class="se-muted">引用：不占空间，源文件动了学生就拿新的；副本：复制一份，换机 / 拔盘也不失效。</span>' +
       '<span style="flex:1"></span><button class="btn btn-ghost btn-sm" onclick="seCloseModal()">关闭</button></div>',
       true);
   }
@@ -588,8 +588,8 @@
         '</div>' +
         '<div id="sePickArea"><div class="se-empty">读取中…</div></div>' +
         '<div style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">' +
-          '<span class="qf-muted">下发方式</span>' +
-          '<select id="seMatMode" class="qf-sel" style="padding:6px 10px;font-size:12.5px;width:auto">' +
+          '<span class="se-muted">下发方式</span>' +
+          '<select id="seMatMode" class="se-sel" style="padding:6px 10px;font-size:12.5px;width:auto">' +
             '<option value="ref">引用（省空间，可能失效）</option>' +
             '<option value="copy">副本（复制一份，稳）</option>' +
           '</select>' +
@@ -598,7 +598,7 @@
         '</div>' +
         '<div class="se-note">学生页会按这里的顺序展示。素材不会暴露老师整个资料夹，只下发你勾的这几个。</div>' +
       '</div>' +
-      '<div class="se-mf"><span class="qf-muted" id="sePickCount">已选 0 个</span><span style="flex:1"></span>' +
+      '<div class="se-mf"><span class="se-muted" id="sePickCount">已选 0 个</span><span style="flex:1"></span>' +
         '<button class="btn btn-ghost btn-sm" onclick="seCloseModal()">取消</button>' +
         '<button class="btn btn-primary btn-sm" onclick="seDoAddMat()">下发</button></div>',
       true);

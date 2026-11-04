@@ -296,15 +296,13 @@ class ActivityStore(object):
     def file_path(self, url):
         """把附件地址还原成本机路径（严格校验，防穿越）。
 
-        认三种前缀：
+        认两种前缀：
           /static/uploads/…        规范地址（服务端产出的就是它）
           /api/act/static/uploads/…前端 actAttUrl / 作品墙拼的是「接口前缀 + 地址」，
                                    不认的话大屏缩略图、作品预览全部 404（2026-11-04 修）
-          /qf/static/uploads/…     QuickForm 历史数据兼容
         """
         u = str(url or "").strip()
-        for pre in ("/api/act/static/uploads/", "/qf/static/uploads/",
-                    "/static/uploads/"):
+        for pre in ("/api/act/static/uploads/", "/static/uploads/"):
             if u.startswith(pre):
                 u = u[len(pre):]
                 break

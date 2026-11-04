@@ -16900,12 +16900,8 @@ function actDedupAsc(rows) {
 }
 function actAttachments(s) { const a = s && s.attachment; if (!a) return []; if (typeof a === 'string') return [a]; if (Array.isArray(a)) return a; return []; }
 /* 附件地址补全：相对路径拼上接口前缀，绝对 URL 原样使用 */
-/* 附件地址补全：相对路径拼上接口前缀，绝对 URL 原样使用。
-   QuickForm 时代的旧记录存的是 /qf/static/uploads/…（前缀已无路由），
-   剥掉 /qf 后走现行地址（file_path 两侧都认），历史提交的预览图才能显示。 */
 function actAttUrl(a) {
   a = String(a || '');
-  if (a.indexOf('/qf/static/uploads/') === 0) a = a.slice(4);
   return /^https?:\/\//i.test(a) ? a : (actApiBase() + a);
 }
 
@@ -35347,7 +35343,6 @@ function cwCollectWorks(rows) {
     actAttachments(s).forEach((a, i) => {
       let url = String(a || '');
       if (!url) return;
-      if (url.indexOf('/qf/static/uploads/') === 0) url = url.slice(4);   // 旧 QF 前缀 → 现行地址
       const name = decodeURIComponent(url.split('?')[0].split('/').pop() || 'file');
       out.push({
         name: name, url: url, student: who, no: no, group: grp, ts: ts,

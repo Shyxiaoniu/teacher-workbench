@@ -788,9 +788,8 @@ def archive_items(course, activity, base, items):
         if url.startswith("/"):
             rel = url.lstrip("/").replace("\\", "/")
             if ".." not in rel.split("/"):
-                # 兼容旧前缀：历史备份里的附件地址可能带 /qf/static/uploads/，
-                # 统一剥成 static/uploads/<活动>/<文件> 再到活动附件目录找。
-                for pre in ("qf/static/uploads/", "static/uploads/"):
+                # 附件地址统一剥成 static/uploads/<活动>/<文件> 再到活动附件目录找。
+                for pre in ("static/uploads/",):
                     if rel.startswith(pre):
                         rel = "activity/" + rel[len(pre):]
                         break
@@ -860,7 +859,7 @@ def fetch_remote(base, url, timeout=20):
         base = "http://127.0.0.1:%s" % (os.environ.get("PORT") or "20020")
     rel = url.lstrip("/")
     if ".." not in rel.split("/"):
-        for pre in ("qf/static/uploads/", "static/uploads/"):
+        for pre in ("static/uploads/",):
             if rel.startswith(pre):
                 rel = "activity/" + rel[len(pre):]
                 break
