@@ -246,6 +246,39 @@ def main():
         tops[r.split("/")[0]] = tops.get(r.split("/")[0], 0) + 1
     for k in sorted(tops):
         print("  %-14s %4d 个文件" % (k, tops[k]))
+    write_manifest(version, zip_path, name + ".zip")
+
+
+def write_manifest(version, zip_path, zip_name):
+    """构建后同步仓库根的 version.json（在线更新 manifest，2026-11-04 加）。
+    保留已写好的 notes（更新说明），只刷新版本号/日期/包名/sha256。
+    zip 本身默认被 .gitignore 忽略——要发布更新时 `git add -f dist/<包>.zip`
+    连同 version.json 一起提交，更新源（raw 地址）就能下载到。"""
+    import hashlib
+    import json as _json
+    h = hashlib.sha256()
+    with open(zip_path, "rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            h.update(chunk)
+    mpath = os.path.join(ROOT, "version.json")
+    old = {}
+    try:
+        with open(mpath, "r", encoding="utf-8") as f:
+            old = _json.load(f)
+    except Exception:
+        pass
+    m = {
+        "version": version,
+        "date": time.strftime("%Y-%m-%d"),
+        "notes": old.get("notes") or [],
+        "zip": zip_name,
+        "sha256": h.hexdigest(),
+    }
+    with open(mpath, "w", encoding="utf-8") as f:
+        _json.dump(m, f, ensure_ascii=False, indent=2)
+        f.write("\n")
+    print("manifest %s（version=%s zip=%s）" % (mpath, version, zip_name))
+    print("提示：发布更新请 `git add -f dist/%s` 连同 version.json 一起提交推送。" % zip_name)
 
 
 if __name__ == "__main__":

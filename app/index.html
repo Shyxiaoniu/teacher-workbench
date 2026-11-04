@@ -11246,6 +11246,7 @@ function renderContent(opts = {}) {
   /* 设置页的「账号与密码」卡片要读服务端状态（账号名、密保是否已设置），
      模板里只能放占位，渲染完再补一次。 */
   if (state.route === 'settings') setTimeout(() => { try { acctPaintSec(); } catch (e) {} }, 20);
+  if (state.route === 'settings') setTimeout(() => { try { updLoad(); } catch (e) {} }, 30);
 
   /* 首页：学生入口卡要问服务端要局域网地址（地址是运行期才知道的，
      模板里只能放占位，渲染完补一次）。 */
@@ -31390,6 +31391,14 @@ const DEMO_RENDER = {
       </div>
     </div>
 
+    <div class="card" id="updCard">
+      <div style="font-size:14px;font-weight:500;margin-bottom:4px">软件更新</div>
+      <div class="term-hint" style="margin-bottom:10px">
+        定期自动检查新版本；更新只替换<b>程序文件</b>，班级、学生、成绩、课件库等数据全部保留。
+      </div>
+      <div id="updBody"><span class="dim">加载中…</span></div>
+    </div>
+
     <div class="card">
       <div style="font-size:14px;font-weight:500;margin-bottom:4px">账号与密码</div>
       <div class="set-line" style="border-bottom:none;padding-bottom:0">
@@ -32450,6 +32459,257 @@ const sid = st ? st.id : '';
    服务端每次改密都会踢掉其它设备的登录会话，并推一次「设置变更」给所有页面。
    ============================================================ */
 const ACCT = { sec: null };
+
+/* ============================================================
+   软件更新 · 系统设置（2026-11-04）
+   检查 / 安装 / 回滚 / 更新源配置。所有写操作都要老师点确认；
+   安装过程轮询进度条；重启后页面自动恢复。
+   ============================================================ */
+let UPD_ST = null;      // /update/status 最近一次返回
+let UPD_TIMER = null;   // 安装进度轮询
+
+function _updFmtTime(ts) {
+  if (!ts) return '还没检查过';
+  const d = new Date(ts * 1000);
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+async function updLoad() {
+  const b = document.getElementById('updBody');
+  if (!b) return;
+  try {
+    const r = await fetch('/api/v2/update/status', { credentials: 'same-origin' });
+    if (r.status === 401) { location.href = '/teacher/login'; return; }
+    UPD_ST = await r.json();
+    updRender();
+  } catch (e) {
+    b.innerHTML = '<span style="color:var(--status-error)">读取更新状态失败：' +
+      esc(String(e.message || e)) + '</span>';
+  }
+}
+window.updLoad = updLoad;
+
+function updRender() {
+  const b = document.getElementById('updBody');
+  if (!b || !UPD_ST) return;
+  const s = UPD_ST;
+  let h = '';
+  /* 当前版本行 + 手动检查 */
+  h += `<div class="hwp-row" style="align-items:center">
+    <span style="font-size:13.5px">当前版本 <b>v${esc(s.version)}</b>
+      <span class="dim">· 上次检查：${_updFmtTime(s.last_check)}</span></span>
+    <span style="flex:1"></span>
+    <button class="btn btn-sm" type="button" style="width:auto" onclick="updCheck()">检查更新</button>
+  </div>`;
+  if (s.last_error) {
+    h += `<div style="margin-top:8px;color:var(--status-error);font-size:13px;line-height:1.6">⚠ ${esc(s.last_error)}</div>`;
+  }
+  /* 安装中：进度条 */
+  const pg = s.progress || {};
+  if (s.phase === 'downloading' || s.phase === 'installing' ||
+      (pg.phase && !['done', 'error', ''].includes(pg.phase))) {
+    h += `<div style="margin-top:10px">
+      <div style="font-size:13px;margin-bottom:5px">${esc(pg.msg || '处理中…')}</div>
+      <div style="height:8px;background:var(--border);border-radius:5px;overflow:hidden">
+        <div style="height:100%;width:${Math.max(3, pg.pct || 3)}%;background:var(--brand-primary);border-radius:5px;transition:width .4s"></div>
+      </div></div>`;
+  }
+  /* 发现新版本 */
+  if (s.has_update) {
+    h += `<div style="margin-top:12px;padding:12px 14px;border:1.5px solid var(--brand-primary);
+            background:var(--brand-soft);border-radius:10px">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <b style="font-size:14.5px">🚀 新版本 v${esc(s.latest)}</b>
+        ${s.date ? `<span class="dim">发布于 ${esc(s.date)}</span>` : ''}
+        <span style="flex:1"></span>
+        <button class="btn btn-primary btn-sm" type="button" style="width:auto"
+          onclick="updApply()">下载并安装</button>
+      </div>
+      ${(s.notes && s.notes.length) ? `<div style="margin-top:8px;font-size:13px;line-height:1.7">
+        <div style="font-weight:600;margin-bottom:2px">更新说明</div>
+        ${s.notes.map(n => `<div>· ${esc(String(n))}</div>`).join('')}</div>` : ''}
+    </div>`;
+  }
+  /* 装好了，等重启 */
+  if (s.phase === 'restart_pending') {
+    h += `<div style="margin-top:12px;padding:12px 14px;border:1.5px solid #2E9E5B;
+            background:rgba(46,158,91,.1);border-radius:10px;font-size:13.5px;line-height:1.7">
+      <b>✅ 新版本已就绪</b> —— 重启服务后生效（数据不受影响）。<br>
+      <span class="dim">重启会短暂断开所有页面连接，几十秒内自动恢复。</span>
+      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-primary btn-sm" type="button" style="width:auto"
+          onclick="updRestart()">立即重启服务</button>
+        ${s.backup ? `<button class="btn btn-ghost btn-sm" type="button" style="width:auto"
+          onclick="updRollback()">回滚到 v${esc(s.backup.from_version)}</button>` : ''}
+      </div></div>`;
+  }
+  /* 有备份：给手动回滚入口（平时收起来） */
+  if (s.backup && s.phase !== 'restart_pending') {
+    h += `<div style="margin-top:8px;font-size:12.5px;color:var(--text-secondary)">
+      检测到更新备份（更新前的 v${esc(s.backup.from_version)}）。
+      <a href="javascript:void(0)" style="color:var(--brand-primary)"
+        onclick="updRollback()">回滚到更新前</a></div>`;
+  }
+  /* 更新成功的回执 */
+  if (s.installed && s.installed.to_version) {
+    h += `<div class="term-hint" style="margin-top:8px">上次更新：v${esc(s.installed.from_version)} → v${esc(s.installed.to_version)}（${_updFmtTime(s.installed.ts)}）</div>`;
+  }
+  /* 更新源设置（折叠） */
+  const c = s.config || {};
+  h += `<details style="margin-top:12px">
+    <summary style="cursor:pointer;font-size:12.5px;color:var(--text-secondary);list-style:none">▸ 更新源设置${c.has_token ? '（已配置令牌）' : ''}</summary>
+    <div style="margin-top:8px;display:flex;flex-direction:column;gap:8px">
+      <label class="hwp-row" style="margin:0"><span class="set-k" style="width:auto;flex:none">检查开关</span>
+        <input type="checkbox" id="updAuto" ${c.auto ? 'checked' : ''}>
+        <span class="dim">每 ${esc(c.interval_hours || 24)} 小时自动检查一次</span></label>
+      <label class="hwp-row" style="margin:0"><span class="set-k" style="width:auto;flex:none">间隔(时)</span>
+        <input id="updInterval" class="fl-inp" type="number" min="1" max="720"
+          style="width:90px;flex:none" value="${esc(c.interval_hours || 24)}"></label>
+      <label class="hwp-row" style="margin:0;align-items:flex-start"><span class="set-k" style="width:auto;flex:none;padding-top:6px">源地址</span>
+        <input id="updUrl" class="fl-inp" style="flex:1;min-width:0" value="${esc(c.url || '')}"
+          placeholder="${esc(c.default_url || '')}（留空用默认）"></label>
+      <label class="hwp-row" style="margin:0"><span class="set-k" style="width:auto;flex:none">访问令牌</span>
+        <input id="updToken" class="fl-inp" type="password" style="flex:1;min-width:0"
+          placeholder="${c.has_token ? '已保存（留空表示不修改）' : '私有仓库填 Gitee/GitHub 私人令牌'}"></label>
+      <div class="term-hint">令牌只保存在本机服务端配置里，不会上传。Gitee 令牌在「设置 → 私人令牌」生成，勾 <b>projects</b> 权限即可。</div>
+      <div><button class="btn btn-sm" type="button" style="width:auto" onclick="updSaveCfg()">保存设置</button></div>
+    </div>
+  </details>`;
+  b.innerHTML = h;
+}
+
+async function updCheck() {
+  toast('正在检查更新…');
+  try {
+    const r = await fetch('/api/v2/update/check', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    const j = await r.json();
+    if (j.ok) {
+      toast(j.has_update ? `发现新版本 v${j.manifest.version}` : (j.manifest && j.manifest.version ? `已是最新版本（v${j.manifest.version}）` : '已是最新版本'));
+    } else {
+      toast(j.msg || '检查失败');
+    }
+  } catch (e) {
+    toast('检查更新失败：' + String(e.message || e));
+  }
+  updLoad();
+}
+window.updCheck = updCheck;
+
+async function updApply() {
+  if (!UPD_ST || !UPD_ST.has_update) return;
+  const ok = await uiConfirm(
+    `下载并安装 v${esc(UPD_ST.latest)}？\n\n· 安装过程约 1~2 分钟（取决于网速）\n· 装完需要重启服务生效\n· 班级、学生、成绩等数据全部保留\n· 安装前会自动备份，失败会自动回滚`,
+    { title: '更新到 v' + UPD_ST.latest, okText: '开始更新', danger: false });
+  if (!ok) return;
+  try {
+    const r = await fetch('/api/v2/update/apply', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    const j = await r.json();
+    if (!j.ok) { toast(j.msg || '无法开始更新'); return; }
+    toast('开始下载更新…');
+    updPoll();
+  } catch (e) {
+    toast('更新请求失败：' + String(e.message || e));
+  }
+}
+window.updApply = updApply;
+
+/** 安装期间轮询进度，装完转成 restart_pending 提示重启 */
+function updPoll() {
+  if (UPD_TIMER) clearInterval(UPD_TIMER);
+  UPD_TIMER = setInterval(async () => {
+    try {
+      const r = await fetch('/api/v2/update/progress', { credentials: 'same-origin' });
+      const j = await r.json();
+      const p = j.progress || {};
+      if (j.phase === 'restart_pending' || p.phase === 'done') {
+        clearInterval(UPD_TIMER); UPD_TIMER = null;
+        updLoad();
+        return;
+      }
+      if (p.phase === 'error') {
+        clearInterval(UPD_TIMER); UPD_TIMER = null;
+        updLoad();
+        toast(p.msg || '更新失败');
+        return;
+      }
+      UPD_ST = UPD_ST || {};
+      UPD_ST.phase = j.phase;
+      UPD_ST.progress = p;
+      updRender();
+    } catch (e) { /* 网络抖动忽略，下一轮再取 */ }
+  }, 900);
+}
+
+async function updRestart() {
+  if (!(await uiConfirm('重启服务？重启期间所有页面（教师端/学生端/大屏）会短暂断开，几十秒内自动恢复。',
+        { title: '重启服务', okText: '立即重启', danger: false }))) return;
+  toast('正在重启服务…');
+  /* execv 会直接换掉进程，这个请求大概率拿不到响应 —— 逢错不报错 */
+  fetch('/api/v2/update/restart', {
+    method: 'POST', credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' }, body: '{}' }).catch(() => {});
+  /* 轮询等它回来：恢复后刷新状态（这时 VERSION 已是新号） */
+  let n = 0;
+  const t = setInterval(async () => {
+    n++;
+    try {
+      const r = await fetch('/api/v2/state', { credentials: 'same-origin' });
+      if (r.ok) {
+        clearInterval(t);
+        toast('服务已重启');
+        UPD_ST = null;
+        updLoad();
+      }
+    } catch (e) { /* 还没起来，继续等 */ }
+    if (n > 60) { clearInterval(t); toast('服务还没回来，请手动确认服务状态'); }
+  }, 2000);
+}
+window.updRestart = updRestart;
+
+async function updRollback() {
+  const from = UPD_ST && UPD_ST.backup ? UPD_ST.backup.from_version : '';
+  if (!(await uiConfirm(`回滚到更新前的版本${from ? '（v' + esc(from) + '）' : ''}？\n\n程序文件会恢复成更新前的样子，数据不受影响；回滚后同样需要重启服务。`,
+        { title: '回滚更新', okText: '回滚', danger: true }))) return;
+  try {
+    const r = await fetch('/api/v2/update/rollback', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    const j = await r.json();
+    toast(j.ok ? (j.msg || '已回滚') : (j.msg || '回滚失败'));
+  } catch (e) {
+    toast('回滚请求失败：' + String(e.message || e));
+  }
+  updLoad();
+}
+window.updRollback = updRollback;
+
+async function updSaveCfg() {
+  const g = id => { const el = document.getElementById(id); return el ? el.value : null; };
+  const body = {
+    auto: !!(document.getElementById('updAuto') || {}).checked,
+    interval_hours: parseInt(g('updInterval') || '24', 10) || 24,
+  };
+  const url = (g('updUrl') || '').trim();
+  const token = (g('updToken') || '').trim();
+  body.url = url;
+  if (token) body.token = token;      // 留空 = 不改已保存的令牌
+  try {
+    const r = await fetch('/api/v2/update/config', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const j = await r.json();
+    toast(j.ok ? '更新设置已保存' : (j.msg || '保存失败'));
+  } catch (e) {
+    toast('保存失败：' + String(e.message || e));
+  }
+  updLoad();
+}
+window.updSaveCfg = updSaveCfg;
 
 async function acctLoadSec(force) {
   if (ACCT.sec && !force) return ACCT.sec;

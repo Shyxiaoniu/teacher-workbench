@@ -48,6 +48,7 @@ import ports as PORTX                  # noqa: E402
 from store import Store, TABLES, ImportRefused   # noqa: E402
 from activity import ActivityStore, parse_multipart   # noqa: E402  课堂活动（自研）
 from typing_store import TypingStore   # noqa: E402
+from updater import Updater            # noqa: E402  在线更新（检查/下载/安装/回滚）
 import ooxml_preview as OOX            # noqa: E402  课件在线预览（纯 Python 解析 OOXML）
 
 # 数据目录：默认与程序同级的 data/（不设环境变量时）；
@@ -87,6 +88,13 @@ CFG["typing"].setdefault("grades", [])
 # 课堂活动配置（提交有效时长等；后端只有自研一种，不再有开关）
 if not isinstance(CFG.get("activity"), dict):
     CFG["activity"] = {}
+# 在线更新配置（2026-11-04）：更新源地址 / 访问令牌 / 自动检查
+if not isinstance(CFG.get("update"), dict):
+    CFG["update"] = {}
+CFG["update"].setdefault("url", "")            # 空 = 默认更新源（Gitee raw version.json）
+CFG["update"].setdefault("token", "")          # 私有仓库的访问令牌
+CFG["update"].setdefault("auto", True)         # 后台定时检查
+CFG["update"].setdefault("interval_hours", 24) # 检查间隔（小时）
 PET_IDS = ["cat", "dog", "rabbit", "penguin", "panda", "dino", "unicorn", "dragon"]
 COND = threading.Condition()
 STARTED = time.time()
@@ -95,6 +103,29 @@ ONLINE_WINDOW = 300      # 5 分钟内活跃算在线
 # 可内联直出的附件类型（其余一律按下载处理，防止同源执行脚本）
 _INLINE_EXTS = {"png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "pdf",
                 "mp4", "webm", "ogg", "mp3", "wav", "m4a", "txt"}
+# 在线更新器（2026-11-04）：状态/下载/备份放数据目录；ROOT 即 app 代码目录
+UPD = Updater(DATA_DIR, VERSION, ROOT)
+
+
+def _update_auto_loop():
+    """后台定时检查更新：启动后 25 秒查一次，之后按配置间隔循环。
+    任何失败都只记状态不打日志刷屏——离线环境是常态，不烦老师。"""
+    time.sleep(25)
+    while True:
+        try:
+            uc = dict(CFG.get("update") or {})
+            if uc.get("auto", True):
+                UPD.check(uc)
+        except Exception:
+            pass
+        try:
+            hrs = max(1, int((CFG.get("update") or {}).get("interval_hours") or 24))
+        except Exception:
+            hrs = 24
+        time.sleep(hrs * 3600)
+
+
+threading.Thread(target=_update_auto_loop, daemon=True, name="update-check").start()
 
 # SSE 长连接上限（每个连接一个线程）
 _SSE_MAX = 200
@@ -1580,6 +1611,16 @@ class Handler(LEG.Handler):
             t = CFG.get("typing") or {}
             return self._json({"ok": True, "enabled": bool(t.get("enabled")),
                                "grades": t.get("grades") or []})
+        if path == "/api/v2/update/status":
+            # 在线更新状态（2026-11-04）：仅教师可读
+            if not self._is_teacher():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            return self._json(UPD.info(CFG.get("update") or {}))
+        if path == "/api/v2/update/progress":
+            if not self._is_teacher():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            return self._json({"ok": True, "progress": UPD.state.get("progress") or {},
+                               "phase": UPD.state.get("phase", "idle")})
         if path == "/api/v2/typing/me":
             s = self._session()
             if not s:
@@ -2451,6 +2492,60 @@ class Handler(LEG.Handler):
             url = str(body.get("url") or "").strip()
             ok = ACT.delete_attachment(task, url)
             return self._json({"ok": ok}, 200 if ok else 404)
+        # ------------------------------------------------------------------
+        # 在线更新（2026-11-04）：检查 / 安装 / 回滚 / 配置 / 重启，全部仅教师
+        # ------------------------------------------------------------------
+        if path == "/api/v2/update/check":
+            if not self._is_teacher():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            r = UPD.check(CFG.get("update") or {})
+            return self._json(r, 200 if r.get("ok") else 502)
+        if path == "/api/v2/update/apply":
+            if not self._is_teacher():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            r = UPD.apply(CFG.get("update") or {})
+            STORE.audit("teacher", "update-apply", str((UPD.state.get("manifest") or {}).get("version") or ""))
+            return self._json(r, 200 if r.get("ok") else 400)
+        if path == "/api/v2/update/rollback":
+            if not self._is_teacher():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            r = UPD.rollback()
+            STORE.audit("teacher", "update-rollback", r.get("msg", ""))
+            return self._json(r, 200 if r.get("ok") else 400)
+        if path == "/api/v2/update/config":
+            if not self._is_teacher():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            u = CFG["update"]
+            if "url" in body:
+                u["url"] = str(body.get("url") or "").strip()
+            if "token" in body:
+                u["token"] = str(body.get("token") or "").strip()
+            if "auto" in body:
+                u["auto"] = bool(body.get("auto"))
+            if "interval_hours" in body:
+                try:
+                    u["interval_hours"] = max(1, min(24 * 30, int(body.get("interval_hours"))))
+                except Exception:
+                    pass
+            A.save_config(CONFIG_PATH, CFG)
+            CFG_VER[0] += 1
+            notify()
+            STORE.audit("teacher", "update-config", "url=%s auto=%s" % (u.get("url") or "默认", u.get("auto")))
+            return self._json({"ok": True})
+        if path == "/api/v2/update/restart":
+            # 原地重启（execv 换进程映像，端口由新进程重新绑定）。
+            # 前端发起后按「连接断开 → 轮询 /api/v2/state 恢复」处理。
+            if not self._is_teacher():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            STORE.audit("teacher", "update-restart", "version=%s" % VERSION)
+            try:
+                sys.stdout.flush()
+                sys.stderr.flush()
+                os.execv(sys.executable, [sys.executable] + list(sys.argv))
+            except Exception as e:
+                return self._json({"ok": False,
+                                   "msg": "自动重启没成功（%s）。请手动重启：Windows 计划任务/直接关掉重开启动脚本；"
+                                          "Docker 用 docker compose restart workbench。" % e}, 500)
         if path == "/api/v2/auth/setup":
             if CFG["teacher"].get("password_hash"):
                 return self._json({"ok": False, "msg": "账号已设置"}, 400)
