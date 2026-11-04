@@ -6248,6 +6248,9 @@ body:has(.mini-bar) .corner-credit { display:none; }
 .cw-selbar b{font-weight:800}
 .cw-selbar .cw-muted{color:var(--text-secondary);font-size:11.5px}
 .cw-selbar .sp{margin-left:auto}
+/* 删除所选项：红色描边按钮，禁用时置灰 */
+.cw-selbar .cw-sel-del{color:var(--status-error,#E24B4A);border-color:var(--status-error,#E24B4A)}
+.cw-selbar .cw-sel-del:disabled{opacity:.45;cursor:not-allowed;border-color:var(--border);color:var(--text-secondary)}
 
 /* 多选框：网格视图压在缩略图左上角，列表 / 紧凑视图占最左一列 */
 .cw-pick{display:flex;align-items:center;justify-content:center;flex:none}
@@ -33609,6 +33612,7 @@ function cwLibPanelHtml() {
         <span class="cw-muted" id="cwSelNames"></span>
         <span class="sp"></span>
         <button class="btn btn-sm" data-batch="1" onclick="cwPushDialog(this)">⬇ 一键下发给班级</button>
+        <button class="btn btn-sm cw-sel-del" id="cwSelDelBtn" onclick="cwDeleteSelected()">🗑 删除所选项</button>
         <button class="btn btn-ghost btn-sm" onclick="cwSelClear()">清除选择</button>
       </div>
 
@@ -34112,6 +34116,9 @@ function cwToolbarSync() {
   if (sbar) sbar.hidden = sel.size === 0;
   const cnt = document.getElementById('cwSelCount');
   if (cnt) cnt.textContent = String(sel.size);
+  /* 删除所选项：没选中就禁用（选择条本身也会隐藏，双保险） */
+  const delBtn = document.getElementById('cwSelDelBtn');
+  if (delBtn) delBtn.disabled = sel.size === 0;
   const nms = document.getElementById('cwSelNames');
   if (nms) {
     if (!sel.size) nms.textContent = '';
@@ -34309,6 +34316,43 @@ async function cwDeleteLocal(btn) {
     if (cwState.course) await cwPickCourse(cwState.course, true);
   } catch (e) { toast(e.message || '删除失败'); }
 }
+/* 批量删除选中的文件（2026-11-04）：确认 → 逐个删 → 撤回相关推送 → 刷新反馈 */
+async function cwDeleteSelected() {
+  const files = cwSelectable();
+  const picked = files.filter(f => cwState.sel.has(String(f.id)));
+  if (!picked.length) { toast('先勾选要删除的文件'); return; }
+  const pushedN = (dbT('materials') || []).filter(m => !m.deleted && m.from === 'courseware'
+    && picked.some(f => String(f.id) === String(m.src_id))).length;
+  const tip = '删除选中的 ' + picked.length + ' 个文件？\n\n'
+    + picked.slice(0, 5).map(f => '· ' + f.name).join('\n')
+    + (picked.length > 5 ? '\n· … 等 ' + picked.length + ' 个' : '')
+    + '\n\n文件会从服务器上真正删掉（不进回收站），删除后无法恢复。'
+    + (pushedN ? '\n\n注意：其中已推送给学生的 ' + pushedN + ' 条记录会一并撤回。' : '');
+  if (!(await uiConfirm(tip, { title: '批量删除文件', okText: '删除 ' + picked.length + ' 个' }))) return;
+  let ok = 0; const fail = [];
+  for (const f of picked) {
+    try {
+      const r = await cwReq('delete', { id: f.id });
+      if (!r.ok) throw new Error(r.msg || '删除失败');
+      ok++;
+      cwState.sel.delete(String(f.id));
+    } catch (e) { fail.push(f.name + '：' + (e.message || '失败')); }
+  }
+  if (ok) {
+    /* 已推送的记录一并撤回：文件都没了，学生端不能留打不开的卡片 */
+    const ids = new Set(picked.map(f => String(f.id)));
+    dbSet('materials', (dbT('materials') || []).map(m =>
+      (!m.deleted && m.from === 'courseware' && ids.has(String(m.src_id)))
+        ? Object.assign({}, m, { deleted: 1 }) : m));
+    cwPaintPushed();
+  }
+  if (fail.length) toast('已删除 ' + ok + ' 个，失败 ' + fail.length + ' 个：' + fail.slice(0, 2).join('；'));
+  else toast('已删除 ' + ok + ' 个文件');
+  cwSelPaint();
+  await cwReload();
+  if (cwState.course) await cwPickCourse(cwState.course, true);
+}
+window.cwDeleteSelected = cwDeleteSelected;
 async function cwMoveLocal(btn) {
   const card = btn.closest('[data-id]');
   if (!card) return;
