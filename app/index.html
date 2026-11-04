@@ -11253,9 +11253,14 @@ function renderContent(opts = {}) {
     cwInit();
   } else if (state.route === 'typing') {
     /* 打字冒险岛管理面板（2026-11-02）：独立页面 iframe 内嵌，
-       复用教师登录会话；静态页公开、数据全走 /api/v2/typing/* 鉴权接口。 */
-    c.innerHTML = '<div style="height:calc(100vh - 128px);min-height:520px">' +
-      '<iframe src="/typing/teacher.html" title="打字练习管理" style="width:100%;height:100%;border:0"></iframe></div>';
+       复用教师登录会话；静态页公开、数据全走 /api/v2/typing/* 鉴权接口。
+       防「跳回首页」（2026-11-04 牛哥反馈）：同步轮询拉到新数据会触发
+       renderContent，原来每次都重建 iframe → 面板整页重载、排行榜视图
+       直接跳回管理首页。iframe 还在就绝不重建。 */
+    if (!c.querySelector('iframe[data-typing-admin]')) {
+      c.innerHTML = '<div style="height:calc(100vh - 128px);min-height:520px">' +
+        '<iframe data-typing-admin src="/typing/teacher.html" title="打字练习管理" style="width:100%;height:100%;border:0"></iframe></div>';
+    }
   } else if (DEMO_RENDER[state.route]) {
     c.innerHTML = DEMO_RENDER[state.route]();
   } else {
@@ -15863,20 +15868,28 @@ async function actPublishCurrent() {
         if (g) { cwSaveLink(t.task_id, t.title, g.course, 'auto'); course = g.course; }
       } catch (e) {}
     }
-    /* 自动部署默认模板：该活动在提交服务上还没有任何自定义页时，
-       用默认模板先部署一份，保证学生打开 /submit/custom.html 就有可用的提交页。
-       服务端 GET /api/custom 没部署时返回「老师还没有配置自定义提交页」占位串；
-       只要返回了其他内容就说明教师设计过页面，绝不能覆盖。
-       同样走同源：提交服务与工作台同一台服务器（网关/直连都是同一源）。 */
+    /* 页面部署（2026-11-04 修正）：老师刚「生成」过的新页面（同一活动）
+       必须先部署再下发——原逻辑只探测服务端有没有页，有就跳过，
+       改版学习单永远发不出去，学生端一直打开旧文件。
+       没生成过页面时沿用原口径：没有自定义页才部署默认模板，
+       服务端已有页且老师没重新生成 → 不动，绝不覆盖教师设计页。 */
     try {
-      const probe = await fetch('/api/custom?task=' + encodeURIComponent(t.task_id));
-      const curHtml = probe.ok ? await probe.text() : '';
-      if (!curHtml.trim() || curHtml.indexOf('老师还没有配置自定义提交页') !== -1) {
+      let deployHtml = null;
+      if (actGeneratedPage && actGeneratedPageTask === t.task_id) {
+        deployHtml = actGeneratedPage;
+      } else {
+        const probe = await fetch('/api/custom?task=' + encodeURIComponent(t.task_id));
+        const curHtml = probe.ok ? await probe.text() : '';
+        if (!curHtml.trim() || curHtml.indexOf('老师还没有配置自定义提交页') !== -1) {
+          deployHtml = actBuildCustomPage(actCustomDefaultTpl());
+        }
+      }
+      if (deployHtml) {
         const dep = await fetch('/api/custom', { method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ task: t.task_id, html: actBuildCustomPage(actCustomDefaultTpl()) }) });
+          body: JSON.stringify({ task: t.task_id, html: deployHtml }) });
         const dj = await dep.json().catch(() => ({}));
-        if (dep.ok && dj.ok) toast('已为该活动自动部署默认学习单模板（可在下方自定义设计后重新生成）');
+        if (dep.ok && dj.ok) toast('已为该活动部署学习单页面（可在下方自定义设计后重新生成）');
       }
     } catch (e) {}
     const now = new Date().toISOString().slice(0, 16).replace('T', ' ');
@@ -16049,13 +16062,25 @@ async function actPublishBatch() {
   const msgEl = document.getElementById('actPubBatchMsg');
   const say = s => { if (msgEl) msgEl.textContent = s; };
   say('正在下发 ' + sel.length + ' 个班级…');
-  // ① 页面部署探测（整批一次）：无自定义页时自动部署默认模板，绝不覆盖教师设计页
+  // ① 页面部署（整批一次）：老师刚「生成」过的新页面（同一活动）必须先部署——
+  //    原来只探测服务端有没有页，有就一概跳过 → 改版 / 同名新建的学习单
+  //    永远发不出去，学生端打开一直是旧文件（2026-11-04 牛哥反馈）。
+  //    没生成过页面时才部署默认模板；服务端已有页且老师没重新生成 → 不动，
+  //    保持「绝不覆盖教师设计页」的原口径。
   try {
-    const probe = await fetch('/api/custom?task=' + encodeURIComponent(t.task_id));
-    const curHtml = probe.ok ? await probe.text() : '';
-    if (!curHtml.trim() || curHtml.indexOf('老师还没有配置自定义提交页') !== -1) {
+    let deployHtml = null;
+    if (actGeneratedPage && actGeneratedPageTask === t.task_id) {
+      deployHtml = actGeneratedPage;
+    } else {
+      const probe = await fetch('/api/custom?task=' + encodeURIComponent(t.task_id));
+      const curHtml = probe.ok ? await probe.text() : '';
+      if (!curHtml.trim() || curHtml.indexOf('老师还没有配置自定义提交页') !== -1) {
+        deployHtml = actBuildCustomPage(actCustomDefaultTpl());
+      }
+    }
+    if (deployHtml) {
       const dep = await fetch('/api/custom', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ task: t.task_id, html: actBuildCustomPage(actCustomDefaultTpl()) }) });
+        body: JSON.stringify({ task: t.task_id, html: deployHtml }) });
       const dj = await dep.json().catch(() => ({}));
       if (!dep.ok || !dj.ok) { toast('✗ 学习单页面部署失败：' + (dj.msg || dep.status)); say(''); return; }
     }
@@ -16750,7 +16775,9 @@ function actBuildCustomPage(html, opts) {
    actUpdateCustomLink / actCopyCustomLink 随之移除；actLanApi 暂无调用方，保留备用。 */
 
 // 生成页面（仅生成并暂存，不部署；部署由「查看」「下发」负责）
-var actGeneratedPage = null;
+// actGeneratedPageTask：暂存页属于哪个活动——下发时只对同一活动生效，
+// 防止老师切了活动后旧暂存页误部署到别的活动上。
+var actGeneratedPage = null, actGeneratedPageTask = null;
 async function actCustomGenerate() {
   const t = actTaskList.find(x => x.task_id === actActiveId);
   if (!t) { toast('请先在①选择活动'); return; }
@@ -16760,6 +16787,7 @@ async function actCustomGenerate() {
   const perQ = document.getElementById('actCustPerQ') ? document.getElementById('actCustPerQ').checked : true;
   actCustStatus('正在注入登录 / 提交逻辑…');
   actGeneratedPage = actBuildCustomPage(raw, { perQ: perQ });
+  actGeneratedPageTask = t.task_id;
   actRenderFileCfg();
   actCustStatus('✓ 已生成页面（' + (perQ ? '每题单独提交' : '整页一个提交') + '）。点「查看」预览，确认后点「下发」发给学生。', 'ok');
 }
@@ -16777,6 +16805,7 @@ async function actCustomView() {
     page = actBuildCustomPage(raw, { perQ: perQ });
     actGeneratedPage = page;
   }
+  actGeneratedPageTask = actActiveId;
   actCustStatus('正在部署预览页…');
   try {
     const r = await fetch('/api/custom', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task: actActiveId, html: page }) });

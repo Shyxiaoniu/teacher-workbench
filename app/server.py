@@ -1008,9 +1008,31 @@ class Handler(LEG.Handler):
         self.wfile.write(body)
 
     def _site_icon(self, path):
-        """根路径图标：快捷方式 / 添加到主屏时系统来取的那两个文件。"""
+        """根路径图标：快捷方式 / 添加到主屏时系统来取的那两个文件。
+
+        2026-11-04 牛哥反馈：学生端链接拖到桌面，快捷方式图标不对。
+        原因：Windows 把链接拖到桌面建 .url 快捷方式时，只会来取
+        「根路径」的 /favicon.ico（不带 Referer、也不看页面 <head> 里的
+        <link rel="icon">）——原来这里永远给教师端「牛师」图标。
+
+        现在的口径：
+        · 无 Referer（拖链接建快捷方式就是这种）→ 学生端「学」图标
+          （学生机拖桌面的场景远多于教师机，默认给学生）；
+        · Referer 来自学生侧页面（/s/、/student/ 等）→ 学生图标；
+        · Referer 来自教师端（/、/teacher/）→ 教师图标。
+        浏览器页签的图标走各页面 <head> 的 <link rel="icon">，
+        与这里无关，所以教师端页签仍是牛师、学生端页签仍是学。
+        """
         name = "favicon.ico" if path == "/favicon.ico" else "apple-touch-icon-180.png"
-        full = os.path.join(ROOT, "icons", name)
+        raw_ref = self.headers.get("Referer") or ""
+        # 无 Referer（拖链接建快捷方式就是这种）→ 学生图标；
+        # 有 Referer 才按页面来源区分教师 / 学生。
+        ref = urllib.parse.urlparse(raw_ref).path if raw_ref else ""
+        teacher_ref = bool(ref) and (ref == "/" or ref.startswith("/teacher")
+                                     or ref.startswith("/index"))
+        full = os.path.join(ROOT, "icons" if teacher_ref else "student", name)
+        if not os.path.isfile(full):
+            full = os.path.join(ROOT, "icons", name)
         if not os.path.isfile(full):
             return self._html("<h1>页面不存在</h1>", 404)
         with open(full, "rb") as f:
@@ -3130,6 +3152,61 @@ class Handler(LEG.Handler):
                 and mins(r.get("start_time")) <= cur]
         return past[-1] if past else rows[0]
 
+    def _class_period_now(self, cid):
+        """这个班「现在」该记哪一节（登录自动签到 / 手动签到 / 学生端显示共用）。
+
+        2026-11-04 牛哥反馈：一个班签完到，下一个班提前进机房登录，
+        整班被误判「迟到」。根因：课间（两节之间）_current_period 取的是
+        「已经过去的最近一节」——新班级被记到上一节，还按上一节的开始
+        时间算迟到（差了整整一个课间，10+ 分钟 → 全班 late）。
+
+        口径：
+        · 整点在某一节的时间窗里 → 就是那一节（各班一样）；
+        · 课间先看「下一节」：距上课 ≤45 分钟、且本班这一节有排课
+          → 记下一节（提前到机房 = 准时）；
+        · 其余（放学后 / 本班课表没在用）→ 保持旧行为（上一节补签）。
+        cid 为 None（无班级上下文）时等同 _current_period。
+        """
+        rows = [r for r in STORE.table_rows("periods") if not r.get("deleted")]
+        if not rows:
+            return None
+        lt = time.localtime()
+        cur = lt.tm_hour * 60 + lt.tm_min
+        dow = lt.tm_wday
+
+        def mins(v):
+            try:
+                a = str(v or "").split(":")
+                return int(a[0]) * 60 + int(a[1] or 0)
+            except Exception:
+                return -1
+        def seq_of(r):
+            try:
+                return float(r.get("seq") if r.get("seq") not in (None, "") else r.get("id"))
+            except Exception:
+                return 999.0
+        rows = sorted(rows, key=seq_of)
+        for r in rows:
+            s, e = mins(r.get("start_time")), mins(r.get("end_time"))
+            if s >= 0 and e > s and s <= cur <= e:
+                return r
+        nxt = None
+        for r in rows:
+            s = mins(r.get("start_time"))
+            if s > cur:
+                nxt = r
+                break
+        if nxt is not None and cid is not None and mins(nxt.get("start_time")) - cur <= 45:
+            try:
+                p = int(float(nxt.get("seq") or nxt.get("id") or 0))
+            except Exception:
+                p = 0
+            if p and self._class_lesson_at(cid, dow, p) is True:
+                return nxt
+        past = [r for r in rows if mins(r.get("start_time")) >= 0
+                and mins(r.get("start_time")) <= cur]
+        return past[-1] if past else rows[0]
+
     def _period_time_ok(self, r):
         """签到时间窗校验：允许「开始前 15 分钟」到「结束后 30 分钟」（课间补签）。
 
@@ -3163,7 +3240,7 @@ class Handler(LEG.Handler):
         统一由服务端算好发给两端显示；带 cid 时顺带给出本班该节是否排课
         （lesson：True 有课 / False 没课 / "no_table" 本班课表没在用）。
         """
-        p = self._current_period()
+        p = self._class_period_now(cid) if cid is not None else self._current_period()
         period = 0
         label = ""
         if p:
@@ -3191,6 +3268,7 @@ class Handler(LEG.Handler):
             return self._json({"ok": False, "msg": "签到太频繁了，稍等一下"}, 429)
 
         p = self._current_period()
+        prow = None
         period = body.get("period")
         if period not in (None, ""):
             try:
@@ -3212,7 +3290,6 @@ class Handler(LEG.Handler):
             if not (1 <= period <= 20):
                 return self._json({"ok": False, "msg": "节次超出范围"}, 400)
             # 时间窗校验：还没开始 / 已结束（含课间补签窗口）都明确拒绝
-            prow = None
             for r in STORE.table_rows("periods"):
                 for k in ("seq", "id"):
                     try:
@@ -3227,12 +3304,14 @@ class Handler(LEG.Handler):
             if not ok:
                 return self._json({"ok": False, "msg": msg}, 400)
         else:
+            # 按班选节（课间优先记本班的下一节，见 _class_period_now）
+            p = self._class_period_now(st.get("class_id")) or self._current_period()
             period = (int(float(p.get("seq") or p.get("id") or 1)) if p else 1)
             ok, msg = self._period_time_ok(p)
             if not ok:
                 return self._json({"ok": False, "msg": msg}, 400)
         d = today_str()
-        ok2, info = self._write_checkin(sid, st, p, period, d, "student")
+        ok2, info = self._write_checkin(sid, st, prow or p, period, d, "student")
         if not ok2:
             return self._json({"ok": False, "msg": info or "签到失败"}, 400)
         return self._json(dict({"ok": True, "rev": STORE.rev()}, **info))
@@ -3350,7 +3429,7 @@ class Handler(LEG.Handler):
             return False, "学生档案不存在"
         if not A.rate_ok("ck:%s" % sid, 20, 60):
             return False, "签到太频繁了，稍等一下"
-        p = self._current_period()
+        p = self._class_period_now(st.get("class_id"))
         if not p:
             return False, ""                          # 课间/放学后不产生考勤
         ok, msg = self._period_time_ok(p)

@@ -619,6 +619,13 @@
       return;
     }
     if (VIEWS.indexOf(S.view) < 0) S.view = 'today';
+    /* 打字页防「闪退」（2026-11-04 牛哥反馈）：打字页是 iframe 内嵌，
+       render() 每次整体重画 #app 会把 iframe 连根拔掉重建——游戏整页重载、
+       正在打的关直接跳回首页。SSE 推送 / 10 秒轮询 / 配置刷新都会触发
+       render，时间一随机必然「不定时闪退」。正在打字视图里（iframe 还活着、
+       开关也没被老师关掉）一律不再动 DOM，切走后自动恢复。 */
+    if (S.view === 'typing' && S.typingOn &&
+        document.querySelector('iframe[data-typing-embed]')) return;
     /* 座位表走独立接口（整间教室的网格），首次进页面时拉一次；
        拿到数据后 loadSeatmap 自己再 render 一遍（2026-11-03）。 */
     if (S.view === 'seat' && !S.seatmap) loadSeatmap();
@@ -715,7 +722,7 @@
         '<div style="font-weight:600;margin-top:8px">老师还没开放打字练习</div>' +
         '<div style="font-size:12.5px;color:var(--ink3);margin-top:4px">等老师打开开关，这里就是打字冒险岛</div></div>';
     }
-    return '<iframe src="/typing/?embed=1" title="打字冒险岛" ' +
+    return '<iframe data-typing-embed="1" src="/typing/?embed=1" title="打字冒险岛" ' +
       'style="width:100%;height:calc(100vh - 150px);min-height:460px;' +
       'border:1.5px solid var(--line,#eee);border-radius:16px;background:#F8F2E4;' +
       'box-shadow:0 6px 20px rgba(60,30,10,.06)"></iframe>';

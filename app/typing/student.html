@@ -252,6 +252,12 @@ body.embed .play-wrap{min-height:calc(100vh - 20px)}
 .en-line .o{color:var(--ok)}
 .en-line .c{color:var(--ink);background:var(--cur-bg);border-radius:6px;box-shadow:0 2px 0 var(--brand)}
 .en-line .e{color:var(--bad);background:var(--bad-soft)}
+/* 大写角标（2026-11-04 牛哥反馈：字母大小写显示不明显）：大写字母头顶一个
+   小 ⇧，远看一眼分得清 a / A。绝对定位不占布局宽度，回显层逐字对齐不受影响。 */
+.en-line span{position:relative}
+.en-line span.up::before{content:'⇧';position:absolute;top:-.58em;left:50%;
+  transform:translateX(-50%);font-size:13px;font-weight:800;line-height:1;
+  color:var(--brand);opacity:.95;pointer-events:none}
 /* 英文课文区：没有拼音气泡，顶部那 24px 的「停靠带」就是纯留白，
    上下改成等距后一行字才真正落在框的正中（还顺手把框压缩了一圈）。 */
 .text-line.en-line{padding:13px 16px;text-align:center}
@@ -260,7 +266,9 @@ body.embed .play-wrap{min-height:calc(100vh - 20px)}
 .key-big{flex:0 0 auto;margin-top:2px;display:flex;flex-direction:column;align-items:center;gap:10px;padding:1px 0 2px}
 .key-cap{width:clamp(54px,7.6vh,70px);height:clamp(54px,7.6vh,70px);border-radius:14px;background:var(--surface);border:2.5px solid var(--brand);
   display:flex;align-items:center;justify-content:center;font-size:clamp(28px,3.9vh,38px);font-weight:800;color:var(--ink);
-  box-shadow:0 3px 0 var(--key-3d),0 7px 14px rgba(180,91,51,.15);text-transform:uppercase;font-family:Consolas,monospace}
+  box-shadow:0 3px 0 var(--key-3d),0 7px 14px rgba(180,91,51,.15);font-family:Consolas,monospace}
+/* 2026-11-04：删掉 text-transform:uppercase —— 大键帽原来自动作大写，
+   小写字母 a 显示成 A，课文里明明是小写学生却看到大写，大小写全乱。 */
 .key-finger{font-size:13px;color:var(--ink2)}
 /* 按键课敲错标注（2026-11-03）：没有输入框，红字挂在键帽下方；min-height 防跳动 */
 .key-err{min-height:19px;font-size:13px;color:var(--bad);font-weight:600}
@@ -1981,7 +1989,9 @@ function textHtml(text, idx, bad) {
   }
   for (i = 0; i < text.length; i++) {
     cls = i < idx ? 'o' : (i === idx ? ((bad || (i === idx && hasErr)) ? 'e' : 'c') : 'd');
-    s += '<span class="' + cls + '">' + esc(text[i]) + '</span>';
+    /* 大写字母加 .up 角标（2026-11-04 牛哥反馈大小写分不清）：⇧ 画在字头顶，
+       绝对定位不占布局宽度，回显层逐字对齐不受影响 */
+    s += '<span class="' + cls + (/[A-Z]/.test(text[i]) ? ' up' : '') + '">' + esc(text[i]) + '</span>';
   }
   return s;
 }
@@ -2321,7 +2331,12 @@ function bindPlay() {
     '6': '^', '7': '&', '8': '*', '9': '(', '0': ')' };
   var KB_CODE_CHARS = { 'Minus': '-', 'Equal': '=', 'BracketLeft': '[', 'BracketRight': ']',
     'Semicolon': ';', 'Quote': "'", 'Backquote': '`', 'Backslash': '\\',
-    'Comma': ',', 'Period': '.', 'Slash': '/' };
+    'Comma': ',', 'Period': '.', 'Slash': '/',
+    /* 小键盘（2026-11-04 牛哥反馈：小键盘的 = 打不出来）：这些键的字符
+       不受 NumLock 影响，直接按物理键位给字符——某些键盘 / 驱动下
+       NumpadEqual 的 e.key 会是 'Unidentified'，靠 e.key 兜底必然丢。 */
+    'NumpadEqual': '=', 'NumpadAdd': '+', 'NumpadSubtract': '-',
+    'NumpadMultiply': '*', 'NumpadDivide': '/', 'NumpadDecimal': '.' };
   var KB_CODE_SHIFT = { 'Minus': '_', 'Equal': '+', 'BracketLeft': '{', 'BracketRight': '}',
     'Semicolon': ':', 'Quote': '"', 'Backquote': '~', 'Backslash': '|',
     'Comma': '<', 'Period': '>', 'Slash': '?' };

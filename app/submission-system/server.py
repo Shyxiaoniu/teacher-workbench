@@ -556,6 +556,10 @@ class Handler(BaseHTTPRequestHandler):
         self._cors()
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
+        # 学习单页（/submit/custom.html、GET /api/custom）改版后 URL 不变，
+        # 没有缓存头时浏览器启发式缓存会拿旧页——学生端「改了学习单还是旧的」
+        # 的另一半根因。这类内容都是动态的教师设计页，一律不准缓存。
+        self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.end_headers()
         self.wfile.write(body)
@@ -911,12 +915,19 @@ class Handler(BaseHTTPRequestHandler):
                                 "self_only": True})
 
     def _custom_html(self, task=""):
-        """教师自定义提交页（公开可见，它本身就是给学生填的页面）。"""
+        """教师自定义提交页（公开可见，它本身就是给学生填的页面）。
+
+        带 task 时只认该活动的模板：查不到就回落「未配置」占位串——
+        绝不能回落全局 custom_html，否则新活动会串出别的活动（或全局
+        默认）页，教师端「有没有页」的探测也会失灵（2026-11-04）。
+        """
         cfg = get_config()
         html = ""
-        if task and isinstance(cfg.get("custom_templates"), dict):
-            html = cfg["custom_templates"].get(task, "")
-        if not html:
+        if task:
+            tpls = cfg.get("custom_templates")
+            if isinstance(tpls, dict):
+                html = tpls.get(task, "")
+        else:
             html = cfg.get("custom_html", "")
         return html or "<!doctype html><meta charset='utf-8'><p>老师还没有配置自定义提交页。</p>"
 
