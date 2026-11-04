@@ -1876,7 +1876,14 @@ body.seat-rsz-dragging .seat:hover { transform:none; box-shadow:none; }
 }
 @keyframes flIn { from{opacity:0} to{opacity:1} }
 .float-box {
-  width:min(360px, 100%); max-height:82vh; overflow:auto;
+  /* 2026-11-04 方案 B：滚动交给 .float-body，标题栏固定。
+     以前 overflow:auto 落在本层，原生竖向滚动条是方形矩形、铺满右边缘，
+     把上下两个圆角「压平」——分析报告弹窗右上角看着没圆角就是这个原因。
+     现改为 flex 列 + overflow:hidden：外层按 border-radius 裁剪整棵子树
+     （含内层滚动条），四个角都完整；滚动条也内缩到 padding 内侧，
+     不再贴着圆角画。 */
+  width:min(360px, 100%); max-height:82vh;
+  display:flex; flex-direction:column; overflow:hidden;
   background:var(--bg-surface); border:1.5px solid var(--brand-primary);
   border-radius:calc(var(--radius) + 4px);
   box-shadow:0 18px 52px rgba(0,0,0,.30);
@@ -1889,6 +1896,7 @@ body.seat-rsz-dragging .seat:hover { transform:none; box-shadow:none; }
 .float-head {
   display:flex; align-items:center; justify-content:space-between;
   gap:10px; padding:13px 15px; border-bottom:1px solid var(--border);
+  flex:none;          /* 固定高度、不参与收缩：内容再长也压不扁标题栏（方案 B） */
   flex-wrap:wrap;
 }
 .float-title { font-size:14.5px; font-weight:500; min-width:0;
@@ -1910,7 +1918,18 @@ body.seat-rsz-dragging .seat:hover { transform:none; box-shadow:none; }
 /* 可拖拽弹窗的标题栏：握住即可移动 */
 .float-head.draggable { cursor:move; }
 .float-head.draggable:active { cursor:grabbing; }
-.float-body { padding:15px; }
+/* 内容层即滚动层（2026-11-04 方案 B）：标题栏以下独立滚动，
+   滚动条落在 body 的 padding 内侧、被外层的 border-radius 裁掉，
+   弹窗右上/右下圆角不再被方形滚动条盖住。细滚动条同时避免
+   Windows 默认 17px 宽的滚动条把 15px 的右内边距吃光。 */
+.float-body {
+  padding:15px; flex:1 1 auto; min-height:0;
+  overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain;
+  scrollbar-width:thin; scrollbar-color:var(--border, #DCE5E0) transparent;
+}
+.float-body::-webkit-scrollbar { width:8px; height:8px; }
+.float-body::-webkit-scrollbar-thumb { background:var(--border, #DCE5E0); border-radius:4px; }
+.float-body::-webkit-scrollbar-track { background:transparent; }
 /* 收作业等宽面板：加宽浮窗，容纳学生网格 */
 .float-layer.wide .float-box { width:min(820px, 100%); }
 /* 课表时间设置浮窗 */
