@@ -909,6 +909,12 @@ class Handler(LEG.Handler):
             # 大屏、课件库归档、自定义页面都按这个前缀取，所以必须可访问。
             if path.startswith("/static/uploads/"):
                 return self._act_file(path)
+            # 兼容旧数据（2026-11-04）：QuickForm 时代的提交把附件地址存成
+            # /qf/static/uploads/…，QF 移除后这个前缀没了路由，历史提交的
+            # 预览图在大屏/作品页全部 404。file_path 本来就认旧前缀，这里
+            # 把路由也补上，新旧记录都能正常显示。
+            if path.startswith("/qf/static/uploads/"):
+                return self._act_file(path)
             if path.startswith("/teacher/"):
                 return self._teacher_static(path[len("/teacher/"):])
             # 学习单开关：活动被「关闭」后，非教师直接打开学生页会被拦下；

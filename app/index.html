@@ -5272,7 +5272,14 @@ body:has(.mini-bar) .corner-credit { display:none; }
   /* 底部留 46px 安全区：右下角还有迷你计时条 .mini-bar / 学生面板 .stu-panel
      两个悬浮件（同步状态胶囊已挪进顶栏，不再占这里），滚到底时最后一行
      内容不被它们压住。 */
-  flex:1; padding:20px 20px 46px; overflow:auto;
+  flex:1; padding:20px 20px 46px;
+  /* overflow:clip 而不是 auto（2026-11-04）：整站其实是「页面级滚动」
+     （.app 是 min-height:100vh，.content 跟着内容长高），这个 auto 从没
+     真正滚动过，却创建了一个「滚动容器」——里面的 position:sticky 全都
+     相对它定位（它不滚动 → sticky 永远不生效）。clip 只裁剪不建容器，
+     大屏统计区吸顶才正常。
+     代价：假设将来真的需要 .content 内部滚动，得改回 auto 并换吸顶方案。 */
+  overflow:clip;
   min-width:0; min-height:0;   /* 必须能收缩，内容撑爆时表现为整页空白 */
 }
 .page-title { font-size:16px; font-weight:500; margin-bottom:14px; }
@@ -15528,6 +15535,26 @@ function renderActivity() {
   .act-kpi .sub{font-size:12px;color:var(--text-secondary);margin-top:2px}
 
   .act-sec{background:var(--bg-surface);border:1px solid var(--border);border-radius:14px;padding:16px;box-shadow:var(--shadow);margin-bottom:14px}
+
+  /* 吸顶统计区（2026-11-04）：标题条 + 四张统计卡在向下滚动时固定在顶栏下沿，
+     浏览下方明细/图表时数据始终可见。
+     · 整站是「页面级滚动」（.app 是 min-height:100vh），所以 top 取顶栏实测高度
+       （--wb-topbar-h，窄屏顶栏会换行变高，由 syncTopbarH() 实时写回），
+       否则 top:0 会让吸顶块盖住顶栏。
+     · z-index 9 刻意低于顶栏的 10：万一两者重叠，顶栏在上，不会互相打架。
+     · 负边距 + 内边距补一层底色，滚动时下方内容不会从卡片缝隙里露出来；
+       不用 backdrop-filter（滚动掉帧），阴影常驻两个状态都自然。 */
+  .act-dash-sticky{position:sticky;top:var(--wb-topbar-h,52px);z-index:9;background:var(--bg-page);
+    margin:-2px -2px 2px;padding:2px 2px 10px;border-radius:0 0 14px 14px;
+    box-shadow:0 12px 18px -16px rgba(0,0,0,.4)}
+  /* 窄屏统计卡变两行，吸顶块高度大：压缩卡片内边距，别把下方内容全顶走 */
+  @media(max-width:760px){
+    .act-dash-sticky .act-kpi{padding:10px 12px}
+    .act-dash-sticky .act-kpi .val{font-size:28px}
+    .act-dash-sticky .act-dash-hd{padding:10px 12px;margin-bottom:10px}
+    .act-dash-sticky .act-dash-hd .hd-t{font-size:15px}
+  }
+
   .act-sec h3{font-size:14px;color:var(--text-primary);letter-spacing:1px;font-weight:bold;margin:0 0 12px;display:flex;align-items:center;gap:8px}
   .act-sec h3::before{content:'';width:5px;height:16px;background:var(--brand-primary);border-radius:3px}
   .act-grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
@@ -16894,11 +16921,19 @@ function actDedupAsc(rows) {
 }
 function actAttachments(s) { const a = s && s.attachment; if (!a) return []; if (typeof a === 'string') return [a]; if (Array.isArray(a)) return a; return []; }
 /* 附件地址补全：相对路径拼上接口前缀，绝对 URL 原样使用 */
-function actAttUrl(a) { a = String(a || ''); return /^https?:\/\//i.test(a) ? a : (actApiBase() + a); }
+/* 附件地址补全：相对路径拼上接口前缀，绝对 URL 原样使用。
+   QuickForm 时代的旧记录存的是 /qf/static/uploads/…（前缀已无路由），
+   剥掉 /qf 后走现行地址（file_path 两侧都认），历史提交的预览图才能显示。 */
+function actAttUrl(a) {
+  a = String(a || '');
+  if (a.indexOf('/qf/static/uploads/') === 0) a = a.slice(4);
+  return /^https?:\/\//i.test(a) ? a : (actApiBase() + a);
+}
 
 async function actRenderDash() {
   // 大屏会整块重建 innerHTML（连"加载中"占位也会先写一次），这里在函数入口就记住
   // 搜索框的焦点与光标位置，渲染完成后还原 → 轮询刷新不会打断正在输入的搜索词
+  try { syncTopbarH(); } catch (e) {}   // 吸顶 top 依赖顶栏实测高度
   const _ae = document.activeElement;
   const _keepSearch = !!(_ae && _ae.id === 'actRosterSearch');
   const _keepPos = _keepSearch ? _ae.selectionStart : null;
@@ -16989,6 +17024,7 @@ function actDashboardHtml(j, subs, matched, clsStus, cls) {
     ? '<div class="act-miss"><div class="act-miss-t">未提交 ' + missing.length + ' 人</div><div class="act-miss-l">' + missing.map(stu => '<span class="act-mid">' + esc(stu.name||'—') + (stu.student_no ? '　' + esc(stu.student_no) : '') + '</span>').join('') + '</div></div>'
     : '<div class="act-miss"><div class="act-miss-t" style="color:var(--status-success,#1D9E75)">全班已交齐 ✅</div></div>';
   return ''
+    + '<div class="act-dash-sticky">'
     + '<div class="act-dash-hd"><div class="hd-bar"></div><div><div class="hd-t">活动数据大屏</div>'
     + '<div class="hd-s">' + esc(j.task_title || actActiveId) + '　·　当前班级：<b>' + esc(String(clsName)) + '</b>　·　数据按本班匹配</div></div>'
   + '<div class="hd-r"><span class="act-dot ' + (submitted ? 'on' : 'off') + '"></span><span class="act-muted">' + (submitted ? '实时数据' : '暂无提交') + '</span>'
@@ -16999,7 +17035,7 @@ function actDashboardHtml(j, subs, matched, clsStus, cls) {
     + '<div class="act-kpi red"><div class="lab">未交人数</div><div class="val">' + notSub + '</div><div class="sub">尚未提交</div></div>'
     + '<div class="act-kpi amber"><div class="lab">提交率</div><div class="val">' + rate + '%</div><div class="sub">已交 / 班级总人数</div></div>'
     + '<div class="act-kpi"><div class="lab">班级总人数</div><div class="val">' + clsTotal + '</div><div class="sub">今日提交 ' + todayN + ' · 含文件 ' + attN + '</div></div>'
-    + '</div>'
+    + '</div></div>'
     + (matched.length === 0 && subs.length > 0
         ? '<div class="act-warn">⚠ 本活动已收到 <b>' + subs.length + '</b> 份提交，但当前班级「<b>' + esc(String(clsName)) + '</b>」匹配到 <b>0</b> 份。'
           + '常见原因：① 上方「选择班级」选错了；② 该班学生名单（学号 / 姓名）还没导入，或与学生填写的不一致。'
@@ -17145,13 +17181,20 @@ function actTableHtml(subs, limit) {
   if (!subs.length) return '<div class="act-muted">暂无可展示的提交。</div>';
   // limit>0 时仅展示最近 limit 条；limit 省略/为 0 时展示全部（用于「本活动全部提交」）
   const rows = (limit && limit > 0) ? subs.slice().reverse().slice(0, limit) : subs.slice();
-  return `<div style="overflow-x:auto"><table class="act-tb"><thead><tr><th>姓名</th><th>学号</th><th>作品标题</th><th>简介</th><th>文件</th><th>时间</th><th>操作</th></tr></thead><tbody>${
+  // 2026-11-04：同一学习单下有多个任务（逐题提交）时，同一学生会交多条记录，
+  // 只显示姓名分不清是哪个任务的 —— 只要列表里出现「任务级」提交就加一列任务名。
+  // 「整页提交 / 测试提交」不是任务，不显示也不触发这一列。
+  const isTaskBtn = b => b && b !== '整页提交' && b !== '测试提交';
+  const btnOf = s => { const b = String(s['按钮'] || '').trim(); return isTaskBtn(b) ? b : ''; };
+  const hasTaskCol = rows.some(s => btnOf(s));
+  return `<div style="overflow-x:auto"><table class="act-tb"><thead><tr><th>姓名</th><th>学号</th>${hasTaskCol ? '<th>任务</th>' : ''}<th>作品标题</th><th>简介</th><th>文件</th><th>时间</th><th>操作</th></tr></thead><tbody>${
     rows.map(s => {
       const atts = actAttachments(s);
       const sid = s._submission_id != null ? s._submission_id : '';
       return `<tr>
         <td>${esc(s['姓名'] || s['name'] || '—')}</td>
         <td>${esc(s['学号'] || s['student_no'] || s['sid'] || '—')}</td>
+        ${hasTaskCol ? `<td>${esc(btnOf(s) || '—')}</td>` : ''}
         <td>${esc(s['作品标题'] || s['title'] || '—')}</td>
         <td>${esc(String(s['作品简介'] || s['desc'] || '').slice(0, 30))}</td>
         <td>${atts.length ? atts.map(a => `<a href="${actAttUrl(a)}" target="_blank">📎</a>`).join(' ') : '—'}</td>
@@ -33907,6 +33950,31 @@ function cwBindLibDrop() {
 window.addEventListener('dragover', e => e.preventDefault());
 window.addEventListener('drop', e => e.preventDefault());
 
+/* 顶栏实测高度 → CSS 变量（2026-11-04）：大屏统计区吸顶时要用它把
+   sticky 的 top 顶到顶栏下沿。顶栏是 height:52px 固定高，但窄屏会换行
+   （height:auto + min-height:52），所以不能写死数字，量一次 + 变更时再量。 */
+function syncTopbarH() {
+  const tb = document.querySelector('.topbar');
+  if (!tb) return;
+  /* 整站字号用 zoom 放大（默认 1.16，见 .sidebar 那条注释）：
+     getBoundingClientRect 量到的是「缩放后」的像素，直接写回 CSS 会再被
+     缩放一次（52px 的顶栏 → 变量 60px → 吸顶位置 69.6px，偏 9px）。
+     这里先按 zoom 还原成布局像素再写。 */
+  let z = 1;
+  try { z = parseFloat(getComputedStyle(document.documentElement).zoom) || 1; } catch (e) {}
+  const h = Math.round((tb.getBoundingClientRect().height || 0) / z);
+  if (h > 0) document.documentElement.style.setProperty('--wb-topbar-h', h + 'px');
+}
+syncTopbarH();
+window.addEventListener('resize', syncTopbarH);
+window.addEventListener('load', syncTopbarH);
+if (window.ResizeObserver) {
+  try {
+    const _tb = document.querySelector('.topbar');
+    if (_tb) new ResizeObserver(syncTopbarH).observe(_tb);
+  } catch (e) {}
+}
+
 async function cwReload() {
   cwState.loadedLib = true;
   cwPaintPushed();
@@ -34814,8 +34882,9 @@ function cwCollectWorks(rows) {
     // 作品标题比 hash 文件名有意义得多（上传后名字会被改成 uuid）
     const title = String(s['作品标题'] || s['作品名称'] || s.title || '').trim();
     actAttachments(s).forEach((a, i) => {
-      const url = String(a || '');
+      let url = String(a || '');
       if (!url) return;
+      if (url.indexOf('/qf/static/uploads/') === 0) url = url.slice(4);   // 旧 QF 前缀 → 现行地址
       const name = decodeURIComponent(url.split('?')[0].split('/').pop() || 'file');
       out.push({
         name: name, url: url, student: who, no: no, group: grp, ts: ts,

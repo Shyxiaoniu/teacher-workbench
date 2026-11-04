@@ -294,11 +294,17 @@ class ActivityStore(object):
         return "/static/uploads/%s/%s" % (task_key, name), info
 
     def file_path(self, url):
-        """把 `/static/uploads/<task>/<file>` 还原成本机路径（严格校验，防穿越）。"""
+        """把附件地址还原成本机路径（严格校验，防穿越）。
+
+        认三种前缀：
+          /static/uploads/…        规范地址（服务端产出的就是它）
+          /api/act/static/uploads/…前端 actAttUrl / 作品墙拼的是「接口前缀 + 地址」，
+                                   不认的话大屏缩略图、作品预览全部 404（2026-11-04 修）
+          /qf/static/uploads/…     QuickForm 历史数据兼容
+        """
         u = str(url or "").strip()
-        for pre in ("/qf/static/uploads/", "/static/uploads/"):
-            # /qf/ 前缀只是历史数据兼容：旧备份里可能存有带前缀的附件地址，
-            # 对外路由已不再提供 /qf/*，这里识别后按同一条本机路径还原。
+        for pre in ("/api/act/static/uploads/", "/qf/static/uploads/",
+                    "/static/uploads/"):
             if u.startswith(pre):
                 u = u[len(pre):]
                 break
