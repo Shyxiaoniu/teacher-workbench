@@ -356,7 +356,10 @@ body.embed .play-wrap{min-height:calc(100vh - 20px)}
 @keyframes kbpulse{50%{transform:translateY(1.5px)}}
 /* 实际敲键瞬态高亮（2026-11-03）：任意按键按下，虚拟键盘上对应的键闪一下。
    .press 正常敲下（品牌橙、按下位移），.press-bad 敲错（红）；
-   与常驻的 .hot「目标键」高亮互不干扰，180ms 后自动退场。 */
+   与常驻的 .hot「目标键」高亮互不干扰，100ms 后自动退场。
+   2026-11-04 牛哥反馈：按下要立马响应、闪的时间缩短 ——
+   键帽默认带 transform .1s 过渡，会拖慢第一帧，瞬态类一律关掉过渡。 */
+.kb-k.press,.kb-k.press-bad{transition:none}
 .kb-k.press{background:var(--cur-bg);border-color:var(--brand);color:var(--brand);
   box-shadow:0 0 0 3px color-mix(in srgb,var(--brand) 45%,transparent);
   transform:translateY(2px);z-index:2}
@@ -368,7 +371,7 @@ body.embed .play-wrap{min-height:calc(100vh - 20px)}
       圆比方块更贴近"手指落键"的意象，也顺手把十根手指拉成同一节拍；
    ② 名字与键位串排在圆下方，各留 15px / 27px 的基线，行高固定，绝不压字；
    ③ 高亮时圆填色、手指变白、下方名字染成手指色 —— 一眼知道该抬哪根。 */
-.hands{flex:0 0 auto;width:100%;max-width:660px;margin:5px auto 0;background:var(--paper);
+.hands{flex:0 0 auto;width:100%;max-width:780px;margin:5px auto 0;background:var(--paper);
   border:1.2px solid var(--line);border-radius:12px;padding:6px 8px 4px;user-select:none}
 .hands svg{width:100%;height:auto;display:block}
 /* 左右手底衬：当前要动的那只手整块微微提亮，一眼知道该抬哪边 */
@@ -377,11 +380,11 @@ body.embed .play-wrap{min-height:calc(100vh - 20px)}
 .finger .fcircle{fill:var(--surface);stroke:var(--c,#ccc);stroke-width:2.2;transition:fill .16s,stroke .16s}
 /* 高亮环：跟着当前手指一圈圈扩散，比单纯改颜色更容易在余光里捕捉到 */
 .finger .fring{fill:none;stroke:var(--c,#ccc);stroke-width:2;opacity:0}
-.finger.active .fring{opacity:.85;animation:fring 1.5s ease-out infinite}
+.finger.active .fring{opacity:.95;stroke-width:3.5;animation:fring .9s ease-out infinite}
 @keyframes fring{
-  0%{r:18;opacity:.55}
-  70%{r:26;opacity:0}
-  100%{r:26;opacity:0}
+  0%{r:19;opacity:.8}
+  70%{r:28;opacity:0}
+  100%{r:28;opacity:0}
 }
 /* 指纹纹路（2026-11-02 替换手指剪影）：
    原来圆里画一根带指甲的手指，本意是"用这根手指"，但学生第一眼
@@ -393,10 +396,12 @@ body.embed .play-wrap{min-height:calc(100vh - 20px)}
 /* 2026-11-03 牛哥要求：高亮必须「原位置」，不许移动图标 ——
    原来这里带 translateY(-5px) scale(1.07) 的「抬起」动效，
    抬起来的圆会跟旁边图标挤到一起，看着错位。现在只靠
-   填色 + 扩散环表达「就是这根」，位置一个像素都不动。 */
-.finger.active .fcircle{fill:var(--c,#ccc);stroke:var(--surface);stroke-width:2.4;
-  filter:drop-shadow(0 5px 8px rgba(0,0,0,.30))}
-.finger.active .fp{stroke:var(--surface)}
+   填色 + 扩散环表达「就是这根」，位置一个像素都不动。
+   2026-11-04 再加强（高亮不够醒目）：描边加粗、指色光晕、
+   印记线条加粗 —— 不动位置，只加对比。 */
+.finger.active .fcircle{fill:var(--c,#ccc);stroke:var(--surface);stroke-width:3.4;
+  filter:drop-shadow(0 0 6px var(--c,#ccc)) drop-shadow(0 5px 8px rgba(0,0,0,.30))}
+.finger.active .fp{stroke:var(--surface);stroke-width:2.6}
 .finger.active .fp.dim{stroke-opacity:.72}
 /* 敲对了 / 敲错了：按下瞬间给一根手指染色（0.26s 后退回），
    这样"我这一下用的是哪根手指"和"应该用哪根"能同时对得上。
@@ -408,14 +413,15 @@ body.embed .play-wrap{min-height:calc(100vh - 20px)}
 /* 要按住 Shift 时，另一只手的对应小指用虚线描边提示"辅助键在这边" */
 .finger.aux .fcircle{stroke-dasharray:3.4 2.6;stroke-width:2.6}
 .finger.aux .fn{fill:var(--c);font-weight:900}
-/* 文字：深色 + 同底色描边，叠在彩色圆上也照样清楚 */
-.finger .fn{font-size:12.5px;font-weight:800;fill:var(--ink);transition:fill .16s;
+/* 文字：没轮到的手指名字调暗（2026-11-04：对比出「就是这根」），
+   轮到的染成手指色，一眼锁定 */
+.finger .fn{font-size:12.5px;font-weight:800;fill:var(--ink);opacity:.55;transition:fill .16s,opacity .16s;
   paint-order:stroke;stroke:var(--paper);stroke-width:2.6px;stroke-linejoin:round}
-.finger.active .fn{fill:var(--c)}
-.finger .fk{font-size:9.5px;font-weight:700;fill:var(--ink2);font-family:Consolas,Menlo,monospace;
-  letter-spacing:-.2px;transition:fill .16s;paint-order:stroke;stroke:var(--paper);stroke-width:2.4px;stroke-linejoin:round}
+.finger.active .fn{fill:var(--c);opacity:1}
+.finger .fk{font-size:9.5px;font-weight:700;fill:var(--ink2);opacity:.6;font-family:Consolas,Menlo,monospace;
+  letter-spacing:-.2px;transition:fill .16s,opacity .16s;paint-order:stroke;stroke:var(--paper);stroke-width:2.4px;stroke-linejoin:round}
 .finger .fk.s{font-size:8.5px}
-.finger.active .fk{fill:var(--ink)}
+.finger.active .fk{fill:var(--ink);opacity:1}
 /* 矮屏压缩：只收顶部与面板留白，键盘交给整体缩放，不再单独改键高字号 */
 @media (max-height:820px){
   .play-card{padding:10px 16px 8px}
@@ -1299,7 +1305,17 @@ function render() {
       ? '<div class="demo-bar teacher-bar">👩‍🏫 <b>教师练习模式</b>：和学生同一张冒险地图，成绩默认只存本机。' +
         '<label class="tw-lb"><input type="checkbox" id="twLb"' + (S.teacherLb && S.teacherLb.on ? ' checked' : '') + '>' +
         '把我的成绩计入</label>' +
-        '<select id="twCls"' + (S.teacherLb && S.teacherLb.on ? '' : ' disabled') + '><option>加载中…</option></select>' +
+        /* 班级下拉：从 S.teacherClasses 现取现拼（2026-11-04 修复）。
+           以前写死「加载中…」占位，只有 boot 时 overview 回来那一刻才补数据——
+           切一次标签页 render() 重画就永远停在「加载中…」，班级列表识别不到。 */
+        '<select id="twCls"' + (S.teacherLb && S.teacherLb.on ? '' : ' disabled') + '>' +
+        ((S.teacherClasses && S.teacherClasses.length)
+          ? S.teacherClasses.map(function (c) {
+              return '<option value="' + esc(c.id) + '"' +
+                (c.id === S.teacherLb.class_id ? ' selected' : '') + '>' + esc(c.name) + '</option>';
+            }).join('')
+          : '<option>加载中…</option>') +
+        '</select>' +
         '<span class="tw-tip">班级排行榜（选班后生效）</span></div>' : '') +
     (S.role === 'student' && !S.config.enabled
       ? '<div class="off-bar"><div class="big">🚧</div><h2>老师还没开放打字练习</h2>' +
@@ -1727,7 +1743,8 @@ function paintKb(ch) {
 
 /* 实际敲键瞬态高亮（2026-11-03 牛哥要求）：任意按键按下的那一瞬间，
    虚拟键盘上被按的那颗键闪一下 —— 和常驻的 .hot「目标键」高亮互相独立。
-   ok=false（敲错）用红色，正确/普通用品牌色；180ms 自动退场，连打不糊。
+   ok=false（敲错）用红色，正确/普通用品牌色；100ms 自动退场，连打不糊。
+   2026-11-04：180ms 缩短到 100ms（按下立马响应、闪完就收）。
    info.shift 时对应手的 Shift 键一起闪。供 keys / 英文 / 中文三个模式共用。 */
 function flashPressKey(ch, ok) {
   var box = $('#kbBox');
@@ -1745,7 +1762,7 @@ function flashPressKey(ch, ok) {
     el.getBoundingClientRect();      /* 强制重排：连续快敲时瞬态也能重放 */
     el.classList.add(cls);
     if (el._pt) clearTimeout(el._pt);
-    el._pt = setTimeout(function () { el.classList.remove('press', 'press-bad'); }, 180);
+    el._pt = setTimeout(function () { el.classList.remove('press', 'press-bad'); }, 100);
   });
 }
 window.kbDebugPress = function (ch) {

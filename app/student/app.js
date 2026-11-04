@@ -18,6 +18,7 @@
   'use strict';
 
   var S = { me: null, rev: 0, T: {}, flags: {}, vis: {}, view: 'today', es: null,
+            now: null,   /* 服务端「现在第几节」（loadNow 定期刷新，2026-11-04） */
             loading: true, seatmap: null };
   var WD = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 
@@ -119,6 +120,9 @@
         pull(S.rev, false).then(render);
       }
     }, 10000);
+    /* 服务端「现在第几节」每分钟对一次表：跨过节的边界（下课/上课）
+       签到卡自动切到新一节，不用学生手动刷新 */
+    setInterval(loadNow, 60000);
   }
 
   /* 打字冒险岛开关（2026-11-02）：老师开放/关闭后学生端入口实时增减 */
@@ -235,8 +239,15 @@
     var a = String(t || '').split(':');
     return (+a[0]) * 60 + (+a[1] || 0);
   }
-  /** 现在第几节：找不到就取“已经过去的最近一节”，和教师端算法保持一致 */
+  /** 现在第几节：找不到就取“已经过去的最近一节”。
+      2026-11-04 牛哥反馈签到节数两端不一致：机房学生机时钟经常不准，
+      本地算出来的节和教师端、实际签到记录对不上 —— 现在「现在第几节」
+      一律以服务端 /api/v2/student/now 为准（服务端时间 = 唯一时间源），
+      服务端还没答上来（刚开机 / 网络抖动）才退回本地时钟估算。 */
   function curPeriod() {
+    if (S.now && S.now.period) {
+      return { seq: S.now.period, label: S.now.label || '' };
+    }
     var ps = T('periods').slice().sort(function (a, b) {
       return (a.seq || 0) - (b.seq || 0);
     });
@@ -252,6 +263,17 @@
   function periodSeq() {
     var p = curPeriod();
     return p ? (Number(p.seq) || Number(p.id) || 1) : 1;
+  }
+  /** 拉服务端当前节次；节数有变化且正在「今日」页时重画签到卡 */
+  function loadNow() {
+    return api('/api/v2/student/now').then(function (j) {
+      if (j && j.ok) {
+        var changed = !S.now || S.now.period !== j.period || S.now.label !== j.label ||
+          S.now.lesson !== j.lesson;
+        S.now = j;
+        if (changed && S.view === 'today' && !S.loading) render();
+      }
+    }).catch(function () {});
   }
   /** 本节课的签到记录 */
   function myCheckin() {
@@ -357,10 +379,13 @@
         '<div class="tag">待交</div></div>';
     }).join('') : '<div class="empty">作业都交齐了</div>';
 
-    /* 课堂签到卡：登录时服务端已自动签到，这里展示状态；按钮只作补签 */
+    /* 课堂签到卡：登录时服务端已自动签到，这里展示状态；按钮只作补签。
+       lesson=false（服务端按课表判定本班这节没排课）→ 不给签到按钮，
+       显示「无课」，跟服务端签到闸门的口径一致（2026-11-04）。 */
     var ck = myCheckin();
     var p = curPeriod();
     var pLabel = p ? (p.label || ('第' + (p.seq || '') + '节')) : '本节课';
+    var noLesson = !!(S.now && S.now.lesson === false);
     var ckDone = ck && (ck.status === 'checked' || ck.status === 'present' || ck.status === 'late');
     var ckTxt;
     if (ckDone) {
@@ -369,6 +394,8 @@
       ckTxt = esc(attLabel(ck.status)) + '（老师已登记）';
     } else if (ck && ck.status === 'absent') {
       ckTxt = '缺勤（本节课超15分钟未登录，已记缺勤）';
+    } else if (noLesson) {
+      ckTxt = '本节本班没有排课，不用签到';
     } else {
       ckTxt = ck ? esc(attLabel(ck.status)) : '还没签到，点右边按钮';
     }
@@ -377,7 +404,8 @@
       '<span>' + ckTxt + '</span></div>' +
       (ckDone
         ? '<div class="ck-done">' + (ck.status === 'late' ? '迟' : '✓') + '</div>'
-        : '<button class="btn ck-b" id="ckBtn">一键签到</button>') +
+        : (noLesson ? '<div class="tag mut">无课</div>'
+                    : '<button class="btn ck-b" id="ckBtn">一键签到</button>')) +
       '</div>';
 
     /* 打字冒险岛入口卡（老师开放后才出现，2026-11-02） */
@@ -1478,6 +1506,13 @@
           return;
         }
         toast(j.already ? '本节课已经签过到了' : '签到成功');
+        /* 签到响应里带着服务端认定的节次：立即用它校正本地显示，
+           不等下一次 loadNow 轮询（避免签到后卡片还挂在旧的一节上） */
+        if (j.period) {
+          S.now = Object.assign({}, S.now || {},
+            { period: Number(j.period) || S.now && S.now.period,
+              label: j.period_label || (S.now && S.now.label) });
+        }
         return pull(S.rev, false).then(render);
       }).catch(function () {
         ck.disabled = false; ck.textContent = '一键签到';
@@ -1664,6 +1699,7 @@
         loadSeatmap();
         render();
         watch();
+        loadNow();     // 服务端当前节次：签到卡节数以服务端为准
       });
     }).catch(function (e) {
       if (window.console && console.error) console.error('启动失败', e);

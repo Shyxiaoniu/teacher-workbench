@@ -72,6 +72,12 @@ select{font-family:inherit;font-size:14px;padding:8px 12px;border:1.5px solid va
 .toast.show{opacity:.95}
 .off-box{text-align:center;padding:70px 30px;color:var(--ink2)}
 .off-box .big{font-size:46px;margin-bottom:10px}
+/* 教师练习视图（2026-11-04）：在管理面板内嵌游戏页，不再新开标签页跳出去 */
+.play-view{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;z-index:50}
+.play-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 16px;background:#fff;
+  border-bottom:1px solid var(--line);box-shadow:0 2px 8px rgba(60,30,10,.05)}
+.play-bar b{font-size:14px}
+.play-view iframe{flex:1;width:100%;border:0}
 </style>
 </head>
 <body>
@@ -157,7 +163,7 @@ function body() {
   return '<div class="head"><h1>⌨️ 打字练习</h1>' +
     '<small>开放给学生端后，学生「今日」页和底部导航会出现「打字」入口</small>' +
     '<span style="margin-left:auto"></span>' +
-    '<button class="btn ghost" id="tryPlay" title="老师也能练：和学生同一张冒险地图，页顶可选是否计入班级排行榜">🎮 教师试玩</button>' +
+    '<button class="btn ghost" id="tryPlay" title="老师也能练：面板内直接开练，和学生同一张冒险地图，页顶可选是否计入班级排行榜">🎮 教师练习</button>' +
     '</div>' +
     '<div class="grid">' +
       '<div class="card">' +
@@ -197,7 +203,7 @@ function body() {
 
 function bind() {
   var tp = $('#tryPlay');
-  if (tp) tp.onclick = function () { window.open('/typing/', '_blank'); };
+  if (tp) tp.onclick = enterPlay;
   var sw = $('#swBtn');
   if (sw) sw.onclick = function () {
     var next = !S.enabled;
@@ -247,6 +253,24 @@ function bind() {
         x.classList.toggle('on', x.getAttribute('data-scope') === S.scope);
       }); };
   });
+}
+
+/* 教师练习（2026-11-04）：不再 window.open 跳出新标签页——
+   直接在管理面板上盖一层全屏视图，iframe 内嵌打字页（同一教师会话，
+   页顶「计入班级排行榜」开关照常可用），点「返回管理」收起。 */
+function enterPlay() {
+  if ($('#playView')) return;
+  var v = document.createElement('div');
+  v.id = 'playView';
+  v.className = 'play-view';
+  v.innerHTML =
+    '<div class="play-bar">' +
+      '<button class="btn ghost" id="backMgr">← 返回管理</button>' +
+      '<b>教师练习 · 和学生同一张冒险地图，成绩默认只存本机，页顶可选计入班级排行榜</b>' +
+    '</div>' +
+    '<iframe src="/typing/?embed=1" title="打字练习"></iframe>';
+  document.body.appendChild(v);
+  $('#backMgr').onclick = function () { v.remove(); };
 }
 
 function loadLb() {

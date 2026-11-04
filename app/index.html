@@ -10623,6 +10623,12 @@ async function goToApp(returnTo) {
   state.__booting = false;
   renderPage();
   quoteInit();   // 好句：按来源/频率拉取并挂定时器
+  /* 服务端当前节次对表（2026-11-04）：考勤页默认节次跟 NAS 时钟走；
+     goToApp 可能多次进入（重新登录），定时器只挂一份 */
+  syncServerPeriod();
+  if (!window.__srvPeriodTimer) {
+    window.__srvPeriodTimer = setInterval(syncServerPeriod, 5 * 60 * 1000);
+  }
 
   // 找回密码：验证码验证身份进来后，立即弹出「修改密码」引导用户设密码，
   // 从此用密码登录，验证码不再承担登录职责
@@ -20263,6 +20269,24 @@ function attPeriod() {
   return Number(state.attPeriod) || 1;
 }
 window.attPeriod = attPeriod;
+/* 「现在第几节」以服务端时钟为准（2026-11-04 牛哥反馈：签到节数两端不一致）。
+   老师这台机器的时钟若与 NAS 服务端有偏差，考勤页默认节次就会和学生端
+   对不上 —— 启动后拉一次 /api/v2/teacher/now 校正，之后每 5 分钟对一次表。
+   老师在考勤页手动选过节次（state.attPeriodMan=true）后不再自动纠正。 */
+function syncServerPeriod() {
+  fetch('/api/v2/teacher/now', { credentials: 'same-origin' })
+    .then(r => r.json())
+    .then(j => {
+      if (!j || !j.ok || !j.period) return;
+      if (state.attPeriodMan) return;
+      if (Number(state.attPeriod) !== Number(j.period)) {
+        state.attPeriod = Number(j.period);
+        if (state.route === 'seats' || state.route === 'attendance') renderContent();
+      }
+    })
+    .catch(() => {});
+}
+window.syncServerPeriod = syncServerPeriod;
 function periodLabel(seq) {
   const p = periodList().find(x => Number(x.seq || x.id) === Number(seq));
   return p ? (p.label || ('第' + (p.seq || seq) + '节')) : ('第' + seq + '节');
@@ -20900,7 +20924,7 @@ function attBoardHtml(cls, date) {
   const st = attStatsOf(cls, date, seq);
   const f = state.ckFilter || '';
   const sel = ps.length ? `<select class="date-inp" style="padding:4px 6px"
-      onchange="state.attPeriod=Number(this.value);renderContent()">
+      onchange="state.attPeriod=Number(this.value);state.attPeriodMan=true;renderContent()">
       ${ps.map(p => `<option value="${p.seq || p.id}" ${
         Number(p.seq || p.id) === seq ? 'selected' : ''}>${
         esc(p.label || ('第' + (p.seq || p.id) + '节'))}${

@@ -1568,6 +1568,21 @@ class Handler(LEG.Handler):
             # 学生端座位表（2026-11-03）：姓名/学号/座位号/小组/班干部，不带考勤，
             # 见 _student_seatmap
             return self._student_seatmap(qs)
+        if path == "/api/v2/student/now":
+            # 学生端「现在第几节」：以服务端时钟为准，签到卡显示的节数
+            # 才能和教师端、实际签到记录三方对上（学生机时钟经常不准）
+            s = self._session()
+            if not s or s["role"] != "student":
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            st = student_row(s.get("student_id"))
+            if not st:
+                return self._json({"ok": False, "msg": "学生档案不存在"}, 404)
+            return self._json(self._now_payload(cid=st.get("class_id")))
+        if path == "/api/v2/teacher/now":
+            # 教师端考勤页默认节次：同样以服务端时钟为准
+            if not self._is_teacher():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            return self._json(self._now_payload())
         if path == "/api/v2/teacher/seat-config":
             # 教师端读回某班已同步的座位表配置（换设备 / 清缓存后本地丢了能补回来）
             if not self._is_teacher():
@@ -1684,6 +1699,11 @@ class Handler(LEG.Handler):
             # 一行参与排序；本周星为 0 时不进周榜（与学生口径一致）。
             tv = TYPING.teacher_lb_value(class_id, scope)
             if tv and not (scope == "week" and tv["value"] <= 0):
+                # 教师行显示名：始终用教师端设置里当前账号昵称（username），
+                # 不用成绩首次上报时缓存的旧名——老师改了昵称排行榜要跟着变
+                tn = str((CFG.get("teacher") or {}).get("username") or "").strip()
+                if tn:
+                    tv["name"] = tn
                 rows.append({"student_id": "__teacher__", "name": tv["name"],
                              "student_no": "", "value": tv["value"],
                              "stars": tv["stars"], "pet": "", "decos": []})
@@ -3123,6 +3143,29 @@ class Handler(LEG.Handler):
         if cur > e + 30:
             return False, "%s 已结束（%s 下课），如需补签请让老师在考勤页登记" % (label, r.get("end_time"))
         return True, ""
+
+    def _now_payload(self, cid=None):
+        """服务端当前节次（2026-11-04 牛哥反馈：签到节数两端不一致）。
+
+        服务端时间 = 唯一时间源（三端校时定版）：学生机 / 教师机时钟不准时，
+        各端自己算出来的「第几节」会和实际签到记录对不上。
+        统一由服务端算好发给两端显示；带 cid 时顺带给出本班该节是否排课
+        （lesson：True 有课 / False 没课 / "no_table" 本班课表没在用）。
+        """
+        p = self._current_period()
+        period = 0
+        label = ""
+        if p:
+            try:
+                period = int(float(p.get("seq") or p.get("id") or 0))
+            except Exception:
+                period = 0
+            label = str(p.get("label") or ("第 %s 节" % (p.get("seq") or p.get("id") or "?")))
+        out = {"ok": True, "date": today_str(), "time": time.strftime("%H:%M"),
+               "period": period, "label": label}
+        if cid is not None and period:
+            out["lesson"] = self._class_lesson_at(cid, time.localtime().tm_wday, period)
+        return out
 
     def _student_checkin(self, body):
         s = self._session()
