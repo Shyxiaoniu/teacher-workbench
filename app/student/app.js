@@ -141,7 +141,8 @@
   function mySeat() { return T('seats').filter(function (s) { return s.student_id === S.me.id; })[0] || null; }
   /** 我的座位「在座位表上」的排/列（2026-11-03）。
       讲台在下方时，排号要从最靠近讲台的一排数起，才和老师那张表、
-      以及老师嘴里说的「你坐第 3 排」一致。座位表接口没拿到时退回原始行列。 */
+      以及老师嘴里说的「你坐第 3 排」一致；列号沿用老师那张表的列号
+      （座位表在屏幕上左右镜像，表头列号同步镜像，文字对得上）。 */
   function mySeatPos() {
     var m = S.seatmap;
     if (m && m.ok && m.me) {
@@ -321,12 +322,14 @@
     var sp = mySeatPos();
     var duty = myDutyToday();
     var hwTodo = todoHomeworks();
+    var usedPushIds = {};
 
     var lessonHtml = ls.length ? ls.map(function (l) {
       var p = pm[l.period_id] || {}, c = cm[l.course_id] || {};
       var st = p.start_time || '', et = p.end_time || '';
       var isNow = st && et && now >= toMin(st) && now <= toMin(et);
       var push = pushOfCourse(c.name || l.course_name || '', todayStr());
+      if (push && push.id) usedPushIds[String(push.id)] = 1;
       var locked = push && !pushOpen(push);
       var gTag = push
         ? (locked
@@ -346,30 +349,36 @@
         gTag + '</div>';
     }).join('') : '<div class="empty">今天没有课，好好休息</div>';
 
-    /* 今日课程学习单（按日期，不依赖课表）：
-       周末 / 临时停课时课表里没课，按课程找学习单的入口就没了——
-       这里按「日期 = 今天」单独列一区块，有课没课都能打开。
-       2026-11-04：只显示下发给本班的课程（服务端已按班投影）。 */
-    var gds = pushes().filter(function (p) {
-      return String(p.date || '') === todayStr();
+    /* 2026-11-04 牛哥要求：单独那块「今日课堂活动 / 今日课程学习单」删掉，
+       学习单入口全部收进上面的「今日课程」卡里——
+       课表格子按课程名匹配到的那条直接显示「进学习单」；
+       课表里没课（周末、临时停课）或课程名对不上的，作为额外一行
+       接在今日课程列表末尾，入口不丢。 */
+    var todayPushes = pushes().filter(function (x) {
+      return String(x.date || '') === todayStr();
     });
-    var gdHtml = gds.length
-      ? '<div class="card"><h3>今日课程学习单<span class="more">' + gds.length + ' 个</span></h3>' +
-        gds.map(function (p) {
-          var locked = !pushOpen(p);
-          return '<div class="lesson' + (locked ? ' locked' : '') + '" ' +
-            (locked
-              ? 'data-locked="1"'
-              : 'data-act="/g/act/' + encodeURIComponent(p.id || '') + '" data-act-title="' + esc(p.task_title || '课堂学习单') + '"') + '>' +
-            '<div class="t"><b>' + esc(p.course || '课堂学习单') + '</b></div>' +
-            '<div class="m"><b>' + esc(p.task_title || '课堂学习单') + '</b>' +
-            '<span>' + (locked ? '老师已关闭，暂时无法打开' : '交互式学习单 · 点开作答并提交，提交后有状态提示') + '</span></div>' +
-            (locked
-              ? '<div class="tag mut" data-locked="1">已关闭</div>'
-              : '<div class="tag hot" data-act="/g/act/' + encodeURIComponent(p.id || '') + '" data-act-title="' + esc(p.task_title || '课堂学习单') + '">打开学习单</div>') +
-            '</div>';
-        }).join('') + '</div>'
-      : '';
+    var extraPushes = todayPushes.filter(function (x) {
+      return !usedPushIds[String(x.id)];
+    });
+    var extraHtml = extraPushes.map(function (x) {
+      var locked = !pushOpen(x);
+      return '<div class="lesson extra' + (locked ? ' locked' : '') + '" ' +
+        (locked
+          ? 'data-locked="1"'
+          : 'data-act="/g/act/' + encodeURIComponent(x.id || '') + '" data-act-title="' +
+            esc(x.task_title || '课堂学习单') + '"') + '>' +
+        '<div class="t"><b>学习单</b><span>今日</span></div>' +
+        '<div class="m"><b>' + esc(x.course || '课堂学习单') + '</b>' +
+        '<span>' + (locked
+          ? '老师已关闭，暂时无法打开'
+          : '交互式学习单 · ' + esc(x.task_title || '点开作答并提交')) + '</span></div>' +
+        (locked
+          ? '<div class="tag mut" data-locked="1">已关闭</div>'
+          : '<div class="tag hot" data-act="/g/act/' + encodeURIComponent(x.id || '') +
+            '" data-act-title="' + esc(x.task_title || '课堂学习单') + '">进学习单</div>') +
+        '</div>';
+    }).join('');
+    if (extraHtml) lessonHtml += extraHtml;
 
     /* 课程资源已独立成「课程」页（v3.0.0），今日页不再重复放课件库入口 */
 
@@ -434,7 +443,6 @@
       typingHtml +
       '<div class="cols2">' +
       '<div class="card"><h3>今日课程<span class="more">点课进学习单</span></h3>' + lessonHtml + '</div>' +
-      gdHtml +
       (S.flags.homework ? '<div class="card"><h3>待交作业<span class="more">' + hwTodo.length + ' 项</span></h3>' + hwHtml + '</div>' : '') +
       (duty.length ? '<div class="card"><h3>今天我值日</h3>' + duty.map(function (x) {
         return '<div class="hw"><div class="dot done"></div><div class="m"><b>' + esc(x.area || '值日') + '</b>' +
@@ -764,18 +772,25 @@
     var flip = String(m.stage) === 'bottom';
     /* 数据行 → 屏幕第几行（也就是「第几排」） */
     function srow(r) { return flip ? R - Number(r) + 1 : Number(r); }
+    /* 数据列 → 屏幕第几列（2026-11-04 牛哥反馈）：
+       老师那张表讲台在下方，学生序号从最靠近讲台那一排「从左到右」排；
+       学生站在自己的位置上往讲台看，左右是反的 —— 所以整张表要转 180°：
+       行反 + 列反，屏幕上就变成「最靠讲台那排从右到左」按序号排。
+       表头列号跟着一起镜像，学生看到的「第 N 列」还是老师嘴里的第 N 列。 */
+    function scol(c) { return flip ? C - Number(c) + 1 : Number(c); }
     var map = {}, placed = 0;
     m.seats.forEach(function (s) {
       var r = Number(s.r), c = Number(s.c);
       if (!r || !c || r > R || c > C) return;
-      map[srow(r) + '-' + c] = s;
+      map[srow(r) + '-' + scol(c)] = s;
       if (s.name) placed++;
     });
     var cells = '';
     /* 轴标注：第一行 = 左上角「排╲列」+ 各列号；之后每行开头 = 排号。
        无论讲台翻不翻转，屏幕上看到的排号就是「第几排」，与老师那张表一致。 */
     cells += '<div class="smap-ax corner"><i>排</i><i>╲</i><i>列</i></div>';
-    for (var c0 = 1; c0 <= C; c0++) cells += '<div class="smap-ax axc">' + c0 + '</div>';
+    for (var c0 = 1; c0 <= C; c0++)
+      cells += '<div class="smap-ax axc">' + (flip ? C - c0 + 1 : c0) + '</div>';
     /* 手机上格子只有 37px 宽：列多时组条右侧只放「★ / 组员号」，
        组名才挤得下；格子宽（列少或宽屏）时与教师端一样写全「组长 / 组员 01」 */
     var cellW = (document.body.clientWidth - 64 - 20 - (C - 1) * 6) / C;
@@ -818,7 +833,7 @@
       '<h3>座位表<span class="more">共 ' + R + ' 排 ' + C + ' 列</span></h3>' +
       '<div class="smap-stage">讲 台</div>' +
       (turned ? '<div class="smap-note">老师设置的讲台在' + stageCn +
-        '，这里统一翻到上方显示，座位号与老师那张表一致</div>' : '') +
+        '，这里统一翻到上方显示：整张表转了 180°，所以最靠讲台那一排的座位号是从右往左数的（和老师那张表一致）</div>' : '') +
       '<div class="smap-scroll"><div class="smap-grid" style="--c:' + (C + 1) +
         ';--fs:13px">' +
         cells + '</div></div>' +

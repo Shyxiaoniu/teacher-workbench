@@ -2606,6 +2606,38 @@ body.seat-rsz-dragging .seat:hover { transform:none; box-shadow:none; }
   outline: 1.5px dashed var(--status-error);
   outline-offset: 1px;
 }
+
+/* ---------- 节次时间重叠（作息改时间后撞车，2026-11-04）----------
+   和上面的「排课冲突」不是一回事：那个是同一时段排了两个班，
+   这个是两节课的起止时间压在一起。用虚线 + 左侧红条区分，
+   免得老师以为是课程排重了。 */
+.tt-row-clash .tt-p-btn { color: var(--status-error); }
+.tt-row-clash .tt-p-time-txt { color: var(--status-error); font-weight: 600; }
+.tt-p-warn {
+  display: inline-block; margin-left: 4px; font-style: normal;
+  font-size: 10px; line-height: 1; font-weight: 700;
+  color: #fff; background: var(--status-error);
+  padding: 2px 3.5px; border-radius: 5px; vertical-align: 1px;
+}
+.tt-cell.time-clash {
+  background-image: repeating-linear-gradient(135deg,
+    color-mix(in srgb, var(--status-error) 8%, transparent) 0 6px,
+    transparent 6px 12px);
+}
+.tt-cell.time-clash::before {
+  content: ''; position: absolute; inset: 0;
+  border: 1.5px dashed color-mix(in srgb, var(--status-error) 60%, transparent);
+  border-radius: 6px; pointer-events: none;
+}
+/* 保存前闪一下相关几行（复用排课冲突的脉冲动画） */
+.tt-row-flash .tt-p-btn,
+.tt-row-flash .tt-cell {
+  animation: ttConflictPulse 1.05s ease-in-out infinite;
+}
+.tt-clash-bar {
+  border-left: 3px solid var(--status-error);
+  background: color-mix(in srgb, var(--status-error) 6%, var(--bg-surface));
+}
 /* 格子内课程详情：名称行（含单双周角标）/ 教师 / 教室 */
 .tt-cell .tt-chip { line-height:1.35; }
 .tt-wp {
@@ -18602,19 +18634,55 @@ function openPeriodDialog(id) {
 }
 window.openPeriodDialog = openPeriodDialog;
 
-function savePeriodDialog(id) {
+/* 保存节次：先做时间合法性校验，再查与前后节次的重叠；
+   重叠时弹确认框（此时先不改任何数据，取消 = 原样不动），
+   确认后才落盘，课表上用红框标出重叠的节次（2026-11-04）。 */
+async function savePeriodDialog(id) {
   const p = (dbT('periods') || []).find(x => Number(x.id) === Number(id));
   if (!p) return;
   const label = ((document.getElementById('pdLabel') || {}).value || '').trim().slice(0, 8);
   const st = (document.getElementById('pdStart') || {}).value || '';
   const en = (document.getElementById('pdEnd') || {}).value || '';
+  const nSt = (st || p.start_time || '').slice(0, 5);
+  const nEn = (en || p.end_time || '').slice(0, 5);
+  /* ① 基本校验：结束必须晚于开始。不关窗、不落盘，老师接着改 */
+  if (nSt && nEn && toMin(nEn) <= toMin(nSt)) {
+    toast('下课时间要晚于上课时间（现在是 ' + nSt + ' → ' + nEn + '）');
+    return;
+  }
+  /* ② 与前后节次的时间重叠 —— 有任何重叠先弹确认 */
+  const clashes = periodClashes(p.id, nSt, nEn, p.day_of_week);
+  let ok = true;
+  if (clashes.length) {
+    /* 弹框期间让课表上相关几行闪一下，把「提示」和「哪几节撞了」对上号 */
+    const ids = [Number(p.id)].concat(clashes.map(c => c.id));
+    ids.forEach(i => {
+      const tr = document.querySelector('tr[data-period-row="' + i + '"]');
+      if (tr) tr.classList.add('tt-row-flash');
+    });
+    try {
+      ok = await uiConfirm(
+        '这一节的时间和其他节次重叠了：\n\n· ' +
+        clashes.map(c => c.rel + '「' + c.label + '」' + c.time).join('\n· ') +
+        '\n\n仍要按 ' + nSt + ' – ' + nEn + ' 设置吗？\n' +
+        '确认后课表上会用红色标出时间重叠的节次，方便你回头调整。',
+        { title: '节次时间冲突', okText: '仍然保存', danger: false });
+    } finally {
+      document.querySelectorAll('tr.tt-row-flash')
+        .forEach(tr => tr.classList.remove('tt-row-flash'));
+    }
+    if (!ok) return;     // 取消：一个字段都没改，弹窗还开着，可以接着改
+  }
+  /* ③ 确认后才真正写入（之前的实现是一进函数就改内存对象，取消没法回滚） */
   if (label) p.label = label;
   if (st) p.start_time = st;
   if (en) p.end_time = en;
   dbPersist();   // 改的是内存对象，得显式落盘
   closeFloat();
   renderContent();
-  toast('节次已更新');
+  toast(clashes.length
+    ? '节次已更新。⚠ 课表上已标出 ' + clashes.length + ' 处时间重叠'
+    : '节次已更新');
 }
 window.savePeriodDialog = savePeriodDialog;
 
@@ -18630,6 +18698,65 @@ function periodSlot(p) {
 }
 window.periodSlot = periodSlot;
 const SLOT_CLS = { '上午': 'am', '下午': 'pm', '晚上': 'night' };
+
+/* ============================================================
+   节次时间重叠检测（2026-11-04 牛哥要求）
+   ------------------------------------------------------------
+   · 区间按半开 [开始, 结束) 比较：上一节 9:35 下课、下一节 9:35 开始
+     ——首尾相接不算冲突；只要压过 1 分钟（9:34 结束 vs 9:35 开始）就算重叠。
+   · 前后两节都要比：既看「这一节的开始有没有早于上一节的结束」，
+     也看「这一节的结束有没有晚于下一节的开始」。整体用区间相交判断，
+     自然覆盖两个方向的边界。
+   · 只跟同一套课表（同一天）里的其它节次比，且没填时间的节次不参与。
+   ============================================================ */
+/** 'HH:MM' → {s,e}（分钟）；缺时间或结束不晚于开始 → null（视为没设时间） */
+function periodRangeOf(st, en) {
+  if (!st || !en) return null;
+  const s = toMin(String(st).slice(0, 5)), e = toMin(String(en).slice(0, 5));
+  if (!isFinite(s) || !isFinite(e) || e <= s) return null;
+  return { s: s, e: e };
+}
+window.periodRangeOf = periodRangeOf;
+
+/** 候选时间与同一天其它节次的重叠名单（按节次号排序） */
+function periodClashes(pid, st, en, day) {
+  const cand = periodRangeOf(st, en);
+  if (!cand) return [];
+  const base = (dbT('periods') || []).filter(p =>
+    Number(p.day_of_week) === Number(day)).sort((a, b) => (Number(a.seq) || 0) - (Number(b.seq) || 0));
+  const me = base.filter(p => Number(p.id) === Number(pid))[0] || {};
+  const out = [];
+  base.forEach(p => {
+    if (Number(p.id) === Number(pid)) return;
+    const r = periodRangeOf(p.start_time, p.end_time);
+    if (!r) return;
+    if (cand.s < r.e && r.s < cand.e)           // 真重叠（相接不算）
+      out.push({
+        id: Number(p.id),
+        seq: Number(p.seq) || 0,
+        rel: Number(p.seq) < Number(me.seq) ? '上一节'
+           : Number(p.seq) > Number(me.seq) ? '下一节' : '同一节',
+        label: p.label || ('第' + (p.seq || '?') + '节'),
+        time: String(p.start_time || '').slice(0, 5) + '–' + String(p.end_time || '').slice(0, 5),
+      });
+  });
+  return out.sort((a, b) => a.seq - b.seq);
+}
+window.periodClashes = periodClashes;
+
+/** 课表渲染用：{ 节次id: 重叠名单 }（只看课表显示的那一套节次） */
+function periodClashMap(day) {
+  const d = (day == null) ? 0 : Number(day);
+  const map = new Map();
+  (dbT('periods') || []).forEach(p => {
+    if (Number(p.day_of_week) !== d) return;
+    const c = periodClashes(p.id, p.start_time, p.end_time, d);
+    if (c.length) map.set(Number(p.id), c);
+  });
+  return map;
+}
+window.periodClashMap = periodClashMap;
+
 
 /** 直接改节次的名称或时间 */
 function editPeriod(id, field, val) {
@@ -30667,6 +30794,11 @@ const DEMO_RENDER = {
         confMap[Number(l.day_of_week) + '-' + Number(l.period_id) + '-' + Number(l.class_id)] = why;
     });
 
+    /* 节次时间重叠预扫描（2026-11-04）：作息里两节时间压在一起时，
+       整行标红并挂 ⚠，让老师一眼看出「哪两节撞了」。数据没改就不该有标记，
+       所以这里每次都按当前时间现算，取消设置时自然回滚。 */
+    const pClash = periodClashMap(0);
+
     const cell = (dow, p) => {
       const list = lessons.filter(x => Number(x.day_of_week) === Number(dow)
         && Number(x.period_id) === Number(p.id)
@@ -30701,11 +30833,22 @@ const DEMO_RENDER = {
       /* 本格有冲突的课 → 整格红描边 + ⚠ 数量角标；悬停提示里能看明细 */
       const confN = list.reduce((a, l) => a +
         ((confMap[Number(dow) + '-' + Number(p.id) + '-' + Number(l.class_id)] || []).length ? 1 : 0), 0);
-      return `<td class="tt-cell${confN ? ' has-conflict' : ''}" data-dow="${dow}" data-pid="${p.id}"
-        ${confN ? `data-conflict-n="${confN}" title="⚠ 有 ${confN} 处排课冲突：${
-          esc(list.filter(l => (confMap[Number(dow)+'-'+Number(p.id)+'-'+Number(l.class_id)]||[]).length)
-            .map(l => (confMap[Number(dow)+'-'+Number(p.id)+'-'+Number(l.class_id)]||[]).join('；')).join('；'))}"` : ''}
-        ${list.length ? '' : 'title="点一下排课"'}
+      /* 这一节的作息时间和别的节次重叠 → 格子也标上（虚线，区别于排课冲突的实线） */
+      const tClash = pClash.get(Number(p.id)) || [];
+      const confWhy = list
+        .filter(l => (confMap[Number(dow) + '-' + Number(p.id) + '-' + Number(l.class_id)] || []).length)
+        .map(l => (confMap[Number(dow) + '-' + Number(p.id) + '-' + Number(l.class_id)] || []).join('；'))
+        .join('；');
+      /* 两种冲突可能同时存在，title 只能有一个：拼成一条 */
+      let tdTip = '';
+      if (confN) tdTip = `⚠ 有 ${confN} 处排课冲突：${confWhy}`;
+      if (tClash.length) tdTip = (tdTip ? tdTip + '\n' : '') +
+        `⚠ 这一节的时间和 ${tClash.map(c => c.label).join('、')} 重叠`;
+      if (!tdTip && !list.length) tdTip = '点一下排课';
+      return `<td class="tt-cell${confN ? ' has-conflict' : ''}${tClash.length ? ' time-clash' : ''}"
+        data-dow="${dow}" data-pid="${p.id}"
+        ${confN ? `data-conflict-n="${confN}"` : ''}
+        ${tdTip ? `title="${esc(tdTip)}"` : ''}
         onclick="editCell(${dow}, ${p.id}, ${fallbackCls})">
         ${chips || '<span class="add-hint">+</span>'}
       </td>`;
@@ -30729,6 +30872,15 @@ const DEMO_RENDER = {
           onclick="openTtSettings()">☰ 课表设置</button>
       </div>
     </div>
+
+    ${pClash.size ? `<div class="notice tt-clash-bar" data-no-fold>
+      <strong>⚠ 有 ${pClash.size} 个节次的作息时间互相重叠</strong>
+      （${[...pClash.keys()].map(id => {
+          const pp = periods.find(x => Number(x.id) === Number(id)) || {};
+          return esc(pp.label || '');
+        }).join('、')}）——
+      点左侧节次名可以改时间；重叠的节次会一直标红，调开之后自动消失。
+    </div>` : ''}
 
     <div class="card" style="overflow:auto;max-height:calc(100vh - 220px);padding:12px">
       ${(() => { window.__ttSlots = (() => {
@@ -30760,11 +30912,16 @@ const DEMO_RENDER = {
                 <span class="tt-slot-n">${_sl.count[slot] || 0} 节</span>
               </td></tr>` : '';
             return slotRow + `
-            <tr class="${(p.kind && p.kind !== 'class') ? 'tt-row-break' : ''}">
+            <tr class="${(p.kind && p.kind !== 'class') ? 'tt-row-break' : ''}${
+              (pClash.get(Number(p.id)) || []).length ? ' tt-row-clash' : ''}"
+              data-period-row="${p.id}">
               <td class="tt-p">
                 <button type="button" class="tt-p-btn" onclick="openPeriodDialog(${p.id})"
-                  title="点一下改节次名称和时间">
-                  <span class="tt-p-label">${esc(p.label || p.name || '')}</span>
+                  title="${(pClash.get(Number(p.id)) || []).length
+                    ? '⚠ 这一节的时间和 ' + esc((pClash.get(Number(p.id)) || []).map(c => c.label).join('、')) + ' 重叠，点一下改时间'
+                    : '点一下改节次名称和时间'}">
+                  <span class="tt-p-label">${esc(p.label || p.name || '')}${
+                    (pClash.get(Number(p.id)) || []).length ? '<i class="tt-p-warn">⚠</i>' : ''}</span>
                   <span class="tt-p-time-txt">${
                     p.start_time || p.end_time
                       ? `${esc(p.start_time || '')} – ${esc(p.end_time || '')}` : '未设时间'}</span>
