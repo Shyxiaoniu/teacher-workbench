@@ -70,7 +70,11 @@ STUDENT_SID_FN = None    # handler -> 学号字符串（与花名册 sid 同一�
 ROSTER_PROVIDER = None   # () -> [{cls, sid, name}]，由主服务从学生表投影
 
 MAX_JSON_BODY = 32 * 1024 * 1024       # JSON 请求体上限（全量备份导入要整库回传，8MB 不够）
-MAX_UPLOAD_BODY = 320 * 1024 * 1024    # 上传接口上限（略大于单文件 300MB）
+MAX_UPLOAD_BODY = 320 * 1024 * 1024    # 上传接口上限（略大于单文件 300MB，原始字节流）
+# 课件上传走的是 base64 JSON，体积膨胀 4/3：300MB 文件 → 约 400MB 请求体，
+# 再留 JSON 结构与文件名的余量（2026-11-04：之前误用通用 32MB 上限，
+# 实际传 24MB 以上的课件必失败，与界面承诺的 300MB 相差十几倍）。
+MAX_CW_UPLOAD_BODY = 440 * 1024 * 1024
 
 # ---------------------------------------------------------------------------
 # 持久化层
@@ -556,12 +560,16 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _read_body(self, limit=MAX_JSON_BODY):
+    def _read_body(self, limit=MAX_JSON_BODY, drain_cap=0):
         """读取请求体，带大小上限。
 
         以前直接 `rfile.read(Content-Length)`：一个 `Content-Length: 4G`
         的请求就能把进程内存吃光（无需任何登录）。现在超限直接拒绝，
         并且按 max(0, ·) 处理，负数和非法值都当 0。
+
+        超限拒绝前如果客户端还在发数据，直接回响应会被 TCP RST，
+        浏览器端看到的不是「文件太大」而是「连接中断」。所以先把手头
+        的请求体读掉再拒绝（最多 drain_cap 字节，防止被 4G 请求拖死）。
         """
         try:
             length = int(self.headers.get("Content-Length") or 0)
@@ -570,14 +578,21 @@ class Handler(BaseHTTPRequestHandler):
         if length < 0:
             length = 0
         if length > limit:
+            if drain_cap and length <= drain_cap:
+                left = length
+                while left > 0:
+                    chunk = self.rfile.read(min(1024 * 1024, left))
+                    if not chunk:
+                        break
+                    left -= len(chunk)
             raise ValueError("请求体过大（%d 字节，上限 %d）" % (length, limit))
         if length <= 0:
             return b""
         return self.rfile.read(length)
 
-    def _read_json(self):
+    def _read_json(self, limit=MAX_JSON_BODY):
         try:
-            raw = self._read_body(MAX_JSON_BODY)
+            raw = self._read_body(limit, drain_cap=MAX_CW_UPLOAD_BODY)
         except ValueError as e:
             self._send_json({"ok": False, "msg": str(e)}, 413)
             return None
@@ -813,7 +828,9 @@ class Handler(BaseHTTPRequestHandler):
 
         # ---- 课件库（写操作）----
         if path.startswith("/api/cw/"):
-            data = self._read_json()
+            # 上传是 base64 JSON，膨胀 4/3，单独放宽；其余课件接口走通用上限
+            data = self._read_json(MAX_CW_UPLOAD_BODY if path == "/api/cw/upload"
+                                   else MAX_JSON_BODY)
             if data is None:
                 return
             return self._cw_post(path, u, data)

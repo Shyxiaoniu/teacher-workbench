@@ -33555,7 +33555,14 @@ async function cwReq(ep, body) {
   const opt = body
     ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
     : { cache: 'no-store' };
-  const r = await fetch(CW_API + ep, opt);
+  let r;
+  try {
+    r = await fetch(CW_API + ep, opt);
+  } catch (e) {
+    /* fetch 网络层失败：服务没起、或传输中途连接被掐（大文件最容易触发） */
+    throw new Error(body ? '连接中断（可能是文件太大或本地服务未启动），请重试或换小一点的文件'
+                         : '连不上本地服务，请用「启动工作台」启动后重试');
+  }
   let j = null;
   try { j = await r.json(); } catch (e) { j = null; }
   if (!j) throw new Error(r.status === 404 ? '本地服务版本太旧，缺少课件接口，请用最新版「启动工作台」重启一次'
@@ -34418,35 +34425,38 @@ async function cwUpload(fileList) {
   if (inp && inp.value.trim() !== course) inp.value = course;
   if (msg) msg.innerHTML = '<div class="cw-ok">正在上传 <b>' + files.length + '</b> 个文件到「' + esc(course) + '」…</div>';
   let done = 0, failedAll = [];
-  const CHUNK = Math.max(1, Math.min(6, files.length));
-  try {
-    for (let i = 0; i < files.length; i += CHUNK) {
-      const batch = files.slice(i, i + CHUNK);
-      const payload = [];
-      for (const f of batch) {
-        if (f.size > 300 * 1024 * 1024) { failedAll.push({ name: f.name, msg: '超过 300MB' }); continue; }
+  /* 2026-11-04：改为一次请求只传一个文件。原来一批最多 6 个文件合一个
+     JSON 请求，几个大文件就能把请求体推到上 GB；单文件单请求失败也好定位。 */
+  for (let i = 0; i < files.length; i++) {
+    const f = files[i];
+    const payload = [];
+    if (f.size > 300 * 1024 * 1024) { failedAll.push({ name: f.name, msg: '超过 300MB' }); }
+    else {
+      try {
         const b64 = await cwReadAsB64(f);
         payload.push({ name: f.name, data: b64 });
-      }
-      if (payload.length) {
         const r = await cwReq('upload', { course: course, files: payload });
         done += (r.saved || []).length;
-        failedAll = failedAll.concat(r.failed || []);
+        for (const x of (r.failed || [])) failedAll.push(x);
+      } catch (err) {
+        failedAll.push({ name: f.name, msg: (err && err.message) ? err.message : '传输失败' });
       }
-      if (msg) msg.innerHTML = '<div class="cw-ok">已上传 <b>' + done + '</b> / ' + files.length + ' …</div>';
     }
-    const failTxt = failedAll.length
-      ? '<br><span style="color:#B45309">没传成功的 ' + failedAll.length + ' 个：'
-        + failedAll.slice(0, 4).map(x => esc(x.name) + '（' + esc(x.msg) + '）').join('、')
-        + (failedAll.length > 4 ? ' …' : '') + '</span>'
-      : '';
-    if (msg) msg.innerHTML = '<div class="' + (done ? 'cw-ok' : 'cw-warn') + '">'
-      + (done ? ('✓ 已上传 <b>' + done + '</b> 个文件到「' + esc(course) + '」。点下面的课程卡片就能看到。')
-              : '✗ 没有文件被保存。') + failTxt + '</div>';
+    if (msg) msg.innerHTML = '<div class="cw-ok">已上传 <b>' + done + '</b> / ' + files.length + ' …</div>';
+  }
+  const failTxt = failedAll.length
+    ? '<br><span style="color:#B45309">没传成功的 ' + failedAll.length + ' 个：'
+      + failedAll.slice(0, 4).map(x => esc(x.name) + '（' + esc(x.msg) + '）').join('、')
+      + (failedAll.length > 4 ? ' …' : '') + '</span>'
+    : '';
+  if (msg) msg.innerHTML = '<div class="' + (done ? 'cw-ok' : 'cw-warn') + '">'
+    + (done ? ('✓ 已上传 <b>' + done + '</b> 个文件到「' + esc(course) + '」。点下面的课程卡片就能看到。')
+            : '✗ 没有文件被保存。') + failTxt + '</div>';
+  try {
     await cwReload();
     if (done) await cwPickCourse(course);
   } catch (e) {
-    if (msg) msg.innerHTML = '<div class="cw-warn">上传失败：' + esc(e.message || e) + '</div>';
+    /* 上传本身成功、只是刷新列表失败：不打断，保留成功提示 */
   } finally {
     const el = document.getElementById('cwFileInput');
     if (el) el.value = '';

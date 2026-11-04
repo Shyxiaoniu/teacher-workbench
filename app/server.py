@@ -556,17 +556,21 @@ class Handler(LEG.Handler):
     # 全量恢复的请求体要带学生作品附件（base64），远大于通用 JSON 上限
     MAX_IMPORT_BODY = 96 * 1024 * 1024
 
-    def _read_json(self):
+    def _read_json(self, limit=None):
         """按路径决定请求体上限：导入接口放宽，其余沿用通用限制。
 
         通用上限是 32MB，而全量备份里的附件 base64 后很容易超过它——
         不放开的话「一键恢复」会在带附件时莫名 413，用户只看到「失败」。
+        limit 由调用方传入（如课件上传 440MB）；不传就交给基类按默认规则处理。
         """
         path = urllib.parse.urlparse(self.path).path
         if path != "/api/v2/admin/import":
-            return LEG.Handler._read_json(self)
+            if limit is None:
+                return LEG.Handler._read_json(self)
+            return LEG.Handler._read_json(self, limit)
         try:
-            raw = self._read_body(self.MAX_IMPORT_BODY)
+            raw = self._read_body(self.MAX_IMPORT_BODY,
+                                  drain_cap=LEG.MAX_CW_UPLOAD_BODY)
         except ValueError as e:
             self._json({"ok": False, "code": "too_large",
                         "msg": "备份文件太大，服务端装不下这次恢复（%s）。"
