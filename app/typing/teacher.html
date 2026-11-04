@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>打字练习管理 · 班级工作台</title>
+<!-- 与学生端共用：排行榜小像里的背景与特效（2026-11-05） -->
+<link rel="stylesheet" href="/typing/pet-ui.css?v=20261105">
 <style>
 :root{
   --brand:#F4632E; --brand2:#FF8A4C; --ink:#2B2B33; --ink2:#5C5C68; --ink3:#9A9AA6;
@@ -53,7 +55,7 @@ select{font-family:inherit;font-size:14px;padding:8px 12px;border:1.5px solid va
 .lb-rank.r1{background:linear-gradient(135deg,#FFD34D,#F0A500);color:#fff}
 .lb-rank.r2{background:linear-gradient(135deg,#C8CDD6,#9BA5B3);color:#fff}
 .lb-rank.r3{background:linear-gradient(135deg,#E8A876,#C97B42);color:#fff}
-.lb-pet{width:38px;height:38px;border-radius:12px;flex:none;overflow:hidden;
+.lb-pet{width:44px;height:44px;border-radius:13px;flex:none;overflow:hidden;
   background:radial-gradient(72% 62% at 50% 74%,#FFF8EC 0%,#F8EADC 100%);
   border:1px solid rgba(200,160,120,.28);
   box-shadow:inset 0 1px 0 #fff,0 1px 3px rgba(150,95,50,.1)}
@@ -78,12 +80,62 @@ select{font-family:inherit;font-size:14px;padding:8px 12px;border:1.5px solid va
   border-bottom:1px solid var(--line);box-shadow:0 2px 8px rgba(60,30,10,.05)}
 .play-bar b{font-size:14px}
 .play-view iframe{flex:1;width:100%;border:0}
+/* ---------- 金币管理（2026-11-05 晚重做） ----------
+   对齐德育页的规范：表单控件统一 36px 高 / 9px 圆角 / 1px 描边，
+   备注改成「标签 + 输入框」两段式，快捷标签沿用德育项目按钮的样式
+   （.mor-items .mor-btn 那一套：白底细边 → 选中品牌色 + 淡底 + 1.5px 光圈）。 */
+:root{--bad:#E24B4A;--brand-soft:#FFF1E8}
+.coin-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:10px;
+  align-items:end;margin-top:12px}
+.fld{display:flex;flex-direction:column;gap:5px;min-width:0}
+.fld>span{font-size:11.5px;color:var(--ink3);font-weight:600;letter-spacing:.2px}
+input[type=text],input[type=number]{font-family:inherit;font-size:13.5px;color:var(--ink);
+  background:#fff;border:1px solid var(--line);border-radius:9px;height:36px;padding:0 11px;
+  transition:border-color .16s,box-shadow .16s;width:100%}
+select{height:36px;border-radius:9px;border:1px solid var(--line);font-size:13.5px;
+  transition:border-color .16s,box-shadow .16s;width:100%}
+input[type=text]:focus,input[type=number]:focus,select:focus{outline:none;
+  border-color:var(--brand);box-shadow:0 0 0 3px rgba(244,99,46,.14)}
+input::placeholder{color:var(--ink3)}
+.coin-form .btn{height:36px;padding:0 22px;border-radius:9px;font-size:14px}
+.note-row{display:flex;align-items:center;gap:8px;margin-top:12px}
+.tag-lbl{font-size:11.5px;color:var(--ink3);font-weight:600;flex:none;letter-spacing:.2px}
+.note-row input{flex:1;min-width:0}
+.tags{display:flex;flex-wrap:wrap;gap:7px;margin-top:9px}
+.tag{border:1px solid var(--line);background:#fff;border-radius:8px;padding:5px 11px;
+  font-family:inherit;font-size:12.5px;color:var(--ink2);cursor:pointer;
+  transition:border-color .12s,color .12s,transform .12s,background .12s}
+.tag:hover{border-color:var(--brand);color:var(--brand);transform:translateY(-1px)}
+.tag.on{border-color:var(--brand);background:var(--brand-soft);color:var(--brand);font-weight:600;
+  box-shadow:0 0 0 1.5px rgba(244,99,46,.35)}
+.coin-sec{display:flex;align-items:baseline;gap:8px;margin-top:16px}
+.coin-sec .sec-unit{font-size:11.5px;color:var(--ink3)}
+.coin-bal{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px;max-height:118px;overflow:auto}
+.coin-chip{font-size:12.5px;background:#fff;border:1px solid var(--line);border-radius:999px;
+  padding:3px 10px;color:var(--ink2)}
+.coin-chip b{color:var(--brand);font-variant-numeric:tabular-nums}
+.coin-chip i{font-style:normal;color:var(--purple);font-variant-numeric:tabular-nums}
+.coin-log{margin-top:7px;max-height:190px;overflow:auto}
+.cl-row{display:flex;align-items:center;gap:8px;padding:6px 4px;font-size:12.5px;
+  border-bottom:1px dashed var(--line)}
+.cl-row:last-child{border-bottom:none}
+.cl-time{width:76px;flex:none;color:var(--ink3);font-size:11.5px}
+.cl-who{flex:none;color:var(--ink2);max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cl-nm{flex:none;font-weight:700;color:var(--ink);max-width:110px;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.cl-delta{flex:none;min-width:46px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+.cl-delta.up{color:var(--ok)}
+.cl-delta.dn{color:var(--bad)}
+.cl-note{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  padding:2px 9px;border-radius:8px;border:1px solid var(--line);background:#FFFBF7;
+  color:var(--ink2);font-size:11.5px}
+.cl-empty{color:var(--ink3);font-size:12.5px;padding:4px 2px}
 </style>
 </head>
 <body>
 <div id="app"><div style="text-align:center;padding:80px 0;color:#B9AFA4">正在加载打字练习管理面板…</div></div>
 <div class="toast" id="toast"></div>
-<script src="/typing/typing-data.js?v=20261102x"></script>
+<script src="/typing/typing-data.js?v=20261105a"></script>
 <script>
 (function () {
 'use strict';
@@ -194,18 +246,31 @@ function body() {
       '<h2>🪙 金币管理</h2>' +
       '<div class="hint">给学生个人或全班发放 / 扣除打字冒险岛金币：奖励课堂表现好、练习认真的同学，' +
         '或把乱刷的扣回来。学生端约 12 秒内同步到新余额；每一笔操作都记录在案，随数据导入导出不丢。</div>' +
-      '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px">' +
-        '<select id="coinCls">' + clsOpts + '</select>' +
-        '<select id="coinStu"><option value="">全班所有人</option></select>' +
-        '<input id="coinAmt" type="number" min="1" max="10000" value="10" style="width:88px" title="金币数量">' +
-        '<select id="coinMode"><option value="add">发放（+）</option><option value="sub">扣除（−）</option></select>' +
-        '<input id="coinNote" placeholder="备注（选填），如：课堂表现出色" style="flex:1;min-width:150px">' +
+      '<div class="coin-form">' +
+        '<label class="fld"><span>班级</span><select id="coinCls">' + clsOpts + '</select></label>' +
+        '<label class="fld"><span>对象</span><select id="coinStu"><option value="">全班所有人</option></select></label>' +
+        '<label class="fld"><span>数量</span>' +
+          '<input id="coinAmt" type="number" min="1" max="10000" value="10" title="金币数量"></label>' +
+        '<label class="fld"><span>方式</span><select id="coinMode">' +
+          '<option value="add">发放（+）</option><option value="sub">扣除（−）</option></select></label>' +
         '<button class="btn" id="coinDo">执行</button>' +
       '</div>' +
-      '<div style="font-size:12.5px;color:var(--ink3);margin-top:14px">当前班级余额（🪙 金币 / ✨ 积分）：</div>' +
-      '<div id="coinBal" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;max-height:120px;overflow:auto"></div>' +
-      '<div style="font-size:12.5px;color:var(--ink3);margin-top:14px">最近操作记录：</div>' +
-      '<div id="coinLogBox" style="margin-top:6px;max-height:190px;overflow:auto;font-size:13px"></div>' +
+      /* 备注：先把德育页那套「标签」搬过来 —— 常用理由点一下就填好，
+         不用每次敲字，也不会出现「课堂表现好」「表现好」两种写法各记一条。 */
+      '<div class="note-row">' +
+        '<span class="tag-lbl">备注</span>' +
+        '<input id="coinNote" type="text" maxlength="40" placeholder="点下面的常用标签，或自己写一句（选填）">' +
+      '</div>' +
+      '<div class="tags" id="coinTagBox">' +
+        ['课堂表现出色', '练习认真', '进步明显', '帮助同学', '遵守纪律', '乱刷扣回'].map(function (t) {
+          return '<button class="tag" type="button" data-note="' + t + '">' + t + '</button>';
+        }).join('') +
+      '</div>' +
+      '<div class="coin-sec"><span class="tag-lbl">当前班级余额</span>' +
+        '<span class="sec-unit">🪙 金币 / ✨ 积分</span></div>' +
+      '<div id="coinBal" class="coin-bal"></div>' +
+      '<div class="coin-sec"><span class="tag-lbl">最近操作记录</span></div>' +
+      '<div id="coinLogBox" class="coin-log"></div>' +
     '</div>' +
     '<div class="card" style="margin-top:14px">' +
       '<h2>班级排行榜</h2>' +
@@ -272,6 +337,29 @@ function bind() {
   if (ccls) ccls.onchange = function () { S.coinCls = ccls.value; S.coinStu = ''; paintCoinBoxes(); };
   var cstus = $('#coinStu');
   if (cstus) cstus.onchange = function () { S.coinStu = cstus.value; };
+  /* 备注快捷标签：点一下填进输入框并高亮，再点取消；手动改字就自动取消高亮 */
+  document.querySelectorAll('#coinTagBox [data-note]').forEach(function (b) {
+    b.onclick = function () {
+      var box = $('#coinNote');
+      var val = b.getAttribute('data-note') || '';
+      var on = !b.classList.contains('on');
+      document.querySelectorAll('#coinTagBox [data-note]').forEach(function (x) {
+        x.classList.remove('on');
+      });
+      if (on) {
+        b.classList.add('on');
+        if (box) box.value = val;
+      } else if (box) {
+        box.value = '';
+      }
+    };
+  });
+  var cn = $('#coinNote');
+  if (cn) cn.oninput = function () {
+    document.querySelectorAll('#coinTagBox [data-note]').forEach(function (x) {
+      x.classList.toggle('on', x.getAttribute('data-note') === cn.value.trim());
+    });
+  };
   var cdo = $('#coinDo');
   if (cdo) cdo.onclick = function () {
     if (S.demo) { toast('演示模式：金币管理需要登录教师账号'); return; }
@@ -293,6 +381,7 @@ function bind() {
       if (r && r.ok) {
         toast('已' + (delta > 0 ? '发放' : '扣除') + ' ' + r.count + ' 名学生');
         if ($('#coinNote')) $('#coinNote').value = '';
+        document.querySelectorAll('#coinTagBox [data-note]').forEach(function (x) { x.classList.remove('on'); });
         loadCoins();
       } else toast((r && r.msg) || '操作失败');
     });
@@ -336,10 +425,11 @@ function loadLb() {
     box.innerHTML = rows.map(function (r, i) {
       var rankCls = i === 0 ? 'r1' : i === 1 ? 'r2' : i === 2 ? 'r3' : '';
       var medal = i < 3 ? ['🥇', '🥈', '🥉'][i] : (i + 1);
-      var pet = r.pet ? TD.petSvg(r.pet, r.decos) : '';
-      return '<div class="lb-row">' +
+      /* 宠物 + 背景 + 特效一起画：与牧场、学生端榜单同一套渲染（2026-11-05） */
+      var tile = TD.petTile({ pet: r.pet, decos: r.decos, bg: r.bg, fx: r.fx, cls: 'lb-pet' });
+      return '<div class="lb-row' + (r.me ? ' me' : '') + '">' +
         '<span class="lb-rank ' + rankCls + '">' + medal + '</span>' +
-        (pet ? '<span class="lb-pet">' + pet + '</span>' : '<span class="lb-pet empty">🐾</span>') +
+        tile +
         '<span class="lb-name">' + esc(r.name) +
           (r.student_no ? '<small style="font-weight:400;color:var(--ink3)"> ' + esc(r.student_no) + ' 号</small>' : '') + '</span>' +
         '<span class="lb-val">' + (Math.round(r.value * 10) / 10) + '<small>' + unit + '</small></span>' +
@@ -386,13 +476,13 @@ function paintCoinBoxes() {
   if (bal) {
     var list = clsStudents(S.coinCls);
     bal.innerHTML = S.demo
-      ? '<span style="color:var(--ink3);font-size:13px">演示模式：登录后这里显示各班余额</span>'
+      ? '<span class="cl-empty">演示模式：登录后这里显示各班余额</span>'
       : (list.length
         ? list.map(function (s) {
-            return '<span style="font-size:12.5px;background:rgba(230,168,46,.12);border:1px solid rgba(230,168,46,.3);' +
-              'border-radius:999px;padding:3px 10px">' + esc(s.name) + ' 🪙' + s.coins + ' ✨' + s.pts + '</span>';
+            return '<span class="coin-chip">' + esc(s.name) +
+              ' <b>🪙 ' + (s.coins || 0) + '</b> <i>✨ ' + (s.pts || 0) + '</i></span>';
           }).join('')
-        : '<span style="color:var(--ink3);font-size:13px">这个班还没有学生</span>');
+        : '<span class="cl-empty">这个班还没有学生</span>');
   }
   if (lg) {
     lg.innerHTML = (d.log || []).length
@@ -400,13 +490,18 @@ function paintCoinBoxes() {
           var t = new Date((e.ts || 0) * 1000);
           var ts = (t.getMonth() + 1) + '/' + t.getDate() + ' ' +
             String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0');
-          return '<div style="padding:3px 0;color:var(--ink2)">' + ts +
-            ' · <b>' + esc(e.by || '老师') + '</b> 给 ' + esc(e.name || '?') + ' ' +
-            ((e.delta || 0) > 0 ? '+' : '') + (e.delta || 0) + ' 金币' +
-            (e.note ? '<span style="color:var(--ink3)">（' + esc(e.note) + '）</span>' : '') +
+          var up = (e.delta || 0) > 0;
+          /* 行结构与德育流水一致：时间 / 操作人 / 对象 / 分值 / 备注标签 */
+          return '<div class="cl-row">' +
+            '<span class="cl-time">' + ts + '</span>' +
+            '<span class="cl-who">' + esc(e.by || '老师') + '</span>' +
+            '<span class="cl-nm">' + esc(e.name || '?') + '</span>' +
+            '<span class="cl-delta ' + (up ? 'up' : 'dn') + '">' +
+              (up ? '+' : '') + (e.delta || 0) + '</span>' +
+            (e.note ? '<span class="cl-note" title="' + esc(e.note) + '">' + esc(e.note) + '</span>' : '') +
             '</div>';
         }).join('')
-      : '<span style="color:var(--ink3);font-size:13px">还没有金币操作记录</span>';
+      : '<span class="cl-empty">还没有金币操作记录</span>';
   }
 }
 function loadCoins() {

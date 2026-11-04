@@ -1,0 +1,60 @@
+/* 宠物小像共用样式（2026-11-05 晚）
+   ------------------------------------------------------------------
+   顶栏头像、排行榜每一行、牧场卡片都用同一套「宠物 + 背景 + 特效」，
+   学生端和教师端各引一份，避免两边各画一套导致「牧场里有背景、榜上却光秃秃」。
+   尺寸由外层类决定（.pet-mini 44px / .lb-pet 38-56px），这里只管层叠与粒子。 */
+
+.pet-tile{position:relative;display:block;overflow:hidden;isolation:isolate}
+/* 脚下的一团柔光：换到「星夜 / 太空」这类深色背景时，宠物不至于糊成一团 */
+.pet-tile::before{
+  content:'';position:absolute;inset:0;z-index:0;pointer-events:none;
+  background:radial-gradient(68% 54% at 50% 82%,rgba(255,255,255,.52) 0%,rgba(255,255,255,0) 72%);
+}
+.pet-tile>svg{position:relative;z-index:1;display:block;width:100%;height:100%}
+.pet-tile .pt-empty{
+  position:relative;z-index:1;display:flex;align-items:center;justify-content:center;
+  width:100%;height:100%;font-size:16px;color:#D8CFC5;
+}
+.pet-tile .pt-empty{font-size:inherit}
+
+/* 特效层：铺满小像，粒子全部绝对定位，不参与布局 */
+.pch-fx{position:absolute;inset:0;z-index:2;pointer-events:none;overflow:hidden;border-radius:inherit}
+.pch-fx i{
+  position:absolute;font-style:normal;line-height:1;opacity:0;font-size:9px;
+  will-change:transform,opacity;
+}
+.pch-fx i.bub{
+  width:6px;height:6px;border-radius:50%;border:1px solid rgba(140,200,255,.9);
+  background:radial-gradient(circle at 32% 30%,rgba(255,255,255,.95),rgba(170,215,255,.3) 64%,rgba(150,200,255,.05));
+}
+/* 四类粒子：闪 / 泡 / 心 / 雪（尺寸按小像缩过，牧场大舞台走 .stage-fx） */
+.pch-sparkle i{animation:pchTwinkle 2.4s ease-in-out infinite}
+.pch-bubbles i{animation:pchBubble 3.8s ease-in infinite}
+.pch-hearts i{animation:pchHeart 3.4s ease-in-out infinite}
+.pch-snow i{font-size:7px;animation:pchSnow 4.6s linear infinite}
+/* 光环 / 极光：小像里用一层柔光，不做全屏 */
+.pch-rainbow::before{
+  content:'';position:absolute;left:50%;top:6%;width:74%;height:34%;transform:translateX(-50%);
+  border-radius:50%;opacity:.75;filter:blur(3px) saturate(1.2);
+  background:conic-gradient(#FF6B6B,#FFB35C,#FFE066,#7BE382,#5CC9FF,#B28DFF,#FF6B6B);
+  animation:pchHue 3.4s linear infinite;
+}
+.pch-aurora::before{
+  content:'';position:absolute;inset:-20%;opacity:.6;filter:blur(6px);
+  background:linear-gradient(115deg,#63E6BE 0%,transparent 36%,#7FA7FF 56%,transparent 74%,#B78CFF 100%);
+  background-size:220% 100%;animation:pchAurora 7s ease-in-out infinite alternate;
+}
+@keyframes pchTwinkle{0%,100%{opacity:0;transform:scale(.4)}45%,60%{opacity:1;transform:scale(1)}}
+@keyframes pchBubble{0%{opacity:0;transform:translateY(4px) scale(.5)}20%{opacity:.95}
+  100%{opacity:0;transform:translateY(-26px) scale(1.05)}}
+@keyframes pchHeart{0%{opacity:0;transform:translateY(3px) scale(.5)}28%{opacity:.95}
+  65%{opacity:.8;transform:translateY(-14px) scale(1) rotate(12deg)}
+  100%{opacity:0;transform:translateY(-26px) scale(.75) rotate(-8deg)}}
+@keyframes pchSnow{0%{opacity:0;transform:translateY(-4px)}14%{opacity:.9}
+  100%{opacity:.15;transform:translateY(38px)}}
+@keyframes pchHue{0%{filter:blur(3px) saturate(1.2) hue-rotate(0)}
+  100%{filter:blur(3px) saturate(1.2) hue-rotate(360deg)}}
+@keyframes pchAurora{0%{background-position:0 0}100%{background-position:100% 0}}
+@media (prefers-reduced-motion: reduce){
+  .pch-fx i,.pch-rainbow::before,.pch-aurora::before{animation:none;opacity:.8}
+}

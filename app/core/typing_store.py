@@ -123,6 +123,38 @@ def pts_for(stars, stage, chapter, repeat):
     return stars * table.get(int(stage), 1) + max(0, int(chapter) - 1)
 
 
+def clean_equip(eq):
+    """把客户端传来的阵容收敛成固定四字段 {pet, decos, bg, fx}。
+
+    排行榜 / 教师行统一从这里取值 —— 以前排行榜只搬 pet+decos，
+    背景和特效（2026-11-05 新增）压根没往后传，学生端榜单里
+    宠物是「裸的」，跟牧场里穿好的一模一样对不上。
+    """
+    e = eq if isinstance(eq, dict) else {}
+    decos = e.get("decos")
+    if not isinstance(decos, (list, tuple)):
+        decos = []
+    return {
+        "pet": str(e.get("pet") or ""),
+        "decos": [str(d) for d in decos if d],
+        "bg": str(e.get("bg") or ""),
+        "fx": str(e.get("fx") or ""),
+    }
+
+
+def _equip_for_lb(stu):
+    """排行榜用的阵容：没手动选过出战宠物时，默认用已拥有的第一只，
+    这样「孵出来了但忘了点出战」的同学在榜上也看得见自己的宠物，
+    而不是清一色 🐾 爪印。"""
+    eq = clean_equip(stu.get("equip"))
+    if not eq["pet"]:
+        pets = stu.get("pets") or []
+        eq["pet"] = str(pets[0]) if pets else ""
+    if not eq["pet"]:
+        eq["decos"] = []
+    return eq
+
+
 def week_key(ts=None):
     """ISO 周标识，如 2026-W45；每周一自动切换 = 周榜自动清零"""
     t = time.localtime(ts or time.time())
@@ -664,6 +696,11 @@ class TypingStore:
             # 总星口径与学生一致：各关最高星之和（week 已是累计口径）
             t["stars"] = sum(b.get("stars", 0) for b in best.values())
             t["best_wpm"] = max([b.get("wpm", 0) for b in best.values()], default=0)
+            # 2026-11-05 晚：老师这一行也要有自己的宠物 / 装扮 / 背景 / 特效。
+            # 以前排行榜里「老师」是写死 pet="" 的，老师在牧场里打扮了半天，
+            # 榜上永远是个灰爪印。
+            if isinstance(body.get("equip"), dict):
+                t["equip"] = clean_equip(body.get("equip"))
             t["updated"] = int(time.time())
             try:
                 self._save()
@@ -687,7 +724,28 @@ class TypingStore:
             else:
                 v = t.get("stars", 0)
             return {"value": v, "stars": t.get("stars", 0),
-                    "name": t.get("name") or "老师"}
+                    "name": t.get("name") or "老师",
+                    **_equip_for_lb({"equip": t.get("equip")})}
+
+    def teacher_equip(self, cid, equip):
+        """老师换宠物 / 换装 / 换背景特效时同步一份到该班档案。
+
+        老师是在自己的游戏页里打扮的（本机存），不上榜时根本不走
+        teacher_record，所以单独给一个轻量入口，让排行榜那行实时跟上。
+        """
+        if not str(cid or "").strip():
+            return {"ok": False, "msg": "缺少班级"}
+        with self.lock:
+            t = self.data.setdefault("teacher", {}).setdefault(str(cid), {})
+            if not isinstance(t, dict):
+                t = {}
+                self.data["teacher"][str(cid)] = t
+            t["equip"] = clean_equip(equip)
+            try:
+                self._save()
+            except Exception:
+                pass
+            return {"ok": True, "equip": t["equip"]}
 
     # ---------------- 排行榜 ----------------
     def leaderboard_data(self, scope):
@@ -712,8 +770,7 @@ class TypingStore:
                     v = stu.get("stars", 0)
                 out[uid] = {"value": v,
                             "stars": stu.get("stars", 0),
-                            "pet": (stu.get("equip") or {}).get("pet", ""),
-                            "decos": (stu.get("equip") or {}).get("decos", [])}
+                            **_equip_for_lb(stu)}
         return out
 
     def reset_week(self):

@@ -1388,6 +1388,51 @@ window.TD = (function () {
     }
   }
 
+  /* ---------------- 宠物小像（顶栏 / 排行榜 / 牧场卡片共用，2026-11-05 晚） ----------------
+     以前三处各写各的：顶栏只塞一只 SVG、排行榜也只塞 SVG，背景和特效
+     只画在牧场大舞台上 —— 同一个学生在牧场里「戴帽子 + 星空」，榜上却是
+     一只光秃秃的宠物，看着像数据没同步。现在统一走这里：
+     背景 = 牧场背景渐变，特效 = 缩小的粒子层（CSS 在 /typing/pet-ui.css）。 */
+  function fxMini(fx) {
+    if (!fx || !effectById(fx)) return '';
+    var out = '<span class="pch-fx pch-' + fx + '">', i;
+    if (fx === 'sparkle') {
+      for (i = 0; i < 5; i++)
+        out += '<i style="left:' + (10 + i * 18) + '%;top:' + (12 + ((i * 27) % 60)) +
+          '%;animation-delay:' + (i * .42) + 's">✨</i>';
+    } else if (fx === 'bubbles') {
+      for (i = 0; i < 4; i++)
+        out += '<i class="bub" style="left:' + (14 + i * 22) + '%;bottom:' +
+          (5 + (i % 2) * 7) + 'px;animation-delay:' + (i * .9) + 's"></i>';
+    } else if (fx === 'hearts') {
+      for (i = 0; i < 3; i++)
+        out += '<i style="left:' + (18 + i * 26) + '%;bottom:12%;animation-delay:' +
+          (i * .8) + 's">💖</i>';
+    } else if (fx === 'snow') {
+      for (i = 0; i < 5; i++)
+        out += '<i style="left:' + (7 + i * 20) + '%;top:0;animation-delay:' +
+          (i * .72) + 's">❄</i>';
+    }
+    return out + '</span>';
+  }
+
+  /** 生成一整个小像：背景（可选）+ 特效（可选）+ 宠物本体（没有就爪印）
+      o = {pet, decos, bg, fx, cls, opts, title}
+      cls 决定尺寸（pet-mini / lb-pet …），样式各自在外层定义。 */
+  function petTile(o) {
+    o = o || {};
+    var cls = o.cls || 'lb-pet';
+    var bg = o.bg ? bgById(o.bg) : null;
+    var st = (bg && bg.id) ? ' style="background:' + bg.css + '"' : '';
+    var inner = fxMini(o.fx);
+    /* 宠物 id 必须在图鉴里，否则渲染出空白小像（老档案里可能有已下线的 id） */
+    inner += (o.pet && petById(o.pet))
+      ? petSvg(o.pet, o.decos || [], o.opts || {})
+      : '<span class="pt-empty">🐾</span>';
+    var ttl = o.title ? ' title="' + String(o.title).replace(/"/g, '&quot;') + '"' : '';
+    return '<span class="' + cls + ' pet-tile"' + ttl + st + '>' + inner + '</span>';
+  }
+
   return {
     STAGES: STAGES, stageById: stageById, KEY_LESSONS: KEY_LESSONS,
     EN_WORDS: EN_WORDS, EN_SENT: EN_SENT,
@@ -1402,6 +1447,7 @@ window.TD = (function () {
     STAR_RULE: STAR_RULE, GRADES: GRADES, GRADE_GROUP: GRADE_GROUP,
     petById: petById, decoById: decoById, titleFor: titleFor,
     catName: catName, slotClash: slotClash, equipDeco: equipDeco, itemById: itemById,
-    nextTitle: nextTitle, petSvg: petSvg, decoSvg: decoSvg
+    nextTitle: nextTitle, petSvg: petSvg, decoSvg: decoSvg,
+    petTile: petTile, fxMini: fxMini
   };
 })();

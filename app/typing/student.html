@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>打字冒险岛 · 班级工作台</title>
 <meta name="theme-color" content="#B45B33">
+<!-- 宠物小像（背景 + 特效）与教师端排行榜共用同一份样式，避免两边长相不一致 -->
+<link rel="stylesheet" href="/typing/pet-ui.css?v=20261105">
 <script>
 /* 主题：与主站共用同一个存储键 wb-smode。
    放在 <head> 里同步执行 —— 首屏就是对的颜色，不会先亮一下再切暗
@@ -92,6 +94,8 @@ body{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;background
   radial-gradient(1200px 500px at 80% -10%, var(--glow1) 0%, transparent 60%),
   radial-gradient(900px 400px at -10% 110%, var(--glow2) 0%, transparent 55%),
   var(--bg);
+  /* 固定在视口：吸顶区要复制同一套背景（.stick-top），两层都 fixed 才对得齐 */
+  background-attachment:fixed;
   color:var(--ink);-webkit-font-smoothing:antialiased}
 #app{max-width:1180px;margin:0 auto;padding:14px 16px 20px}
 button{font-family:inherit;cursor:pointer;border:none;background:none}
@@ -106,6 +110,23 @@ button{font-family:inherit;cursor:pointer;border:none;background:none}
 /* 顶栏 */
 .top{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);
   border-radius:18px;padding:10px 16px;box-shadow:0 6px 20px var(--shadow)}
+/* 吸顶区（2026-11-05）：顶栏 + 教师练习条 + 页签整体常驻。
+   排行榜动辄几十行，往下翻的时候星数/金币/宠物还得看得见，
+   否则学生翻到一半就不知道自己在看谁的榜。
+   实现要点：留出 padding 让卡片离屏幕顶 6px，用负 margin 把这段 padding
+   吃回去（静止时位置不变）；top 取负值让背景色向上铺满，
+   滚动时不会有内容从缝里透出来（半透明+模糊那版实测会透出卡片边缘）。 */
+.stick-top{position:sticky;top:-14px;z-index:30;
+  margin:-20px -6px 0;padding:20px 6px 6px;
+  /* 背景 = 与 body 完全相同的一套（同样 fixed），这样它是实底的、挡得住
+     下方内容，又和周围页面严丝合缝，不会留下一条色块分界。 */
+  background:
+    radial-gradient(1200px 500px at 80% -10%, var(--glow1) 0%, transparent 60%),
+    radial-gradient(900px 400px at -10% 110%, var(--glow2) 0%, transparent 55%),
+    var(--bg);
+  background-attachment:fixed;
+  border-radius:0 0 18px 18px}
+body.embed .stick-top{margin:-20px -4px 0;padding:20px 4px 6px}
 .logo{font-size:22px;font-weight:800;color:var(--brand);letter-spacing:1px;white-space:nowrap}
 .logo small{font-size:12px;color:var(--ink3);font-weight:400;margin-left:6px}
 .meter{display:flex;gap:8px;align-items:center;margin-left:auto;flex-wrap:wrap}
@@ -1166,7 +1187,7 @@ html[data-mode="dark"] .tabs button.on{box-shadow:0 4px 12px rgba(0,0,0,.32)}
 <div id="app"><div style="text-align:center;padding:80px 0;color:var(--ink3)">正在登上打字冒险岛…</div></div>
 <script src="/student/ui-dialog.js?v=20261102"></script>
 <script src="/typing/pinyin.js?v=20261102w"></script>
-<script src="/typing/typing-data.js?v=20261102x"></script>
+<script src="/typing/typing-data.js?v=20261105a"></script>
 <script src="/typing/articles.js?v=20261103a"></script>
 <script src="/typing/levels.js?v=20261102x"></script>
 <script>
@@ -1178,7 +1199,7 @@ var S = {
   role: null, demo: false, me: null, progress: null, config: { enabled: false, grades: [] },
   view: 'map', map: { stage: 1, chapter: 1 }, play: null,
   lb: { scope: 'week', rows: [], class_name: '' },
-  ranch: { pet: '', decos: [] },
+  ranch: { pet: '', decos: [], bg: '', fx: '' },
   /* 文章阅读：art.id 是当前在读的文章，art.type 是文章库切到的分类 */
   art: { id: '', type: 'all' },
   shop: false,
@@ -1373,50 +1394,71 @@ function ranchFromEquip(equip) {
   return { pet: e.pet || '', decos: e.decos || [], bg: e.bg || '', fx: e.fx || '' };
 }
 
+/** 顶栏头像的悬停说明：一眼看清「这是哪个伙伴 + 什么背景 + 什么特效」 */
+function petTitleText() {
+  var bits = [];
+  var p = S.ranch.pet ? TD.petById(S.ranch.pet) : null;
+  bits.push(p ? '出战宠物：' + p.name : '还没有出战宠物');
+  var bg = S.ranch.bg ? TD.bgById(S.ranch.bg) : null;
+  if (bg && bg.id) bits.push('背景：' + bg.name);
+  var fx = S.ranch.fx ? TD.effectById(S.ranch.fx) : null;
+  if (fx) bits.push('特效：' + fx.name);
+  return bits.join(' · ');
+}
+
 /* ---------------- 渲染框架 ---------------- */
 function render() {
   var st = TD.titleFor(S.progress.stars || 0);
-  var petSvg = TD.petSvg(S.ranch.pet, S.ranch.decos);
+  /* 顶栏头像跟牧场同源：背景 + 特效 + 装扮一起带出来（2026-11-05） */
+  var petMini = TD.petTile({ pet: S.ranch.pet, decos: S.ranch.decos,
+                             bg: S.ranch.bg, fx: S.ranch.fx, cls: 'pet-mini',
+                             title: petTitleText() });
+  var enrolled = !(S.role === 'student' && !S.config.enabled);
   var html =
-    '<div class="top">' +
-      '<span class="logo">⌨️ 打字冒险岛<small>班级工作台</small></span>' +
-      '<div class="meter">' +
-        '<span class="chip">⭐ ' + (S.progress.stars || 0) + ' 星</span>' +
-        '<span class="chip b">🪙 ' + (S.progress.coins || 0) + '</span>' +
-        '<span class="chip b">✨ ' + (S.progress.pts || 0) + '</span>' +
-        '<span class="chip p">' + esc(st.name) + '</span>' +
-        (S.progress.eggs ? '<span class="chip b">🥚 ×' + S.progress.eggs + '</span>' : '') +
-        '<span class="pet-mini" title="出战宠物">' + (petSvg || '🐾') + '</span>' +
-        '<button class="mode-btn" id="modeBtn" type="button" title="切换浅色 / 夜间">'
-          + (themeIsDark() ? '☀' : '🌙') + '</button>' +
+    '<div class="stick-top">' +
+      '<div class="top">' +
+        '<span class="logo">⌨️ 打字冒险岛<small>班级工作台</small></span>' +
+        '<div class="meter">' +
+          '<span class="chip">⭐ ' + (S.progress.stars || 0) + ' 星</span>' +
+          '<span class="chip b">🪙 ' + (S.progress.coins || 0) + '</span>' +
+          '<span class="chip b">✨ ' + (S.progress.pts || 0) + '</span>' +
+          '<span class="chip p">' + esc(st.name) + '</span>' +
+          (S.progress.eggs ? '<span class="chip b">🥚 ×' + S.progress.eggs + '</span>' : '') +
+          /* 头像 title：悬停能看到当前背景/特效名，老师问「你那个光环哪来的」好回答 */
+          petMini +
+          '<button class="mode-btn" id="modeBtn" type="button" title="切换浅色 / 夜间">'
+            + (themeIsDark() ? '☀' : '🌙') + '</button>' +
+        '</div>' +
       '</div>' +
+      (S.demo && S.role !== 'teacher'
+        ? '<div class="demo-bar">🎬 演示模式：当前未登录，展示的是示例数据，成绩只存在本机。' +
+          '学生登录后进入这里，成绩会真实记录并上榜。</div>' : '') +
+      (S.demo && S.role === 'teacher'
+        ? '<div class="demo-bar teacher-bar">👩‍🏫 <b>教师练习模式</b>：和学生同一张冒险地图，成绩默认只存本机。' +
+          '<label class="tw-lb"><input type="checkbox" id="twLb"' + (S.teacherLb && S.teacherLb.on ? ' checked' : '') + '>' +
+          '把我的成绩计入</label>' +
+          /* 班级下拉：从 S.teacherClasses 现取现拼（2026-11-04 修复）。
+             以前写死「加载中…」占位，只有 boot 时 overview 回来那一刻才补数据——
+             切一次标签页 render() 重画就永远停在「加载中…」，班级列表识别不到。 */
+          '<select id="twCls"' + (S.teacherLb && S.teacherLb.on ? '' : ' disabled') + '>' +
+          ((S.teacherClasses && S.teacherClasses.length)
+            ? S.teacherClasses.map(function (c) {
+                return '<option value="' + esc(c.id) + '"' +
+                  (c.id === S.teacherLb.class_id ? ' selected' : '') + '>' + esc(c.name) + '</option>';
+              }).join('')
+            : '<option>加载中…</option>') +
+          '</select>' +
+          '<span class="tw-tip">班级排行榜（选班后生效）</span></div>' : '') +
+      (enrolled
+        ? '<div class="tabs">' +
+            tabBtn('map', '🗺 冒险地图') + tabBtn('lb', '🏆 排行榜') + tabBtn('ranch', '🐾 宠物牧场') +
+          '</div>'
+        : '') +
     '</div>' +
-    (S.demo && S.role !== 'teacher'
-      ? '<div class="demo-bar">🎬 演示模式：当前未登录，展示的是示例数据，成绩只存在本机。' +
-        '学生登录后进入这里，成绩会真实记录并上榜。</div>' : '') +
-    (S.demo && S.role === 'teacher'
-      ? '<div class="demo-bar teacher-bar">👩‍🏫 <b>教师练习模式</b>：和学生同一张冒险地图，成绩默认只存本机。' +
-        '<label class="tw-lb"><input type="checkbox" id="twLb"' + (S.teacherLb && S.teacherLb.on ? ' checked' : '') + '>' +
-        '把我的成绩计入</label>' +
-        /* 班级下拉：从 S.teacherClasses 现取现拼（2026-11-04 修复）。
-           以前写死「加载中…」占位，只有 boot 时 overview 回来那一刻才补数据——
-           切一次标签页 render() 重画就永远停在「加载中…」，班级列表识别不到。 */
-        '<select id="twCls"' + (S.teacherLb && S.teacherLb.on ? '' : ' disabled') + '>' +
-        ((S.teacherClasses && S.teacherClasses.length)
-          ? S.teacherClasses.map(function (c) {
-              return '<option value="' + esc(c.id) + '"' +
-                (c.id === S.teacherLb.class_id ? ' selected' : '') + '>' + esc(c.name) + '</option>';
-            }).join('')
-          : '<option>加载中…</option>') +
-        '</select>' +
-        '<span class="tw-tip">班级排行榜（选班后生效）</span></div>' : '') +
-    (S.role === 'student' && !S.config.enabled
-      ? '<div class="off-bar"><div class="big">🚧</div><h2>老师还没开放打字练习</h2>' +
-        '<p>等老师在教师端打开开关，这里就会变成打字冒险岛。<br>先回「今日」页看看别的任务吧。</p></div>'
-      :
-      '<div class="tabs">' +
-        tabBtn('map', '🗺 冒险地图') + tabBtn('lb', '🏆 排行榜') + tabBtn('ranch', '🐾 宠物牧场') +
-      '</div>' + '<div id="view"></div>') +
+    (enrolled ? '' :
+      '<div class="off-bar"><div class="big">🚧</div><h2>老师还没开放打字练习</h2>' +
+        '<p>等老师在教师端打开开关，这里就会变成打字冒险岛。<br>先回「今日」页看看别的任务吧。</p></div>') +
+    (enrolled ? '<div id="view"></div>' : '') +
     '<span class="credit">打字冒险岛 · 班级工作台 2.0 · 牛老师设计</span>';
   app.classList.add('ui-big');   /* 非练习页：内容按视口高度铺开，减少底部空白 */
   app.innerHTML = html;
@@ -2229,7 +2271,8 @@ function paintArt() {
 }
 function renderPlay() {
   var P = S.play, L = P.L, stage = TD.stageById(L.stage) || TD.STAGES[0];
-  var petHtml = TD.petSvg(S.ranch.pet, S.ranch.decos) || '🐾';
+  var petHtml = TD.petTile({ pet: S.ranch.pet, decos: S.ranch.decos,
+                             bg: S.ranch.bg, fx: S.ranch.fx, cls: 'pet-mini' });
   var body = '';
   if (L.type === 'keys') {
     var cur = L.items[P.idx] || { k: '', hint: '' };
@@ -2285,7 +2328,7 @@ function renderPlay() {
             (L.articleTitle ? '　· ' + esc(L.articleTitle) : '') + '</div>' +
           '<div class="sub">' + esc(stage.name) + ' · 目标：准确率 ≥90% 通关，' + L.speedLine +
             (L.mode === 'cn' ? ' 字/分' : ' KPM') + ' 拿两星</div></div>' +
-          '<span class="pet-mini">' + petHtml + '</span>' +
+          petHtml +
           '<div class="live"><span class="chip" id="liveSpeed">0' + (L.mode === 'cn' ? ' 字/分' : ' KPM') +
             '</span><span class="chip b" id="liveAcc">100%</span></div>' +
         '</div>' +
@@ -3047,7 +3090,10 @@ function submitResult(payload, stars, wpm) {
       if (S.role === 'teacher' && S.teacherLb && S.teacherLb.on && S.teacherLb.class_id) {
         api('/api/v2/typing/teacher-record', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(Object.assign({ class_id: S.teacherLb.class_id }, payload))
+          body: JSON.stringify(Object.assign({ class_id: S.teacherLb.class_id,
+            /* 老师这一行也要有宠物和背景特效，否则榜上永远是个灰爪印（2026-11-05） */
+            equip: { pet: S.ranch.pet, decos: S.ranch.decos, bg: S.ranch.bg, fx: S.ranch.fx } },
+            payload))
         });
       }
       showResult(stars, wpm, payload, { newBest: newBest, gained: gained, coins_gained: addCoins,
@@ -3165,7 +3211,7 @@ function loadLb() {
       return { name: n, value: v, pet: pets[i], decos: i === 0 ? ['crown'] : (i === 2 ? ['bow'] : []), me: n === S.me.name };
     });
     rows.push({ name: S.me.name, value: scope === 'speed' ? 33.6 : (scope === 'week' ? S.progress.week_stars || 0 : S.progress.stars || 0),
-      pet: S.ranch.pet, decos: S.ranch.decos, me: true });
+      pet: S.ranch.pet, decos: S.ranch.decos, bg: S.ranch.bg, fx: S.ranch.fx, me: true });
     rows.sort(function (a, b) { return b.value - a.value; });
     S.lb.rows = rows; S.lb.class_name = S.me.class_name;
     paintLb();
@@ -3204,10 +3250,11 @@ function paintLb() {
   box.innerHTML = S.lb.rows.map(function (r, i) {
     var rankCls = i === 0 ? 'r1' : i === 1 ? 'r2' : i === 2 ? 'r3' : '';
     var medal = i < 3 ? ['🥇', '🥈', '🥉'][i] : (i + 1);
-    var pet = r.pet ? TD.petSvg(r.pet, r.decos) : '';
+    /* 榜上每一行的小像都带背景与特效 —— 和牧场里看到的是同一副样子（2026-11-05） */
+    var tile = TD.petTile({ pet: r.pet, decos: r.decos, bg: r.bg, fx: r.fx, cls: 'lb-pet' });
     return '<div class="lb-row' + (r.me ? ' me' : '') + '">' +
       '<span class="lb-rank ' + rankCls + '">' + medal + '</span>' +
-      (pet ? '<span class="lb-pet">' + pet + '</span>' : '<span class="lb-pet empty">🐾</span>') +
+      tile +
       '<span class="lb-name">' + esc(r.name) + (r.me ? '<small>（我）</small>' : '') + '</span>' +
       '<span class="lb-val">' + (Math.round(r.value * 10) / 10) + '<small>' + unit + '</small></span>' +
       '</div>';
@@ -3668,8 +3715,19 @@ function bindRanch() {
 }
 function saveEquip() {
   if (S.demo) {
-    S.progress.equip = { pet: S.ranch.pet, decos: S.ranch.decos.slice() };
+    S.progress.equip = { pet: S.ranch.pet, decos: S.ranch.decos.slice(),
+                         bg: S.ranch.bg || '', fx: S.ranch.fx || '' };
     demoSave();
+    /* 教师练习模式：老师换装不上榜也要让班级排行榜那行跟着变，
+       否则榜上永远是上次练习时穿的那身（2026-11-05） */
+    if (S.role === 'teacher' && S.teacherLb && S.teacherLb.on && S.teacherLb.class_id) {
+      api('/api/v2/typing/teacher-equip', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ class_id: S.teacherLb.class_id,
+          equip: { pet: S.ranch.pet, decos: S.ranch.decos,
+                   bg: S.ranch.bg || '', fx: S.ranch.fx || '' } })
+      });
+    }
     return;
   }
   api('/api/v2/typing/equip', {

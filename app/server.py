@@ -98,7 +98,7 @@ CFG["update"].setdefault("interval_hours", 24) # 检查间隔（小时）
 PET_IDS = ["cat", "dog", "rabbit", "penguin", "panda", "dino", "unicorn", "dragon"]
 COND = threading.Condition()
 STARTED = time.time()
-VERSION = "2.0.6"
+VERSION = "2.0.7"
 ONLINE_WINDOW = 300      # 5 分钟内活跃算在线
 # 可内联直出的附件类型（其余一律按下载处理，防止同源执行脚本）
 _INLINE_EXTS = {"png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "pdf",
@@ -1892,7 +1892,8 @@ class Handler(LEG.Handler):
                 rows.append({"student_id": uid, "name": st.get("name", ""),
                              "student_no": st.get("student_no", ""),
                              "value": d["value"], "stars": d["stars"],
-                             "pet": d["pet"], "decos": d["decos"]})
+                             "pet": d.get("pet", ""), "decos": d.get("decos") or [],
+                             "bg": d.get("bg", ""), "fx": d.get("fx", "")})
             rows.sort(key=lambda x: -x["value"])
             # 教师练习成绩（2026-11-03）：开启「计入班级排行榜」后，以「老师」
             # 一行参与排序；本周星为 0 时不进周榜（与学生口径一致）。
@@ -1905,7 +1906,9 @@ class Handler(LEG.Handler):
                     tv["name"] = tn
                 rows.append({"student_id": "__teacher__", "name": tv["name"],
                              "student_no": "", "value": tv["value"],
-                             "stars": tv["stars"], "pet": "", "decos": []})
+                             "stars": tv["stars"], "pet": tv.get("pet", ""),
+                             "decos": tv.get("decos") or [],
+                             "bg": tv.get("bg", ""), "fx": tv.get("fx", "")})
                 rows.sort(key=lambda x: -x["value"])
             rows = rows[:50]
             if me_id:
@@ -3039,6 +3042,12 @@ class Handler(LEG.Handler):
                                                          body.get("stage"), body.get("chapter"),
                                                          body.get("level"), res.get("stars")))
             return self._json(res)
+        if path == "/api/v2/typing/teacher-equip":
+            # 老师换装不上榜也要让排行榜那行跟上（2026-11-05 晚）
+            if not self._is_teacher():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            return self._json(TYPING.teacher_equip(body.get("class_id"),
+                                                   body.get("equip") or body))
         if path == "/api/v2/typing/claim":
             s = self._session()
             if not s or s["role"] != "student":
