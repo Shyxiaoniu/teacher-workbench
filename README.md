@@ -1,6 +1,6 @@
 # 班级工作台 2.0
 
-> 给班主任和任课老师用的一套**班级工作台**：教师端、学生端与表单服务共用一个网页入口，
+> 给班主任和任课老师用的一套**班级工作台**：教师端与学生端共用一个网页入口，
 > 数据全部存在自己的机器上，不依赖任何第三方云服务。
 
 当前版本：**2.0**
@@ -61,9 +61,6 @@ http://<服务器局域网 IP>:8080/        ← Docker 部署的入口；直接�
 
 活动接口在 `/api/act/*`（学生提交页、自定义数据大屏、课件库归档都按这个格式走），
 附件在 `/static/uploads/<活动号>/<文件>`。
-
-> 历史：2026-11-03 之前这里曾集成第三方表单服务 QuickForm；自该日起由本项目
-> 自研实现，相关源码与许可声明已整体移除。
 
 ---
 
@@ -350,8 +347,8 @@ cp .env.example .env          # 改下面「必改」的两项
 docker compose up -d --build
 ```
 
-等 10~30 秒，执行 `docker compose ps`，`workbench`、`quickform`、`gateway`
-三个都是 `healthy` 就绪（`init` 是初始化容器，跑完即退出，属正常）。
+等 10~30 秒，执行 `docker compose ps`，`workbench`、`gateway`
+两个都是 `healthy` 就绪（`init` 是初始化容器，跑完即退出，属正常）。
 浏览器打开 `http://<服务器IP>:8080/` 即可。
 
 > **完全离线部署**：在有外网的机器上执行 `docker compose build`，
@@ -558,9 +555,6 @@ git pull && docker compose up -d --build
 以 MIT 许可证发布，版权人 Copyright (c) 2026 Shyxiaoniu。
 第三方组件清单（如 Docker 基础镜像）见 **[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)**。
 
-> 历史：2026-11-03 之前仓库曾集成第三方表单服务 QuickForm（MIT，© 谢作如）；
-> 自该日起课堂活动由本项目自研，QuickForm 源码已整体移除，相应许可义务终止。
-
 ### 你可以做什么
 
 - 免费用于个人教学、学校内部部署、商业或非商业用途；
@@ -585,7 +579,6 @@ git pull && docker compose up -d --build
    并告知学生与家长的前提下使用。
 4. 部署到公网或校园网前请自行加固（改默认口令、限访问范围、上 HTTPS、定期备份），
    **未加固导致的风险由部署者承担**。
-
 
 ---
 
