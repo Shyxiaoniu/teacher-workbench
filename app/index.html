@@ -34604,7 +34604,12 @@ async function cwRenameCourse(name) {
 }
 window.cwRenameCourse = cwRenameCourse;
 
-/* 上传：逐个读成 base64 再发（一次请求只传一个文件，大文件也好定位失败原因） */
+/* 上传：一次请求直传一个文件（2026-11-04 改流式直传）。
+   原来 readAsDataURL 把整个文件读成 base64 字符串（内存 ≈ 文件体积的 2.7 倍），
+   再 JSON.stringify 一遍又翻一倍——两三百 MB 的课件直接把浏览器内存顶爆，
+   整个标签页崩成「此页存在问题 Out of Memory」。现在 fetch 的 body 直接是
+   File 对象，浏览器原生流式发送，JS 侧几乎不占内存；服务端按 256KB
+   分块落盘（/api/cw/upload_raw）。 */
 async function cwUpload(fileList) {
   const files = Array.from(fileList || []);
   if (!files.length) return;
@@ -34616,21 +34621,26 @@ async function cwUpload(fileList) {
     toast('先选择课程文件夹再上传');
     return;
   }
+  if (!cwAvailable()) { toast('课件功能需要本地服务，请用「启动工作台」打开'); return; }
   if (msg) msg.innerHTML = '<div class="cw-ok">正在上传 <b>' + files.length + '</b> 个文件到「' + esc(course) + '」…</div>';
   let done = 0, failedAll = [];
-  /* 2026-11-04：改为一次请求只传一个文件。原来一批最多 6 个文件合一个
-     JSON 请求，几个大文件就能把请求体推到上 GB；单文件单请求失败也好定位。 */
   for (let i = 0; i < files.length; i++) {
     const f = files[i];
-    const payload = [];
-    if (f.size > 300 * 1024 * 1024) { failedAll.push({ name: f.name, msg: '超过 300MB' }); }
-    else {
+    if (f.size > 300 * 1024 * 1024) {
+      failedAll.push({ name: f.name, msg: '超过 300MB' });
+    } else {
       try {
-        const b64 = await cwReadAsB64(f);
-        payload.push({ name: f.name, data: b64 });
-        const r = await cwReq('upload', { course: course, files: payload });
-        done += (r.saved || []).length;
-        for (const x of (r.failed || [])) failedAll.push(x);
+        const r = await fetch(CW_API + 'upload_raw?course=' + encodeURIComponent(course)
+          + '&name=' + encodeURIComponent(f.name),
+          { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' },
+            body: f, credentials: 'same-origin' });
+        let j = null;
+        try { j = await r.json(); } catch (e) { j = null; }
+        if (!j) throw new Error(r.status === 413 ? '文件太大（单个上限 300MB）'
+                                                 : '服务返回异常（HTTP ' + r.status + '）');
+        if (j.ok) done += (j.saved || []).length;
+        for (const x of (j.failed || [])) failedAll.push(x);
+        if (!j.ok && j.msg && !(j.failed || []).length) failedAll.push({ name: f.name, msg: j.msg });
       } catch (err) {
         failedAll.push({ name: f.name, msg: (err && err.message) ? err.message : '传输失败' });
       }
@@ -34656,15 +34666,6 @@ async function cwUpload(fileList) {
   }
 }
 window.cwUpload = cwUpload;
-
-function cwReadAsB64(file) {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(String(r.result || ''));
-    r.onerror = () => reject(new Error('读不到文件：' + file.name));
-    r.readAsDataURL(file);
-  });
-}
 
 /* 「资料夹」（本地文件夹只读挂载）已于 2026-11-01 整体下线：
    所有资料统一上传到服务器课件库存储，详见 cwLibPanelHtml 一段。 */

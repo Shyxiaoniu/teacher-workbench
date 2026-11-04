@@ -718,7 +718,7 @@ class Handler(BaseHTTPRequestHandler):
         # ---- 通用门槛：同源 + JSON ----
         if not self._same_origin():
             return self._send_json({"ok": False, "msg": "跨站请求被拒绝"}, 403)
-        if path.startswith("/api/enh/upload"):
+        if path.startswith("/api/enh/upload") or path == "/api/cw/upload_raw":
             pass                        # 流式上传，Content-Type 是 application/octet-stream
         elif not self._json_content_type_ok():
             return self._send_json({"ok": False, "msg": "请求格式必须是 JSON"}, 415)
@@ -829,6 +829,12 @@ class Handler(BaseHTTPRequestHandler):
         # ---- 提交增强（写操作，含流式上传）----
         if path.startswith("/api/enh/"):
             return self._enh_post(path, u)
+
+        # ---- 课件库流式直传（2026-11-04）：请求体 = 文件原始字节 ----
+        # base64 JSON 上传要在浏览器里把整个文件读成字符串再翻倍序列化，
+        # 大文件直接把浏览器内存顶爆（OOM 崩页）。改走 octet-stream 直传。
+        if path == "/api/cw/upload_raw":
+            return self._cw_upload_raw(u)
 
         # ---- 课件库（写操作）----
         if path.startswith("/api/cw/"):
@@ -1123,6 +1129,42 @@ class Handler(BaseHTTPRequestHandler):
     # ------------------------------------------------------------------
     # 课件库：POST
     # ------------------------------------------------------------------
+    def _cw_upload_raw(self, u):
+        """课件流式直传（2026-11-04）：POST /api/cw/upload_raw?course=&name=
+        请求体就是文件原始字节（application/octet-stream），按 256KB 分块落盘。
+
+        替代 base64 JSON 上传的大文件场景：浏览器 fetch body=File 流式发送，
+        前端不再把整个文件读进 JS 内存；服务端也只持有 256KB 缓冲。
+        超限时把手头的请求体读掉再拒（同 _read_body 的 drain 逻辑），
+        避免 keep-alive 连接被残留数据弄脏，浏览器误报「连接中断」。
+        """
+        ok, why = self._cw_allowed()
+        if not ok:
+            return self._send_json({"ok": False, "msg": why, "need_login": True}, 403)
+        qs = urllib.parse.parse_qs(u.query)
+        # parse_qs 已对值做过一次 UTF-8 解码，这里不能再 unquote——
+        # 文件名本身带 % 时（如「50%进度.pptx」）二次解码会出错。
+        arg = lambda k: (qs.get(k) or [""])[0]
+        course = arg("course").strip() or "未分课程"
+        name = arg("name")
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except Exception:
+            length = 0
+        if length <= 0:
+            return self._send_json({"ok": False, "msg": "没有收到文件内容"}, 400)
+        if length > CW.MAX_UPLOAD:
+            left = length
+            while left > 0:                     # drain：读完再拒，别让连接带着残包
+                chunk = self.rfile.read(min(1024 * 1024, left))
+                if not chunk:
+                    break
+                left -= len(chunk)
+            return self._send_json({"ok": False,
+                                    "msg": "文件太大（单个上限 %s）" % CW.human_size(CW.MAX_UPLOAD)}, 413)
+        res = CW.save_stream(course, name, self.rfile, length)
+        return self._send_json(res, 200 if res.get("ok") else 400)
+
     def _cw_post(self, path, u, data):
         # 兼容旧前端的 allow_lan 开关：容器部署下访问权限只按教师会话判定，
         # 这里直接回成功但不再改任何配置（避免落到下面 set_root 的兜底分支）。

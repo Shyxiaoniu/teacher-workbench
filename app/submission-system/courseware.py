@@ -681,6 +681,61 @@ def save_upload(course, files):
             "msg": ("已上传 %d 个文件" % len(saved)) if saved else "没有文件被保存"}
 
 
+def save_stream(course, name, stream, length):
+    """流式直传落盘（2026-11-04）：请求体就是文件原始字节，边收边写。
+
+    走 base64 JSON 的 save_upload 要在浏览器里把整个文件读成字符串再翻倍
+    序列化，两三百 MB 的课件就能把浏览器内存顶爆（「此页存在问题 Out of
+    Memory」）。这里从请求流按 256KB 分块写盘，浏览器用 fetch body=File
+    流式发送，前后端内存占用都是常数级。
+    """
+    folder = abs_of(safe_course(course))
+    if not folder:
+        return {"ok": False, "msg": "课程名不合法"}
+    try:
+        os.makedirs(folder, exist_ok=True)
+    except Exception as e:
+        return {"ok": False, "msg": "无法创建课程目录：%s" % e}
+    nm = safe_name(name)
+    try:
+        length = int(length or 0)
+    except Exception:
+        length = 0
+    if length <= 0:
+        return {"ok": False, "msg": "没有收到文件内容"}
+    if length > MAX_UPLOAD:
+        return {"ok": False, "msg": "超过 %s 上限" % human_size(MAX_UPLOAD)}
+    target = unique_path(folder, nm)
+    n = 0
+    try:
+        with open(target, "wb") as fh:
+            left = length
+            while left > 0:
+                chunk = stream.read(min(262144, left))
+                if not chunk:
+                    break
+                fh.write(chunk)
+                n += len(chunk)
+                left -= len(chunk)
+    except Exception as e:
+        try:
+            os.remove(target)
+        except Exception:
+            pass
+        return {"ok": False, "msg": "写入失败：%s" % e}
+    if n <= 0:
+        try:
+            os.remove(target)
+        except Exception:
+            pass
+        return {"ok": False, "msg": "文件是空的"}
+    return {"ok": True, "saved": [{"name": os.path.basename(target),
+                                   "id": rel_of(target),
+                                   "size_text": human_size(n)}],
+            "failed": [], "course": safe_course(course),
+            "msg": "已上传 1 个文件"}
+
+
 def archive_items(course, activity, base, items):
     """把活动提交的文件复制进 <课程>/_活动作品/<活动名>/"""
     course_dir = abs_of(safe_course(course))
