@@ -572,7 +572,7 @@
   var NAV = [
     { id: 'today', name: '今日', ic: '☀' },
     { id: 'homework', name: '作业', ic: '✎', flag: 'homework' },
-    { id: 'courses', name: '课程', ic: '📚' },
+    { id: 'courses', name: '科目', ic: '📚' },
     /* 座位表（2026-11-03）：与教师端同一张图，讲台固定朝上，自己高亮 */
     { id: 'seat', name: '座位', ic: '🪑' },
     /* 打字冒险岛：老师开放后显示，站内 iframe 内嵌（2026-11-02） */
@@ -582,7 +582,7 @@
   var TITLES = {
     today: ['今日', '签到 · 课堂学习单 · 要交的作业'],
     homework: ['我的作业', '全部作业与提交状态 · 点一条查看详情'],
-    courses: ['我的课程', '老师发布的课程与资源 · 点击即可在线预览'],
+    courses: ['我的科目', '老师发布的各科资料 · 点击即可在线预览'],
     seat: ['我的座位', '座位表 · 讲台固定在上方 · 高亮你自己的位置'],
     typing: ['打字冒险岛', '闯关练打字 · 赢星星 · 孵宠物 · 上排行榜']
   };
@@ -998,9 +998,9 @@
   function vCourses() {
     var cs = myCourses();
     var html = '<div class="stat-grid">' +
-      statCard(cs.length, '我的课程') + statCard(cwPushed().length, '资源文件') + '</div>';
+      statCard(cs.length, '我的科目') + statCard(cwPushed().length, '资源文件') + '</div>';
     if (!cs.length) {
-      return html + emptyBox('还没有课程', '老师在教师端排好课表、推送资源后，这里就会亮起来');
+      return html + emptyBox('还没有科目', '老师在教师端排好课表、推送资源后，这里就会亮起来');
     }
     html += '<div class="cols2">';
     cs.forEach(function (c) {
@@ -1552,7 +1552,7 @@
       '<label>班级</label><select id="cls"><option value="">加载中…</option></select>' +
       '<label>班级码</label><input id="code" placeholder="校内网不用填；外网访问时问老师要" ' +
       'autocomplete="off" maxlength="12">' +
-      '<label>学号 / 姓名</label><select id="stu" disabled><option value="">请先选班级</option></select>' +
+      '<label>学号</label><select id="stu" disabled><option value="">请先选班级</option></select>' +
       '<label>姓名</label><input id="nm" readonly placeholder="选学号后自动带出">' +
       '<label>密码</label><input id="pwd" type="password" autocomplete="current-password" placeholder="老师给你的密码">' +
       '<div class="err" id="err">' + esc(msg || '') + '</div>' +
@@ -1608,8 +1608,10 @@
           return;
         }
         stu.innerHTML = '<option value="">请选择你的学号</option>' + list.map(function (x) {
+          /* 2026-11-04 牛哥要求：下拉里只显示学号、不显示姓名（名单不互相可见）；
+             选中后姓名自动匹配到下面只读的「姓名」框里。 */
           return '<option value="' + esc(x.id) + '" data-name="' + esc(x.name) + '">' +
-            esc((x.no || '—') + ' · ' + x.name) + '</option>';
+            esc(x.no || '（无学号）') + '</option>';
         }).join('');
         stu.disabled = false;
       });

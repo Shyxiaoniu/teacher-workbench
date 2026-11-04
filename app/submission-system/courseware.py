@@ -907,6 +907,20 @@ def delete_file(rel):
         return {"ok": False, "msg": "文件不存在"}
     try:
         os.remove(full)
+        # 若删掉的正是这门课的学习单，标记一并清掉（防悬挂引用）
+        try:
+            cfg = load_cfg()
+            sheets = cfg.get("sheets") if isinstance(cfg.get("sheets"), dict) else {}
+            changed = False
+            for c, v in list(sheets.items()):
+                if str(v) == str(rel):
+                    sheets.pop(c, None)
+                    changed = True
+            if changed:
+                cfg["sheets"] = sheets
+                save_cfg(cfg)
+        except Exception:
+            pass
         return {"ok": True, "msg": "已删除", "id": rel}
     except Exception as e:
         return {"ok": False, "msg": "删除失败：%s" % e}
@@ -941,6 +955,47 @@ def rename_or_move(rel, course=None, new_name=None):
         return {"ok": False, "msg": "操作失败：%s" % e}
 
 
+def sheet_of(course):
+    """某课程被「设为学习单」的网页文件 id（相对路径）；没设过返回 ""。
+
+    存在配置文件 cfg["sheets"] 里（课程名 → 文件相对路径），重启不丢。
+    大屏页「学习单」下拉据此自动预选，下发即部署这份网页。"""
+    cfg = load_cfg()
+    sheets = cfg.get("sheets") if isinstance(cfg.get("sheets"), dict) else {}
+    return str(sheets.get(safe_course(course)) or "")
+
+
+def set_sheet(course, rel):
+    """把课程资料里的一个网页文件设为该课程的学习单（rel 为空 = 取消）。
+
+    校验文件真实存在且在根目录内；文件被删 / 移动后标记自动失效
+    （读取时以文件是否还在为准）。同一课程同时只有一个学习单，
+    重复设置 = 换成新的；在「大屏」下发时按此标记自动预选并部署。"""
+    course = str(course or "").strip()
+    if not course or course == "未分课程":
+        return {"ok": False, "msg": "请先选择一个课程文件夹（未分课程不能设学习单）"}
+    cfg = load_cfg()
+    sheets = cfg.get("sheets") if isinstance(cfg.get("sheets"), dict) else {}
+    rel = str(rel or "").strip()
+    if not rel:
+        sheets.pop(safe_course(course), None)
+        cfg["sheets"] = sheets
+        cfg["updated_at"] = _now()
+        save_cfg(cfg)
+        return {"ok": True, "msg": "已取消「%s」的学习单标记" % safe_course(course), "sheet": ""}
+    full = abs_of(rel, must_exist=True)
+    if not full or not os.path.isfile(full):
+        return {"ok": False, "msg": "文件不存在或已被移动"}
+    if ext_of(full) not in ("html", "htm"):
+        return {"ok": False, "msg": "只能把网页文件（.html / .htm）设为学习单"}
+    sheets[safe_course(course)] = rel_of(full)
+    cfg["sheets"] = sheets
+    cfg["updated_at"] = _now()
+    save_cfg(cfg)
+    return {"ok": True, "msg": "已把「%s」设为课程「%s」的学习单" % (os.path.basename(full), safe_course(course)),
+            "sheet": rel_of(full)}
+
+
 def delete_course(name):
     """删除整个课程文件夹（2026-11-04 资源管理器改版）。
     递归删除，不可恢复；「未分课程」是散文件的伪归属，不能删。"""
@@ -954,6 +1009,15 @@ def delete_course(name):
         return {"ok": False, "msg": "不能删除课件根目录"}
     try:
         shutil.rmtree(folder)
+        # 课程没了，学习单标记一并清掉
+        try:
+            cfg = load_cfg()
+            sheets = cfg.get("sheets") if isinstance(cfg.get("sheets"), dict) else {}
+            if sheets.pop(safe_course(name), None) is not None:
+                cfg["sheets"] = sheets
+                save_cfg(cfg)
+        except Exception:
+            pass
         return {"ok": True, "msg": "已删除课程文件夹「%s」" % name}
     except Exception as e:
         return {"ok": False, "msg": "删除失败：%s" % e}
@@ -982,6 +1046,19 @@ def rename_course(old, new):
         return {"ok": False, "msg": "已经有叫「%s」的课节了，换一个名字" % dst_name}
     try:
         os.rename(src, dst)
+        # 学习单标记跟着课程改名走（2026-11-04）：键换新课程名，值的路径前缀也要换
+        try:
+            cfg = load_cfg()
+            sheets = cfg.get("sheets") if isinstance(cfg.get("sheets"), dict) else {}
+            old_key = safe_course(old)
+            if old_key in sheets:
+                v = str(sheets.pop(old_key) or "")
+                rest = v.split("/", 1)[1] if "/" in v else v
+                sheets[dst_name] = dst_name + "/" + rest if rest else dst_name
+                cfg["sheets"] = sheets
+                save_cfg(cfg)
+        except Exception:
+            pass
         return {"ok": True, "msg": "已改名为「%s」" % dst_name,
                 "old": safe_course(old), "new": dst_name}
     except Exception as e:

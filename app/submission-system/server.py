@@ -1090,7 +1090,9 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/cw/list":
             course = arg("course")
             files = CW.list_files(course) if course else CW.all_files()[0]
-            return self._send_json({"ok": True, "course": course, "files": files})
+            # 该课程被「设为学习单」的网页文件 id（前端据此打标 + 大屏预选）
+            sheet = CW.sheet_of(course) if course else ""
+            return self._send_json({"ok": True, "course": course, "files": files, "sheet": sheet})
         if path == "/api/cw/file":
             full = CW.abs_of(arg("id"), must_exist=True)
             if not full or not os.path.isfile(full):
@@ -1208,6 +1210,10 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/cw/archive":
             res = CW.archive_items(data.get("course"), data.get("activity"),
                                    data.get("base") or "", data.get("items") or [])
+            return self._send_json(res, 200 if res.get("ok") else 400)
+        if path == "/api/cw/set_sheet":
+            # 把课程资料里的网页文件设为该课程的学习单（id 为空 = 取消标记）
+            res = CW.set_sheet(data.get("course"), data.get("id"))
             return self._send_json(res, 200 if res.get("ok") else 400)
         if path == "/api/cw/save_text":
             res = CW.save_text(data.get("course"), data.get("subdir"),
