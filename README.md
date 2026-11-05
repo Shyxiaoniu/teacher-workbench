@@ -3,7 +3,7 @@
 > 给班主任和任课老师用的一套**班级工作台**：教师端与学生端共用一个网页入口，
 > 数据全部存在自己的服务器上，不依赖任何第三方云服务。
 
-当前版本：**2.0.28**（版本号唯一代码源：`app/server.py` 的 `VERSION`）
+当前版本：**2.0.29**（版本号唯一代码源：`app/server.py` 的 `VERSION`）
 
 ```
 http://<服务器局域网 IP>:8080/        ← Docker 部署的入口；直接运行时是 :20020
@@ -378,9 +378,9 @@ docker compose up -d --build
 
 | # | 文件 | 位置 |
 |---|---|---|
-| 1 | `app/server.py` | `VERSION = "2.0.28"` —— **唯一代码源** |
-| 2 | `.env.example` | `IMAGE_TAG=2.0.28` |
-| 3 | `docker-compose.yml` | `image: …:${IMAGE_TAG:-2.0.28}`（init 与 workbench **两处**） |
+| 1 | `app/server.py` | `VERSION = "2.0.29"` —— **唯一代码源** |
+| 2 | `.env.example` | `IMAGE_TAG=2.0.29` |
+| 3 | `docker-compose.yml` | `image: …:${IMAGE_TAG:-2.0.29}`（init 与 workbench **两处**） |
 | 4 | `README.md` | 文首「当前版本」 |
 | 5 | `version.json` | 由 `tools/make_release.py` 自动同步 |
 
@@ -408,6 +408,29 @@ python tools/make_release.py --out D:\dist   # 指定输出目录（默认 dist/
 > 「创建发行版」并上传 zip 才会有内容。在线更新走的是 `version.json`（manifest）+
 > raw 直链，不依赖 Releases 功能；想把 zip 同时挂到 Releases 也可以，把
 > `version.json` 的 `zip` 字段改成完整 URL 即可。
+
+### 大屏统计区不再吸顶 + 问卷逐题归位（2.0.29）
+
+**① 统计区取消吸顶**
+
+| 项 | 说明 |
+|---|---|
+| 改了什么 | `.act-dash-sticky`（`position:sticky` + `top:var(--wb-topbar-h)` + 负边距 + 阴影）→ `.act-dash-top`，纯文档流 |
+| 为什么 | 1080p 教室屏上标题条 + 四张 KPI 常驻要吃掉 220px，往下看明细只剩一条缝 |
+| 间距 | 标题条 padding 14→11、KPI padding 16→12、数值 42→34、`.act-sec` padding 16→13、间距 14→11 |
+| 图表 | `actDrawBars` 以前写死 320×170：桌面右边一大片空白、390px 上还撑出横向滚动。现在按容器宽度画（位图 ×DPR，坐标仍用 CSS 像素） |
+| 窄屏 | `.act-dash-hd` 允许换行，状态/按钮整行落到第二行（原来被挤成「刷/新」竖排）；KPI 两列 |
+| 验证 | 1440：KPI 四列、高 126px、无重叠、占满宽度；390：两列、无横向溢出（336/336） |
+
+**② 一条提交重复显示 / 题目认不出来**
+
+| 根因 | 改法 |
+|---|---|
+| 提交记录里的「按钮」带尾空格 → `actSubId` 用原始字符串拼 key，同一人同一题被当成两条 | 拼 key 前归一化（`trim` + 折叠空白），4 条 → 3 条 |
+| 同一道题在 layout 里登记了两次（模板复用 `name="q1"`、嵌套块重复扫描）→ 一张卡变两张、数字一样 | 扫描只取最外层块；按 `btn|name` 去重；渲染时同名字段只出一张卡 |
+| 题目的 `q.btn` 带换行/连续空格 → `String(q.btn) === String(btn)` 永不成立，整个窗口不显示题目 | 两边都归一化后比较 |
+| 老学习单没有 `custom_layout`（2.0.10 之前下发）→ 只能看到名单 | ① 打开大屏时后台自动扫一次并写回（`actHealLayout`，每个活动一次）；② 扫不到就按学生实际填写的字段自动识别（`actInferQuizQs`，只认 ≤8 个短取值） |
+| 只有一个提交按钮的学习单不出窗口 → 单选题看不到分布 | 单按钮但确有题目字段时也出窗口（纯上传仍不出） |
 
 ### 打字岛只钉标题行 / 学习单存档独立网页 / Mac 更新重启（2.0.28）
 

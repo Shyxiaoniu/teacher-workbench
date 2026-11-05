@@ -15921,47 +15921,52 @@ function renderActivity() {
   .act-cls-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 
   /* ===== 数据大屏 · 学情大屏模板视觉规范 ===== */
-  .act-dash-hd{display:flex;align-items:center;gap:12px;background:var(--bg-surface);border:1px solid var(--border);border-left:6px solid var(--brand-primary);border-radius:12px;padding:14px 16px;margin-bottom:14px}
+  .act-dash-hd{display:flex;align-items:center;gap:12px;background:var(--bg-surface);border:1px solid var(--border);border-left:6px solid var(--brand-primary);border-radius:12px;padding:11px 14px;margin-bottom:10px}
   .act-dash-hd .hd-bar{width:6px;align-self:stretch;background:var(--brand-primary);border-radius:4px}
-  .act-dash-hd .hd-t{font-size:18px;font-weight:bold;color:var(--text-primary)}
+  .act-dash-hd .hd-t{font-size:17px;font-weight:bold;color:var(--text-primary)}
   .act-dash-hd .hd-s{font-size:12px;color:var(--text-secondary);margin-top:2px}
   .act-dash-hd .hd-r{margin-left:auto;display:flex;align-items:center;gap:8px}
+  /* 按钮不参与压缩：窄屏上曾被挤成竖排的「刷/新」两个字 */
+  .act-dash-hd .hd-r .btn{flex:none;white-space:nowrap}
+  .act-dash-hd .hd-r .act-muted{white-space:nowrap}
 
-  .act-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px}
+  .act-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:12px}
   @media(max-width:760px){.act-kpis{grid-template-columns:repeat(2,1fr)}}
-  .act-kpi{background:var(--bg-surface);border:1px solid var(--border);border-top:5px solid var(--brand-primary);border-radius:14px;padding:16px 18px;box-shadow:var(--shadow)}
+  .act-kpi{background:var(--bg-surface);border:1px solid var(--border);border-top:5px solid var(--brand-primary);border-radius:12px;padding:12px 15px;box-shadow:var(--shadow)}
   .act-kpi.red{border-top-color:var(--status-error,#E24B4A)}
   .act-kpi.amber{border-top-color:var(--chart-3,#EF9F27)}
   .act-kpi.ok{border-top-color:var(--chart-1,#1D9E75)}
-  .act-kpi .lab{font-size:13px;color:var(--text-secondary);letter-spacing:1px}
-  .act-kpi .val{font-size:42px;font-weight:bold;line-height:1.15;margin-top:2px;color:var(--brand-primary);font-variant-numeric:tabular-nums}
+  .act-kpi .lab{font-size:12.5px;color:var(--text-secondary);letter-spacing:1px}
+  .act-kpi .val{font-size:34px;font-weight:bold;line-height:1.12;margin-top:2px;color:var(--brand-primary);font-variant-numeric:tabular-nums}
   .act-kpi.red .val{color:var(--status-error,#E24B4A)}
   .act-kpi.amber .val{color:var(--brand-primary)}
   .act-kpi.ok .val{color:var(--chart-1,#1D9E75)}
-  .act-kpi .sub{font-size:12px;color:var(--text-secondary);margin-top:2px}
+  .act-kpi .sub{font-size:11.5px;color:var(--text-secondary);margin-top:1px}
 
-  .act-sec{background:var(--bg-surface);border:1px solid var(--border);border-radius:14px;padding:16px;box-shadow:var(--shadow);margin-bottom:14px}
+  .act-sec{background:var(--bg-surface);border:1px solid var(--border);border-radius:13px;padding:13px 14px;box-shadow:var(--shadow);margin-bottom:11px}
+  /* 图表按容器宽度画（见 actDrawBars）；这条只是兜底，防止缩放窗口后旧尺寸溢出 */
+  .act-sec canvas{display:block;max-width:100%}
 
-  /* 吸顶统计区（2026-11-04）：标题条 + 四张统计卡在向下滚动时固定在顶栏下沿，
-     浏览下方明细/图表时数据始终可见。
-     · 整站是「页面级滚动」（.app 是 min-height:100vh），所以 top 取顶栏实测高度
-       （--wb-topbar-h，窄屏顶栏会换行变高，由 syncTopbarH() 实时写回），
-       否则 top:0 会让吸顶块盖住顶栏。
-     · z-index 9 刻意低于顶栏的 10：万一两者重叠，顶栏在上，不会互相打架。
-     · 负边距 + 内边距补一层底色，滚动时下方内容不会从卡片缝隙里露出来；
-       不用 backdrop-filter（滚动掉帧），阴影常驻两个状态都自然。 */
-  .act-dash-sticky{position:sticky;top:var(--wb-topbar-h,52px);z-index:9;background:var(--bg-page);
-    margin:-2px -2px 2px;padding:2px 2px 10px;border-radius:0 0 14px 14px;
-    box-shadow:0 12px 18px -16px rgba(0,0,0,.4)}
-  /* 窄屏统计卡变两行，吸顶块高度大：压缩卡片内边距，别把下方内容全顶走 */
+  /* 统计区（2026-11-05 取消吸顶）：
+     以前标题条 + 四张统计卡常驻在顶栏下沿（position:sticky + --wb-topbar-h），
+     1080p 教室屏上竖向吃掉 220px，往下看明细/名单时内容区只剩一条缝；
+     现在回归普通文档流，跟页面一起滚走，内容区拿回整屏。
+     保留 .act-dash-top 这层包装：它只负责「标题条 + KPI」这一组的间距，
+     不再有定位、负边距和阴影（负边距是为了吸顶时补底色，现在没意义了）。 */
+  .act-dash-top{margin:0 0 6px;padding:0}
+  /* 窄屏把统计卡压扁一点，四张卡别占掉大半屏 */
   @media(max-width:760px){
-    .act-dash-sticky .act-kpi{padding:10px 12px}
-    .act-dash-sticky .act-kpi .val{font-size:28px}
-    .act-dash-sticky .act-dash-hd{padding:10px 12px;margin-bottom:10px}
-    .act-dash-sticky .act-dash-hd .hd-t{font-size:15px}
+    .act-dash-top .act-kpi{padding:10px 12px}
+    .act-dash-top .act-kpi .val{font-size:28px}
+    .act-dash-top .act-dash-hd{padding:10px 12px;margin-bottom:10px;flex-wrap:wrap;gap:8px}
+    .act-dash-top .act-dash-hd .hd-t{font-size:15px}
+    /* 右半段整行落到第二行：否则标题被挤成一列三四个字、按钮竖排 */
+    .act-dash-top .act-dash-hd > div:not(.hd-bar){min-width:0}
+    .act-dash-top .act-dash-hd .hd-r{margin-left:0;width:100%;justify-content:flex-end;flex-wrap:wrap}
+    .act-dash-top .act-dash-hd .hd-s{font-size:11.5px;line-height:1.55}
   }
 
-  .act-sec h3{font-size:14px;color:var(--text-primary);letter-spacing:1px;font-weight:bold;margin:0 0 12px;display:flex;align-items:center;gap:8px}
+  .act-sec h3{font-size:14px;color:var(--text-primary);letter-spacing:1px;font-weight:bold;margin:0 0 9px;display:flex;align-items:center;gap:8px}
   .act-sec h3::before{content:'';width:5px;height:16px;background:var(--brand-primary);border-radius:3px}
   .act-grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
   @media(max-width:760px){.act-grid2{grid-template-columns:1fr}}
@@ -16005,8 +16010,8 @@ function renderActivity() {
 
   /* 逐任务收集窗口（2026-11-05）：一份学习单里有几个提交按钮就开几个窗口，
      窗口内同一名学生只出现一次；问卷题在窗口里直接给出选项分布。 */
-  .act-wins{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:14px}
-  .act-win{border:1px solid var(--border);border-radius:12px;padding:13px 15px;background:var(--bg-surface)}
+  .act-wins{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+  .act-win{border:1px solid var(--border);border-radius:12px;padding:11px 13px;background:var(--bg-surface)}
   .act-win-hd{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:10px;
     padding-bottom:9px;border-bottom:1px solid var(--border)}
   .act-win-hd b{font-size:14px;color:var(--text-primary);line-height:1.4}
@@ -16019,6 +16024,9 @@ function renderActivity() {
   .act-win-row .ts{margin-left:auto;font-size:12px;color:var(--text-secondary);font-variant-numeric:tabular-nums}
   .act-win-empty{color:var(--text-secondary);font-size:13px;padding:16px 0;text-align:center}
   .act-qstat{margin-top:12px;border-top:1px dashed var(--border);padding-top:11px}
+  /* 没登记题目结构时的提示条：说明下面的分布是从提交数据推断的 */
+  .act-infer-note{font-size:11.5px;color:var(--text-secondary);background:var(--brand-soft);
+    border-radius:8px;padding:6px 9px;margin:10px 0 2px;line-height:1.5}
   .act-qstat-t{font-size:13px;font-weight:700;color:var(--text-primary);margin-bottom:9px;
     display:flex;gap:8px;align-items:baseline;line-height:1.5}
   .act-qstat-t span{font-weight:400;font-size:12px;color:var(--text-secondary);white-space:nowrap}
@@ -17253,12 +17261,20 @@ function actScanLayout(rawHtml, perQ) {
   if (!doc) return out;
   // 注入后的页面里带着登录浮层和运行时脚本：先摘掉，否则学号输入框会被当成题目
   doc.querySelectorAll('#actLogin, script, style, noscript').forEach(n => { if (n.parentNode) n.parentNode.removeChild(n); });
-  const blocks = Array.from(doc.querySelectorAll('.act-q, .q-block'));
+  /* 题目块只取最外层（2026-11-05）：模板里 .act-q 套 .act-q 很常见，
+     以前里外各扫一遍，同一组 input 被登记两次 → 大屏出现两张一模一样的题卡，
+     数字也一样，看着就是「同一题重复显示两条」。 */
+  const blocksAll = Array.from(doc.querySelectorAll('.act-q, .q-block'));
+  const blocks = blocksAll.filter(b =>
+    !(b.parentElement && b.parentElement.closest('.act-q, .q-block')));
+  /* 标签统一归一化：模板标题里常有换行/缩进/连续空格，直接 trim 只能去掉首尾，
+     中间的空格会让「提交按钮」和 layout 里的 btn 对不上 → 题目统计整块丢失。 */
+  const norm = v => String(v || '').replace(/\s+/g, ' ').trim();
   const titleOf = el => {
     const h = el.querySelector('h1,h2,h3,h4,h5');
-    return (h && (h.textContent || '').trim()) || '';
+    return norm(h && h.textContent);
   };
-  const addBtn = label => { label = String(label || '').trim(); if (label && out.buttons.indexOf(label) < 0) out.buttons.push(label); };
+  const addBtn = label => { label = norm(label); if (label && out.buttons.indexOf(label) < 0) out.buttons.push(label); };
   /* 正确答案（2026-11-05 加）：下发时扫出来存进 layout.questions[].answer，
      大屏才能算「正确率」。模板可以三选一标注，扫不到就只出选项分布：
        ① 题目容器上写 data-answer="B" / data-answer="A,C"（多选逗号分隔）
@@ -17336,6 +17352,17 @@ function actScanLayout(rawHtml, perQ) {
     addBtn('整页提交');
     blocks.forEach((b, i) => scanQ(b, '整页提交', i));
   }
+  out.buttons = out.buttons.map(norm).filter((v, i, a) => v && a.indexOf(v) === i);
+  /* 同一个窗口里同名字段只登记一次（2026-11-05）：
+     模板在不同块里复用 name（都叫 q1 / answer）或者结构重复时，
+     以前会登记两条一模一样的题 → 大屏一张卡变两张、数字还完全相同。 */
+  const seenQ = {};
+  out.questions = out.questions.filter(q => {
+    const k = norm(q.btn) + '|' + String(q.name || '');
+    if (seenQ[k]) return false;
+    seenQ[k] = 1;
+    return true;
+  });
   out.updated_at = new Date().toISOString();
   return out;
 }
@@ -17415,7 +17442,12 @@ function actTaskWindowsHtml(allMatched, layout) {
   const taskBtns = btns.filter(b => b && b !== '整页提交');
   // 只有「一份学习单里确实有多个提交按钮」才开窗口区：
   // 整页提交 / 只有一个按钮时，窗口和下面的学生名单完全重复，没有意义。
-  if (taskBtns.length < 2) return '';
+  // 2026-11-05 例外：只有一个按钮、但确实有题目字段时也要开 —— 否则单选题的
+  // 答题分布整块消失，老师会以为「识别不到题目」。
+  const hasQuizField = (lay.questions || []).length > 0 || rows.some(s =>
+    Object.keys(s || {}).some(k => k && k.charAt(0) !== '_' && !ACT_QUIZ_RESERVED[k]
+      && String(s[k] == null ? '' : s[k]).trim() !== ''));
+  if (taskBtns.length < 2 && !(taskBtns.length === 1 && hasQuizField)) return '';
   const cards = taskBtns.map(b => {
     const one = actDedupByPerson(rows.filter(s => norm(actTaskOf(s)) === b));  // 同窗口内一人一条
     const list = one.length
@@ -17432,8 +17464,11 @@ function actTaskWindowsHtml(allMatched, layout) {
       + '</div>';
   }).join('');
   return '<div class="act-sec"><h3>任务收集窗口（每个提交按钮一个）</h3>'
-    + '<div class="act-note">这份学习单里有 <b>' + taskBtns.length + '</b> 个提交按钮，下面按按钮分成 '
-    + taskBtns.length + ' 个窗口。同一名学生在同一个窗口里只出现一次；交了几个任务，就在几个窗口里各有一条。</div>'
+    + '<div class="act-note">' + (taskBtns.length > 1
+        ? '这份学习单里有 <b>' + taskBtns.length + '</b> 个提交按钮，下面按按钮分成 '
+          + taskBtns.length + ' 个窗口。同一名学生在同一个窗口里只出现一次；交了几个任务，就在几个窗口里各有一条。'
+        : '这份学习单只有一个提交按钮，下面单独给出这个任务的收集情况与答题分布。')
+    + '</div>'
     + '<div class="act-wins">' + cards + '</div></div>';
 }
 window.actTaskWindowsHtml = actTaskWindowsHtml;
@@ -17452,11 +17487,27 @@ window.actTaskWindowsHtml = actTaskWindowsHtml;
  *  为什么按「人」而不是按「记录」算：同一窗口里已按学号去重（actDedupByPerson），
  *  传进来的 rows 就是一人一条；这里再按 学号→答对题数 累计，避免同名撞车。 */
 function actQuizStatsHtml(rows, layout, btn) {
-  const qs = ((layout && layout.questions) || []).filter(q =>
-    q && q.kind === 'choice' && (!q.btn || String(q.btn) === String(btn)));
+  const norm = v => String(v || '').replace(/\s+/g, ' ').trim();
+  const nb = norm(btn);
+  const list = rows || [];
+  /* ① 归属筛选用归一化后的按钮名：模板标题带换行/连续空格时，
+        以前 String(q.btn) === String(btn) 永远不成立 → 整个窗口一道题都不显示。
+     ② 同名字段只出一张卡：模板复用 name（都叫 q1 / answer）或老 layout 重复登记时，
+        否则同一道题印两张、数字一模一样，看着像「重复两条数据」。 */
+  const seen = {};
+  let qs = ((layout && layout.questions) || []).filter(q =>
+    q && q.kind === 'choice' && (!q.btn || norm(q.btn) === nb));
+  qs = qs.filter(q => {
+    const k = String(q.name || '');
+    if (!k || seen[k]) return false;
+    seen[k] = 1;
+    return true;
+  });
+  /* ③ 这个窗口一道题都没登记 → 按学生实际填的字段自动识别（老学习单没扫过 layout 也能出数） */
+  let inferred = false;
+  if (!qs.length) { qs = actInferQuizQs(list); inferred = qs.length > 0; }
   if (!qs.length) return '';
 
-  const list = rows || [];
   const isRight = (q, picked) => {
     const ans = (q.answer || []).map(String);
     if (!ans.length) return null;                 /* 没标答案 → 不算对错 */
@@ -17552,9 +17603,51 @@ function actQuizStatsHtml(rows, layout, btn) {
       + (distStr ? '<div class="aqs-dist">' + esc(distStr) + '</div>' : '')
       + '</div>';
   }
-  return cards + summary;
+  return (inferred
+      ? '<div class="act-infer-note">这份学习单没登记题目结构，下面按学生实际填写的字段自动识别（同名同窗口只算一次）。</div>'
+      : '')
+    + cards + summary;
 }
 window.actQuizStatsHtml = actQuizStatsHtml;
+
+/* 从提交数据里推断「这道题有哪些选项」（2026-11-05）
+ *
+ *  什么时候用：老学习单在老版本下发的，layout 里没有 questions；
+ *  或者模板结构和扫描结果对不上。这时候窗口里只剩一列名单，老师看不到答题分布。
+ *
+ *  口径：只认「短、少、可枚举」的字段 —— 不同取值 ≤ 8 个、每个 ≤ 24 字，
+ *  才当成选择题出分布；长文本（作文、备注）不硬凑成选项，免得把一段话印成图例。
+ *  身份/附件/内部字段一律跳过。 */
+const ACT_QUIZ_RESERVED = {
+  '学号': 1, '姓名': 1, '班级': 1, '按钮': 1, 'attachment': 1, 'submitted_at': 1,
+  '作品标题': 1, '作品简介': 1, '测试内容': 1, 'file': 1,
+};
+function actInferQuizQs(rows) {
+  const map = new Map();          /* 字段名 → 出现过的取值（保持表单顺序） */
+  (rows || []).forEach(r => {
+    Object.keys(r || {}).forEach(k => {
+      if (!k || k.charAt(0) === '_' || ACT_QUIZ_RESERVED[k]) return;
+      const v = r[k];
+      const arr = Array.isArray(v) ? v : [v];
+      arr.forEach(x => {
+        const s = String(x == null ? '' : x).trim();
+        if (!s) return;
+        if (!map.has(k)) map.set(k, []);
+        const a = map.get(k);
+        if (a.indexOf(s) < 0 && a.length <= 8) a.push(s);
+      });
+    });
+  });
+  const out = [];
+  map.forEach((vals, k) => {
+    if (vals.length < 1 || vals.length > 8) return;
+    if (!vals.every(v => v.length <= 24)) return;
+    out.push({ btn: '', title: '题目字段 ' + k, kind: 'choice', name: k,
+               multiple: false, options: vals.slice(), answer: [], inferred: true });
+  });
+  return out;
+}
+window.actInferQuizQs = actInferQuizQs;
 /* 兼容旧调用名 */
 function actButtonWindowsHtml(subs) { return actTaskWindowsHtml(subs, actTaskLayout); }
 
@@ -17632,9 +17725,11 @@ function actNormSub(s) {
 function actSubId(s) {
   const no = String(s['学号'] || s['student_no'] || s['sid'] || '').trim();
   const nm = String(s['姓名'] || s['name'] || '').trim();
-  const btn = String(s['按钮'] || '').trim();
+  const btn = String(s['按钮'] || '').trim().replace(/\s+/g, ' ');
   // 逐题提交（带「按钮」，且不是整页/测试）→ 按题目分开，同学生同题去重留最新；
   // 其余提交方式 → 统一按学生姓名去重（姓名优先，缺姓名兜底学号），一人只留最新一条。
+  // 2026-11-05：按钮名先归一化。模板标题里常带换行/连续空格，
+  // 「第1题」和「第1题  」会被当成两个任务 → 大屏同一人多出一条重复记录。
   const perQ = btn && btn !== '整页提交' && btn !== '测试提交';
   const base = perQ ? (no || nm) : (nm || no);
   return base ? (perQ ? base + '#' + btn : base) : '';
@@ -17701,10 +17796,42 @@ function actAttUrl(a) {
   return /^https?:\/\//i.test(a) ? a : (actApiBase() + a);
 }
 
+/* 老学习单自动补题目结构（2026-11-05）
+ *
+ *  2.0.10 之前下发的学习单没有 custom_layout，大屏只能看到一列名字，
+ *  老师以为「系统识别不出题目」。这里取回已部署的页面，用**同一套**
+ *  actScanLayout 扫一遍再存回去，下次进来就有逐题分布。
+ *  · 每个活动只试一次（失败不重试，不打扰课堂）；
+ *  · perQ 从页面里的 BLOCKS_PER_Q 读（注入时写死的），读不到再按提交记录推断；
+ *  · 扫不出题就放弃，不写空 layout 覆盖已有数据。 */
+let actLayoutHealTried = {};
+async function actHealLayout(task, rows) {
+  if (!task || actLayoutHealTried[task]) return false;
+  actLayoutHealTried[task] = 1;
+  try {
+    const r = await fetch('/api/custom?task=' + encodeURIComponent(task), { cache: 'no-store' });
+    if (!r.ok) return false;
+    const html = await r.text();
+    if (!html || html.length < 40) return false;
+    const m = /BLOCKS_PER_Q\s*=\s*(true|false)/.exec(html);
+    const nb = new Set((rows || [])
+      .map(s => String(s['按钮'] || '').replace(/\s+/g, ' ').trim())
+      .filter(b => b && b !== '整页提交' && b !== '测试提交'));
+    const perQ = m ? (m[1] === 'true') : (nb.size > 1);
+    const lay = actScanLayout(html, perQ);
+    if (!lay || !(lay.questions || []).length) return false;
+    const r2 = await fetch('/api/custom', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task: task, html: html, layout: lay }),
+    });
+    return !!(r2 && r2.ok);
+  } catch (e) { return false; }
+}
+
 async function actRenderDash() {
   // 大屏会整块重建 innerHTML（连"加载中"占位也会先写一次），这里在函数入口就记住
   // 搜索框的焦点与光标位置，渲染完成后还原 → 轮询刷新不会打断正在输入的搜索词
-  try { syncTopbarH(); } catch (e) {}   // 吸顶 top 依赖顶栏实测高度
+  try { syncTopbarH(); } catch (e) {}   // 其它吸顶元素（表格表头等）仍依赖顶栏实测高度
   const _ae = document.activeElement;
   const _keepSearch = !!(_ae && _ae.id === 'actRosterSearch');
   const _keepPos = _keepSearch ? _ae.selectionStart : null;
@@ -17736,6 +17863,11 @@ async function actRenderDash() {
   const clsObjNow = (dbT('classes') || []).find(c => Number(c.id) === Number(cls));
   actCurClsName = clsObjNow ? String(clsObjNow.name || '') : '';
   actTaskLayout = (j && j.layout && typeof j.layout === 'object') ? j.layout : {};
+  /* 老学习单没登记题目结构 → 后台补一次（成功会自己重绘，失败就按数据自动识别兜底） */
+  if (subs.length && !((actTaskLayout && actTaskLayout.questions) || []).length
+      && !actLayoutHealTried[actActiveId]) {
+    actHealLayout(actActiveId, subs).then(done => { if (done) actRenderDash(); });
+  }
   const matched = subs.filter(s => actSubMatchClass(s, clsStus));
   /* 一人一条（2026-11-05）：同一学生先后交任务一、任务二时，subs 里是两条不同
      按钮的记录（这是对的，要分进各自的任务窗口）。但顶部 KPI、学生作品、提交
@@ -17804,7 +17936,7 @@ function actDashboardHtml(j, subs, matched, clsStus, cls, allMatched) {
     ? '<div class="act-miss"><div class="act-miss-t">未提交 ' + missing.length + ' 人</div><div class="act-miss-l">' + missing.map(stu => '<span class="act-mid">' + esc(stu.name||'—') + (stu.student_no ? '　' + esc(stu.student_no) : '') + '</span>').join('') + '</div></div>'
     : '<div class="act-miss"><div class="act-miss-t" style="color:var(--status-success,#1D9E75)">全班已交齐 ✅</div></div>';
   return ''
-    + '<div class="act-dash-sticky">'
+    + '<div class="act-dash-top">'
     + '<div class="act-dash-hd"><div class="hd-bar"></div><div><div class="hd-t">课程数据大屏</div>'
     + '<div class="hd-s">' + esc(j.task_title || actActiveId) + '　·　当前班级：<b>' + esc(String(clsName)) + '</b>　·　按班级收集</div></div>'
   + '<div class="hd-r"><span class="act-dot ' + (submitted ? 'on' : 'off') + '"></span><span class="act-muted">' + (submitted ? '实时数据' : '暂无提交') + '</span>'
@@ -18044,7 +18176,27 @@ function actDrawCharts(j, subs) {
 
 function actDrawBars(canvasId, items) {
   const cv = document.getElementById(canvasId); if (!cv) return;
-  const ctx = cv.getContext('2d'); const W = cv.width, H = cv.height; ctx.clearRect(0, 0, W, H);
+  const ctx = cv.getContext('2d');
+  /* 2026-11-05：以前画布写死 320×170 —— 桌面上右边留一大片空白，
+     390px 手机上又比容器宽、撑出横向滚动条。改成按容器实际宽度定尺寸：
+     位图按 DPR 放大（字不糊），绘制坐标仍用 CSS 像素。 */
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const p = cv.parentElement;
+  const pcs = p ? getComputedStyle(p) : null;
+  const inner = p ? (p.clientWidth
+      - (parseFloat(pcs.paddingLeft) || 0) - (parseFloat(pcs.paddingRight) || 0)) : 320;
+  const cssW = Math.max(220, Math.round(inner || 320));
+  const cssH = 170;
+  if (cv._wbW !== cssW || cv._wbDpr !== dpr) {
+    cv._wbW = cssW; cv._wbDpr = dpr;
+    cv.style.width = cssW + 'px';
+    cv.style.height = cssH + 'px';
+    cv.width = Math.round(cssW * dpr);
+    cv.height = Math.round(cssH * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  const W = cssW, H = cssH;
+  ctx.clearRect(0, 0, W, H);
   const css = getComputedStyle(document.documentElement);
   const brand = (css.getPropertyValue('--brand-primary') || '#0F6E56').trim();
   const txt = (css.getPropertyValue('--text-primary') || '#1A2E28').trim();
