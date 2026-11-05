@@ -51,7 +51,6 @@ from activity import ActivityStore, parse_multipart   # noqa: E402  课堂活动
 from typing_store import TypingStore   # noqa: E402
 from updater import Updater            # noqa: E402  在线更新（检查/下载/安装/回滚）
 import ooxml_preview as OOX            # noqa: E402  课件在线预览（纯 Python 解析 OOXML）
-import sheet_archive as SHEET_ARC      # noqa: E402  学习单提交存档（独立网页）
 
 # 数据目录：默认与程序同级的 data/（不设环境变量时）；
 # 容器部署时用 WB_DATA_DIR 指到挂载卷，两者行为一致。
@@ -132,7 +131,7 @@ CFG["update"].setdefault("interval_hours", 24) # 检查间隔（小时）
 PET_IDS = ["cat", "dog", "rabbit", "penguin", "panda", "dino", "unicorn", "dragon"]
 COND = threading.Condition()
 STARTED = time.time()
-VERSION = "2.0.34"
+VERSION = "2.0.35"
 ONLINE_WINDOW = 300      # 5 分钟内活跃算在线
 # 可内联直出的附件类型（其余一律按下载处理，防止同源执行脚本）
 _INLINE_EXTS = {"png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "pdf",
@@ -843,11 +842,10 @@ class Handler(LEG.Handler):
                                                      keep_blank_values=True))
             except Exception:
                 fields = {"data": raw.decode("utf-8", "replace")[:5000]}
-        # 学习单存档：匿名口没有票，身份按提交里带的认（和下面入库口径一致）
-        _who = {"学号": str(fields.get("学号") or fields.get("sid") or ""),
-                "姓名": str(fields.get("姓名") or fields.get("name") or ""),
-                "班级": str(fields.get("班级") or fields.get("cls") or "")}
-        _arc = self._sheet_archive(task_key, fields.pop("__archive", ""), _who)
+        # 老页面兼容（2026-11-05 深夜）：2.0.34 及以前的页面提交时会带 __archive
+        # （整页 HTML 快照）。现在不再存整页存档，直接丢弃 —— 留下来会变成一列
+        # 几百 KB 的文本塞进 data，既撑库又在大屏表格里冒出一列乱码。身份用票里的认。
+        fields.pop("__archive", None)
         # 任务类型（2026-11-05）：纯数据任务丢掉误带的文件，与带票提交口保持一致
         _allow, _kind = self._accept_files(task_key, fields)
         _ignored = 0
@@ -856,8 +854,7 @@ class Handler(LEG.Handler):
             files = []
         try:
             res = ACT.add_submission(task_key, fields, files,
-                                     ip=self._client_ip_safe(), archive=_arc,
-                                     kind=_kind)
+                                     ip=self._client_ip_safe(), kind=_kind)
         except ValueError as e:
             return self._json_cors({"ok": False, "message": str(e)}, 413)
         except LookupError:
@@ -1658,38 +1655,6 @@ class Handler(LEG.Handler):
     #   ② 地址一旦写进页面，老师换机器就要全班改一遍；
     #   ③ 身份字段如果由页面自己填，学生改个数字就能冒充别人。
     # 走这里：学生只带一张票，身份由服务端补，活动服务只需要在内网可达。
-    def _sheet_archive(self, task, raw, who):
-        """把「学习单整页快照」做成独立网页存档；任何异常都返回 None。
-
-        存档失败绝不能拖累提交 —— 学生答完题交不上去，比少一份存档严重得多。
-        只有确实部署过学习单模板的活动才存（防止这个公开提交口被当成图床）。
-        """
-        try:
-            if not isinstance(raw, str) or not raw.strip():
-                return None
-            cfg = LEG.get_config() or {}
-            tpls = cfg.get("custom_templates") if isinstance(cfg, dict) else None
-            if not (isinstance(tpls, dict) and str(tpls.get(task) or "").strip()):
-                return None
-            arc = SHEET_ARC.build(raw, {
-                "task": task,
-                "title": (ACT.get_task(task) or {}).get("title") or "",
-                "cls": (who or {}).get("班级") or "",
-                "name": (who or {}).get("姓名") or "",
-                "sid": (who or {}).get("学号") or "",
-                "time": time.strftime("%Y-%m-%d %H:%M:%S"),
-            })
-            if not arc:
-                return None
-            tag = re.sub(r"[^\w\u4e00-\u9fa5-]+", "_",
-                         "%s_%s" % ((who or {}).get("姓名") or "学生",
-                                    (who or {}).get("学号") or ""))[:60].strip("_")
-            return {"name": "学习单-%s-%s.html" % (tag or "学生",
-                                                  time.strftime("%Y%m%d-%H%M%S")),
-                    "data": arc.encode("utf-8"),
-                    "mime": "text/html; charset=utf-8"}
-        except Exception:
-            return None
 
     def _accept_files(self, task, fields):
         """这次提交收不收文件（2026-11-05）。
@@ -1773,10 +1738,9 @@ class Handler(LEG.Handler):
                 fields = dict(urllib.parse.parse_qsl(txt, keep_blank_values=True))
             except Exception:
                 fields = {"答案": txt[:5000]}
-        # 学习单存档（2026-11-05）：页面把「填好答案的整页快照」放在 __archive。
-        # 先摘出来 —— 它不是一道题的答案，混进 fields 会在大屏上多出一列
-        # 巨大文本。身份用服务端票里的（who），页面自报的不算数。
-        archive = self._sheet_archive(task, fields.pop("__archive", ""), who)
+        # 老页面兼容（2026-11-05 深夜）：不再保存整页 HTML 快照，带票口同样直接丢弃
+        # __archive。它不是一道题的答案，留着会变成一列几百 KB 的文本。
+        fields.pop("__archive", None)
         # 身份以服务端签的票为准，页面自己填的一律覆盖（防冒名）
         fields.update(who)
         # 任务类型：纯数据任务即使前端误带了文件，也在这里丢掉（不写盘、不产生 attachment）
@@ -1788,7 +1752,7 @@ class Handler(LEG.Handler):
         try:
             res = ACT.add_submission(task, fields, files, ip=self._client_ip_safe(),
                                      sid=who.get("学号"), name=who.get("姓名"),
-                                     cls=who.get("班级"), archive=archive, kind=kind)
+                                     cls=who.get("班级"), kind=kind)
         except ValueError as e:
             return self._json_cors({"ok": False, "msg": str(e)}, 413)
         except LookupError:

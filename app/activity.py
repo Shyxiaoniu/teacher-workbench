@@ -321,16 +321,12 @@ class ActivityStore(object):
     # 提交
     # ------------------------------------------------------------------
     def add_submission(self, task_key, data, files=None, ip="", sid="", name="", cls="",
-                       archive=None, kind=""):
+                       kind=""):
         """收一条提交。files = [{name, data, mime}]，写盘后把 URL 挂进 data['attachment']。
 
         kind（2026-11-05）：任务类型 —— "file" 文件任务 / "data" 纯数据任务。
         只作为内部字段写进 data["_kind"]（下划线开头，导出与表格都不展示），
         用来区分「这条提交本来该不该有附件」；调用方负责在 data 任务里不传 files。
-
-        archive（2026-11-05）：学习单的整页快照 {name,data,mime}，单独落一份 .html，
-        地址记在 data['_sheet']。不混进 attachment —— 那是学生上传的作品文件，
-        前端「文件」列只认它，两者混在一起会让人分不清哪个是学生交的。
         """
         task_key = str(task_key)
         if not self.get_task(task_key):
@@ -352,17 +348,6 @@ class ActivityStore(object):
             infos.append(info)
         if urls:
             data["attachment"] = urls[0] if len(urls) == 1 else urls
-        # 学习单存档：和作品附件一样落在活动目录里，但地址单列在 _sheet，
-        # 前端「文件」列不会把它当成学生交的作品。
-        sheet_url, sheet_info = "", None
-        if isinstance(archive, dict) and archive.get("data"):
-            try:
-                sheet_url, sheet_info = self.save_file(
-                    task_key, archive.get("name") or "学习单.html",
-                    archive["data"], archive.get("mime") or "text/html; charset=utf-8")
-                data["_sheet"] = sheet_url
-            except Exception:
-                sheet_url, sheet_info = "", None
         # 身份：显式列 + JSON 里的中文字段都写，前端/导出/归档各处都认
         sid = str(sid or data.get("学号") or "").strip()
         name = str(name or data.get("姓名") or "").strip()
@@ -381,8 +366,7 @@ class ActivityStore(object):
                 "INSERT INTO act_submission(task_key,data,sid,name,cls,ip,files,submitted_at) "
                 "VALUES(?,?,?,?,?,?,?,?)",
                 (task_key, json.dumps(data, ensure_ascii=False), sid, name, cls, ip,
-                 json.dumps([u for u in (urls + ([sheet_url] if sheet_url else []))],
-                            ensure_ascii=False), ts))
+                 json.dumps(urls, ensure_ascii=False), ts))
             sub_id = int(cur.lastrowid)
             for info, url in zip(infos, urls):
                 self.conn.execute(
@@ -390,16 +374,9 @@ class ActivityStore(object):
                     "VALUES(?,?,?,?,?,?,?)",
                     (task_key, sub_id, info["stored"], info["orig"], info["size"],
                      info["mime"], ts))
-            if sheet_info:
-                # 也登记进 act_file：删除提交时按 files 列一起清掉，不留孤儿文件
-                self.conn.execute(
-                    "INSERT INTO act_file(task_key,sub_id,stored,orig,size,mime,created_at) "
-                    "VALUES(?,?,?,?,?,?,?)",
-                    (task_key, sub_id, sheet_info["stored"], sheet_info["orig"],
-                     sheet_info["size"], sheet_info["mime"], ts))
             self.conn.commit()
         return {"id": sub_id, "attachment": data.get("attachment"),
-                "sheet": sheet_url, "submitted_at": ts}
+                "submitted_at": ts}
 
     def submissions(self, task_key):
         """全量提交（`/all` 的标准返回）。"""
@@ -443,7 +420,8 @@ class ActivityStore(object):
             sid = d.get("_submission_id")
             fs = fmap.get(int(sid)) if sid is not None else None
             if fs:
-                # 学习单存档（_sheet）不是学生交的作品，别混进 _files
+                # 老数据（2.0.34 及以前）里有一份学习单整页存档，它不是学生交的作品，
+                # 不能混进 _files；新数据已经没有 _sheet，这段只是兼容历史记录。
                 fs = [f for f in fs if f.get("url") != d.get("_sheet")]
                 if fs:
                     d["_files"] = fs

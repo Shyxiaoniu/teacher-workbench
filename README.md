@@ -3,7 +3,7 @@
 > 给班主任和任课老师用的一套**班级工作台**：教师端与学生端共用一个网页入口，
 > 数据全部存在自己的服务器上，不依赖任何第三方云服务。
 
-当前版本：**2.0.34**（版本号唯一代码源：`app/server.py` 的 `VERSION`）
+当前版本：**2.0.35**（版本号唯一代码源：`app/server.py` 的 `VERSION`）
 
 ```
 http://<服务器局域网 IP>:8080/        ← Docker 部署的入口；直接运行时是 :20020
@@ -378,9 +378,9 @@ docker compose up -d --build
 
 | # | 文件 | 位置 |
 |---|---|---|
-| 1 | `app/server.py` | `VERSION = "2.0.34"` —— **唯一代码源** |
-| 2 | `.env.example` | `IMAGE_TAG=2.0.34` |
-| 3 | `docker-compose.yml` | `image: …:${IMAGE_TAG:-2.0.34}`（init 与 workbench **两处**） |
+| 1 | `app/server.py` | `VERSION = "2.0.35"` —— **唯一代码源** |
+| 2 | `.env.example` | `IMAGE_TAG=2.0.35` |
+| 3 | `docker-compose.yml` | `image: …:${IMAGE_TAG:-2.0.35}`（init 与 workbench **两处**） |
 | 4 | `README.md` | 文首「当前版本」 |
 | 5 | `version.json` | 由 `tools/make_release.py` 自动同步 |
 
@@ -445,6 +445,35 @@ python tools/make_release.py --out D:\dist   # 指定输出目录（默认 dist/
 | 今日页 | 「老师刚推送的截图」小卡（现已移除） |
 | 接口 | `GET /api/v2/tool/latest`、`GET /api/v2/tool/img?id=`（现已 404） |
 
+### 学习单不再存整页 HTML 存档：只留学生交的文件（2.0.35）
+
+**① 改了什么**
+
+| 层 | 2.0.34 及以前 | 2.0.35 |
+|---|---|---|
+| 学生提交页 | 提交瞬间克隆整页、回填答案，作为 `__archive` 一起发 | **不再生成快照**（`actArchiveHtml` 已删），只发字段 + 当前任务块里的文件 |
+| 服务端 | `_sheet_archive()` + `core/sheet_archive.py` 清洗后落 `.html` | 两个提交口都 `fields.pop("__archive", None)` 直接丢弃（防老页面缓存） |
+| 存储 | `data._sheet` + `act_file` 里一行 `.html` | 只存 `data`（字段）与 `attachment` + `act_file` 里的真实文件 |
+| 大屏「文件」列 | 📄 存档 + 📎 附件 | 只有 📎；没交文件显示「—」 |
+| 归档 | 会把 `.html` 当作品一起搬进资料 | 只搬真实文件；没文件只写提交数据 CSV |
+
+**② 适用范围**
+
+只影响**课堂学习单（活动提交）**：`/api/v2/student/submit`（带票）与
+`/api/act/<活动>`（匿名口）。作业收交、资料上传、课程文件、作品归档的目录结构
+（`<课程>/<班级>/<学号+姓名>/`）都不变。
+
+**③ 边界情况**
+
+| 情况 | 行为 |
+|---|---|
+| 学生交文件 | 文件原样落 `act_file`，`data.attachment` 回填，大屏可在线预览、归档进学生文件夹 |
+| 学生只填文字 | 只写 `act_submission.data`，不写盘、不产生 `act_file` 行、不生成归档文件夹 |
+| 浏览器还拿着旧页面（缓存/未刷新） | 仍会发 `__archive`，服务端丢弃：不落库、不落盘、响应里没有 `sheet`，不报错 |
+| 历史数据里的 `_sheet` | 不再展示、不再归档；`.html` 文件仍留在 `<数据目录>/activity/<活动>/`，需要清理可手删 |
+| 同一个学生先交文件后只交数据 | `actKeepFiles()` 只继承附件，文件不丢；`_sheet` 不再参与合并 |
+| 归档时一条文件都没有 | 只写 `-提交数据.csv`（附件数为 0），不建班级/学生文件夹 |
+
 ### 学习单提交按任务类型分流：文件任务 / 纯数据任务（2.0.34）
 
 **① 适用范围**
@@ -467,7 +496,7 @@ python tools/make_release.py --out D:\dist   # 指定输出目录（默认 dist/
 |---|---|---|
 | 文件任务 | 字段 + 文件（`FormData` 带 file） | `act_submission.data.attachment` = 附件 URL（多个为数组）；`act_file` 一行一个文件（含原始文件名/大小/MIME）；读接口额外给 `_files` |
 | 纯数据任务 | **只收字段**，`type=file` 一律跳过 | 只有 `act_submission.data`（各字段 + 学号/姓名/班级 + `_kind: "data"`）；**不写盘、不产生 `attachment`、不占 `act_file` 行** |
-| 两者都有 | 学习单整页存档 | `data._sheet` = 存档 HTML 地址；**不算学生作品**，`_files` 里已排除 |
+| 学习单整页存档（2.0.34 及以前） | 整页 HTML 快照 `__archive` | `data._sheet` —— **2.0.35 已整体删除**，见上一节 |
 
 服务端还有一道兜底：`kind=data` 时即使请求里带了文件也直接丢弃（响应回
 `ignored_files: N`），`ACT.add_submission` 里再兜一次 —— 纯数据任务永远不会落附件。
@@ -475,7 +504,7 @@ python tools/make_release.py --out D:\dist   # 指定输出目录（默认 dist/
 **④ 互不冲突**
 
 - 同一学生「先交文件、后又交了一次纯数据」时，按人去重会保留最新一条；
-  `actKeepFiles()` 把旧记录的 `attachment / _files / _sheet` 继承过来，
+  `actKeepFiles()` 把旧记录的 `attachment / _files` 继承过来，
   文件不会因为一次纯数据提交而消失；
 - 反过来（先数据后文件）以新记录为准，附件自然是新的；
 - 逐题提交时每个按钮独立记录（key 含按钮名），文件任务和数据任务互不覆盖。
@@ -610,7 +639,10 @@ python tools/make_release.py --out D:\dist   # 指定输出目录（默认 dist/
 | 窄屏 | ≤760px 时顶栏折成「标题一行 + 数据 chip 一行」（原来 chip 折三四行，吸顶后占掉半屏） |
 | 牧场 | `fitViewScroll()` 改成按 `#view` 到视口的实际距离算高度，不再用「视口 − sticky 高度」硬减（页签已不在 sticky 里，硬减会多出一条滚动条） |
 
-**② 学习单提交存成独立网页**
+**② 学习单提交存成独立网页（⚠️ 2.0.35 已删除，仅作历史记录）**
+
+> 现在提交结果就是**学生上传的文件本身**；没有文件的任务只记录提交数据。
+> 页面不再生成 `__archive`，服务端也不再落 `.html` 存档。详见文首「2.0.35」一节。
 
 - 提交瞬间，页面把**整页 DOM 克隆**一份，把用户输入回写进属性（`value` / `checked` /
   `selected` / textarea 文本），摘掉脚本、登录浮层、身份条、提交按钮，作为
