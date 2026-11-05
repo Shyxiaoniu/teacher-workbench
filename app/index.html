@@ -8269,14 +8269,18 @@ function quoteCacheRead() {
 }
 function currentQuote() {
   const c = quoteCfg();
+  /* 字号是「好句这一行」的显示设置，跟句子从哪来无关（2026-11-05 修）：
+     以前只有自定义来源才带 size，在线 / 内置来源把 size 丢掉，
+     paintQuoteEl 见不到 size 就把内联 font-size 清空 ——
+     表现就是「改了字号、保存了，却什么都没变」。 */
   if (c.mode === 'custom' && (c.custom.trim() || c.html)) {
     return { text: c.custom.trim(), html: c.html || '', size: c.size };
   }
   if (c.mode === 'online') {
     const cache = quoteCacheRead();
-    if (cache && cache.text) return { text: cache.text };
+    if (cache && cache.text) return { text: cache.text, size: c.size };
   }
-  return { text: quoteOfDay() };
+  return { text: quoteOfDay(), size: c.size };
 }
 
 /** 好句富文本白名单清洗：只留字号相关的 span + 少量行内标签。
@@ -8332,8 +8336,12 @@ function paintQuoteEl(el, q) {
 function showQuote(q) {
   const el = document.getElementById('greetQuote');
   if (!el) return;
+  /* 传字符串的调用（在线取句、内置轮换、点「立即换一句」）也要带上配置的字号，
+     否则一次换句就把字号打回默认 —— 这是「设置后过一会儿又失效」的另一半原因。 */
+  const obj = (q && typeof q === 'object') ? Object.assign({}, q) : { text: q };
+  if (obj.size == null) obj.size = quoteCfg().size;
   const before = el.innerHTML;
-  paintQuoteEl(el, q);
+  paintQuoteEl(el, obj);
   if (el.innerHTML !== before) {
     el.classList.remove('gs-q-in'); void el.offsetWidth; el.classList.add('gs-q-in');
   }
@@ -8342,7 +8350,8 @@ function showQuote(q) {
  *  否则「刷新页面」会退回纯文本、把自定义字号丢掉，看着像没保存。 */
 function quoteCardHtml() {
   const q = currentQuote();
-  const style = q.size ? ' style="font-size:' + quoteSizeClamp(q.size) + 'px"' : '';
+  const sz = quoteSizeClamp(q.size == null ? quoteCfg().size : q.size);
+  const style = ' style="font-size:' + sz + 'px"';
   return '<span class="gs-main" id="greetQuote" title="' + esc(q.text || '') + '"' + style + '>'
     + (q.html ? quoteCleanHtml(q.html) : esc(q.text || '')) + '</span>';
 }
@@ -8484,7 +8493,7 @@ function openGreetSetting() {
       </select>
     </div>
     <div class="field">
-      <label>自定义好句<span class="qs-count" id="qsCount">0/60</span></label>
+      <label>好句内容与字号<span class="qs-count" id="qsCount">0/60</span></label>
       <div class="qs-tools">
         <select id="qsWholeSize" title="整句的基准字号">
           <option value="13">整句 13px</option>
@@ -8512,6 +8521,7 @@ function openGreetSetting() {
         <span class="qs-prev-t">预览（与侧栏好句一致）</span>
         <span class="gs-main" id="qsQuotePrev"></span>
       </div>
+      <div class="imp-tip" style="margin-top:6px">字号对「在线 / 内置 / 自定义」三种来源都生效；选中文字调的字号只作用于这一段。</div>
     </div>
     <div class="field">
       <label>更换频率</label>
@@ -8576,6 +8586,10 @@ function qsPreview() {
   const ed = document.getElementById('qsCustom');
   const pv = document.getElementById('qsQuotePrev');
   if (!ed || !pv) return;
+  /* 预览的「整句字号」必须跟着编辑区走：
+     打开弹窗时只是把字号写在 ed 上，不在这里补一次的话，
+     预览会一直用 CSS 默认的 15.5px —— 看着像「改了字号没生效」。 */
+  pv.style.fontSize = ed.style.fontSize || (quoteCfg().size + 'px');
   pv.innerHTML = quoteCleanHtml(ed.innerHTML);   // 清洗后再插入，预览与保存同一套规则
   pv.title = ed.textContent || '';
   const n = String(ed.textContent || '').replace(/\s+/g, ' ').trim().length;
@@ -16332,6 +16346,10 @@ function renderActivity() {
   .act-pub-tip{font-size:12px;color:var(--text-secondary);line-height:1.7;margin-top:10px}
   .act-del-btn{font-size:12px;padding:3px 9px;border:1px solid var(--status-error,#E24B4A);color:var(--status-error,#E24B4A);background:var(--bg-surface);border-radius:8px;cursor:pointer;white-space:nowrap}
   .act-del-btn:hover{background:var(--status-error,#E24B4A);color:#fff}
+  /* 「文件」列的 📎：看起来像链接，点开走页面内预览（2026-11-05） */
+  .act-file-btn{border:0;background:transparent;padding:1px 3px;font-size:15px;line-height:1;
+    cursor:pointer;border-radius:6px}
+  .act-file-btn:hover{background:var(--brand-soft)}
   .act-del{margin-left:auto}
   /* ===== ③ 下发到班级：改为「下发」按钮 + 弹窗（复用上面 chip 样式） ===== */
   .act-pub-check{color:var(--brand-primary);font-weight:700;margin-left:2px}
@@ -17798,6 +17816,67 @@ function actDedupByPerson(rows) {
   });
 }
 function actAttachments(s) { const a = s && s.attachment; if (!a) return []; if (typeof a === 'string') return [a]; if (Array.isArray(a)) return a; return []; }
+/* 附件列表（2026-11-05）：优先用服务端带的 _files（有原始文件名 / 大小 / MIME），
+   老数据没有 _files 时退回 attachment 里的地址，按 URL 最后一段当名字。
+   统一返回 [{url, name, size, mime}]，预览、归档、作品墙都走这一份。 */
+function actFileList(s) {
+  const out = [];
+  const seen = {};
+  const push = (u, name, size, mime) => {
+    u = String(u || '');
+    if (!u || seen[u]) return;
+    seen[u] = 1;
+    out.push({ url: u,
+               name: String(name || '').trim() || decodeURIComponent(u.split('?')[0].split('/').pop() || '文件'),
+               size: Number(size) || 0,
+               mime: String(mime || '') });
+  };
+  ((s && s._files) || []).forEach(f => { if (f && f.url) push(f.url, f.name, f.size, f.mime); });
+  actAttachments(s).forEach(u => push(u, '', 0, ''));
+  return out;
+}
+/* 大屏「文件」列：点 📎 直接在页面里预览，不再跳到原始地址（office 会被下载）。
+   idx 指定先看第几个；预览器右上角仍保留「下载原文件」。 */
+function actOpenFiles(s, idx) {
+  const list = actFileList(s);
+  if (!list.length) { toast('这条提交没有文件'); return; }
+  const who = actRosterName(s) || '学生';
+  actOpenFileItems(list, idx, who, actTaskOf(s));
+}
+/* 表格里的按钮：不靠全局索引找数据，文件地址就写在按钮的 data-* 上，
+   同一格里所有按钮组成「上一个 / 下一个」的序列，重绘多少次都不会错位。 */
+function actOpenFileBtn(btn) {
+  if (!btn) return;
+  const cell = btn.closest('td') || btn.parentNode;
+  const all = Array.prototype.slice.call(cell.querySelectorAll('.act-file-btn'));
+  const idx = Math.max(0, all.indexOf(btn));
+  const list = all.map(b => ({
+    url: b.getAttribute('data-furl') || '',
+    name: b.getAttribute('data-fname') || '文件',
+    size: 0, mime: ''
+  })).filter(x => x.url);
+  if (!list.length) { toast('这条提交没有文件'); return; }
+  actOpenFileItems(list, idx, btn.getAttribute('data-fwho') || '学生',
+                   btn.getAttribute('data-ftask') || '');
+}
+function actOpenFileItems(list, idx, who, taskLabel) {
+  if (typeof cwOpenViewer !== 'function') { location.href = actAttUrl(list[0].url); return; }
+  const items = list.map(f => ({
+    name: (who ? who + ' · ' : '') + f.name,
+    kind: cwKindOf(f.name),
+    size: f.size ? (f.size > 1048576 ? (f.size / 1048576).toFixed(1) + 'MB'
+                                    : Math.max(1, Math.round(f.size / 1024)) + 'KB') : '',
+    src: actAttUrl(f.url),
+    download: actAttUrl(f.url),
+    doc: (typeof cwAvailable === 'function' && cwAvailable())
+      ? (CW_API + 'remote?base=' + encodeURIComponent(actAbsBase())
+         + '&url=' + encodeURIComponent(cwRelPath(f.url)) + cwDarkQs())
+      : '',
+    noDoc: !(typeof cwAvailable === 'function' && cwAvailable())
+  }));
+  cwOpenViewer(items, Math.max(0, Math.min(idx || 0, items.length - 1)),
+               who + (taskLabel ? ' · ' + taskLabel : ''));
+}
 /* 附件地址补全：相对路径拼上接口前缀，绝对 URL 原样使用 */
 function actAttUrl(a) {
   a = String(a || '');
@@ -17954,8 +18033,23 @@ async function actClearSubs() {
   try {
     const r = await fetch('/api/v2/act-clear?task=' + encodeURIComponent(actActiveId), { method: 'POST' });
     const j = await r.json().catch(() => ({}));
-    if (j && j.ok) { toast('已清空全部提交数据'); actRenderDash(); }
-    else toast('清空失败：' + ((j && j.msg) || r.status));
+    if (!j || !j.ok) { toast('清空失败：' + ((j && j.msg) || r.status)); return; }
+    /* 2026-11-05：提交记录删了，但从这里归档到「资料」的副本还在。
+       老师清空后再有新提交触发自动归档，旧作品又会被看见，像是数据回来了。
+       这里顺手把本次活动的归档副本一起删掉（索引缺失 / 老数据失败都不拦清空）。 */
+    let removed = 0;
+    try {
+      const link = (typeof cwLinkOf === 'function') ? cwLinkOf(actActiveId) : null;
+      if (link && link.course && typeof cwReq === 'function') {
+        const ar = await cwReq('archive_clear', {
+          course: link.course, activity: actTaskTitle(),
+          cls: actCurClsName || ''
+        });
+        if (ar && ar.ok) removed = Number(ar.removed) || 0;
+      }
+    } catch (e) { /* 归档副本清理失败不影响清空本身 */ }
+    toast('已清空全部提交数据' + (removed ? '，并清理归档副本 ' + removed + ' 个' : ''));
+    actRenderDash();
   } catch (e) { toast('清空失败：' + e.message); }
 }
 async function actDelSub(id) {
@@ -18086,14 +18180,20 @@ function actTableHtml(subs, limit) {
   const hasTaskCol = rows.some(s => btnOf(s));
   return `<div style="overflow-x:auto"><table class="act-tb"><thead><tr><th>姓名</th><th>学号</th>${hasTaskCol ? '<th>任务</th>' : ''}<th>作品标题</th><th>简介</th><th>文件</th><th>时间</th><th>操作</th></tr></thead><tbody>${
     rows.map(s => {
-      const atts = actAttachments(s);
+      const atts = actFileList(s);
       const sid = s._submission_id != null ? s._submission_id : '';
       /* 学习单存档（2026-11-05）：学生提交时存的独立网页，点开可看/下载。
          和作品附件分开显示，老师一眼能分清「学生交的文件」和「学习单本身」。 */
       const sheetA = s._sheet
         ? `<a href="${actAttUrl(s._sheet)}" target="_blank" rel="noopener" title="学习单存档（独立网页，可另存）">📄</a>` : '';
+      const who = actRosterName(s) || '学生';
+      const taskLb = actTaskOf(s) || '';
       const fileCell = [sheetA,
-        atts.length ? atts.map(a => `<a href="${actAttUrl(a)}" target="_blank">📎</a>`).join(' ') : ''
+        atts.length ? atts.map((f, fi) =>
+          `<button type="button" class="act-file-btn" title="${esc(f.name)}（点一下在线预览）"`
+          + ` data-furl="${esc(f.url)}" data-fname="${esc(f.name)}"`
+          + ` data-fwho="${esc(who)}" data-ftask="${esc(taskLb)}"`
+          + ` onclick="actOpenFileBtn(this)">📎${atts.length > 1 ? (fi + 1) : ''}</button>`).join(' ') : ''
       ].filter(Boolean).join(' ') || '—';
       return `<tr>
         <td>${esc(s['姓名'] || s['name'] || '—')}</td>
@@ -36379,16 +36479,23 @@ async function cwArchiveTask(silent) {
   const rows = (actLastMatched || []);
   const items = [];
   rows.forEach(s => {
-    actAttachments(s).forEach(a => {
-      const url = String(a || '');
-      if (!url) return;
+    const who = actRosterName(s);
+    const no = actRosterNo(s);
+    actFileList(s).forEach(f => {
+      if (!f.url) return;
       items.push({
-        name: url.split('?')[0].split('/').pop() || 'file',
-        url: url,
-        student: actRosterName(s)
+        name: f.name || (f.url.split('?')[0].split('/').pop() || 'file'),  // 学生交的原文件名
+        url: f.url,
+        student: who,
+        no: no
       });
     });
   });
+  /* 归档目标：<课程>/<班级>/<学号+姓名>/（2026-11-05）
+     班级取当前大屏选中的班；取不到就交给服务端落到「未分班」，绝不让归档失败。 */
+  const clsName = actCurClsName
+    || ((dbT('classes') || []).find(c => Number(c.id) === Number(actCurClass())) || {}).name
+    || '';
   const say = (html, ok) => {
     cwLastArchive[actActiveId] = { ok: ok, html: html };
     /* 归属条已移除（2026-11-04）：归档结果改用 toast 告知 */
@@ -36401,16 +36508,20 @@ async function cwArchiveTask(silent) {
     return;
   }
   try {
-    const r = await cwReq('archive', { course: link.course, activity: title, base: actAbsBase(), items: items });
+    const r = await cwReq('archive', { course: link.course, activity: title,
+                                      cls: clsName, base: actAbsBase(), items: items });
     if (!r.ok) throw new Error(r.msg || '归档失败');
     const savedN = (r.saved || []).length, skipN = (r.skipped || []).length;
+    const renameN = (r.saved || []).filter(x => x.renamed).length;
     const dataMsg = await cwArchiveDataCsv(link.course, title, rows);
     const parts = [];
     if (savedN) parts.push('新增 ' + savedN + ' 个文件');
+    if (renameN) parts.push('其中 ' + renameN + ' 个同名已自动加序号');
     if (skipN) parts.push('已有 ' + skipN + ' 个（跳过）');
-    say('✓ 已归档到「' + esc(link.course) + '」：' + (parts.join('、') || '无变化')
+    const clsLb = r.class || clsName || '未分班';
+    say('✓ 已归档到「' + esc(link.course) + ' / ' + esc(clsLb) + '」：' + (parts.join('、') || '无变化')
         + (dataMsg ? '；' + esc(dataMsg) : '')
-        + '<br><span style="font-size:12px">位置：' + esc(r.rel || '') + '</span>', true);
+        + '<br><span style="font-size:12px">位置：' + esc(r.rel || '') + '（每位学生一个「学号+姓名」文件夹）</span>', true);
     if (!silent) toast('归档完成：' + (parts.join('、') || '无变化'));
   } catch (e) {
     say('归档失败：' + esc(e.message || e), false);
@@ -36521,15 +36632,18 @@ function cwCollectWorks(rows) {
     if (grp === undefined) { grp = cwGroupLabelOf(no, who); gcache[gk] = grp; }
     // 作品标题比 hash 文件名有意义得多（上传后名字会被改成 uuid）
     const title = String(s['作品标题'] || s['作品名称'] || s.title || '').trim();
-    actAttachments(s).forEach((a, i) => {
-      let url = String(a || '');
+    const files = actFileList(s);
+    files.forEach((f, i) => {
+      const url = String(f.url || '');
       if (!url) return;
-      const name = decodeURIComponent(url.split('?')[0].split('/').pop() || 'file');
+      // 优先用服务端 _files 里的原始文件名；老数据退回 URL 最后一段
+      const name = String(f.name || '').trim()
+        || decodeURIComponent(url.split('?')[0].split('/').pop() || 'file');
       out.push({
         name: name, url: url, student: who, no: no, group: grp, ts: ts,
         title: title,                       // 学生填的作品标题（可能为空）
         label: title || name,               // 界面上优先显示标题
-        multi: actAttachments(s).length > 1, // 一人多文件时标注序号
+        multi: files.length > 1,            // 一人多文件时标注序号
         seq: i,
         kind: cwKindOf(name), full: (url.indexOf('http') === 0 ? url : actApiBase() + url)
       });

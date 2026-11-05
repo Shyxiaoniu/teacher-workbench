@@ -1297,8 +1297,15 @@ class Handler(BaseHTTPRequestHandler):
             res = CW.delete_course(data.get("name"))
             return self._send_json(res, 200 if res.get("ok") else 400)
         if path == "/api/cw/archive":
+            # 2026-11-05：按 <课程>/<班级>/<学号+姓名>/ 归档；cls 缺省落「未分班」
             res = CW.archive_items(data.get("course"), data.get("activity"),
-                                   data.get("base") or "", data.get("items") or [])
+                                   data.get("base") or "", data.get("items") or [],
+                                   data.get("cls") or "")
+            return self._send_json(res, 200 if res.get("ok") else 400)
+        if path == "/api/cw/archive_clear":
+            # 清空活动提交时一并删掉归档副本（2026-11-05）
+            res = CW.archive_clear(data.get("course"), data.get("activity"),
+                                   data.get("cls") or "")
             return self._send_json(res, 200 if res.get("ok") else 400)
         if path == "/api/cw/set_sheet":
             # 把课程资料里的网页文件设为该课程的学习单（id 为空 = 取消标记）

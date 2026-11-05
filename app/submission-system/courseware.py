@@ -844,27 +844,120 @@ def save_stream(course, name, stream, length, sub=""):
             "msg": "已上传 1 个文件"}
 
 
-def archive_items(course, activity, base, items):
-    """把活动提交的文件复制进 <课程>/_活动作品/<活动名>/"""
+def _safe_folder(text, fallback="未命名"):
+    """文件夹名：复用 safe_name，另把 / 换成 -，限长，空值给兜底。"""
+    s = safe_name(text or "").replace("/", "-").strip()
+    if not s or s == "未命名":
+        s = ""
+    return (s or fallback)[:60]
+
+
+# ---------------------------------------------------------------------------
+# 归档索引（2026-11-05）
+# 作用：记录「哪个课程 / 班级 / 活动」归档了哪些文件，清空提交时才能把副本
+#       一起删掉 —— 否则老师清空大屏后，资料夹里的旧作品还在，新提交一来又
+#       被看见，表现为「旧数据再次显示」。
+# 位置：数据目录下（不进课件库，老师打开资料夹看不到这个 json）。
+# ---------------------------------------------------------------------------
+def _index_path():
+    try:
+        os.makedirs(DATA, exist_ok=True)
+    except Exception:
+        pass
+    return os.path.join(DATA, "archive-index.json")
+
+
+def _load_index():
+    try:
+        with open(_index_path(), "r", encoding="utf-8") as f:
+            d = json.load(f)
+        return d if isinstance(d, dict) else {}
+    except Exception:
+        return {}
+
+
+def _save_index(d):
+    try:
+        with open(_index_path(), "w", encoding="utf-8") as f:
+            json.dump(d, f, ensure_ascii=False, indent=1)
+        return True
+    except Exception:
+        return False
+
+
+def _index_key(course, cls, activity):
+    return "|".join([safe_course(course), _safe_folder(cls, "未分班"),
+                     _safe_folder(activity, "未命名活动")])
+
+
+
+def _student_folder(no, name):
+    """「学号+姓名」文件夹名（2026-11-05 牛哥要求）。
+
+    约定与异常兜底：
+      · 学号、姓名都有 → 20250108张三
+      · 只有学号       → 20250108
+      · 只有姓名       → 张三
+      · 都没有         → 未命名学生
+    两段都做安全清洗（去路径分隔符/控制字符），限长 60，保证一定是一个合法目录名。
+    """
+    s_no = _safe_folder(no, "")
+    s_nm = _safe_folder(name, "")
+    return (s_no + s_nm)[:60] or "未命名学生"
+
+
+def _unique_target(dir_path, name):
+    """同名文件不覆盖：第二个起加 (2)、(3)…；返回 (路径, 是否重名过)。"""
+    base, ext = os.path.splitext(name)
+    target = os.path.join(dir_path, name)
+    if not os.path.exists(target):
+        return target, False
+    i = 2
+    while i <= 200:
+        target = os.path.join(dir_path, "%s (%d)%s" % (base, i, ext))
+        if not os.path.exists(target):
+            return target, True
+        i += 1
+    return os.path.join(dir_path, "%s (%d)%s" % (base, 200, ext)), True
+
+
+def archive_items(course, activity, base, items, cls=""):
+    """把活动提交的文件复制进 <课程>/<班级>/<学号+姓名>/。
+
+    2026-11-05 调整（牛哥要求）：原来是 <课程>/_活动作品/<活动名>/<学生>_<文件名>
+    平铺，交两次就分不清谁是谁。现在按「课程 → 班级 → 学号+姓名」三级建目录，
+    学生交的原始文件名保持不变，一个学生的所有作品都在自己文件夹里。
+
+    异常处理：
+      · 班级为空        → 落到「未分班」
+      · 学号/姓名缺一项 → 用有的那一项命名；都没有 → 「未命名学生」
+      · 同名文件已存在  → 大小一致视为已归档（跳过）；内容不同则存成「名字 (2).xlsx」
+      · 目录建不出来    → 返回明确中文原因，前端弹出来，不静默失败
+    """
     course_dir = abs_of(safe_course(course))
     if not course_dir:
         return {"ok": False, "msg": "课程名不合法"}
-    act = safe_name(activity) or "未命名活动"
-    target_dir = os.path.join(course_dir, "_活动作品", act)
+    cls_dir = os.path.join(course_dir, _safe_folder(cls, "未分班"))
     try:
-        os.makedirs(target_dir, exist_ok=True)
+        os.makedirs(cls_dir, exist_ok=True)
     except Exception as e:
-        return {"ok": False, "msg": "无法创建归档目录：%s" % e}
+        return {"ok": False, "msg": "无法创建班级文件夹：%s" % e}
     base = str(base or "").rstrip("/")
+    act = _safe_folder(activity, "未命名活动")
+    idx_key = _index_key(course, cls, act)
+    index = _load_index()
+    mine = set(index.get(idx_key) or [])
     saved, skipped = [], []
     for it in (items or []):
         url = str(it.get("url") or "")
-        nm = safe_name(it.get("name") or url.rsplit("/", 1)[-1] or "file")
-        stu = safe_name(it.get("student") or "")
-        if stu:
-            nm = "%s_%s" % (stu, nm)
+        # 文件名优先用提交里带过来的「原始文件名」，没有才退回 URL 最后一段
+        raw_name = str(it.get("name") or "").strip() or url.rsplit("/", 1)[-1] or "file"
+        nm = safe_name(raw_name)
+        stu_dir_name = _student_folder(it.get("no"), it.get("student"))
+        stu_dir = os.path.join(cls_dir, stu_dir_name)
         if not url:
-            skipped.append({"name": nm, "msg": "没有文件地址"})
+            skipped.append({"name": nm, "student": stu_dir_name,
+                            "msg": "没有文件地址"})
             continue
         blob = None
         # ① 服务器本地文件系统直读（活动附件就在 <数据目录>/activity/ 下，最快最稳）
@@ -904,28 +997,103 @@ def archive_items(course, activity, base, items):
                 with urllib.request.urlopen(req, timeout=20) as r:
                     blob = r.read()
             except Exception as e:
-                skipped.append({"name": nm, "msg": "下载失败：%s" % e})
+                skipped.append({"name": nm, "student": stu_dir_name,
+                                "msg": "下载失败：%s" % e})
                 continue
         if not blob:
-            skipped.append({"name": nm, "msg": "读取到的内容是空的"})
+            skipped.append({"name": nm, "student": stu_dir_name, "msg": "读取到的内容是空的"})
             continue
-        target = os.path.join(target_dir, nm)
         try:
-            if os.path.isfile(target):
-                try:
-                    if os.path.getsize(target) == len(blob):
-                        skipped.append({"name": nm, "msg": "已是最新"})
-                        continue
-                except Exception:
-                    pass
+            os.makedirs(stu_dir, exist_ok=True)
+        except Exception as e:
+            skipped.append({"name": nm, "student": stu_dir_name, "msg": "建学生文件夹失败：%s" % e})
+            continue
+        first = os.path.join(stu_dir, nm)
+        if os.path.isfile(first):
+            try:
+                if os.path.getsize(first) == len(blob):
+                    skipped.append({"name": nm, "student": stu_dir_name,
+                                    "msg": "已是最新", "rel": rel_of(stu_dir)})
+                    mine.add(rel_of(first))
+                    continue
+            except Exception:
+                pass
+        target, renamed = _unique_target(stu_dir, nm)
+        try:
             with open(target, "wb") as fh:
                 fh.write(blob)
-            saved.append({"name": nm, "size_text": human_size(len(blob))})
+            mine.add(rel_of(target))
+            saved.append({"name": os.path.basename(target), "origin": nm,
+                          "student": stu_dir_name, "renamed": renamed,
+                          "size_text": human_size(len(blob)),
+                          "rel": rel_of(target)})
         except Exception as e:
-            skipped.append({"name": nm, "msg": "写入失败：%s" % e})
+            skipped.append({"name": nm, "student": stu_dir_name, "msg": "写入失败：%s" % e})
+    if mine:
+        index[idx_key] = sorted(mine)
+        _save_index(index)
     return {"ok": True, "saved": saved, "skipped": skipped,
-            "dir": target_dir, "rel": rel_of(target_dir),
-            "msg": "已归档 %d 个文件到 %s" % (len(saved), act)}
+            "dir": cls_dir, "rel": rel_of(cls_dir), "class": _safe_folder(cls, "未分班"),
+            "msg": "已归档 %d 个文件到 %s / %s" % (len(saved), safe_course(course),
+                                                  _safe_folder(cls, "未分班"))}
+
+
+def archive_clear(course, activity, cls=""):
+    """清空某个活动归档出来的副本（2026-11-05）。
+
+    清空大屏提交时一并调用：按归档索引删掉该活动的文件，并把空出来的
+    学生文件夹 / 班级文件夹收掉。老版本平铺的 `_活动作品/<活动名>/` 也一起删。
+    找不到索引（老数据）不算失败：至少把旧目录清掉，剩下的留给老师手动处理。
+    """
+    course_dir = abs_of(safe_course(course))
+    if not course_dir:
+        return {"ok": False, "msg": "课程名不合法"}
+    act = _safe_folder(activity, "未命名活动")
+    index = _load_index()
+    key = _index_key(course, cls, act)
+    paths = index.pop(key, [])
+    root = root_dir()
+    removed, failed = 0, 0
+    dirs = set()
+    for rel in paths:
+        full = os.path.normpath(os.path.join(root, str(rel).replace("/", os.sep)))
+        try:
+            if os.path.commonpath([os.path.normpath(root), full]) != os.path.normpath(root):
+                continue
+        except ValueError:
+            continue
+        try:
+            if os.path.isfile(full):
+                os.remove(full)
+                removed += 1
+            dirs.add(os.path.dirname(full))
+        except Exception:
+            failed += 1
+    # 收掉空的学生 / 班级文件夹（不越过课程目录）
+    for d in sorted(dirs, key=lambda x: len(x), reverse=True):
+        cur = d
+        while cur and os.path.normpath(cur) != os.path.normpath(course_dir):
+            try:
+                if os.path.isdir(cur) and not os.listdir(cur):
+                    os.rmdir(cur)
+                else:
+                    break
+            except Exception:
+                break
+            cur = os.path.dirname(cur)
+    # 老版本：<课程>/_活动作品/<活动名>/
+    legacy = os.path.join(course_dir, "_活动作品", act)
+    legacy_gone = False
+    if os.path.isdir(legacy):
+        try:
+            shutil.rmtree(legacy, ignore_errors=True)
+            legacy_gone = True
+        except Exception:
+            pass
+    _save_index(index)
+    return {"ok": True, "removed": removed, "failed": failed,
+            "legacy": legacy_gone,
+            "msg": "已清理该活动的归档副本 %d 个" % removed}
 
 
 def fetch_remote(base, url, timeout=20):

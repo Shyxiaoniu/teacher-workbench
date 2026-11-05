@@ -415,6 +415,26 @@ class ActivityStore(object):
             if r["cls"] and not d.get("班级"):
                 d["班级"] = r["cls"]
             out.append(d)
+        # 附件元信息（2026-11-05）：attachment 里存的是 /static/uploads/<活动>/<uuid>.pdf，
+        # 界面上要给学生交的原文件名。act_file 里有 orig，一次查询按 sub_id 分组带出去，
+        # 归档、作品墙、大屏「文件」列都用它；老数据没有对应行时 schema 不变（不写 _files）。
+        fmap = {}
+        with self.lock:
+            frows = self.conn.execute(
+                "SELECT sub_id, stored, orig, size, mime FROM act_file "
+                "WHERE task_key=? AND sub_id>0 ORDER BY id ASC", (str(task_key),)).fetchall()
+        for fr in frows:
+            fmap.setdefault(int(fr["sub_id"]), []).append({
+                "url": "/static/uploads/%s/%s" % (task_key, fr["stored"]),
+                "name": fr["orig"] or fr["stored"],
+                "size": int(fr["size"] or 0),
+                "mime": fr["mime"] or "",
+            })
+        for d in out:
+            sid = d.get("_submission_id")
+            fs = fmap.get(int(sid)) if sid is not None else None
+            if fs:
+                d["_files"] = fs
         return out
 
     def count(self, task_key):
@@ -501,7 +521,7 @@ class ActivityStore(object):
         extra = []
         for s in subs:
             for k in s:
-                if k in ("_submission_id", "_ip", "submitted_at") or k in fixed:
+                if k in ("_submission_id", "_ip", "submitted_at", "_files") or k in fixed:
                     continue
                 if k not in extra:
                     extra.append(k)
