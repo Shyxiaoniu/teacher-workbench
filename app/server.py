@@ -130,7 +130,7 @@ CFG["update"].setdefault("interval_hours", 24) # 检查间隔（小时）
 PET_IDS = ["cat", "dog", "rabbit", "penguin", "panda", "dino", "unicorn", "dragon"]
 COND = threading.Condition()
 STARTED = time.time()
-VERSION = "2.0.25"
+VERSION = "2.0.26"
 ONLINE_WINDOW = 300      # 5 分钟内活跃算在线
 # 可内联直出的附件类型（其余一律按下载处理，防止同源执行脚本）
 _INLINE_EXTS = {"png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "pdf",
@@ -307,6 +307,20 @@ def student_row(sid):
 # 教师端保存时推上来，学生端只读。
 # ----------------------------------------------------------------------
 SEAT_CFG_KEYS = ("rows", "cols", "order", "start", "snakeDir", "stage")
+
+
+def _split_acc_id(v):
+    """拆「账号id|真实id」复合键（2026-11-05，多账号班级聚合用）。
+
+    登录页的班级/学生 id 现在带账号前缀（不同教师账号可能有同 id 的班），
+    形如 `t2|1`。老页面/老缓存里是不带前缀的 `1`，这里一并兼容：
+    返回 (账号id, 真实id)，不带前缀时账号部分为空字符串。
+    """
+    s = str(v or "").strip()
+    if "|" in s:
+        a, _, r = s.partition("|")
+        return a.strip(), r.strip()
+    return "", s
 
 
 def _seat_i(v, default=0):
@@ -2592,12 +2606,37 @@ class Handler(LEG.Handler):
                            "msg": "从外网访问需要班级码，问一下老师"}, 401)
 
     def _public_classes(self, qs):
-        """登录页的班级下拉。只给 id + 名称，不含任何学生信息。"""
+        """登录页的班级下拉。只给 id + 名称，不含任何学生信息。
+
+        2026-11-05 修「换设备导入后学生端说没有创建班级」：
+        以前只查**当前账号的工作区**（未登录 = default）。可数据是全量恢复进来的，
+        可能落在别的教师账号工作区里 —— 教师登录那个账号看得见班级，登录页却查
+        default（空），于是学生端显示「没有创建班级」。
+        现在遍历**所有教师账号**合并班级；id 统一写成「账号|班级id」复合键
+        （不同账号可能有同 id 的班），单账号时也一样带前缀，解析见 _split_acc_id。
+        """
         bad = self._need_public_code(qs)
         if bad:
             return bad
-        rows = [{"id": c.get("id"), "name": c.get("name", "班级")}
-                for c in STORE.table_rows("classes")]
+        rows, seen = [], set()
+        want = (qs.get("acc") or [""])[0].strip()
+        for tid in ([want] if want else ACCOUNTS.teacher_ids()):
+            try:
+                ACC.set_account(tid)
+                cur = STORE.table_rows("classes")
+            except Exception:
+                continue
+            for c in cur:
+                cid = str(c.get("id") or "").strip()
+                if not cid:
+                    continue
+                key = (str(tid), cid)
+                if key in seen:
+                    continue
+                seen.add(key)
+                rows.append({"id": "%s|%s" % (tid, cid),
+                             "name": c.get("name", "班级"),
+                             "acc": str(tid)})
         rows.sort(key=lambda x: str(x["name"]))
         return self._json({"ok": True, "classes": rows})
 
@@ -2606,20 +2645,30 @@ class Handler(LEG.Handler):
 
         只暴露“这个班有哪些人”，不暴露任何联系方式；密码仍然是必须的，
         所以知道学号也不能冒充别人。公网来源见 _need_public_code。
+        class_id 支持「账号|班级id」复合键：只在那个账号的工作区里找。
         """
         bad = self._need_public_code(qs)
         if bad:
             return bad
-        cid = (qs.get("class_id") or [""])[0]
+        want_acc, cid = _split_acc_id((qs.get("class_id") or [""])[0])
         if not cid:
             return self._json({"ok": False, "msg": "缺少 class_id"}, 400)
         out = []
-        for r in STORE.table_rows("students"):
-            if str(r.get("class_id")) != str(cid):
+        tids = [want_acc] if want_acc else ACCOUNTS.teacher_ids()
+        for tid in tids:
+            try:
+                ACC.set_account(tid)
+                rows = STORE.table_rows("students")
+            except Exception:
                 continue
-            out.append({"id": r.get("id"),
-                        "no": str(r.get("student_no") or ""),
-                        "name": str(r.get("name") or "")})
+            for r in rows:
+                if str(r.get("class_id")) != str(cid):
+                    continue
+                out.append({"id": r.get("id"),
+                            "no": str(r.get("student_no") or ""),
+                            "name": str(r.get("name") or "")})
+            if out:
+                break
         out.sort(key=lambda x: (x["no"] or "", x["name"]))
         return self._json({"ok": True, "students": out})
 
@@ -3109,7 +3158,8 @@ class Handler(LEG.Handler):
             # IP 维度只做“异常刷接口”的粗拦截；防爆破靠下面的学号维度。
             if not A.rate_ok("s:" + ip, 120, 60):
                 return self._json({"ok": False, "msg": "登录请求太多，请 1 分钟后再试"}, 429)
-            cls_id = body.get("class_id")
+            # 班级 id 可能是「账号|班级id」复合键（登录页多账号聚合后的值）
+            want_acc, cls_id = _split_acc_id(body.get("class_id"))
             sid = body.get("student_id")
             no = str(body.get("no") or "").strip()
             code = str(body.get("code") or "").strip().upper()
@@ -3120,7 +3170,9 @@ class Handler(LEG.Handler):
             hit = None
             found_acc = None
             code_bad = False
-            for tid in ACCOUNTS.teacher_ids():
+            # 带账号前缀时只查那个工作区（避免两个账号有同 id 的班时串号），
+            # 不带就还是全账号遍历（老页面/老缓存兼容）。
+            for tid in ([want_acc] if want_acc else ACCOUNTS.teacher_ids()):
                 ACC.set_account(tid)
                 rows = STORE.table_rows("students")
                 matched = None

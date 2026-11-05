@@ -3,7 +3,7 @@
 > 给班主任和任课老师用的一套**班级工作台**：教师端与学生端共用一个网页入口，
 > 数据全部存在自己的服务器上，不依赖任何第三方云服务。
 
-当前版本：**2.0.25**（版本号唯一代码源：`app/server.py` 的 `VERSION`）
+当前版本：**2.0.26**（版本号唯一代码源：`app/server.py` 的 `VERSION`）
 
 ```
 http://<服务器局域网 IP>:8080/        ← Docker 部署的入口；直接运行时是 :20020
@@ -378,9 +378,9 @@ docker compose up -d --build
 
 | # | 文件 | 位置 |
 |---|---|---|
-| 1 | `app/server.py` | `VERSION = "2.0.25"` —— **唯一代码源** |
-| 2 | `.env.example` | `IMAGE_TAG=2.0.25` |
-| 3 | `docker-compose.yml` | `image: …:${IMAGE_TAG:-2.0.25}`（init 与 workbench **两处**） |
+| 1 | `app/server.py` | `VERSION = "2.0.26"` —— **唯一代码源** |
+| 2 | `.env.example` | `IMAGE_TAG=2.0.26` |
+| 3 | `docker-compose.yml` | `image: …:${IMAGE_TAG:-2.0.26}`（init 与 workbench **两处**） |
 | 4 | `README.md` | 文首「当前版本」 |
 | 5 | `version.json` | 由 `tools/make_release.py` 自动同步 |
 
@@ -408,6 +408,24 @@ python tools/make_release.py --out D:\dist   # 指定输出目录（默认 dist/
 > 「创建发行版」并上传 zip 才会有内容。在线更新走的是 `version.json`（manifest）+
 > raw 直链，不依赖 Releases 功能；想把 zip 同时挂到 Releases 也可以，把
 > `version.json` 的 `zip` 字段改成完整 URL 即可。
+
+### 换设备导入后学生端「没有创建班级」（2.0.26）
+
+- **现象**：新版本导出、换设备导入，教师端登录后班级/学生都在，但学生端登录页
+  显示「没有创建班级」，学生根本选不了班。
+- **原因**：登录页的班级下拉 `/api/v2/public/classes` 只查**当前请求绑定的账号**
+  （未登录 = `default`）。而全量恢复可能把数据写进**另一个教师账号的工作区**
+  （比如原来的 `t2`），教师登录那个账号看得见、登录页查 default 是空的。
+  2.0.19 的 `_ensure_default_teacher` 只补了「default 这个账号存在」，
+  补出来的是**空工作区**，正好撞上这个盲点。
+- **改法**：
+  - `_public_classes()` 遍历**所有教师账号**合并班级，id 写成 `账号|班级id` 复合键
+    （不同账号可能有同 id 的班）；
+  - `_public_students()`、`/api/v2/auth/student` 都支持复合键（`_split_acc_id`），
+    带前缀就只查那个账号，**不带前缀仍按老逻辑全账号遍历**（老页面/老缓存兼容）；
+  - 单账号场景 id 也会带 `default|1` 前缀，不影响登录（服务端会拆）。
+- **验证 b31**：default 留空、班级只在 t2 → 登录页能列出 `t2|2 七2班`、
+  名单正常、复合 id 与纯 id 都能登录；两个账号都有班级时两个班都列出。
 
 ### 学习单身份不再重复显示（2.0.25）
 
