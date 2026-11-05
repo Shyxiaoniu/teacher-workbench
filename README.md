@@ -3,7 +3,7 @@
 > 给班主任和任课老师用的一套**班级工作台**：教师端与学生端共用一个网页入口，
 > 数据全部存在自己的服务器上，不依赖任何第三方云服务。
 
-当前版本：**2.0.26**（版本号唯一代码源：`app/server.py` 的 `VERSION`）
+当前版本：**2.0.27**（版本号唯一代码源：`app/server.py` 的 `VERSION`）
 
 ```
 http://<服务器局域网 IP>:8080/        ← Docker 部署的入口；直接运行时是 :20020
@@ -378,9 +378,9 @@ docker compose up -d --build
 
 | # | 文件 | 位置 |
 |---|---|---|
-| 1 | `app/server.py` | `VERSION = "2.0.26"` —— **唯一代码源** |
-| 2 | `.env.example` | `IMAGE_TAG=2.0.26` |
-| 3 | `docker-compose.yml` | `image: …:${IMAGE_TAG:-2.0.26}`（init 与 workbench **两处**） |
+| 1 | `app/server.py` | `VERSION = "2.0.27"` —— **唯一代码源** |
+| 2 | `.env.example` | `IMAGE_TAG=2.0.27` |
+| 3 | `docker-compose.yml` | `image: …:${IMAGE_TAG:-2.0.27}`（init 与 workbench **两处**） |
 | 4 | `README.md` | 文首「当前版本」 |
 | 5 | `version.json` | 由 `tools/make_release.py` 自动同步 |
 
@@ -408,6 +408,27 @@ python tools/make_release.py --out D:\dist   # 指定输出目录（默认 dist/
 > 「创建发行版」并上传 zip 才会有内容。在线更新走的是 `version.json`（manifest）+
 > raw 直链，不依赖 Releases 功能；想把 zip 同时挂到 Releases 也可以，把
 > `version.json` 的 `zip` 字段改成完整 URL 即可。
+
+### 大屏问卷正确率 + 一条提交不再显示两次（2.0.27）
+
+**① 逐题正确率与整体分布**
+
+| 项 | 说明 |
+|---|---|
+| 数据来源 | 每条提交 = 一条作答记录，表单字段名就是题目 `input` 的 `name` |
+| 正确答案 | **下发时扫描**模板：题目容器 `data-answer="B"`（多选 `"A,C"`）、或正确选项 `input[data-correct="1"]`、或 `input`/它的 `label` 带 `class="correct"`；扫到存进 `layout.questions[].answer` |
+| 逐题 | 「正确 2/3 · 67%」，每个选项一条进度条（人数 · 占比），正确答案那条标绿打 ✓ |
+| 整体 | 参与人数、平均正确率、答对题数分布（对 2 题 1 人 · 对 1 题 2 人…） |
+| 没标答案 | 明确写「未标正确答案」，只出选项分布，**不谎报 0%** |
+| 多选 | 按集合相等判定（选项完全相同才算对） |
+| 刷新 | 大屏走 SSE（`/api/v2/events`）实时刷新，学生一交就重绘；断线时退回 12 秒轮询 |
+
+**② 一个问卷题目的提交显示两条**
+
+- **原因**：`actTaskWindowsHtml()` 直接用 `layout.buttons` 的原始字符串做 `indexOf` 去重。
+  老 layout 里可能同时存着「提交任务一」和「提交任务一 」（尾空格 / 双空格），
+  两个变体都被当成独立按钮 → **同一份提交在两个窗口各渲染一次**。
+- **改法**：按钮名归一化（`trim` + 折叠连续空白）后再去重，过滤时也用归一化值比较。
 
 ### 换设备导入后学生端「没有创建班级」（2.0.26）
 

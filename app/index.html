@@ -16027,6 +16027,23 @@ function renderActivity() {
   .act-opt-track{display:block;height:9px;border-radius:5px;background:var(--brand-soft);overflow:hidden}
   .act-opt-fill{display:block;height:100%;border-radius:5px;background:var(--brand-primary);transition:width .5s}
   .act-opt-v{color:var(--text-secondary);font-variant-numeric:tabular-nums;white-space:nowrap}
+  /* 2.0.27：正确答案标绿 + 每题正确率 + 整体汇总 */
+  .act-opt.act-opt-good .act-opt-l{color:var(--status-ok);font-weight:700}
+  .act-opt.act-opt-good .act-opt-fill{background:var(--status-ok)}
+  .act-opt .act-ok{color:var(--status-ok);font-weight:800}
+  .act-qstat-t .act-rate{color:var(--status-ok);font-weight:700}
+  .act-qstat-t .act-noans{color:var(--text-secondary);font-style:normal;opacity:.8}
+  .act-quiz-sum{margin-top:14px;border-top:1px dashed var(--border);padding-top:12px}
+  .aqs-hd{font-size:13px;font-weight:700;color:var(--text-primary);margin-bottom:10px}
+  .aqs-hd span{font-weight:400;font-size:12px;color:var(--text-secondary);margin-left:8px}
+  .aqs-kpis{display:flex;gap:10px;flex-wrap:wrap}
+  .aqs-kpi{flex:1 1 0;min-width:86px;background:var(--brand-soft);border-radius:10px;
+    padding:9px 12px;text-align:center}
+  .aqs-kpi b{display:block;font-size:20px;color:var(--brand-primary);line-height:1.2;
+    font-variant-numeric:tabular-nums}
+  .aqs-kpi span{font-size:11.5px;color:var(--text-secondary)}
+  .aqs-dist{font-size:12px;color:var(--text-secondary);margin-top:9px;line-height:1.7;
+    font-variant-numeric:tabular-nums}
   .act-allsubs[open] summary{margin-bottom:12px}
 
   /* ===== ④ 自定义上传（教师自制网页模板） ===== */
@@ -17218,6 +17235,35 @@ function actScanLayout(rawHtml, perQ) {
     return (h && (h.textContent || '').trim()) || '';
   };
   const addBtn = label => { label = String(label || '').trim(); if (label && out.buttons.indexOf(label) < 0) out.buttons.push(label); };
+  /* 正确答案（2026-11-05 加）：下发时扫出来存进 layout.questions[].answer，
+     大屏才能算「正确率」。模板可以三选一标注，扫不到就只出选项分布：
+       ① 题目容器上写 data-answer="B" / data-answer="A,C"（多选逗号分隔）
+       ② 正确选项的 input 上写 data-correct="1"
+       ③ 正确选项的 input 或它的 label 带 class="correct" */
+  const pickAnswer = (el, nm) => {
+    const out = [];
+    const da = String(el.getAttribute('data-answer') ||
+                      el.getAttribute('data-correct') || '').trim();
+    if (da) {
+      da.split(/[,，;；\s]+/).forEach(x => { x = x.trim(); if (x) out.push(x); });
+    }
+    if (!out.length) {
+      Array.from(el.querySelectorAll('input[type=radio],input[type=checkbox]'))
+        .forEach(inp => {
+          if (String(inp.getAttribute('name') || '').trim() !== nm) return;
+          const ok = String(inp.getAttribute('data-correct') || '').toLowerCase();
+          const own = String(inp.className || '');
+          const par = String((inp.parentNode && inp.parentNode.className) || '');
+          const isC = (segs) => /(^|\s)correct(\s|$)/.test(segs);
+          if (ok === '1' || ok === 'true' || isC(own) || isC(par)) {
+            const v = String(inp.getAttribute('value') != null
+                             ? inp.getAttribute('value') : '').trim();
+            if (v) out.push(v);
+          }
+        });
+    }
+    return out;
+  };
   const scanQ = (el, btn, seq) => {
     const title = titleOf(el) || ('第' + (seq + 1) + '题');
     const choices = Array.from(el.querySelectorAll('input[type=radio],input[type=checkbox]'));
@@ -17236,6 +17282,7 @@ function actScanLayout(rawHtml, perQ) {
       order.forEach(nm => out.questions.push({
         btn: btn, title: title, kind: 'choice', name: nm,
         multiple: groups[nm].multiple, options: groups[nm].options,
+        answer: pickAnswer(el, nm),
       }));
       out.hasQuiz = order.length > 0 || out.hasQuiz;
       if (order.length) return;
@@ -17330,19 +17377,23 @@ async function actCustomView() {
  *  窗口内按人去重只留最新一条；选择题直接把选项分布画出来。 */
 function actTaskWindowsHtml(allMatched, layout) {
   const lay = (layout && typeof layout === 'object') ? layout : {};
-  const btns = Array.isArray(lay.buttons) ? lay.buttons.slice() : [];
+  /* 按钮名归一化再去重（2.0.27）：
+     老 layout 里可能存着「提交任务一」和「提交任务一 」（尾空格 / 双空格），
+     以前直接 indexOf 判重，两个变体都被当成独立按钮 → 同一份提交在两个窗口
+     各显示一次，看着就是「一个问卷题目的提交出现两条」。 */
+  const norm = v => String(v || '').trim().replace(/\s+/g, ' ');
+  const btns = [];
+  const addB = v => { const n = norm(v); if (n && btns.indexOf(n) < 0) btns.push(n); };
+  (Array.isArray(lay.buttons) ? lay.buttons : []).forEach(addB);
   const rows = allMatched || [];
   // 数据里出现、但 layout 里没登记的按钮（老页面 / 老师临时改过网页）补在后面，绝不让数据漏掉
-  rows.forEach(s => {
-    const b = actTaskOf(s);
-    if (b && btns.indexOf(b) < 0) btns.push(b);
-  });
+  rows.forEach(s => addB(actTaskOf(s)));
   const taskBtns = btns.filter(b => b && b !== '整页提交');
   // 只有「一份学习单里确实有多个提交按钮」才开窗口区：
   // 整页提交 / 只有一个按钮时，窗口和下面的学生名单完全重复，没有意义。
   if (taskBtns.length < 2) return '';
   const cards = taskBtns.map(b => {
-    const one = actDedupByPerson(rows.filter(s => actTaskOf(s) === b));  // 同窗口内一人一条
+    const one = actDedupByPerson(rows.filter(s => norm(actTaskOf(s)) === b));  // 同窗口内一人一条
     const list = one.length
       ? one.map((s, i) =>
         '<div class="act-win-row"><i style="font-style:normal;font-weight:700;color:var(--brand-primary)">' + (i + 1) + '</i>'
@@ -17363,39 +17414,121 @@ function actTaskWindowsHtml(allMatched, layout) {
 }
 window.actTaskWindowsHtml = actTaskWindowsHtml;
 
-/* 问卷 / 选择题统计（2026-11-05）：每道选择题给出「选项 → 人数 · 占比」。
- *  选项全集来自下发时扫描的 layout —— 0 人选的选项也要列出来，
- *  老师一眼能看出「全班是不是都选了同一项」；提交里出现的额外取值补在后面，不丢数据。 */
+/* 问卷 / 选择题统计（2026-11-05；2.0.27 加正确率与整体汇总）
+ *
+ *  数据来源：每条提交就是一条作答记录（表单字段名 = 题目 input 的 name）。
+ *  正确答案来自**下发时扫描**存进 layout.questions[].answer（模板用 data-answer /
+ *  data-correct / class="correct" 标注）。没标答案的题只出选项分布，不算正确率。
+ *
+ *  展示：
+ *    · 每题一张卡：题干 + 「正确 x/y · z%」，下面每个选项一条进度条（人数 · 占比），
+ *      正确答案那一条打 ✓ 并标绿；
+ *    · 全题之后一个整体块：参与人数、平均正确率、答对题数分布（对 3 题 x 人…）。
+ *
+ *  为什么按「人」而不是按「记录」算：同一窗口里已按学号去重（actDedupByPerson），
+ *  传进来的 rows 就是一人一条；这里再按 学号→答对题数 累计，避免同名撞车。 */
 function actQuizStatsHtml(rows, layout, btn) {
   const qs = ((layout && layout.questions) || []).filter(q =>
     q && q.kind === 'choice' && (!q.btn || String(q.btn) === String(btn)));
   if (!qs.length) return '';
-  return qs.map((q, qi) => {
+
+  const list = rows || [];
+  const isRight = (q, picked) => {
+    const ans = (q.answer || []).map(String);
+    if (!ans.length) return null;                 /* 没标答案 → 不算对错 */
+    const p = picked.map(String);
+    if (q.multiple) {
+      const a = ans.slice().sort(), b = p.slice().sort();
+      return a.length === b.length && a.every((v, i) => v === b[i]);
+    }
+    return p.length === 1 && p[0] === ans[0];
+  };
+  const pickOf = (s, q) => {
+    const v = s[q.name];
+    const arr = Array.isArray(v) ? v : (v == null ? [] : [v]);
+    return arr.map(x => String(x).trim()).filter(Boolean);
+  };
+
+  let ratedQ = 0, rateSum = 0;      /* 有答案的题数 / 正确率之和 */
+  const cards = qs.map((q, qi) => {
     const counts = {}, extra = [];
-    let answered = 0;
-    (rows || []).forEach(s => {
-      const v = s[q.name];
-      const arr = Array.isArray(v) ? v : (v == null ? [] : [v]);
-      const picked = arr.map(x => String(x).trim()).filter(Boolean);
+    let answered = 0, right = 0;
+    const ans = (q.answer || []).map(String);
+
+    list.forEach(s => {
+      const picked = pickOf(s, q);
       if (picked.length) answered++;
       picked.forEach(k => {
         if (!(k in counts)) { counts[k] = 0; if ((q.options || []).indexOf(k) < 0) extra.push(k); }
         counts[k]++;
       });
+      if (ans.length && picked.length && isRight(q, picked)) right++;
     });
+
     const opts = (q.options || []).concat(extra);
     if (!opts.length) return '';
+    const rate = (ans.length && answered) ? Math.round(right / answered * 100) : null;
+    if (rate !== null) { ratedQ++; rateSum += rate; }
+
     const lines = opts.map(o => {
       const c = counts[o] || 0;
       const pct = answered ? Math.round(c / answered * 100) : 0;
-      return '<div class="act-opt" title="' + esc(o) + '：' + c + ' 人">'
-        + '<span class="act-opt-l">' + esc(o) + '</span>'
+      const good = ans.indexOf(String(o)) >= 0;
+      return '<div class="act-opt' + (good ? ' act-opt-good' : '')
+        + '" title="' + esc(o) + '：' + c + ' 人">'
+        + '<span class="act-opt-l">' + esc(o) + (good ? ' <b class="act-ok">✓</b>' : '') + '</span>'
         + '<span class="act-opt-track"><i class="act-opt-fill" style="width:' + pct + '%"></i></span>'
         + '<span class="act-opt-v">' + c + (answered ? ' · ' + pct + '%' : '') + '</span></div>';
     }).join('');
-    return '<div class="act-qstat"><div class="act-qstat-t">' + esc(q.title || ('第' + (qi + 1) + '题'))
-      + '<span>' + answered + ' 人作答' + (q.multiple ? '（多选）' : '') + '</span></div>' + lines + '</div>';
+
+    return '<div class="act-qstat"><div class="act-qstat-t">'
+      + esc(q.title || ('第' + (qi + 1) + '题'))
+      + '<span>' + answered + ' 人作答' + (q.multiple ? '（多选）' : '')
+      + (rate !== null
+          ? ' · <b class="act-rate">正确 ' + right + '/' + answered + ' · ' + rate + '%</b>'
+          : ' · <i class="act-noans">未标正确答案</i>')
+      + '</span></div>' + lines + '</div>';
   }).join('');
+
+  /* 整体：参与人数 / 平均正确率 / 答对题数分布（只统计标了答案的题） */
+  const qsRated = qs.filter(q => (q.answer || []).length);
+  let summary = '';
+  if (qsRated.length) {
+    const per = {};                    /* 学号（或姓名）→ 答对题数 */
+    let participants = 0;
+    list.forEach(s => {
+      const key = String(actRosterNo(s) || actRosterName(s) || '');
+      let n = 0, touched = false;
+      qsRated.forEach(q => {
+        const picked = pickOf(s, q);
+        if (!picked.length) return;
+        touched = true;
+        if (isRight(q, picked)) n++;
+      });
+      if (!key) return;
+      if (touched) participants++;
+      per[key] = (per[key] || 0) + (touched ? n : 0);
+    });
+    const dist = {};
+    Object.keys(per).forEach(k => {
+      const n = per[k];
+      dist[n] = (dist[n] || 0) + 1;
+    });
+    const avg = ratedQ ? Math.round(rateSum / ratedQ) : 0;
+    const distStr = Object.keys(dist)
+      .map(Number).sort((a, b) => b - a)
+      .map(n => '对 ' + n + ' 题 ' + dist[n] + ' 人').join(' · ');
+    summary = '<div class="act-quiz-sum">'
+      + '<div class="aqs-hd">整体答题情况<span>共 ' + qsRated.length + ' 道有答案的题</span></div>'
+      + '<div class="aqs-kpis">'
+      + '<div class="aqs-kpi"><b>' + (participants || list.length) + '</b><span>参与人数</span></div>'
+      + '<div class="aqs-kpi"><b>' + avg + '%</b><span>平均正确率</span></div>'
+      + '<div class="aqs-kpi"><b>' + (ratedQ ? Math.round(rateSum / ratedQ) : 0) + '%</b><span>逐题均值</span></div>'
+      + '</div>'
+      + (distStr ? '<div class="aqs-dist">' + esc(distStr) + '</div>' : '')
+      + '</div>';
+  }
+  return cards + summary;
 }
 window.actQuizStatsHtml = actQuizStatsHtml;
 /* 兼容旧调用名 */
