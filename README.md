@@ -3,7 +3,7 @@
 > 给班主任和任课老师用的一套**班级工作台**：教师端与学生端共用一个网页入口，
 > 数据全部存在自己的服务器上，不依赖任何第三方云服务。
 
-当前版本：**2.0.23**（版本号唯一代码源：`app/server.py` 的 `VERSION`）
+当前版本：**2.0.24**（版本号唯一代码源：`app/server.py` 的 `VERSION`）
 
 ```
 http://<服务器局域网 IP>:8080/        ← Docker 部署的入口；直接运行时是 :20020
@@ -378,9 +378,9 @@ docker compose up -d --build
 
 | # | 文件 | 位置 |
 |---|---|---|
-| 1 | `app/server.py` | `VERSION = "2.0.23"` —— **唯一代码源** |
-| 2 | `.env.example` | `IMAGE_TAG=2.0.23` |
-| 3 | `docker-compose.yml` | `image: …:${IMAGE_TAG:-2.0.23}`（init 与 workbench **两处**） |
+| 1 | `app/server.py` | `VERSION = "2.0.24"` —— **唯一代码源** |
+| 2 | `.env.example` | `IMAGE_TAG=2.0.24` |
+| 3 | `docker-compose.yml` | `image: …:${IMAGE_TAG:-2.0.24}`（init 与 workbench **两处**） |
 | 4 | `README.md` | 文首「当前版本」 |
 | 5 | `version.json` | 由 `tools/make_release.py` 自动同步 |
 
@@ -408,6 +408,21 @@ python tools/make_release.py --out D:\dist   # 指定输出目录（默认 dist/
 > 「创建发行版」并上传 zip 才会有内容。在线更新走的是 `version.json`（manifest）+
 > raw 直链，不依赖 Releases 功能；想把 zip 同时挂到 Releases 也可以，把
 > `version.json` 的 `zip` 字段改成完整 URL 即可。
+
+### 学生端站内跳转回到当前标签（2.0.24）
+
+- **现象**：学生端点资料「打开」、点站内链接，都会开一个新标签；在那边点返回，
+  浏览器回到的仍是旧标签的学生端，看着像"点一次多一个页面"，也容易以为数据丢了。
+- **原因**：2.0.23 之前定过一条"所有离开当前页的跳转一律开新标签"的规则
+  （`app/student/app.js` 的 `openNewTab()`，外加一个全局 `a[href]` 兜底监听），
+  当时是为了不把学生端顶掉，但对**站内页面**是过度反应。
+- **改法**：`openNewTab()` 内部按目标分流 ——
+  - **同源**（`/g/mat/...`、`/s/...`、`/cw/...` 这类）→ `location.href`，当前标签跳转；
+  - **外部站点** → 仍 `window.open('_blank')`，避免把学生端顶掉后回不来；
+  - 全局 `a[href]` 兜底监听不变，仍然统一走 `openNewTab()`，所以以后新增的链接自动正确。
+- 「预览弹窗」里的「下载原文件 / 在新窗口打开」**保持不变**：那是指向 `/cw/<id>` 的
+  文件，不是页面，「在新窗口」是明确的操作意图。
+- 验收 b29：站内链接 `1 → 1` 标签页、外链 `1 → 2`、原标签不被顶掉。
 
 ### 导入进度不闪烁 + 附件剥离 + 文章按类别分配（2.0.23）
 
