@@ -198,6 +198,58 @@ def collect():
     return sorted(set(out))
 
 
+def _zipinfo(arcname, mode, mtime=None):
+    """构造一个「Unix 普通文件」条目。
+
+    ⚠️ create_system 必须显式写 3，否则解压后没有执行权限：
+      ZipInfo 在 Windows 上默认 create_system=0（FAT/MS-DOS），这时解压器
+      会**整段忽略** external_attr 高 16 位的 Unix 权限 —— 包里 .command /
+      .sh 解压到 macOS / Linux 就是 644，双击提示「没有权限打开」。
+      2026-11-05 牛哥反馈的正是这个：此前只写了 external_attr、忘了
+      create_system，所以「修过一次」仍然复发。
+    同时把 date_time 设成源文件的 mtime（不设的话全是 1980-01-01）。
+    """
+    zi = zipfile.ZipInfo(arcname, date_time=mtime or time.localtime()[:6])
+    zi.create_system = 3                      # 3 = Unix，权限位才生效
+    zi.external_attr = mode << 16             # 高 16 位 = st_mode
+    zi.compress_type = zipfile.ZIP_DEFLATED   # ZipInfo 不继承 ZipFile 压缩设置
+    return zi
+
+
+def verify_release(zip_path):
+    """构建后自检：解压即用的权限必须正确，不合格就不留产物。
+
+    这道闸门是「同类问题不再反复出现」的保证 —— 以后谁改了打包方式又忘了
+    create_system，构建会直接失败，而不是悄悄产出一个 mac/Linux 打不开的包。
+    """
+    bad = []
+    total = 0
+    with zipfile.ZipFile(zip_path) as z:
+        for i in z.infolist():
+            if i.is_dir():
+                continue
+            total += 1
+            base = i.filename.rsplit("/", 1)[-1]
+            want = 0o755 if base.endswith((".command", ".sh")) else 0o644
+            got = (i.external_attr >> 16) & 0o777
+            if i.create_system != 3:
+                bad.append("%s：create_system=%s（应为 3=Unix）"
+                           % (i.filename, i.create_system))
+            elif got != want:
+                bad.append("%s：权限 %s（应为 %s）"
+                           % (i.filename, oct(got), oct(want)))
+            if not (i.flag_bits & 0x800):
+                bad.append("%s：文件名缺 UTF-8 标记（中文会乱码）" % i.filename)
+    if bad:
+        try:
+            os.remove(zip_path)
+        except Exception:
+            pass
+        raise SystemExit("发行包自检失败（已删除产物，避免发出去才被发现）：\n  "
+                         + "\n  ".join(bad[:12]))
+    print("自检通过：%d 个条目均为 Unix 条目，.command/.sh 755，其余 644" % total)
+
+
 def main():
     ap = argparse.ArgumentParser(description="构建班级工作台发行包")
     ap.add_argument("--date", default=time.strftime("%y%m%d"), help="日期（yyMMdd）")
@@ -225,35 +277,31 @@ def main():
     notes = NOTES.format(name=name, version=version, date_human=date_human)
 
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
-        z.writestr(name + "/发行说明.md", notes.encode("utf-8"))
+        z.writestr(_zipinfo(name + "/发行说明.md", 0o100644),
+                   notes.encode("utf-8"))
 
-        zi = zipfile.ZipInfo(name + "/启动工作台.bat")
-        zi.external_attr = 0o100644 << 16
-        zi.compress_type = zipfile.ZIP_DEFLATED   # ZipInfo 不继承 ZipFile 压缩设置
-        z.writestr(zi, STARTER_BAT.replace("\n", "\r\n").encode("gbk", "replace"))
+        z.writestr(_zipinfo(name + "/启动工作台.bat", 0o100644),
+                   STARTER_BAT.replace("\n", "\r\n").encode("gbk", "replace"))
 
-        zi = zipfile.ZipInfo(name + "/启动工作台.command")
-        zi.external_attr = 0o100755 << 16
-        zi.compress_type = zipfile.ZIP_DEFLATED
-        z.writestr(zi, STARTER_SH.encode("utf-8"))
+        z.writestr(_zipinfo(name + "/启动工作台.command", 0o100755),
+                   STARTER_SH.encode("utf-8"))
 
-        # Windows 上打包：NTFS 没有 Unix 执行位，z.write() 默认不会写权限。
-        # 不补的话，解压到 macOS 后 .command/.sh 全部不可执行——顶层启动器
-        # 能双击，但它 exec 的 app/启动教师端.command 会报「没有权限」。
-        # external_attr 高 16 位 = Unix 权限；0o100755 的前导 0o10 是「普通文件」
-        # 类型位，部分解压工具没有类型位会整段忽略权限。
+        # Windows 上打包：NTFS 没有 Unix 执行位，必须显式补 create_system+权限，
+        # 否则解压到 macOS 后 .command/.sh 全部不可执行——顶层启动器能双击，
+        # 但它 exec 的 app/启动教师端.command 会报「没有权限」。
         exec_rels = {"app/启动教师端.command", "app/启动教师端.sh",
                      "app/submission-system/run.command", "docker/entrypoint.sh"}
         for rel in files:
             full = os.path.join(ROOT, rel.replace("/", os.sep))
-            zi = zipfile.ZipInfo(name + "/" + rel)
-            zi.compress_type = zipfile.ZIP_DEFLATED
-            if rel in exec_rels:
-                zi.external_attr = 0o100755 << 16
-            else:
-                zi.external_attr = 0o100644 << 16
+            mode = 0o100755 if rel in exec_rels else 0o100644
+            try:
+                mt = time.localtime(os.path.getmtime(full))[:6]
+            except Exception:
+                mt = None
             with open(full, "rb") as fh:
-                z.writestr(zi, fh.read())
+                z.writestr(_zipinfo(name + "/" + rel, mode, mt), fh.read())
+
+    verify_release(zip_path)
 
     total = sum(os.path.getsize(os.path.join(ROOT, r.replace("/", os.sep))) for r in files)
     print("版本 %s ｜ 日期 %s" % (version, args.date))

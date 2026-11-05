@@ -3,7 +3,7 @@
 > 给班主任和任课老师用的一套**班级工作台**：教师端与学生端共用一个网页入口，
 > 数据全部存在自己的服务器上，不依赖任何第三方云服务。
 
-当前版本：**2.0.15**（版本号唯一代码源：`app/server.py` 的 `VERSION`）
+当前版本：**2.0.16**（版本号唯一代码源：`app/server.py` 的 `VERSION`）
 
 ```
 http://<服务器局域网 IP>:8080/        ← Docker 部署的入口；直接运行时是 :20020
@@ -378,9 +378,9 @@ docker compose up -d --build
 
 | # | 文件 | 位置 |
 |---|---|---|
-| 1 | `app/server.py` | `VERSION = "2.0.15"` —— **唯一代码源** |
-| 2 | `.env.example` | `IMAGE_TAG=2.0.15` |
-| 3 | `docker-compose.yml` | `image: …:${IMAGE_TAG:-2.0.15}`（init 与 workbench **两处**） |
+| 1 | `app/server.py` | `VERSION = "2.0.16"` —— **唯一代码源** |
+| 2 | `.env.example` | `IMAGE_TAG=2.0.16` |
+| 3 | `docker-compose.yml` | `image: …:${IMAGE_TAG:-2.0.16}`（init 与 workbench **两处**） |
 | 4 | `README.md` | 文首「当前版本」 |
 | 5 | `version.json` | 由 `tools/make_release.py` 自动同步 |
 
@@ -408,6 +408,19 @@ python tools/make_release.py --out D:\dist   # 指定输出目录（默认 dist/
 > 「创建发行版」并上传 zip 才会有内容。在线更新走的是 `version.json`（manifest）+
 > raw 直链，不依赖 Releases 功能；想把 zip 同时挂到 Releases 也可以，把
 > `version.json` 的 `zip` 字段改成完整 URL 即可。
+
+### 发行包权限（2.0.16）
+
+- **现象**：macOS / Linux 解压发行包后双击 `启动工作台.command` 提示「没有权限打开」，
+  终端执行报 `Permission denied`；解压出来的 `.command` / `.sh` 是 644。
+- **根因**：`make_release.py` 只给 `ZipInfo.external_attr` 写了 755，**没写
+  `create_system = 3`**。Windows 上 `ZipInfo` 默认 `create_system = 0`（FAT/MS-DOS），
+  解压器看到「DOS 文件系统」就整段忽略高 16 位的 Unix 权限，按 umask 给 644。
+  之前「修过一次」只补了 `external_attr`，所以问题一直复发。
+- **修复**：统一用 `_zipinfo()` 构造条目（`create_system = 3` + `external_attr = mode<<16`
+  + 源文件 mtime）；构建末尾跑 `verify_release()` 自检 —— 任何条目不是 Unix 条目、
+  权限不对、或缺 UTF-8 文件名标记，**直接删掉产物并让构建失败**，不会再产出坏包。
+- 详细台账见 `docs/问题排查记录.md`。
 
 ### 设置锚点 / 好句编辑 / 更新重启（2.0.15）
 
