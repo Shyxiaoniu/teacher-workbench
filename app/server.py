@@ -130,7 +130,7 @@ CFG["update"].setdefault("interval_hours", 24) # 检查间隔（小时）
 PET_IDS = ["cat", "dog", "rabbit", "penguin", "panda", "dino", "unicorn", "dragon"]
 COND = threading.Condition()
 STARTED = time.time()
-VERSION = "2.0.17"
+VERSION = "2.0.18"
 ONLINE_WINDOW = 300      # 5 分钟内活跃算在线
 # 可内联直出的附件类型（其余一律按下载处理，防止同源执行脚本）
 _INLINE_EXTS = {"png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "pdf",
@@ -4719,6 +4719,25 @@ def absent_sweeper():
             pass                          # 扫描失败不影响主服务
 
 
+def _print_admin_hint():
+    """默认管理员账号/密码只在启动终端出现（2026-11-05 牛哥要求：登录页不再展示）。
+
+    只有「首次启动、刚建出管理员」才打印明文密码；账号已存在时只提示账号名
+    与重置办法 —— 库里只剩哈希，没有密码可以打印。
+    """
+    try:
+        user = ACCOUNTS.admin_username()
+        pwd = ACCOUNTS.admin_initial_password()
+    except Exception:
+        return
+    if pwd:
+        print("[workbench] 管理员账号 %s ／ 初始密码 %s" % (user, pwd))
+        print("            只在首次启动打印这一次，登录后请尽快改掉。")
+    elif user:
+        print("[workbench] 管理员账号 %s（密码已设置；忘记请用 launch.py --reset-password）"
+              % user)
+
+
 def main():
     import argparse
     ap = argparse.ArgumentParser()
@@ -4828,6 +4847,7 @@ def main():
     print("[workbench] 服务已启动 · 教师端 http://127.0.0.1:%d/teacher/（容器内地址）" % port)
     for ip in lan_ips()[:3]:
         print("[workbench] 学生端 http://%s:%d/s/" % (ip, port))
+    _print_admin_hint()
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

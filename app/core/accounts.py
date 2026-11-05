@@ -159,9 +159,14 @@ class AccountStore(object):
         self.path = os.path.join(data_dir, "accounts.json")
         self.lock = threading.RLock()
         self.data = self._load()
+        # 本进程是否刚刚建出管理员（首次启动）。只有这一次能拿到明文密码 ——
+        # 之后 accounts.json 里只剩哈希，谁也还原不出来。
+        # 登录页不再展示默认账号密码，改由启动终端打印（2026-11-05 牛哥要求）。
+        self.bootstrapped = False
         if not isinstance(self.data, dict) or not self.data.get("admin"):
             self.data = self._bootstrap(legacy_teacher or {})
             self._save()
+            self.bootstrapped = True
         # 部署时可用环境变量覆盖管理员账号；只在显式要求时重置口令，
         # 避免每次重启都把管理员密码悄悄改回默认值。
         self._apply_env_admin()
@@ -224,6 +229,25 @@ class AccountStore(object):
     def admin(self):
         with self.lock:
             return dict(self.data["admin"])
+
+    def admin_username(self):
+        """当前管理员账号名（登录页不再展示，仅供启动终端提示用）。"""
+        try:
+            with self.lock:
+                return str((self.data.get("admin") or {}).get("username") or "")
+        except Exception:
+            return ""
+
+    def admin_initial_password(self):
+        """首次启动才知道的明文密码；账号已存在时返回空串。
+
+        2026-11-05：登录页不再展示默认账号密码，改在启动终端打印一次。
+        只有「本进程刚建出管理员」这一种情况能给出明文 —— 之后就只剩哈希，
+        任何地方都还原不出来（也不该还原）。
+        """
+        if not getattr(self, "bootstrapped", False):
+            return ""
+        return self.env.get("WB_ADMIN_PASSWORD") or DEFAULT_ADMIN_PASSWORD
 
     def teachers(self):
         with self.lock:

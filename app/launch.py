@@ -152,6 +152,26 @@ def check_env():
         die("数据目录不可写：%s" % e, "把整个文件夹放到「文档 / 桌面 / D 盘」再试。")
 
 
+def admin_hint():
+    """默认管理员账号/密码只在启动终端出现（登录页已不再展示）。
+
+    首次启动（还没有 accounts.json）才给出明文密码；之后库里只剩哈希，
+    只能提示账号名与重置办法。
+    """
+    user = (os.environ.get("WB_ADMIN_USERNAME") or "").strip() or "teacher"
+    pwd = os.environ.get("WB_ADMIN_PASSWORD") or "t12345678"
+    path = os.path.join(DATA, "accounts.json")
+    if not os.path.isfile(path):
+        return "  管理员    %s ／ %s（首次启动自动创建，登录后请改掉）" % (user, pwd)
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            d = json.load(f) or {}
+        u = str((d.get("admin") or {}).get("username") or "") or user
+    except Exception:
+        u = user
+    return "  管理员    %s（密码已设置；忘记可用 launch.py --reset-password）" % u
+
+
 def banner(port, cfg):
     ips = lan_ips()
     ip = ips[0] if ips else "127.0.0.1"
@@ -166,6 +186,7 @@ def banner(port, cfg):
     log("  学生端控制台  http://127.0.0.1:%d/teacher/console" % port)
     log("")
     log("  班级码  %s" % code)
+    log(admin_hint())
     if len(ips) > 1:
         log("  其它网段  " + "  ".join("http://%s:%d/s/" % (x, port) for x in ips[1:3]))
     log("")

@@ -80,31 +80,31 @@ def _page(title, body, extra_head=""):
 
 
 LOGIN_BODY = """
-<div class="card" style="max-width:440px;margin:7vh auto 0">
+<div class="card" style="max-width:420px;margin:7vh auto 0">
   <div class="brand">__LOGO__<div><div style="font-weight:750;font-size:15px">班级工作台</div>
-  <div style="font-size:12px;color:#849690">服务端部署 · 多教师账号</div></div></div>
-  <div style="display:flex;gap:8px;margin:4px 0 14px">
+  <div style="font-size:12px;color:#849690">多教师账号</div></div></div>
+  <div style="display:flex;gap:8px;margin:4px 0 16px">
     <button type="button" id="tabAdmin" style="flex:1;padding:9px 10px;border-radius:10px;border:1.5px solid #0F6E56;background:#0F6E56;color:#fff;font-weight:700;font-size:13.5px;cursor:pointer">管理员登录</button>
     <button type="button" id="tabTeacher" style="flex:1;padding:9px 10px;border-radius:10px;border:1.5px solid #D9E5DF;background:#fff;color:#5F6E68;font-weight:700;font-size:13.5px;cursor:pointer">教师登录</button>
   </div>
   <h1 id="lgTitle">管理员登录</h1>
-  <p class="sub" id="lgSub">默认账号 <b>teacher</b>、默认密码 <b>t12345678</b>；部署时可用环境变量修改。管理员只负责教师账号的注册与管理。</p>
+  <p class="sub" id="lgSub">管理教师账号。</p>
   <form id="f">
     <label>账号</label>
-    <input id="user" type="text" autocomplete="username" placeholder="账号" value="teacher" autofocus>
+    <input id="user" type="text" autocomplete="username" placeholder="账号" autofocus>
     <label>密码</label>
     <input id="pwd" type="password" autocomplete="current-password" placeholder="密码">
     <div class="err" id="err">__MSG__</div>
     <button style="width:100%;margin-top:6px" id="btn">进入管理控制台</button>
   </form>
   <div id="forgotWrap" style="margin-top:14px;font-size:13px;text-align:center">
-    <a href="/teacher/forgot" style="color:#0F6E56;text-decoration:none">忘记密码？用密保问题重设 →</a>
+    <a href="/teacher/forgot" style="color:#0F6E56;text-decoration:none">忘记密码？</a>
   </div>
   <div style="margin-top:8px;font-size:13px;text-align:center">
-    <a href="javascript:void 0" id="impLink" style="color:#5F6E68;text-decoration:none">📥 数据导入（换设备 / 重装后一键恢复全部数据）</a>
+    <a href="javascript:void 0" id="impLink" style="color:#5F6E68;text-decoration:none">📥 数据导入</a>
   </div>
   <div class="tip" style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap">
-    <span>学生入口 <code>/s/</code> · 教师账号由管理员统一创建</span>
+    <span>学生入口 <code>/s/</code></span>
     <button id="helpBtn" type="button" class="qbtn" aria-label="查看登录页说明">？</button>
   </div>
 </div>
@@ -119,9 +119,9 @@ function lgSet(r){
   a.style.background=r==='admin'?'#0F6E56':'#fff'; a.style.color=r==='admin'?'#fff':'#5F6E68'; a.style.border=r==='admin'?on:off;
   t.style.background=r==='teacher'?'#0F6E56':'#fff'; t.style.color=r==='teacher'?'#fff':'#5F6E68'; t.style.border=r==='teacher'?on:off;
   document.getElementById('lgTitle').textContent=r==='admin'?'管理员登录':'教师登录';
-  document.getElementById('lgSub').innerHTML=r==='admin'
-    ? '默认账号 <b>teacher</b>、默认密码 <b>t12345678</b>；部署时可用环境变量修改。管理员只负责教师账号的注册与管理。'
-    : '教师账号由管理员在管理控制台创建；每位教师的数据、资料与文件彼此独立。';
+  document.getElementById('lgSub').textContent = r==='admin'
+    ? '管理教师账号。'
+    : '教师账号由管理员创建。';
   document.getElementById('btn').textContent=r==='admin'?'进入管理控制台':'进入教师工作台';
   document.getElementById('forgotWrap').style.display=r==='teacher'?'':'none';
   document.getElementById('err').textContent='';
