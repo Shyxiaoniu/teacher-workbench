@@ -3,7 +3,7 @@
 > 给班主任和任课老师用的一套**班级工作台**：教师端与学生端共用一个网页入口，
 > 数据全部存在自己的服务器上，不依赖任何第三方云服务。
 
-当前版本：**2.0.19**（版本号唯一代码源：`app/server.py` 的 `VERSION`）
+当前版本：**2.0.20**（版本号唯一代码源：`app/server.py` 的 `VERSION`）
 
 ```
 http://<服务器局域网 IP>:8080/        ← Docker 部署的入口；直接运行时是 :20020
@@ -378,9 +378,9 @@ docker compose up -d --build
 
 | # | 文件 | 位置 |
 |---|---|---|
-| 1 | `app/server.py` | `VERSION = "2.0.19"` —— **唯一代码源** |
-| 2 | `.env.example` | `IMAGE_TAG=2.0.19` |
-| 3 | `docker-compose.yml` | `image: …:${IMAGE_TAG:-2.0.19}`（init 与 workbench **两处**） |
+| 1 | `app/server.py` | `VERSION = "2.0.20"` —— **唯一代码源** |
+| 2 | `.env.example` | `IMAGE_TAG=2.0.20` |
+| 3 | `docker-compose.yml` | `image: …:${IMAGE_TAG:-2.0.20}`（init 与 workbench **两处**） |
 | 4 | `README.md` | 文首「当前版本」 |
 | 5 | `version.json` | 由 `tools/make_release.py` 自动同步 |
 
@@ -408,6 +408,22 @@ python tools/make_release.py --out D:\dist   # 指定输出目录（默认 dist/
 > 「创建发行版」并上传 zip 才会有内容。在线更新走的是 `version.json`（manifest）+
 > raw 直链，不依赖 Releases 功能；想把 zip 同时挂到 Releases 也可以，把
 > `version.json` 的 `zip` 字段改成完整 URL 即可。
+
+### 更新提醒改成底部提示条（2.0.20）
+
+- 原来新版本提醒是「左下角头像挂红色数字角标 + 侧栏弹大卡片」。角标容易被当成
+  未读消息，卡片又跟迷你计时条抢位置。现在换成**页面底部居中一条小提示**：
+  - 文案「新版本 vX 可用，点此查看更新」，右侧「查看」胶囊 + ✕；
+  - **整条可点** → 直接跳 系统设置 →「软件更新」并滚到那张卡片；
+    键盘 Tab 聚焦后 Enter / 空格同样可跳；
+  - ✕ 关闭后**本次会话不再弹**（`sessionStorage['wb-upd-bar-closed']` 记录版本号，
+    下次发版会重新提示）；
+  - 桌面宽 520px 居中，手机通栏（左右各 12px）、隐藏「查看」胶囊省宽度，
+    文案自动折行不截断。
+- **注意 zoom**：整站字号缩放用的是 `documentElement.style.zoom`（默认 1.16），
+  `position:fixed` 的宽高会被再放大一次。提示条的宽度按 `520 / zoom` 反算，
+  否则 520 会占 603 视觉像素、手机上直接横向溢出。
+- 旧的 `body.has-update` 角标样式、`.upd-mini` 卡片与动画已全部移除。
 
 ### Mac 更新后无法启动 / 导入后学生登录不了 / 导入入口（2.0.19）
 

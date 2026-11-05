@@ -2947,30 +2947,68 @@ body.seat-rsz-dragging .seat:hover { transform:none; box-shadow:none; }
   box-shadow:0 2px 6px color-mix(in srgb, var(--brand-primary) 30%, transparent);
 }
 .su-av.lg { width:38px; height:38px; border-radius:12px; font-size:17px; }
-/* ---------- 更新提醒（2026-11-05） ----------
-   启动检测到新版本：左下角头像挂数字角标 + 侧栏左下弹出小窗。
-   角标由 body.has-update 驱动，SPA 重绘侧栏时自动跟着出现，不用重新挂 DOM。 */
-.side-user .su-av { position:relative; }
-body.has-update .side-user .su-av::after{
-  content:'1'; position:absolute; right:-6px; top:-6px; min-width:17px; height:17px; padding:0 3px;
-  border-radius:999px; background:var(--status-error); color:#fff; font-size:10px; font-weight:800;
-  display:grid; place-items:center; line-height:1; z-index:3;
-  box-shadow:0 0 0 2px var(--bg-surface); }
-.upd-mini{ position:fixed; left:14px; bottom:74px; z-index:120;
-  width:min(320px,calc(100vw - 28px)); background:var(--bg-surface);
-  border:1.5px solid var(--brand-primary); border-radius:14px; padding:12px 14px 11px;
-  box-shadow:0 12px 34px rgba(0,0,0,.2); font-size:13px; line-height:1.55;
-  color:var(--text-primary); animation:updMiniIn .28s ease both; }
-@keyframes updMiniIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
-.upd-mini .um-head{ display:flex; align-items:center; gap:8px; font-weight:700; font-size:13.5px; }
-.upd-mini .um-date{ font-size:11.5px; color:var(--text-secondary); font-weight:400; }
-.upd-mini .um-x{ margin-left:auto; border:none; background:transparent; color:var(--text-secondary);
-  font-size:17px; line-height:1; cursor:pointer; padding:2px 4px; }
-.upd-mini .um-x:hover{ color:var(--status-error); }
-.upd-mini .um-btns{ display:flex; gap:8px; margin-top:10px; }
-.upd-mini .um-btns button{ font-size:12.5px; padding:6px 12px; border-radius:9px; cursor:pointer; }
-.upd-mini .um-go{ background:var(--brand-primary); color:#fff; border:1px solid var(--brand-primary); }
-.upd-mini .um-later{ background:transparent; color:var(--text-secondary); border:1px solid var(--border); }
+/* ---------- 更新提醒（2026-11-05 改版） ----------
+   原来用「头像上挂红色数字角标 + 左下角大卡片」。数字角标容易被当成未读消息，
+   点开又只是一堆说明；卡片还占着侧栏左下角，跟迷你计时条抢位置。
+   现在统一成**页面底部居中一条小提示**：整条可点 → 直接跳 系统设置 → 软件更新，
+   右侧 ✕ 关掉、本次会话不再弹。
+   居中用 left/right + max-width + margin:auto（不用 translateX），
+   桌面和手机共用一套规则，手机上自然变成通栏。 */
+.upd-bar{
+  position:fixed; left:50%;
+  bottom:calc(18px + env(safe-area-inset-bottom, 0px));
+  /* 宽度：固定 520 + max-width 收口。**不要用 CSS min()** —— 实测这台 Edge
+     解析不了 `min(520px, calc(...))`，整条声明被丢弃、宽度退回内容宽（603px、
+     手机上 429px 溢出屏）。width + max-width 两条老写法哪里都认。 */
+  transform:translateX(-50%);
+  width:520px; max-width:calc(100vw - 24px);
+  z-index:120;
+  display:flex; align-items:center; gap:9px;
+  padding:10px 12px 10px 13px;
+  background:var(--bg-surface);
+  border:1px solid color-mix(in srgb, var(--brand-primary) 32%, var(--border));
+  border-radius:13px;
+  box-shadow:0 10px 28px rgba(15,23,20,.18), 0 1px 2px rgba(15,23,20,.06);
+  font-size:13px; line-height:1.4; color:var(--text-primary);
+  cursor:pointer; text-align:left; font-family:inherit;
+  animation:updBarIn .26s cubic-bezier(.22,1.2,.36,1) both;
+}
+/* 动画里必须带着 translateX(-50%)，否则结束帧的 transform:none 会把居中弄丢 */
+@keyframes updBarIn{
+  from{opacity:0;transform:translate(-50%,12px)}
+  to{opacity:1;transform:translate(-50%,0)}
+}
+.upd-bar:hover{ border-color:color-mix(in srgb, var(--brand-primary) 55%, var(--border)); }
+.upd-bar:focus-visible{
+  outline:none;
+  box-shadow:0 0 0 3px color-mix(in srgb, var(--brand-primary) 26%, transparent),
+             0 10px 28px rgba(15,23,20,.18);
+}
+.upd-bar .ub-ico{ font-size:15px; line-height:1; flex:none; }
+.upd-bar .ub-txt{
+  flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  color:var(--text-secondary);
+}
+.upd-bar .ub-txt b{ color:var(--brand-primary); font-weight:700; }
+.upd-bar .ub-go{
+  flex:none; padding:4px 11px; border-radius:999px;
+  background:var(--brand-soft); color:var(--brand); font-size:12px; font-weight:700;
+  transition:background var(--dur-fast) var(--ease-out);
+}
+.upd-bar:hover .ub-go{ background:color-mix(in srgb, var(--brand-primary) 18%, transparent); }
+.upd-bar .ub-x{
+  flex:none; border:none; background:transparent; color:var(--text-secondary);
+  font-size:15px; line-height:1; cursor:pointer; padding:3px 4px; border-radius:6px;
+  transition:color var(--dur-fast), background var(--dur-fast);
+}
+.upd-bar .ub-x:hover{ color:var(--status-error); background:var(--bg-page); }
+/* 手机：通栏贴底，「查看」胶囊省掉（整条本来就可点），只留文案 + ✕ */
+@media(max-width:520px){
+  .upd-bar{ bottom:calc(12px + env(safe-area-inset-bottom, 0px));
+    padding:10px 10px 10px 12px; border-radius:12px; }
+  .upd-bar .ub-go{ display:none; }
+  .upd-bar .ub-txt{ white-space:normal; }   /* 窄屏允许折行，不硬截断 */
+}
 /* 更新说明：逐条短句 + 序号徽标，长句截断，不糊成一大段 */
 .upd-notes{ counter-reset:updN; list-style:none; display:flex; flex-direction:column; gap:5px;
   margin:8px 0 0; padding:0; }
@@ -33454,42 +33492,76 @@ function updNotesHtml(notes, limit) {
     `</div>`;
 }
 
-/** 启动提醒：进工作台后拉一次更新状态。有新版本就在左下角弹小窗，
-    并给头像加数字角标；关掉小窗本次会话不再弹，角标保留到更新完成。 */
+/** 启动提醒：进工作台后拉一次更新状态，有新版本就在页面底部弹一条小提示。
+ *  整条可点 → 系统设置 →「软件更新」；右侧 ✕ 关掉，本次会话不再弹。
+ *  2026-11-05 改版：原来的头像数字角标 + 左下角大卡片已移除
+ *  （角标会被当成未读消息，大卡片又占侧栏左下角）。 */
 async function updBootstrapHint() {
   try {
     const r = await fetch('/api/v2/update/status', { credentials: 'same-origin' });
     if (!r.ok) return;
     const s = await r.json();
-    if (!s || !s.ok || !s.has_update) { document.body.classList.remove('has-update'); return; }
-    document.body.classList.add('has-update');
+    if (!s || !s.ok || !s.has_update) return;
     let closed = '';
-    try { closed = sessionStorage.getItem('wb-upd-mini-closed') || ''; } catch (e) {}
-    if (closed === s.latest) return;
-    const old = document.getElementById('updMini');
+    try { closed = sessionStorage.getItem('wb-upd-bar-closed') || ''; } catch (e) {}
+    if (closed === String(s.latest || '')) return;   /* 本次会话已关过，别再打扰 */
+    const old = document.getElementById('updBar');
     if (old) old.remove();
-    const box = document.createElement('div');
-    box.className = 'upd-mini';
-    box.id = 'updMini';
-    box.innerHTML =
-      `<div class="um-head">🚀 新版本 v${esc(s.latest || '')}` +
-        (s.date ? `<span class="um-date">${esc(s.date)}</span>` : '') +
-        `<button class="um-x" type="button" title="本次不再提醒" aria-label="关闭">✕</button></div>` +
-      updNotesHtml(s.notes, 3) +
-      `<div class="um-btns"><button class="um-go" type="button">查看更新</button>` +
-        `<button class="um-later" type="button">稍后再说</button></div>`;
-    const close = () => {
-      try { sessionStorage.setItem('wb-upd-mini-closed', String(s.latest || '')); } catch (e) {}
-      box.remove();
+    const bar = document.createElement('div');
+    bar.className = 'upd-bar';
+    bar.id = 'updBar';
+    bar.setAttribute('role', 'button');
+    bar.setAttribute('tabindex', '0');
+    bar.title = '查看更新说明';
+    bar.innerHTML =
+      `<span class="ub-ico">🚀</span>` +
+      `<span class="ub-txt">新版本 <b>v${esc(s.latest || '')}</b> 可用，点此查看更新</span>` +
+      `<span class="ub-go">查看</span>` +
+      `<button class="ub-x" type="button" title="本次不再提示" aria-label="关闭">✕</button>`;
+    const close = (e) => {
+      if (e) e.stopPropagation();
+      try { sessionStorage.setItem('wb-upd-bar-closed', String(s.latest || '')); } catch (e2) {}
+      bar.remove();
     };
-    box.querySelector('.um-x').onclick = close;
-    box.querySelector('.um-later').onclick = close;
-    box.querySelector('.um-go').onclick = () => {
-      close();
+    const go = () => {
+      bar.remove();
       location.hash = '#settings';
-      setTimeout(() => { try { updLoad(); } catch (e) {} }, 120);
+      /* 滚到「软件更新」卡片。设置页高度在数据加载完才定下来，一次滚动可能
+         被后续重排顶偏，所以校正到位置稳定为止（最多 6 次）。用 auto 而不是
+         smooth：连续两次 smooth 会互相打断，反而停不到位。 */
+      let n = 0;
+      const align = () => {
+        n += 1;
+        const card = document.getElementById('updCard');
+        if (!card) {
+          if (n < 6) setTimeout(align, 200);
+          return;
+        }
+        const tb = document.querySelector('.topbar');
+        const off = (tb ? tb.getBoundingClientRect().height : 0) + 10;
+        const rr = card.getBoundingClientRect();
+        window.scrollTo({ top: Math.max(0, window.scrollY + rr.top - off),
+                          behavior: 'auto' });
+        const gap = Math.abs(card.getBoundingClientRect().top - off);
+        if (n < 6 && gap > 12) setTimeout(align, 200);
+      };
+      setTimeout(() => { try { updLoad(); } catch (e) {} align(); }, 260);
     };
-    document.body.appendChild(box);
+    bar.onclick = go;
+    bar.onkeydown = (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }
+    };
+    bar.querySelector('.ub-x').onclick = close;
+    /* 整站字号缩放用的是 documentElement.style.zoom（默认 1.16）——
+       fixed 元素的宽高会被 zoom 再放大一次，520 实际占 603 视觉像素，
+       手机上直接横向溢出。按当前 zoom 反算真实宽度（与 syncSidebarHeight
+       里处理 --sb-h 的思路一致）。 */
+    try {
+      const Z = parseFloat(document.documentElement.style.zoom || '1') || 1;
+      bar.style.width = Math.round(520 / Z) + 'px';
+      bar.style.maxWidth = Math.round((window.innerWidth - 24) / Z) + 'px';
+    } catch (e) {}
+    document.body.appendChild(bar);
   } catch (e) { /* 离线是常态，静默跳过 */ }
 }
 window.updBootstrapHint = updBootstrapHint;
@@ -33501,8 +33573,6 @@ async function updLoad() {
     const r = await fetch('/api/v2/update/status', { credentials: 'same-origin' });
     if (r.status === 401) { location.href = '/teacher/login'; return; }
     UPD_ST = await r.json();
-    /* 头像角标跟着最新状态走：装完 / 已重启就不再提示 */
-    document.body.classList.toggle('has-update', !!UPD_ST.has_update);
     updRender();
   } catch (e) {
     b.innerHTML = '<span style="color:var(--status-error)">读取更新状态失败：' +
