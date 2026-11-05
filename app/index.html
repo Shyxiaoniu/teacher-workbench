@@ -8591,7 +8591,17 @@ function qsSetBase(px) {
   const pv = document.getElementById('qsQuotePrev');
   if (pv) pv.style.fontSize = v + 'px';
   const whole = document.getElementById('qsWholeSize');
-  if (whole) whole.value = String(v);
+  if (whole) {
+    whole.value = String(v);
+    /* 从「选中字号」带过来的值可能不在整句预设里（如 16 / 28）：
+       补一个选项，否则下拉会显示空白，看着像没设置成功 */
+    if (whole.value !== String(v)) {
+      const o = document.createElement('option');
+      o.value = String(v); o.textContent = '整句 ' + v + 'px';
+      whole.appendChild(o);
+      whole.value = String(v);
+    }
+  }
   qsPreview();
 }
 window.qsSetBase = qsSetBase;

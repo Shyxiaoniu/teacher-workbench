@@ -9,5 +9,5 @@
     "问题台账补 P-042 ~ P-045 与 T-14（清除字号时 extractContents 取不到 span 元素本身的坑）"
   ],
   "zip": "dist/班级工作台2.0.32-261105.zip",
-  "sha256": "ec8013ca1ab534ee52f7fba8c0f4d44c8cf248fc0c3403c95a9ee7704c746ea1"
+  "sha256": "91dd5864afca7d7ac42073701b958f92fe033d2672e0c3a61b31418f2c69cdc2"
 }
