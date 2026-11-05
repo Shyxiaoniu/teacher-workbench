@@ -536,11 +536,13 @@
     var payload = { tables: (sv && sv.tables) || {}, config: (sv && sv.config) || {},
                     force: !!force };
     /* 这几个字段只在备份里确实存在时才带上：服务端「带了 creds 才整体替换口令表」，
-       盲目补一个空数组会把本机密码清空。 */
+       盲目补一个空数组会把本机密码清空。activity 同理（2026-11-05 补：
+       导出带了活动数据，恢复却一直没发——换机后课堂活动会整体丢失）。 */
     if (sv && 'creds' in sv) payload.creds = sv.creds || [];
     if (sv && 'sub' in sv) payload.sub = sv.sub || {};
     if (sv && 'typing' in sv) payload.typing = sv.typing || {};
     if (sv && 'files' in sv) payload.files = sv.files || {};
+    if (sv && 'activity' in sv) payload.activity = sv.activity || {};
     try {
       var resp = await fetch('/api/v2/admin/import', {
         method: 'POST', credentials: 'same-origin',

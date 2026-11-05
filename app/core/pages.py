@@ -34,6 +34,10 @@ button.danger{background:#B3261E}
 .row{display:flex;gap:10px;align-items:center}
 .err{color:#B3261E;font-size:13px;min-height:20px;margin-top:10px}
 .tip{color:#849690;font-size:12.4px;line-height:1.8;margin-top:14px}
+/* 「？」说明钮（2026-11-05）：提示精简成一两行，完整说明收进弹窗 */
+.qbtn{width:22px;height:22px;border-radius:50%;border:1px solid #CDE2DA;background:#F1F7F4;
+  color:#0F6E56;font-size:13px;font-weight:700;cursor:pointer;line-height:1;padding:0;flex:none}
+.qbtn:hover{background:#0F6E56;color:#fff;border-color:#0F6E56}
 .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
 .kpi{background:#F1F7F4;border-radius:12px;padding:14px 16px}
 .kpi b{display:block;font-size:24px;color:#0F6E56;line-height:1.2}
@@ -92,9 +96,18 @@ LOGIN_BODY = """
   <div style="margin-top:14px;font-size:13px;text-align:center">
     <a href="/teacher/forgot" style="color:#0F6E56;text-decoration:none">忘记密码？用密保问题重设 →</a>
   </div>
-  <div class="tip">学生请访问 <code>/s/</code>，选择班级和学号，用老师给的密码登录。<br>
-  没设密保问题又忘了密码：在服务器上执行 <code>docker compose exec workbench python launch.py --reset-password</code>。</div>
+  <div style="margin-top:8px;font-size:13px;text-align:center">
+    <a href="javascript:void 0" id="impLink" style="color:#5F6E68;text-decoration:none">📥 数据导入（换设备 / 重装后一键恢复全部数据）</a>
+  </div>
+  <div class="tip" style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap">
+    <span>学生入口 <code>/s/</code> · 登录相关说明点</span>
+    <button id="helpBtn" type="button" class="qbtn" aria-label="查看登录页说明">？</button>
+  </div>
 </div>
+<script>
+document.getElementById('impLink').onclick=function(){LoginIO.open();};
+document.getElementById('helpBtn').onclick=function(){LoginIO.help('login');};
+</script>
 <script>
 document.getElementById('f').onsubmit = async function(e){
   e.preventDefault();
@@ -150,9 +163,13 @@ SETUP_BODY = """
     <a href="javascript:void 0" id="swLogin" style="color:#0F6E56;text-decoration:none">已有账号？直接登录 →</a>
     <a href="javascript:void 0" id="swSetup" style="display:none;color:#0F6E56;text-decoration:none">← 还没有账号？创建一个</a>
   </div>
-  <div class="tip">密保答案只保存加密后的哈希，连老师自己也看不到原文。<br>
-  学生不用这个账号：他们在 <code>/s/</code> 选择班级、学号，
-  输入你设置的初始密码（默认 <b>123456</b>）即可进入，只能看到自己的数据。</div>
+  <div style="margin-top:8px;font-size:13px;text-align:center">
+    <a href="javascript:void 0" id="impLink" style="color:#5F6E68;text-decoration:none">📥 数据导入（旧设备有备份？直接恢复，账号也一起回来）</a>
+  </div>
+  <div class="tip" style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap">
+    <span>密保答案只存加密哈希 · 学生入口 <code>/s/</code> · 详细说明点</span>
+    <button id="helpBtn" type="button" class="qbtn" aria-label="查看首次设置说明">？</button>
+  </div>
 </div>
 <script>
 document.getElementById('f').onsubmit = async function(e){
@@ -201,17 +218,26 @@ document.getElementById('f').onsubmit = async function(e){
     err.textContent=j.msg||'账号或密码不正确'; btn.disabled=false; btn.textContent='进入工作台';
   };
 })();
+document.getElementById('impLink').onclick=function(){LoginIO.open();};
+document.getElementById('helpBtn').onclick=function(){LoginIO.help('setup');};
 </script>"""
+
+
+# 登录 / 首次设置页共用的两份公开脚本：
+#   · cipher.js        AES/SHA256 加密核心（与教师端 index.html 同一份文件）
+#   · login-import.js  「数据导入」对话框 + 「？」说明弹窗（window.LoginIO）
+LOGIN_SCRIPTS = ('<script src="/core/cipher.js"></script>'
+                 '<script src="/login-import.js"></script>')
 
 
 def login_page(msg=""):
     body = LOGIN_BODY.replace("__LOGO__", LOGO).replace("__MSG__", msg)
-    return _page("教师登录 · 班级工作台", body)
+    return _page("教师登录 · 班级工作台", body, LOGIN_SCRIPTS)
 
 
 def login_page_setup(msg=""):
     body = SETUP_BODY.replace("__LOGO__", LOGO).replace("__MSG__", msg)
-    return _page("创建账号 · 班级工作台", body)
+    return _page("创建账号 · 班级工作台", body, LOGIN_SCRIPTS)
 
 
 FORGOT_BODY = """

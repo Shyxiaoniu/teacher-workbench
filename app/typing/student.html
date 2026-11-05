@@ -154,6 +154,17 @@ body.embed .stick-top{margin:-20px -4px 0;padding:20px 4px 6px}
   border:1.5px solid var(--sun-line);background:var(--card);color:inherit;cursor:pointer}
 .teacher-bar select:disabled{opacity:.55;cursor:not-allowed}
 .teacher-bar .tw-tip{font-size:12px;opacity:.85}
+/* 折叠态（2026-11-05）：提示默认收成一行，吸顶区少吃一截竖向空间，
+   下方正文（冒险地图 / 排行榜 / 牧场）能多露出一段。点「展开」才看全文。 */
+.teacher-bar .tw-sum{display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex:1;min-width:0}
+.teacher-bar .tw-sum .tw-state{font-size:12.5px;opacity:.85}
+.teacher-bar .tw-full{display:contents}
+.teacher-bar.is-open .tw-sum{display:none}
+.teacher-bar:not(.is-open) .tw-full{display:none}
+.tw-toggle{margin-left:auto;font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer;
+  padding:4px 12px;border-radius:99px;border:1.5px solid var(--sun-line);
+  background:var(--card);color:inherit;white-space:nowrap}
+.tw-toggle:hover{background:var(--sun-bg);border-color:var(--sun-ink)}
 .off-bar{margin:60px auto 0;max-width:460px;text-align:center;background:var(--card);border:1px solid var(--line);
   border-radius:20px;padding:44px 30px;box-shadow:0 8px 24px var(--shadow)}
 .off-bar .big{font-size:44px;margin-bottom:10px}
@@ -1350,6 +1361,8 @@ function boot() {
             if (S.teacherClasses.length && !S.teacherLb.class_id) {
               S.teacherLb.class_id = S.teacherClasses[0].id;
             }
+            /* 折叠摘要里「成绩计入：某班」的班名也要跟下班级列表 */
+            twBarSync();
             /* 教师条已渲染，开关班级下拉补数据 */
             var sel = $('#twCls');
             if (sel) {
@@ -1451,21 +1464,29 @@ function render() {
         ? '<div class="demo-bar">🎬 演示模式：当前未登录，展示的是示例数据，成绩只存在本机。' +
           '学生登录后进入这里，成绩会真实记录并上榜。</div>' : '') +
       (S.demo && S.role === 'teacher'
-        ? '<div class="demo-bar teacher-bar">👩‍🏫 <b>教师练习模式</b>：和学生同一张冒险地图，成绩默认只存本机。' +
-          '<label class="tw-lb"><input type="checkbox" id="twLb"' + (S.teacherLb && S.teacherLb.on ? ' checked' : '') + '>' +
-          '把我的成绩计入</label>' +
+        ? '<div class="demo-bar teacher-bar' + (twBarOpen() ? ' is-open' : '') + '" id="twBar">'
+          /* 折叠摘要（默认）：一行说清「现在算不算成绩」，展开才占大块空间 */
+          + '<div class="tw-sum">👩‍🏫 <b>教师练习模式</b>'
+          + '<span class="tw-state">' + twBarState() + '</span>'
+          + '<button class="tw-toggle" type="button">展开设置 ▾</button></div>'
+          /* 展开全文：原来的开关 + 班级下拉 + 说明，外加一个「收起」 */
+          + '<div class="tw-full">👩‍🏫 <b>教师练习模式</b>：和学生同一张冒险地图，成绩默认只存本机。'
+          + '<label class="tw-lb"><input type="checkbox" id="twLb"' + (S.teacherLb && S.teacherLb.on ? ' checked' : '') + '>'
+          + '把我的成绩计入</label>'
           /* 班级下拉：从 S.teacherClasses 现取现拼（2026-11-04 修复）。
              以前写死「加载中…」占位，只有 boot 时 overview 回来那一刻才补数据——
              切一次标签页 render() 重画就永远停在「加载中…」，班级列表识别不到。 */
-          '<select id="twCls"' + (S.teacherLb && S.teacherLb.on ? '' : ' disabled') + '>' +
-          ((S.teacherClasses && S.teacherClasses.length)
+          + '<select id="twCls"' + (S.teacherLb && S.teacherLb.on ? '' : ' disabled') + '>'
+          + ((S.teacherClasses && S.teacherClasses.length)
             ? S.teacherClasses.map(function (c) {
                 return '<option value="' + esc(c.id) + '"' +
                   (c.id === S.teacherLb.class_id ? ' selected' : '') + '>' + esc(c.name) + '</option>';
               }).join('')
-            : '<option>加载中…</option>') +
-          '</select>' +
-          '<span class="tw-tip">班级排行榜（选班后生效）</span></div>' : '') +
+            : '<option>加载中…</option>')
+          + '</select>'
+          + '<span class="tw-tip">班级排行榜（选班后生效）</span>'
+          + '<button class="tw-toggle" type="button">收起 ▴</button></div>'
+          + '</div>' : '') +
       (enrolled
         ? '<div class="tabs">' +
             tabBtn('map', '🗺 冒险地图') + tabBtn('lb', '🏆 排行榜') + tabBtn('ranch', '🐾 宠物牧场') +
@@ -1551,8 +1572,39 @@ function bindView() {
 }
 
 /* 教师练习条的开关与班级选择（2026-11-03）：
-   记在 localStorage['wb-typing-teacher-lb']，成绩提交时按它决定是否上报。 */
+   记在 localStorage['wb-typing-teacher-lb']，成绩提交时按它决定是否上报。
+   2026-11-05 起整条默认折叠（localStorage['wb-typing-teacher-bar'] 记展开状态），
+   吸顶区不再常年占一大条；折叠摘要实时显示「成绩算不算」。 */
+function twBarOpen() {
+  try { return !!(JSON.parse(localStorage.getItem('wb-typing-teacher-bar') || '{}').open); }
+  catch (e) { return false; }
+}
+function twBarState() {
+  var lb = S.teacherLb || {};
+  if (!lb.on) return '成绩只存本机，不计入班级榜';
+  var cls = (S.teacherClasses || []).filter(function (c) { return String(c.id) === String(lb.class_id); })[0];
+  return '成绩计入：' + (cls ? cls.name : '所选班级');
+}
+function twBarSave(open) {
+  try { localStorage.setItem('wb-typing-teacher-bar', JSON.stringify({ open: !!open })); } catch (e) {}
+}
+function twBarSync() {
+  var st = document.querySelector('#twBar .tw-state');
+  if (st) st.textContent = twBarState();
+}
 function bindTeacherBar() {
+  var bar = document.getElementById('twBar');
+  if (bar) {
+    bar.querySelectorAll('.tw-toggle').forEach(function (btn) {
+      btn.onclick = function () {
+        var open = !bar.classList.contains('is-open');
+        bar.classList.toggle('is-open', open);
+        twBarSave(open);
+        twBarSync();
+        fitViewScroll();        /* 吸顶区高度变了，牧场容器要跟着重算 */
+      };
+    });
+  }
   var cb = $('#twLb'), sel = $('#twCls');
   if (!cb && !sel) return;
   if (cb) cb.onchange = function () {
@@ -1560,12 +1612,14 @@ function bindTeacherBar() {
     S.teacherLb.on = cb.checked;
     if (sel) sel.disabled = !cb.checked;
     try { localStorage.setItem('wb-typing-teacher-lb', JSON.stringify(S.teacherLb)); } catch (e) {}
+    twBarSync();
     uiToast(cb.checked ? '好，下次通关会把成绩计入所选班级的排行榜' : '成绩恢复为只存本机');
   };
   if (sel) sel.onchange = function () {
     S.teacherLb = S.teacherLb || { on: false, class_id: '' };
     S.teacherLb.class_id = sel.value;
     try { localStorage.setItem('wb-typing-teacher-lb', JSON.stringify(S.teacherLb)); } catch (e) {}
+    twBarSync();
   };
 }
 

@@ -98,7 +98,7 @@ CFG["update"].setdefault("interval_hours", 24) # 检查间隔（小时）
 PET_IDS = ["cat", "dog", "rabbit", "penguin", "panda", "dino", "unicorn", "dragon"]
 COND = threading.Condition()
 STARTED = time.time()
-VERSION = "2.0.10"
+VERSION = "2.0.11"
 ONLINE_WINDOW = 300      # 5 分钟内活跃算在线
 # 可内联直出的附件类型（其余一律按下载处理，防止同源执行脚本）
 _INLINE_EXTS = {"png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "pdf",
@@ -564,7 +564,7 @@ class Handler(LEG.Handler):
         limit 由调用方传入（如课件上传 440MB）；不传就交给基类按默认规则处理。
         """
         path = urllib.parse.urlparse(self.path).path
-        if path != "/api/v2/admin/import":
+        if path not in ("/api/v2/admin/import", "/api/v2/admin/import-preauth"):
             if limit is None:
                 return LEG.Handler._read_json(self)
             return LEG.Handler._read_json(self, limit)
@@ -872,6 +872,13 @@ class Handler(LEG.Handler):
                 return self._teacher_page()
             if path == "/teacher/login":
                 return self._teacher_login_page()
+            # 登录页「数据导入」要用的两份公开脚本（2026-11-05）：
+            # · cipher.js  = AES/SHA256 纯 JS 实现，与教师端同一份文件（唯一实现），
+            #   登录页解密 .cwbackup 与教师端加密必须逐字节兼容；
+            # · login-import.js = 导入对话框 UI。
+            # 都是纯代码不含任何数据 / 口令，公开可取，no-store 保证改版即生效。
+            if path in ("/core/cipher.js", "/login-import.js"):
+                return self._login_asset(path)
             if path == "/teacher/forgot":
                 if not CFG["teacher"].get("password_hash"):
                     return self._redirect("/teacher/login")
@@ -974,6 +981,22 @@ class Handler(LEG.Handler):
         if not CFG["teacher"].get("password_hash"):
             return self._html(P.login_page_setup())
         return self._html(P.login_page())
+
+    def _login_asset(self, path):
+        """登录页公开静态脚本（无登录态）：白名单只放这两个文件。"""
+        rel = {"/core/cipher.js": os.path.join("core", "cipher.js"),
+               "/login-import.js": "login-import.js"}[path]
+        full = os.path.normpath(os.path.join(ROOT, rel))
+        if not os.path.isfile(full):
+            return self._json({"ok": False, "msg": "not found"}, 404)
+        with open(full, "rb") as f:
+            body = f.read()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/javascript; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
 
     def _teacher_static(self, rel):
         rel = (rel or "").replace("\\", "/").lstrip("/")
@@ -3314,6 +3337,9 @@ class Handler(LEG.Handler):
             return self._teacher_leave(body)
         if path == "/api/v2/admin/import":
             return self._import(body)
+        # 登录页「数据导入」（换设备 / 重新部署）：见 _import_preauth 的说明
+        if path == "/api/v2/admin/import-preauth":
+            return self._import_preauth(body)
         return self._json({"ok": False, "msg": "未知接口"}, 404)
 
     def _set_session_headers(self, token, expire=False, extra=None, hours=12):
@@ -3797,7 +3823,7 @@ class Handler(LEG.Handler):
         return self._json({"ok": True})
 
     def _import(self, body):
-        """全量恢复的唯一入口（教师端「从备份一键恢复」）。
+        """全量恢复入口之一（教师端「从备份一键恢复」）。
 
         2026-11-03 加固（换机测试 F1/F2/F5）：
           · F1 先校验后落库 —— 空表 / 缺表 / 数据量骤减一律在删数据之前拒绝；
@@ -3808,6 +3834,40 @@ class Handler(LEG.Handler):
         """
         if not self._is_teacher():
             return self._json({"ok": False, "msg": "只有教师端可以导入"}, 403)
+        return self._do_import(body, actor="teacher")
+
+    def _import_preauth(self, body):
+        """登录页「数据导入」（2026-11-05）：换设备 / 重新部署后，
+        还没登录（甚至还没有账号）就要把旧机的全部数据搬进来。
+
+        免登录不等于不设防 —— 按两种情况分别把关：
+          · 还没有管理员账号：沿用首次设置页同一套窗口限制（_setup_allowed），
+            启动 24 小时内 + 内网来源才放行。导入的备份里带着教师账号，
+            恢复完账号就回来了；
+          · 已有账号：必须验证教师账号密码（强度等同登录本身），防止
+            机房里学生随手把一份备份灌进服务端覆盖全班数据。
+        """
+        ip = A.client_ip(self)
+        if not A.rate_ok("imp:" + ip, 12, 300):
+            return self._json({"ok": False, "msg": "操作太频繁，请 5 分钟后再试"}, 429)
+        if CFG["teacher"].get("password_hash"):
+            user = str(body.get("teacher_username") or "").strip()
+            pwd = str(body.get("teacher_password") or "")
+            want_user = str(CFG["teacher"].get("username") or "teacher")
+            if (user and user != want_user) or \
+                    not A.verify_password(pwd, CFG["teacher"].get("password_hash")):
+                STORE.audit("?", "preauth-import-fail", ip)
+                return self._json({"ok": False,
+                                   "msg": "教师账号或密码不正确 —— 已有账号的服务器"
+                                          "导入数据前要先验证教师密码（防止学生误导入）"}, 401)
+            return self._do_import(body, actor="teacher")
+        ok_setup, why_setup = self._setup_allowed()
+        if not ok_setup:
+            return self._json({"ok": False, "msg": why_setup}, 403)
+        return self._do_import(body, actor="restore")
+
+    def _do_import(self, body, actor="teacher"):
+        """导入的真正实现：校验 → 写库 → 汇总范围，被登录态和登录页两条入口共用。"""
         tables = body.get("tables")
         if tables is None:
             return self._json({
@@ -3817,9 +3877,15 @@ class Handler(LEG.Handler):
             return self._json({"ok": False, "code": "bad_format",
                                "msg": "备份格式不对（数据表段不是键值结构），文件可能已损坏。"}, 400)
 
+        mode = str(body.get("mode") or "replace")
+        if mode not in ("replace", "merge", "skip"):
+            return self._json({"ok": False, "code": "bad_mode",
+                               "msg": "不认识的冲突处理策略：%s" % mode}, 400)
+
         force = bool(body.get("force"))
         try:
-            res = STORE.import_snapshot(tables, replace=True, force=force)
+            res = STORE.import_snapshot(tables, replace=(mode == "replace"),
+                                        force=force, mode=mode, actor=actor)
         except ImportRefused as e:
             # 409 只用于「需要用户再确认一次」，前端据此弹二次确认后带 force 重试
             return self._json({"ok": False, "code": e.code, "msg": e.msg,
@@ -3843,8 +3909,17 @@ class Handler(LEG.Handler):
         creds = body.get("creds")
         if "creds" in body and isinstance(creds, list):
             # 整体替换：只做 import_creds（纯新增）会留下目标机独有的旧密码
-            STORE.clear_creds()
-            counts["student_creds"] = STORE.import_creds(creds)
+            if mode == "replace":
+                STORE.clear_creds()
+                counts["student_creds"] = STORE.import_creds(creds)
+            elif mode == "skip":
+                # 只补本机没有的口令；已设过密码的学生一律不动
+                fresh = [c for c in creds
+                         if isinstance(c, dict) and not STORE.get_cred(c.get("student_id"))]
+                counts["student_creds"] = STORE.import_creds(fresh)
+            else:
+                # merge：按学号 upsert，双方都保留
+                counts["student_creds"] = STORE.import_creds(creds)
 
         # 打字冒险岛（独立 typing.json，不进 29 表）
         if "typing" in body:
@@ -3876,6 +3951,9 @@ class Handler(LEG.Handler):
             if not r.get("ok"):
                 warnings.append("学生作品附件没有还原成功：%s" % (r.get("msg") or "未知原因"))
 
+        if res.get("skipped_rows"):
+            warnings.append("按「跳过」策略让过已有记录 %s 条"
+                            % res.get("skipped_rows"))
         if res.get("skipped_tables"):
             warnings.append("以下表名本机不认识，已跳过：%s" % "、".join(res["skipped_tables"][:8]))
         if res.get("kept_tables"):
@@ -3885,6 +3963,8 @@ class Handler(LEG.Handler):
         notify()
         return self._json({"ok": True, "counts": counts, "rev": STORE.rev(),
                            "rows": res.get("rows", 0),
+                           "mode": mode,
+                           "skipped_rows": res.get("skipped_rows", 0),
                            "skipped_tables": res.get("skipped_tables") or [],
                            "kept_tables": res.get("kept_tables") or [],
                            "warnings": warnings})

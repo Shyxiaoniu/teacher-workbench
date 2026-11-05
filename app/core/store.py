@@ -661,7 +661,8 @@ class Store(object):
                 "SELECT tbl, COUNT(*) AS c FROM rows WHERE deleted=0 GROUP BY tbl").fetchall()
         return {r["tbl"]: int(r["c"]) for r in rows}
 
-    def import_snapshot(self, tables, replace=True, actor="teacher", force=False):
+    def import_snapshot(self, tables, replace=True, actor="teacher", force=False,
+                        mode=None):
         """一次性导入（备份恢复 / 老数据迁移）。
 
         2026-11-03 加固（换机测试 F1，高危）——
@@ -675,9 +676,20 @@ class Store(object):
           2. 只替换备份里确实带了的表；备份没带的表原样保留（老备份不再误伤新表）。
           3. 写入按 force=True 走，备份里写了什么就是什么。
 
+        2026-11-05 冲突策略（mode 参数，登录页「数据导入」三选一）：
+          · "replace"（默认，兼容老调用）：备份带的表整表替换 —— 换新设备首选；
+          · "merge"：不删任何行，备份里的记录按主键 upsert（同号以备份为准，
+            本机独有的行原样保留）；数据只会多不会少，跳过骤减校验；
+          · "skip"：只补本机没有的记录（主键已存在的一律不碰），
+            返回 skipped_rows 说明有多少条被让过。
+
         返回 {"counts":{表:写入行}, "skipped_tables":[...], "kept_tables":[...],
-              "rows": 总行数}；不合格时抛 ImportRefused。
+              "rows": 总行数, "skipped_rows": int}；不合格时抛 ImportRefused。
         """
+        if mode in (None, "", "replace"):
+            mode = "replace"
+        if mode not in ("replace", "merge", "skip"):
+            raise ImportRefused("不认识的导入策略：%s" % mode)
         clean, skipped, bad = {}, [], []
         if isinstance(tables, dict):
             for tbl, rows in tables.items():
@@ -695,22 +707,26 @@ class Store(object):
         if not clean:
             raise ImportRefused("备份里没有任何可识别的数据表，已中止导入，本机数据没有改动。")
 
-        live = self.table_counts()
-        alive_total = sum(int(v) for v in live.values())
-        current = sum(int(live.get(t, 0)) for t in clean)
-        if alive_total and not incoming:
-            raise ImportRefused(
-                "这份备份里一行数据都没有，导入会把本机 %d 行数据全部清空，已中止。"
-                "如果你确实想清空，请到「清空本机数据」里操作。" % alive_total)
-        if not force and current >= 5 and incoming < current * 0.4:
-            raise ImportRefused(
-                "备份里的数据量（%d 行）明显少于本机（%d 行），可能拿错了文件或备份不完整。"
-                % (incoming, current),
-                code="needs_force",
-                detail={"incoming": incoming, "current": current})
+        # merge / skip 不删除任何本机数据，「空备份 / 数据量骤减」两类危险
+        # 只在整表替换（replace）时才构成事故，其余策略放行。
+        if mode == "replace":
+            live = self.table_counts()
+            alive_total = sum(int(v) for v in live.values())
+            current = sum(int(live.get(t, 0)) for t in clean)
+            if alive_total and not incoming:
+                raise ImportRefused(
+                    "这份备份里一行数据都没有，导入会把本机 %d 行数据全部清空，已中止。"
+                    "如果你确实想清空，请到「清空本机数据」里操作。" % alive_total)
+            if not force and current >= 5 and incoming < current * 0.4:
+                raise ImportRefused(
+                    "备份里的数据量（%d 行）明显少于本机（%d 行），可能拿错了文件或备份不完整。"
+                    % (incoming, current),
+                    code="needs_force",
+                    detail={"incoming": incoming, "current": current})
 
         counts = {}
-        if replace:
+        skipped_rows = 0
+        if mode == "replace":
             with self.lock:
                 # 整表打删除必须逐行占 rev：否则别的设备完全不知道这些行没了，
                 # 恢复一份旧备份后，各端还留着一堆“备份里没有”的数据。
@@ -729,13 +745,22 @@ class Store(object):
         for tbl, rows in clean.items():
             n = 0
             for row in rows:
+                if mode == "skip":
+                    rid = row_id(tbl, row)
+                    if rid is not None and self.get_row(tbl, rid):
+                        skipped_rows += 1     # 本机已有同号记录：用户选了「跳过」
+                        continue
                 _, changed, _ = self.upsert(tbl, row, actor, force=True)
                 n += 1 if changed else 0
             counts[tbl] = n
-        self.audit(actor, "import", json.dumps(counts, ensure_ascii=False))
+        self.audit(actor, "import", json.dumps(
+            {"mode": mode, "counts": counts, "skipped_rows": skipped_rows},
+            ensure_ascii=False))
         result = {
             "counts": counts,
             "rows": incoming,
+            "mode": mode,
+            "skipped_rows": skipped_rows,
             "skipped_tables": sorted(skipped),
             "kept_tables": sorted(t for t in TABLES if t not in clean),
         }
