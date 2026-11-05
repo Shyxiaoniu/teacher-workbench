@@ -1959,6 +1959,51 @@ body.seat-rsz-dragging .seat:hover { transform:none; box-shadow:none; }
 .float-body::-webkit-scrollbar { width:8px; height:8px; }
 .float-body::-webkit-scrollbar-thumb { background:var(--border, #DCE5E0); border-radius:4px; }
 .float-body::-webkit-scrollbar-track { background:transparent; }
+/* 弹窗底部常驻操作区（2026-11-05）：
+   导入名单这类长列表，按钮以前写在 body 末尾，名单一长就得滚到底才能点。
+   现在把操作按钮放进这层：flex:none 不参与滚动，高度固定贴在弹窗底部，
+   中间 .float-body 自己滚（min-height:0 + overflow:auto），两者互不遮挡。
+   和其它弹窗同一套配色：上边框分隔 + 背景同卡片 + 极淡的上投影。 */
+.float-foot {
+  flex:none; display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  padding:11px 15px; border-top:1px solid var(--border);
+  background:var(--bg-surface);
+  box-shadow:0 -10px 16px -14px rgba(0,0,0,.45);
+  border-radius:0 0 calc(var(--radius) + 4px) calc(var(--radius) + 4px);
+}
+.float-foot .btn { width:auto; }
+.float-foot .ff-hint { margin-left:auto; font-size:12px; color:var(--text-secondary); }
+
+/* ===== 截图工具（2026-11-05）=====
+   全屏工作区（不是浮窗）：截屏后要拉框、要标注，浮窗太小。
+   结构 = 顶部说明条 + 中间画布（可滚动/等比缩放） + 底部工具栏，
+   整层 fixed + 深色半透明遮罩，和微信截图的「先框选再标注」顺序一致。 */
+.shot-layer{position:fixed;inset:0;z-index:3000;background:rgba(16,20,18,.62);
+  display:flex;flex-direction:column;gap:8px;padding:10px;backdrop-filter:blur(2px)}
+.shot-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  background:var(--bg-surface);border:1px solid var(--border);border-radius:12px;
+  padding:8px 12px;font-size:13px}
+.shot-head b{font-size:14px}
+.shot-stage{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center;
+  overflow:auto;padding:10px;background:rgba(0,0,0,.28);border-radius:12px}
+.shot-stage canvas{background:#0B0F0D;border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,.45);
+  cursor:crosshair;display:block}
+.shot-empty{color:#fff;text-align:center;line-height:2;font-size:14px;opacity:.92}
+.shot-empty .dim{color:rgba(255,255,255,.62)}
+.shot-bar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;
+  background:var(--bg-surface);border:1px solid var(--border);border-radius:12px;padding:7px 10px}
+.shot-t{width:34px;height:30px;border-radius:8px;border:1px solid transparent;
+  background:var(--bg-page);color:var(--text-primary);font-size:15px;line-height:1;cursor:pointer}
+.shot-t:hover{background:var(--brand-soft)}
+.shot-t.on{background:var(--brand-soft);border-color:var(--brand-primary);color:var(--brand-primary)}
+.shot-sep{width:1px;height:22px;background:var(--border);margin:0 4px}
+.shot-color{width:22px;height:22px;border-radius:50%;display:inline-block;cursor:pointer;
+  border:2px solid var(--bg-surface);box-shadow:0 0 0 1px var(--border)}
+.shot-color.on{box-shadow:0 0 0 2px var(--brand-primary)}
+@media(max-width:760px){
+  .shot-head .fl-inp{width:110px!important}
+  .shot-t{width:30px;height:28px}
+}
 /* 收作业等宽面板：加宽浮窗，容纳学生网格 */
 .float-layer.wide .float-box { width:min(820px, 100%); }
 /* 课表时间设置浮窗 */
@@ -7568,6 +7613,7 @@ function showFloat(title, bodyHtml, opts) {
         </span>
       </div>
       <div class="float-body">${bodyHtml}</div>
+      ${o.footer ? `<div class="float-foot">${o.footer}</div>` : ''}
     </div>`;
   layer.style.display = 'flex';
   if (o.zoom) bindFloatWheelZoom(layer);
@@ -12099,7 +12145,436 @@ function toolOpenLink(url) {
   if (!w) toast('浏览器拦截了新标签页，请允许弹窗后重试');
 }
 window.toolOpenLink = toolOpenLink;
-/** 新增 / 编辑工具（弹框） */
+
+/* ============================================================
+   截图工具（2026-11-05）
+   参照微信截图的操作顺序：截屏/粘贴 → 拉框选区 → 标注 → 保存/复制/推送。
+   · 屏幕捕获用 getDisplayMedia，只在「安全上下文」可用（127.0.0.1 / https）。
+     学校局域网 http://192.168.x.x 下浏览器不给这个能力，所以另外三条路兜底：
+     上传图片、Ctrl+V 粘贴、拖拽进窗口 —— 三条都不依赖安全上下文。
+   · 标注全部画在同一张 canvas 上：底图 + 形状列表，任何一步改动都整屏重绘，
+     撤销 = 弹掉最后一个形状，简单可靠。
+   ============================================================ */
+const SHOT = { open: false, base: null, cv: null, ctx: null,
+               sel: null, tool: 'rect', color: '#E24B4A', width: 3,
+               shapes: [], drag: null, layer: null };
+
+function shotEl(id) { return document.getElementById(id); }
+
+function shotOpen() {
+  if (SHOT.open) return;
+  const layer = document.createElement('div');
+  layer.className = 'shot-layer';
+  layer.id = 'shotLayer';
+  layer.innerHTML =
+    `<div class="shot-head">
+       <b>📷 截图工具</b>
+       <span class="dim" id="shotHint">拖动框选要截取的区域；也可以 Ctrl+V 粘贴、拖入图片</span>
+       <span style="flex:1"></span>
+       <input id="shotTitle" class="fl-inp" value="课堂截图" maxlength="30"
+              style="width:150px;padding:5px 9px;font-size:12.5px" title="推送到学生端时显示的标题">
+       <button class="btn btn-ghost btn-sm" type="button" onclick="shotCapture()">截取屏幕</button>
+       <label class="btn btn-ghost btn-sm" style="cursor:pointer">上传图片
+         <input id="shotFile" type="file" accept="image/*" style="display:none"></label>
+       <button class="btn btn-ghost btn-sm" type="button" onclick="closeShot()">关闭</button>
+     </div>
+     <div class="shot-stage" id="shotStage">
+       <div class="shot-empty" id="shotEmpty">
+         <div style="font-size:34px">🖼️</div>
+         <div>点「截取屏幕」或把图片拖进来 / 按 Ctrl+V 粘贴</div>
+         <div class="dim" style="font-size:12.5px">局域网 HTTP 地址下浏览器不给屏幕捕获权限，用粘贴或上传同样可以标注</div>
+       </div>
+       <canvas id="shotCanvas" style="display:none"></canvas>
+     </div>
+     <div class="shot-bar">
+       <button class="shot-t on" type="button" data-shot-tool="rect" title="矩形">▭</button>
+       <button class="shot-t" type="button" data-shot-tool="ellipse" title="椭圆">◯</button>
+       <button class="shot-t" type="button" data-shot-tool="arrow" title="箭头">↗</button>
+       <button class="shot-t" type="button" data-shot-tool="pen" title="画笔">✎</button>
+       <button class="shot-t" type="button" data-shot-tool="text" title="文字">T</button>
+       <button class="shot-t" type="button" data-shot-tool="mosaic" title="马赛克">▦</button>
+       <span class="shot-sep"></span>
+       <span id="shotColors" style="display:flex;gap:5px;align-items:center"></span>
+       <span class="shot-sep"></span>
+       <select id="shotWidth" class="act-rt-sel" style="padding:5px 8px;font-size:12px">
+         <option value="2">细</option><option value="3" selected>中</option><option value="6">粗</option>
+       </select>
+       <span class="shot-sep"></span>
+       <button class="btn btn-ghost btn-sm" type="button" onclick="shotUndo()">撤销</button>
+       <button class="btn btn-ghost btn-sm" type="button" onclick="shotResetSel()">重选区</button>
+       <span style="flex:1"></span>
+       <button class="btn btn-ghost btn-sm" type="button" onclick="shotSave()">保存 PNG</button>
+       <button class="btn btn-ghost btn-sm" type="button" onclick="shotCopy()">复制</button>
+       <button class="btn btn-primary btn-sm" type="button" onclick="shotPush()">📤 推送到学生端</button>
+     </div>`;
+  document.body.appendChild(layer);
+  SHOT.open = true;
+  SHOT.layer = layer;
+  SHOT.cv = shotEl('shotCanvas');
+  SHOT.ctx = SHOT.cv.getContext('2d');
+  SHOT.base = null; SHOT.sel = null; SHOT.shapes = []; SHOT.drag = null;
+
+  /* 颜色（微信常用红/黄/蓝/黑） */
+  const colors = ['#E24B4A', '#EF9F27', '#378ADD', '#111111', '#1D9E75'];
+  shotEl('shotColors').innerHTML = colors.map((c, i) =>
+    `<span class="shot-color${i === 0 ? ' on' : ''}" data-shot-color="${c}"
+       style="background:${c}" title="${c}"></span>`).join('');
+
+  layer.addEventListener('click', shotToolbarClick);
+  shotEl('shotFile').addEventListener('change', shotFilePicked);
+  shotEl('shotWidth').addEventListener('change', function () {
+    SHOT.width = Number(this.value) || 3;
+  });
+  /* 粘贴 / 拖拽：不依赖安全上下文，是最通用的两条路 */
+  document.addEventListener('paste', shotPaste);
+  ['dragover', 'drop'].forEach(ev => layer.addEventListener(ev, shotDrop));
+  window.addEventListener('resize', shotFit);
+
+  const cv = SHOT.cv;
+  cv.addEventListener('mousedown', shotDown);
+  cv.addEventListener('mousemove', shotMove);
+  window.addEventListener('mouseup', shotUp);
+  shotHint('拖动框选要截取的区域；也可以 Ctrl+V 粘贴、拖入图片');
+}
+
+function shotClose() {
+  const l = shotEl('shotLayer');
+  if (l) l.remove();
+  document.removeEventListener('paste', shotPaste);
+  window.removeEventListener('mouseup', shotUp);
+  window.removeEventListener('resize', shotFit);
+  SHOT.open = false; SHOT.layer = null; SHOT.cv = null; SHOT.ctx = null;
+  SHOT.base = null; SHOT.sel = null; SHOT.shapes = [];
+}
+window.shotOpen = shotOpen; window.closeShot = shotClose;
+
+function shotHint(t) { const e = shotEl('shotHint'); if (e) e.textContent = t; }
+function shotToast(t) { try { toast(t); } catch (e) {} }
+
+function shotCanvasPos(e) {
+  const cv = SHOT.cv, r = cv.getBoundingClientRect();
+  return {
+    x: (e.clientX - r.left) * (cv.width / Math.max(1, r.width)),
+    y: (e.clientY - r.top) * (cv.height / Math.max(1, r.height)),
+  };
+}
+
+function shotSetImage(dataUrl) {
+  const img = new Image();
+  img.onload = function () {
+    const cv = SHOT.cv;
+    cv.width = img.naturalWidth;
+    cv.height = img.naturalHeight;
+    SHOT.base = img;
+    SHOT.sel = null; SHOT.shapes = [];
+    cv.style.display = 'block';
+    const em = shotEl('shotEmpty'); if (em) em.style.display = 'none';
+    shotFit();
+    shotRedraw();
+    shotHint('拖动框选要截取的区域（选好后可以继续标注）');
+  };
+  img.onerror = function () { shotToast('这张图片读不出来，换一张试试'); };
+  img.src = dataUrl;
+}
+
+/* 画布按舞台大小等比缩放（只改 CSS 尺寸，像素坐标不变，标注仍然准） */
+function shotFit() {
+  const cv = SHOT.cv, stage = shotEl('shotStage');
+  if (!cv || !stage || !cv.width) return;
+  const pad = 10;
+  const maxW = stage.clientWidth - pad * 2, maxH = stage.clientHeight - pad * 2;
+  const s = Math.min(1, maxW / cv.width, maxH / cv.height);
+  cv.style.width = Math.max(80, Math.round(cv.width * s)) + 'px';
+  cv.style.height = Math.max(60, Math.round(cv.height * s)) + 'px';
+}
+
+function shotRedraw() {
+  const cv = SHOT.cv, ctx = SHOT.ctx;
+  if (!cv || !ctx) return;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  if (!SHOT.base) return;
+  ctx.drawImage(SHOT.base, 0, 0);
+  if (SHOT.sel) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(SHOT.sel.x, SHOT.sel.y, SHOT.sel.w, SHOT.sel.h);
+    ctx.clip();
+    SHOT.shapes.forEach(s => shotDrawShape(ctx, s));
+    ctx.restore();
+    /* 选区外压暗 + 绿色边框（微信同款视觉） */
+    const { x, y, w, h } = SHOT.sel;
+    ctx.save();
+    ctx.fillStyle = 'rgba(8,12,10,.55)';
+    ctx.beginPath();
+    ctx.rect(0, 0, cv.width, cv.height);
+    ctx.rect(x, y, w, h);
+    ctx.fill('evenodd');
+    ctx.restore();
+    ctx.strokeStyle = '#39D98A';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(x + .75, y + .75, w - 1.5, h - 1.5);
+  } else {
+    SHOT.shapes.forEach(s => shotDrawShape(ctx, s));
+  }
+  if (SHOT.drag && SHOT.drag.mode === 'draw') shotDrawShape(ctx, SHOT.drag.shape, true);
+}
+
+function shotDrawShape(ctx, s, preview) {
+  ctx.save();
+  ctx.strokeStyle = s.color; ctx.fillStyle = s.color;
+  ctx.lineWidth = s.width; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  if (s.kind === 'mosaic') {
+    shotMosaic(ctx, s);
+  } else if (s.kind === 'text') {
+    ctx.font = 'bold ' + Math.max(14, s.width * 6) + 'px "PingFang SC","Microsoft YaHei",sans-serif';
+    ctx.textBaseline = 'top';
+    ctx.fillText(s.text, s.x1, s.y1);
+  } else if (s.kind === 'pen') {
+    ctx.beginPath();
+    (s.pts || []).forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
+    ctx.stroke();
+  } else if (s.kind === 'arrow') {
+    const dx = s.x2 - s.x1, dy = s.y2 - s.y1;
+    const len = Math.hypot(dx, dy);
+    if (len < 2) { ctx.restore(); return; }
+    const ux = dx / len, uy = dy / len;
+    const hl = Math.min(18 + s.width * 2, len * 0.5);
+    ctx.beginPath(); ctx.moveTo(s.x1, s.y1); ctx.lineTo(s.x2, s.y2); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(s.x2, s.y2);
+    ctx.lineTo(s.x2 - ux * hl - uy * hl * 0.55, s.y2 - uy * hl + ux * hl * 0.55);
+    ctx.lineTo(s.x2 - ux * hl + uy * hl * 0.55, s.y2 - uy * hl - ux * hl * 0.55);
+    ctx.closePath(); ctx.fill();
+  } else {
+    const x = Math.min(s.x1, s.x2), y = Math.min(s.y1, s.y2);
+    const w = Math.abs(s.x2 - s.x1), h = Math.abs(s.y2 - s.y1);
+    if (w < 1 || h < 1) { ctx.restore(); return; }
+    ctx.beginPath();
+    if (s.kind === 'ellipse') ctx.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
+    else ctx.rect(x, y, w, h);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/* 马赛克：把底图对应区域缩到很小再放大（关掉插值），画笔经过的地方糊成格 */
+function shotMosaic(ctx, s) {
+  const bx = Math.max(0, Math.min(s.x1, s.x2));
+  const by = Math.max(0, Math.min(s.y1, s.y2));
+  const bw = Math.abs(s.x2 - s.x1), bh = Math.abs(s.y2 - s.y1);
+  if (bw < 4 || bh < 4) return;
+  const block = 9;
+  const tw = Math.max(1, Math.round(bw / block)), th = Math.max(1, Math.round(bh / block));
+  const tmp = document.createElement('canvas');
+  tmp.width = tw; tmp.height = th;
+  const tc = tmp.getContext('2d');
+  tc.imageSmoothingEnabled = true;
+  tc.drawImage(SHOT.base, bx, by, bw, bh, 0, 0, tw, th);
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(tmp, 0, 0, tw, th, bx, by, bw, bh);
+  ctx.restore();
+}
+
+function shotDown(e) {
+  if (!SHOT.base) return;
+  const p = shotCanvasPos(e);
+  if (!SHOT.sel) { SHOT.drag = { mode: 'sel', x0: p.x, y0: p.y }; return; }
+  const sel = SHOT.sel;
+  if (p.x < sel.x || p.x > sel.x + sel.w || p.y < sel.y || p.y > sel.y + sel.h) return;
+  const base = { color: SHOT.color, width: SHOT.width };
+  if (SHOT.tool === 'pen') {
+    SHOT.drag = { mode: 'draw', shape: Object.assign({ kind: 'pen', pts: [p] }, base) };
+  } else if (SHOT.tool === 'text') {
+    uiPrompt('输入要标注的文字', { title: '文字标注', value: '' }).then(t => {
+      if (!t) return;
+      SHOT.shapes.push(Object.assign({ kind: 'text', x1: p.x, y1: p.y, text: String(t).slice(0, 60) }, base));
+      shotRedraw();
+    });
+    return;
+  } else {
+    SHOT.drag = { mode: 'draw', shape: Object.assign({ kind: SHOT.tool, x1: p.x, y1: p.y, x2: p.x, y2: p.y }, base) };
+  }
+  shotRedraw();
+}
+
+function shotMove(e) {
+  if (!SHOT.drag) return;
+  const p = shotCanvasPos(e);
+  if (SHOT.drag.mode === 'sel') {
+    SHOT.drag.x1 = p.x; SHOT.drag.y1 = p.y;
+    shotRedrawSelection();
+    return;
+  }
+  const s = SHOT.drag.shape;
+  if (s.kind === 'pen') s.pts.push(p);
+  else { s.x2 = p.x; s.y2 = p.y; }
+  shotRedraw();
+}
+
+function shotRedrawSelection() {
+  /* 拖选过程中也要看到「选区框」，但还没定下来 → 用一个临时形状画框 */
+  const d = SHOT.drag;
+  if (!d || d.mode !== 'sel' || d.x1 == null) return;
+  const ctx = SHOT.ctx, cv = SHOT.cv;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  ctx.drawImage(SHOT.base, 0, 0);
+  const x = Math.min(d.x0, d.x1), y = Math.min(d.y0, d.y1);
+  const w = Math.abs(d.x1 - d.x0), h = Math.abs(d.y1 - d.y0);
+  ctx.save();
+  ctx.fillStyle = 'rgba(8,12,10,.55)';
+  ctx.beginPath();
+  ctx.rect(0, 0, cv.width, cv.height);
+  ctx.rect(x, y, w, h);
+  ctx.fill('evenodd');
+  ctx.restore();
+  ctx.strokeStyle = '#39D98A'; ctx.lineWidth = 1.5;
+  ctx.strokeRect(x + .75, y + .75, Math.max(0, w - 1.5), Math.max(0, h - 1.5));
+}
+
+function shotUp() {
+  const d = SHOT.drag;
+  if (!d) return;
+  SHOT.drag = null;
+  if (d.mode === 'sel') {
+    const x = Math.min(d.x0, d.x1), y = Math.min(d.y0, d.y1);
+    const w = Math.abs(d.x1 - d.x0), h = Math.abs(d.y1 - d.y0);
+    if (w < 8 || h < 8) { shotRedraw(); return; }   // 手抖不算选区
+    SHOT.sel = { x, y, w, h };
+    shotRedraw();
+    shotHint('已选 ' + Math.round(w) + '×' + Math.round(h) + '，用下方工具标注，或直接推送');
+  } else {
+    SHOT.shapes.push(d.shape);
+    shotRedraw();
+  }
+}
+
+function shotResetSel() {
+  SHOT.sel = null;
+  SHOT.shapes = [];
+  shotRedraw();
+  shotHint('重新拖动框选区域（已画的内容会清掉）');
+}
+window.shotUndo = function () {
+  if (SHOT.shapes.length) { SHOT.shapes.pop(); shotRedraw(); }
+  else shotToast('没有可撤销的标注了');
+};
+window.shotResetSel = shotResetSel;
+
+function shotToolbarClick(e) {
+  const t = e.target.closest('[data-shot-tool]');
+  if (t) {
+    SHOT.tool = t.getAttribute('data-shot-tool');
+    SHOT.layer.querySelectorAll('[data-shot-tool]').forEach(b => b.classList.toggle('on', b === t));
+    return;
+  }
+  const c = e.target.closest('[data-shot-color]');
+  if (c) {
+    SHOT.color = c.getAttribute('data-shot-color');
+    SHOT.layer.querySelectorAll('[data-shot-color]').forEach(b => b.classList.toggle('on', b === c));
+  }
+}
+
+function shotFilePicked(ev) {
+  const f = ev.target.files && ev.target.files[0];
+  if (f) shotReadFile(f);
+}
+function shotReadFile(f) {
+  const r = new FileReader();
+  r.onload = () => shotSetImage(String(r.result || ''));
+  r.readAsDataURL(f);
+}
+function shotPaste(e) {
+  if (!SHOT.open || !e.clipboardData) return;
+  const items = Array.from(e.clipboardData.items || []);
+  const it = items.find(x => String(x.type || '').startsWith('image/'));
+  if (!it) return;
+  const f = it.getAsFile();
+  if (f) { e.preventDefault(); shotReadFile(f); }
+}
+function shotDrop(e) {
+  e.preventDefault();
+  if (!SHOT.open) return;
+  const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f) shotReadFile(f);
+}
+window.shotCapture = async function () {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+    shotToast('当前地址不支持截屏：请用 127.0.0.1 打开教师端，或按 Ctrl+V 粘贴截图');
+    return;
+  }
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+  } catch (e) { return; }           // 用户取消
+  try {
+    const v = document.createElement('video');
+    v.srcObject = stream; v.muted = true; v.playsInline = true;
+    await v.play();
+    await new Promise(r => setTimeout(r, 200));   // 等首帧稳定
+    const c = document.createElement('canvas');
+    c.width = v.videoWidth || 1280;
+    c.height = v.videoHeight || 720;
+    c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+    shotSetImage(c.toDataURL('image/png'));
+  } catch (e) {
+    shotToast('截屏失败：' + (e.message || e));
+  } finally {
+    try { stream.getTracks().forEach(t => t.stop()); } catch (e) {}
+  }
+};
+
+function shotExport() {
+  const sel = SHOT.sel;
+  if (!sel || sel.w < 4 || sel.h < 4) return '';
+  const out = document.createElement('canvas');
+  out.width = Math.round(sel.w); out.height = Math.round(sel.h);
+  out.getContext('2d').drawImage(SHOT.cv, sel.x, sel.y, sel.w, sel.h, 0, 0, out.width, out.height);
+  return out.toDataURL('image/png');
+}
+window.shotSave = function () {
+  const d = shotExport();
+  if (!d) { shotToast('先拖动框选一个区域'); return; }
+  const a = document.createElement('a');
+  a.href = d;
+  a.download = '截图-' + new Date().toISOString().slice(0, 10) + '.png';
+  document.body.appendChild(a); a.click(); a.remove();
+};
+window.shotCopy = async function () {
+  const d = shotExport();
+  if (!d) { shotToast('先拖动框选一个区域'); return; }
+  try {
+    const blob = await (await fetch(d)).blob();
+    if (!navigator.clipboard || !window.ClipboardItem) throw new Error('no clipboard');
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+    shotToast('已复制到剪贴板，可以直接粘贴到微信/文档');
+  } catch (e) {
+    shotToast('这个浏览器不给复制权限，已改为下载 PNG');
+    window.shotSave();
+  }
+};
+window.shotPush = async function () {
+  const d = shotExport();
+  if (!d) { shotToast('先拖动框选一个区域'); return; }
+  const titleEl = shotEl('shotTitle');
+  const title = (titleEl && titleEl.value || '课堂截图').trim() || '课堂截图';
+  try {
+    const r = await fetch('/api/v2/tool/push', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: d, title: title }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.ok) { shotToast(j.msg || ('推送失败（' + r.status + '）')); return; }
+    shotToast('已推送到学生端：学生「今日」和「工具」页都能看到');
+    closeShot();
+  } catch (e) {
+    shotToast('推送失败：连不上服务端');
+  }
+};
+
+/* 新增 / 编辑工具（弹框） */
 function openToolDialog(id) {
   const editing = id ? toolArr().find(t => t.id === Number(id)) : null;
   const type = editing ? editing.type : 'link';
@@ -27975,7 +28450,9 @@ function exportAllClasses(fmt) {
 window.exportAllClasses = exportAllClasses;
 /** 导入学生名单（CSV）：首行表头 学号/姓名/性别/家长姓名/手机号 */
 function openImportClass(id) {
-  const c = (dbT('classes') || []).find(x => x.id === Number(id));
+  /* id 可能是数字也可能是字符串（导入/恢复的数据两种都有），用字符串比，
+     否则「点导入名单没反应」——以前这里用 id === Number(id) 严格比。 */
+  const c = (dbT('classes') || []).find(x => String(x.id) === String(id));
   if (!c) return;
   window.__clsImpClass = Number(id);
   /* 2026-11-04 修 bug：__clsImp 是全局暂存，以前打开弹窗不重置——
@@ -28011,11 +28488,15 @@ function openImportClass(id) {
     <div id="clsPreview" style="margin-top:10px"></div>
     <button class="btn btn-ghost btn-sm" type="button" onclick="clsAddRow()" style="margin-top:8px">＋ 手动添加一行</button>
     <button class="btn btn-ghost btn-sm" type="button" onclick="clsClearParsed()" style="margin-top:8px">🗑 清空列表</button>
-    <div class="hwp-acts">
-      <button class="btn btn-primary" type="button" id="clsApplyBtn" disabled
-        onclick="applyClassImport(${c.id})">确认导入</button>
-      <button class="btn btn-ghost" type="button" onclick="closeFloat()">取消</button>
-    </div>`);
+    `, {
+    /* 确认按钮放弹窗底部常驻（2026-11-05）：名单几十行时不用滚到底才能点。
+       按钮 id 不变，applyClassImport / clsPasteApply 里取 #clsApplyBtn 的逻辑不受影响。 */
+    footer:
+      `<button class="btn btn-primary" type="button" id="clsApplyBtn" disabled
+         onclick="applyClassImport(${c.id})">确认导入</button>
+       <button class="btn btn-ghost" type="button" onclick="closeFloat()">取消</button>
+       <span class="ff-hint" id="clsImpFootHint">先解析名单，确认无误后再导入</span>`
+  });
 }
 window.openImportClass = openImportClass;
 
@@ -28246,6 +28727,15 @@ function clsRecomputeDup() {
   });
   const btn = document.getElementById('clsApplyBtn');
   if (btn) btn.disabled = hasDup || !d.parsed.length;
+  /* 底部常驻区的提示：解析完立刻告诉老师「多少人、能不能导」，
+     不用滚回列表顶部去数（2026-11-05）。 */
+  const hint = document.getElementById('clsImpFootHint');
+  if (hint) {
+    hint.textContent = !d.parsed.length ? '先解析名单，确认无误后再导入'
+      : (hasDup ? '⚠ 有学号重复，改完才能导入'
+                : '共 ' + d.parsed.length + ' 人，确认无误后点左边按钮');
+    hint.style.color = hasDup ? 'var(--status-error, #E24B4A)' : '';
+  }
 }
 window.clsRecomputeDup = clsRecomputeDup;
 
@@ -28353,6 +28843,8 @@ function clsClearParsed() {
   renderClsPreview();
   const btn = document.getElementById('clsApplyBtn');
   if (btn) btn.disabled = true;
+  const hint = document.getElementById('clsImpFootHint');
+  if (hint) { hint.textContent = '先解析名单，确认无误后再导入'; hint.style.color = ''; }
   toast('已清空，可重新粘贴或选文件');
 }
 window.clsClearParsed = clsClearParsed;
@@ -33130,6 +33622,8 @@ const DEMO_RENDER = {
     const links = arr.filter(t => t.type !== 'qr');
     const qrs = arr.filter(t => t.type === 'qr');
     const builtin = [
+      { key: 'shot', icon: '📷', name: '截图工具', desc: '框选、标注、打码，一键推送到学生端',
+        act: 'shotOpen()', extra: '推给学生看' },
       { key: 'roll', icon: '🎲', name: '随机点名', desc: '按学号或小组随机点人，可开不重复模式，一节课轮一遍',
         act: 'openRollCall()', extra: (() => {
           const rs = rollState();

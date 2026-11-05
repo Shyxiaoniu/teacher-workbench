@@ -3,7 +3,7 @@
 > 给班主任和任课老师用的一套**班级工作台**：教师端与学生端共用一个网页入口，
 > 数据全部存在自己的服务器上，不依赖任何第三方云服务。
 
-当前版本：**2.0.30**（版本号唯一代码源：`app/server.py` 的 `VERSION`）
+当前版本：**2.0.31**（版本号唯一代码源：`app/server.py` 的 `VERSION`）
 
 ```
 http://<服务器局域网 IP>:8080/        ← Docker 部署的入口；直接运行时是 :20020
@@ -378,9 +378,9 @@ docker compose up -d --build
 
 | # | 文件 | 位置 |
 |---|---|---|
-| 1 | `app/server.py` | `VERSION = "2.0.30"` —— **唯一代码源** |
-| 2 | `.env.example` | `IMAGE_TAG=2.0.30` |
-| 3 | `docker-compose.yml` | `image: …:${IMAGE_TAG:-2.0.30}`（init 与 workbench **两处**） |
+| 1 | `app/server.py` | `VERSION = "2.0.31"` —— **唯一代码源** |
+| 2 | `.env.example` | `IMAGE_TAG=2.0.31` |
+| 3 | `docker-compose.yml` | `image: …:${IMAGE_TAG:-2.0.31}`（init 与 workbench **两处**） |
 | 4 | `README.md` | 文首「当前版本」 |
 | 5 | `version.json` | 由 `tools/make_release.py` 自动同步 |
 
@@ -408,6 +408,40 @@ python tools/make_release.py --out D:\dist   # 指定输出目录（默认 dist/
 > 「创建发行版」并上传 zip 才会有内容。在线更新走的是 `version.json`（manifest）+
 > raw 直链，不依赖 Releases 功能；想把 zip 同时挂到 Releases 也可以，把
 > `version.json` 的 `zip` 字段改成完整 URL 即可。
+
+### 导入名单按钮吸底 + 截图工具（2.0.31）
+
+**① 导入名单弹窗：确认按钮吸底**
+
+| 项 | 说明 |
+|---|---|
+| 结构 | `showFloat(title, body, {footer})` 新增 `footer` 插槽 → `.float-box` 变成「标题栏 + 滚动 body + 固定 footer」三段 |
+| 样式 | `.float-foot{flex:none; border-top; padding:11px 15px; 极淡上投影}`，与其它弹窗同一套配色 |
+| 效果 | 名单几十行时只有中间列表滚，`确认导入 / 取消` 永远贴在弹窗底部；底部还带一句「共 N 人，确认无误后点左边按钮」 |
+| 兼容 | 不传 `footer` 的弹窗结构完全不变 |
+| 顺手修 | `openImportClass` 用 `x.id === Number(id)` 严格比，id 是字符串时找不到班 → 点「导入名单」没反应；改成字符串比 |
+
+**② 教师端工具页 · 截图工具**
+
+- 工具页「内置工具」第一张卡：📷 截图工具，点开是全屏工作区（不是浮窗）。
+- 参照微信截图：**拉框选区 → 标注 → 保存/复制/推送**。
+  - 6 种标注：矩形 / 椭圆 / 箭头 / 画笔 / 文字 / 马赛克（马赛克从底图采样后降采样，再关插值放大）。
+  - 5 种颜色 + 3 档线宽，撤销、重选区。
+- 取图三条路：`getDisplayMedia` 截屏（**只在 127.0.0.1 / https 可用**）、`Ctrl+V` 粘贴、拖入/上传图片。
+  局域网 `http://192.168.x.x` 下浏览器不给屏幕捕获，页面里直接写清楚，引导用粘贴。
+- **一键推送**：`POST /api/v2/tool/push`（教师）→ 存 `<账号目录>/tools/<id>.png` + `index.json`，
+  只保留最近 12 张。
+
+**③ 学生端工具页（新增）**
+
+| 位置 | 表现 |
+|---|---|
+| 底部/侧边导航 | 新增「🧰 工具」，排在「资料」后面 |
+| 工具页 | 显示最新一张推送：标题、时间、整图；点图在**新标签**放大（学生端不关闭）；右上「刷新」 |
+| 今日页 | 一张小卡「老师刚推送的截图」（左侧缩略图 + 标题时间），点一下进「工具」页 |
+| 接口 | `GET /api/v2/tool/latest`（学生/教师，需登录）、`GET /api/v2/tool/img?id=`（需登录，PNG） |
+
+> 截图不进 `/api/v2/sync` 快照：几百 KB 的 PNG 塞进每次同步会拖慢整页，改成进页面时按需拉一次。
 
 ### 学生端网页一律新标签打开（2.0.30）
 
