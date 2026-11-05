@@ -1266,17 +1266,27 @@ var S = {
   view: 'map', map: { stage: 1, chapter: 1 }, play: null,
   lb: { scope: 'week', rows: [], class_name: '' },
   ranch: { pet: '', decos: [], bg: '', fx: '' },
-  /* 文章阅读：art.id 是当前在读的文章，art.type 是文章库切到的分类 */
-  art: { id: '', type: 'all' },
+  /* 文章阅读（2026-11-05 三次定版）：
+       art.cat  当前选的类别（'' = 全部），关卡按该类别「字数由短到长」分配；
+       art.type 文章库里切到的分类 tab（只影响浏览，不参与选关）；
+       art.id   老的单篇锁定，仅用于兼容旧 localStorage，不再由界面设置。 */
+  art: { id: '', type: 'all', cat: '' },
   shop: false,
   eggOpening: false
 };
-/* 文章选择不涉及成绩，存本机即可（换机器会回到默认课文，不影响进度） */
+/* 文章选择不涉及成绩，存本机即可（换机器会回到默认，不影响进度） */
 function readArtId() {
   try { return localStorage.getItem('wb-typing-art') || ''; } catch (e) { return ''; }
 }
 function saveArtId(id) {
   try { localStorage.setItem('wb-typing-art', id || ''); } catch (e) {}
+}
+/* 类别选择：2.0.23 起学生选的是"哪一类"，不是"哪一篇" */
+function readArtCat() {
+  try { return localStorage.getItem('wb-typing-cat') || ''; } catch (e) { return ''; }
+}
+function saveArtCat(c) {
+  try { localStorage.setItem('wb-typing-cat', c || ''); } catch (e) {}
 }
 
 /* ---------------- 基础 ---------------- */
@@ -1363,13 +1373,19 @@ var DEMO_LB_NAMES = ['李晓明','王小虎','张思思','陈快乐','刘一一'
 /* ---------------- 启动 ---------------- */
 function boot() {
   var qs = new URLSearchParams(location.search);
-  /* 2026-11-05：默认是「自动轮换」（引擎按卷/关自动配文章），只有学生
-     从文章库主动固定过某一篇才带 id。以前这里兜底成 TA.DEFAULT_ID，
-     于是默认状态就是"已固定"，可下方关卡卡片按自动轮换显示别的文章 ——
-     上下两处对不上（牛哥反馈的「切换后不同步」就是这个）。
-     另外选「自动轮换」时保存的是空串，被这个兜底又变回固定篇，
-     等于"退不回自动"，一并去掉。 */
-  S.art.id = readArtId();
+  /* 2.0.23：学生选的是「类别」不是「单篇」。
+     老版本把单篇 id 存在 wb-typing-art 里，这里迁移成它所属的类别后清掉旧键，
+     否则老用户会一直停在某一篇的旧状态。 */
+  S.art.cat = readArtCat();
+  (function migrateOldArt() {
+    var oldId = readArtId();
+    if (!oldId) return;
+    if (!S.art.cat && window.TA && TA.get) {
+      var a0 = TA.get(oldId);
+      if (a0 && a0.type) { S.art.cat = a0.type; saveArtCat(a0.type); }
+    }
+    saveArtId('');
+  })();
   /* 学生端框架内嵌模式：收窄边距，视觉上融入外层页面 */
   if (qs.get('embed') === '1') document.body.classList.add('embed');
   api('/api/v2/typing/config').then(function (cfg) {
@@ -1708,15 +1724,12 @@ function viewMap() {
     var boss = lv === 10;
     var b = (S.progress.best || {})['s' + stg + 'c' + ch + 'l' + lv];
     var stars = b ? b.stars : 0;
-    /* 文章篇章：每张卡直接写这一关配到的文章。
-       固定了某一篇（S.art.id）时，10 关都是这一篇 —— 必须跟着变，
-       否则上方文章条写着《A》、下面卡片还是自动轮换的《B》《C》，
-       学生根本分不清点进去会打什么（2026-11-05 牛哥反馈）。
-       没固定时仍按引擎的确定性轮换显示。 */
+    /* 文章篇章：每张卡写这一关实际配到的文章。
+       2.0.23 起按「类别 + 字数由短到长」分配，所以同一类别的 10 关
+       是从短到长的 10 篇（小类别会循环）。 */
     var _nm, _art = null;
-    if (stg === 6) {
-      if (S.art.id && window.TA && TA.get(S.art.id)) _art = TA.get(S.art.id);
-      else if (TL.articleOf) _art = TL.articleOf(ch, lv);
+    if (stg === 6 && TL.articleOfCat) {
+      _art = TL.articleOfCat(S.art.cat || '', ch, lv);
       if (_art) _nm = '《' + esc(_art.title) + '》';
     }
     var nm = _nm || esc(TL.topicOf(stg, lv) || levelName(stage, boss));
@@ -1763,36 +1776,28 @@ function levelName(stage, boss) {
   return '输入挑战';
 }
 function artBar() {
-  /* 2026-11-05 文章关卡改为「一关一整篇、引擎自动配」：
-     默认自动轮换（按卷分难度、按关换文章），从文章库手动固定后
-     才回到「这一篇打到尾」的老玩法，条上随时可以退回自动。 */
-  var pinned = S.art.id && window.TA && TA.get(S.art.id);
+  /* 2026-11-05 三次定版：学生选的不再是"某一篇"，而是"哪一类"。
+     选好类别后，本卷 10 关从这个类别里按「字数由短到长」依次取文章，
+     既保证一关一篇不重样，又天然满足练字难度由浅入深。 */
+  var cat = S.art.cat || '';
   var ch = S.map.chapter;
-  if (pinned) {
-    var a = TA.get(S.art.id);
-    return '<div class="art-bar">' +
-      '<span class="ab-ic">📖</span>' +
-      '<div class="ab-main">' +
-        '<div class="ab-t"><b>' + esc(a.title) + '</b>' +
-          '<span class="ab-type">' + esc(a.typeName) + '</span>' +
-          '<span class="ab-hard">' + starsHtml(a.hard) + '</span></div>' +
-        '<div class="ab-meta">' + esc(a.author || '') + ' · ' + a.count + ' 行 / ' + a.chars +
-          ' 字 · 已固定，本卷 10 关都读这一篇</div>' +
-      '</div>' +
-      '<button class="btn line sm" id="artOpen">换一篇</button>' +
-    '</div>';
+  var t = null, pool = [];
+  if (window.TA) {
+    t = TA.TYPES.filter(function (x) { return x.id === cat; })[0] || null;
+    pool = TA.ARTICLES.filter(function (x) { return !cat || x.type === cat; })
+      .sort(function (a, b) { return a.chars - b.chars; });
   }
-  var tier = TL.artTier ? TL.artTier(ch) : 1;
-  var poolN = (window.TA) ? TA.ARTICLES.filter(function (x) { return x.hard === tier; }).length : 0;
+  var nm = t ? t.name : '全部分类';
+  var ic = t ? t.icon : '📚';
+  var desc = t ? t.desc : '七类文章混着来，按字数由短到长分配';
   return '<div class="art-bar">' +
-    '<span class="ab-ic">🎯</span>' +
+    '<span class="ab-ic">' + ic + '</span>' +
     '<div class="ab-main">' +
-      '<div class="ab-t"><b>自动轮换 · 一关一篇</b>' +
-        '<span class="ab-type">第 ' + ch + ' 卷 · 难度 ' + starsHtml(tier) + '</span></div>' +
-      '<div class="ab-meta">每关自动配一整篇文章：完成一关，下一关就是新文章，难度随卷递进' +
-        (poolN ? '（本档 ' + poolN + ' 篇轮换）' : '') + '</div>' +
+      '<div class="ab-t"><b>' + esc(nm) + '</b>' +
+        '<span class="ab-type">第 ' + ch + ' 卷 · ' + pool.length + ' 篇轮换</span></div>' +
+      '<div class="ab-meta">' + esc(desc) + ' · 本卷 10 关按字数由短到长依次分配</div>' +
     '</div>' +
-    '<button class="btn line sm" id="artOpen">自选文章</button>' +
+    '<button class="btn line sm" id="artOpen">换类别</button>' +
   '</div>';
 }
 /* ---------------- 文章库抽屉 ----------------
@@ -1804,69 +1809,53 @@ function openArtLib() {
   var total = TA.ARTICLES.reduce(function (n, a) { return n + a.chars; }, 0);
   var mask = document.createElement('div');
   mask.className = 'mask';
-  function cardHtml(a) {
-    return '<button class="al-card' + (a.id === S.art.id ? ' on' : '') + '" data-pick="' + a.id + '">' +
-      '<div class="ac-top"><span class="ac-type">' + esc(a.typeName) + '</span>' +
-        '<span class="ac-hard" title="难度">' + starsHtml(a.hard) + '</span></div>' +
-      '<b class="ac-title">' + esc(a.title) + '</b>' +
-      '<div class="ac-author">' + esc(a.author || '') + (a.grade ? ' · ' + esc(a.grade) : '') + '</div>' +
-      '<div class="ac-desc">' + esc(a.desc) + '</div>' +
-      '<div class="ac-meta">' + a.count + ' 句 · ' + a.chars + ' 字</div>' +
+  function catCard(id, name, icon, desc, list) {
+    var n = list.length, minC = 0, maxC = 0;
+    if (n) {
+      var cs = list.map(function (a) { return a.chars; });
+      minC = Math.min.apply(null, cs);
+      maxC = Math.max.apply(null, cs);
+    }
+    return '<button class="al-card' + ((S.art.cat || '') === id ? ' on' : '') +
+        '" data-cat="' + id + '">' +
+      '<div class="ac-top"><span class="ac-type">' + icon + '</span>' +
+        '<span class="ac-hard">' + n + ' 篇</span></div>' +
+      '<b class="ac-title">' + esc(name) + '</b>' +
+      '<div class="ac-desc">' + esc(desc) + '</div>' +
+      '<div class="ac-meta">' + (n ? ('最短 ' + minC + ' 字 · 最长 ' + maxC + ' 字')
+                                  : (TA.ARTICLES.length + ' 篇')) + '</div>' +
     '</button>';
   }
-  function tabsHtml() {
-    var all = '<button class="' + (S.art.type === 'all' ? 'on' : '') + '" data-arttype="all">全部 ' +
-      TA.ARTICLES.length + '</button>';
+  function catsHtml() {
+    var all = catCard('', '全部分类', '📚',
+      '七类文章混着来，按字数由短到长分配', TA.ARTICLES);
     return all + TA.TYPES.map(function (t) {
-      return '<button class="' + (S.art.type === t.id ? 'on' : '') + '" data-arttype="' + t.id + '">' +
-        t.icon + ' ' + t.name + ' ' + t.articles.length + '</button>';
+      return catCard(t.id, t.name, t.icon, t.desc, TA.list(t.id) || []);
     }).join('');
-  }
-  function gridHtml() {
-    var list = S.art.type === 'all' ? TA.ARTICLES : TA.list(S.art.type);
-    var auto = '<button class="al-card auto' + (!S.art.id ? ' on' : '') + '" data-pick="__auto__">' +
-      '<div class="ac-top"><span class="ac-type">🎯 推荐</span></div>' +
-      '<b class="ac-title">自动轮换</b>' +
-      '<div class="ac-desc">不用挑：每关自动配一整篇新文章，难度随卷递进，完成一关换一篇</div>' +
-      '<div class="ac-meta">' + TA.ARTICLES.length + ' 篇参与轮换</div>' +
-    '</button>';
-    if (!list.length) return auto + '<div class="al-empty">这一类还没有文章</div>';
-    return auto + list.map(cardHtml).join('');
   }
   mask.innerHTML = '<div class="artlib">' +
     '<div class="al-head">' +
-      '<div><b>📚 文章库</b><span class="al-sub">共 ' + TA.TYPES.length + ' 类 · ' +
+      '<div><b>📚 选文章类别</b><span class="al-sub">' + TA.TYPES.length + ' 类 · ' +
         TA.ARTICLES.length + ' 篇 · ' + total + ' 字</span></div>' +
       '<button class="al-x" id="alX" aria-label="关闭">✕</button>' +
     '</div>' +
-    '<div class="al-tabs" id="alTabs">' + tabsHtml() + '</div>' +
-    '<div class="al-grid" id="alGrid">' + gridHtml() + '</div>' +
-    '<div class="al-foot">默认「自动轮换」：关卡自己配文章、完成一关换一篇。想专练某一篇就点它固定，随时回来点「自动轮换」恢复。</div>' +
+    '<div class="al-grid" id="alGrid">' + catsHtml() + '</div>' +
+    '<div class="al-foot">选一个类别：本卷 10 关从这一类里按字数由短到长依次取文章，一关一篇；' +
+      '过关进下一关就是更长的一篇，难度自然递进。</div>' +
     '</div>';
   document.body.appendChild(mask);
   function close() { mask.remove(); }
   mask.addEventListener('click', function (e) { if (e.target === mask) close(); });
   mask.querySelector('#alX').onclick = close;
-  mask.querySelector('#alTabs').addEventListener('click', function (e) {
-    var b = e.target.closest('[data-arttype]');
-    if (!b) return;
-    S.art.type = b.getAttribute('data-arttype');
-    mask.querySelector('#alTabs').innerHTML = tabsHtml();
-    mask.querySelector('#alGrid').innerHTML = gridHtml();
-  });
   mask.querySelector('#alGrid').addEventListener('click', function (e) {
-    var b = e.target.closest('[data-pick]');
+    var b = e.target.closest('[data-cat]');
     if (!b) return;
-    var id = b.getAttribute('data-pick');
-    if (id === '__auto__') {
-      S.art.id = '';                 /* 退回自动轮换，卷号原地保留，接着当前进度换着读 */
-      saveArtId('');
-    } else {
-      S.art.id = id;
-      saveArtId(id);
-      S.map.stage = 6;
-      S.map.chapter = 1;             /* 固定一篇 = 从头读，进度按卷号累加，不会串 */
-    }
+    S.art.cat = b.getAttribute('data-cat') || '';
+    saveArtCat(S.art.cat);
+    S.art.id = '';                    /* 单篇锁定彻底退场，只剩类别 */
+    saveArtId('');
+    S.map.stage = 6;
+    S.map.chapter = 1;                /* 换类别 = 从第 1 卷重新开始 */
     close();
     render();
   });
@@ -2268,9 +2257,9 @@ window.kbDebugLevel = function () {
 function startLevel(st, ch, lv) {
   /* 断点续打（2026-11-05）：上次没打完的这一关（教师关闭练习时自动存过草稿），
      3 天内再进来先问一句 —— 接着打，还是从头开始。
-     固定了某一篇文章（S.art.id）时不续打：草稿里存的是上次那篇的正文，
-     换了文章再拿它续，等于让学生接着打旧文章（2026-11-05 牛哥反馈的「数据不同步」）。 */
-  var dr = (!S.demo && S.role === 'student' && S.progress && !S.art.id)
+     文章关（第 6 篇章）不续打：草稿按「卷-关」记，换类别后同一关是另一篇文章，
+     拿旧正文续打等于打错篇（2026-11-05 牛哥反馈的「数据不同步」）。 */
+  var dr = (!S.demo && S.role === 'student' && S.progress && st !== 6)
     ? (S.progress.draft || null) : null;
   if (dr && dr.k === ('s' + st + 'c' + ch + 'l' + lv)
       && (Date.now() / 1000 - (dr.ts || 0)) < 3 * 86400) {
@@ -2292,12 +2281,12 @@ function openLevel(st, ch, lv, dr) {
   clearPlayBindings();
   try {
     var grades = (S.config && S.config.grades) || [];
-    /* 第 6 篇章：不传 articleId = 引擎按卷/关自动轮换配文章；
-       学生从文章库固定了某一篇才带进去（S.art.id）。其余篇章每次
-       进关（重玩 / 重置 / 刷新后再进）都换一套随机内容，防止背顺序。 */
-    var artId = (st === 6 && S.art.id) ? S.art.id : null;
-    var nonce = artId ? 0 : Math.floor(Math.random() * 0x7fffffff);
-    var L = TL.genLevel(st, ch, lv, grades, artId, nonce);
+    /* 第 6 篇章：按「类别」取文章（S.art.cat），引擎从该类别的池子里
+       按字数由短到长分配；nonce 固定 0 —— 同一关任何时候进来都是同一篇，
+       成绩与断点才对得上。其余篇章每次进关都换随机内容，防止背顺序。 */
+    var artCat = (st === 6) ? (S.art.cat || '') : null;
+    var nonce = (st === 6) ? 0 : Math.floor(Math.random() * 0x7fffffff);
+    var L = TL.genLevel(st, ch, lv, grades, null, nonce, artCat);
     /* 防御：关卡数据生成异常（阶段越界 / 文本缺失等）时，给出明确错误而不是白屏或卡死 */
     if (!L || !L.type) throw new Error('关卡数据生成失败（stage=' + st + ' chapter=' + ch + ' level=' + lv + '）');
     if (L.type === 'keys' && !Array.isArray(L.items)) L.items = [];

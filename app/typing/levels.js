@@ -161,12 +161,33 @@ window.TL = (function () {
     return pool[gi % pool.length];
   }
 
+  /* ---------------- 按类别配文章（2026-11-05 三次定版） ----------------
+     学生选的不再是"某一篇"，而是"某一类"：
+       · 池子 = 该类别下的全部文章，按字数升序（字少 = 简单）；
+       · 第 1 关最短、第 10 关最长，卷内顺着池子往下走，正好对上
+         "练字难度由浅入深"的要求；
+       · 同一关任何时候进去都是同一篇（确定性），成绩/断点才对得上；
+       · 池子打满就从头循环，所以小类别（古诗 4 篇）也不会 10 关全一样。
+     cat 为空 = 不限类别（全部文章），等价于老的自动轮换但改按字数排。 */
+  function articleOfCat(cat, chapter, level) {
+    if (!(window.TA && window.TA.ARTICLES && window.TA.ARTICLES.length)) return null;
+    var pool = window.TA.ARTICLES.filter(function (a) {
+      return !cat || a.type === cat;
+    }).sort(function (a, b) {
+      if (a.chars !== b.chars) return a.chars - b.chars;   /* 难度：字数优先 */
+      return String(a.id) < String(b.id) ? -1 : 1;          /* 同字数稳定排序 */
+    });
+    if (!pool.length) return null;
+    var gi = (chapter - 1) * 10 + (Math.min(level, 10) - 1);
+    return pool[gi % pool.length];
+  }
+
   /* ---------------- 关卡生成 ----------------
      返回：
        type='keys' → items:[{k, hint}]，逐键作答
        type='text' → text:'...'，逐字作答
      speedLine：两星速度线（字/分）；timeLimit：秒 */
-  function genLevel(stage, chapter, level, grades, articleId, nonce) {
+  function genLevel(stage, chapter, level, grades, articleId, nonce, articleCat) {
     var TD = window.TD;
     /* 文章维度 + 尝试号参与种子：nonce 每次进关随机 → 重玩/重置/刷新
        内容都不同；不传 nonce（读文章模式）则同一关内容恒定 */
@@ -266,7 +287,9 @@ window.TL = (function () {
          反复打同一篇。手动从文章库固定的文章（articleId）仍然优先。 */
       var art = null;
       if (window.TA && window.TA.get) {
-        art = articleId ? window.TA.get(articleId) : articleOf(chapter, level);
+        /* 单篇（articleId，老入口保留）优先；否则按类别从池子里按字数递进取。 */
+        art = articleId ? window.TA.get(articleId)
+                        : articleOfCat(articleCat || '', chapter, level);
       }
       if (art && art.lines.length) {
         var lines = art.lines;
@@ -347,7 +370,7 @@ window.TL = (function () {
     genLevel: genLevel, starsFor: starsFor, speedLine: speedLine,
     difficulty: difficulty, levelFactor: levelFactor, topicOf: topicOf,
     levelKey: levelKey, isBoss: isBoss,
-    articleOf: articleOf, artTier: artTier,
+    articleOf: articleOf, artTier: artTier, articleOfCat: articleOfCat,
     basePtsFor: basePtsFor, bonusPtsFor: bonusPtsFor, ptsFor: ptsFor
   };
 })();

@@ -3,7 +3,7 @@
 > 给班主任和任课老师用的一套**班级工作台**：教师端与学生端共用一个网页入口，
 > 数据全部存在自己的服务器上，不依赖任何第三方云服务。
 
-当前版本：**2.0.22**（版本号唯一代码源：`app/server.py` 的 `VERSION`）
+当前版本：**2.0.23**（版本号唯一代码源：`app/server.py` 的 `VERSION`）
 
 ```
 http://<服务器局域网 IP>:8080/        ← Docker 部署的入口；直接运行时是 :20020
@@ -378,9 +378,9 @@ docker compose up -d --build
 
 | # | 文件 | 位置 |
 |---|---|---|
-| 1 | `app/server.py` | `VERSION = "2.0.22"` —— **唯一代码源** |
-| 2 | `.env.example` | `IMAGE_TAG=2.0.22` |
-| 3 | `docker-compose.yml` | `image: …:${IMAGE_TAG:-2.0.22}`（init 与 workbench **两处**） |
+| 1 | `app/server.py` | `VERSION = "2.0.23"` —— **唯一代码源** |
+| 2 | `.env.example` | `IMAGE_TAG=2.0.23` |
+| 3 | `docker-compose.yml` | `image: …:${IMAGE_TAG:-2.0.23}`（init 与 workbench **两处**） |
 | 4 | `README.md` | 文首「当前版本」 |
 | 5 | `version.json` | 由 `tools/make_release.py` 自动同步 |
 
@@ -408,6 +408,37 @@ python tools/make_release.py --out D:\dist   # 指定输出目录（默认 dist/
 > 「创建发行版」并上传 zip 才会有内容。在线更新走的是 `version.json`（manifest）+
 > raw 直链，不依赖 Releases 功能；想把 zip 同时挂到 Releases 也可以，把
 > `version.json` 的 `zip` 字段改成完整 URL 即可。
+
+### 导入进度不闪烁 + 附件剥离 + 文章按类别分配（2.0.23）
+
+**① 导入/导出进度不再闪**
+
+原来进度靠 `toast()` 报，而 toast 的实现是「删旧节点 + 建新节点」—— 解密回调每 64KB
+调一次（8MB 备份 128 次），整窗跟着重建、闪烁。现在换成专用进度卡 `.bk-prog`：
+
+- 节点**只建一次**，之后只改两个 Text 节点的 `nodeValue` 和进度条 `style.width`，
+  **零 insert / 零 remove**（b27 用 MutationObserver 实测：插入 1 次、重建 0 次）；
+- 进度条宽度带 `transition:width .18s linear`，只让进度条自己动；
+- 容器 `pointer-events:none`，不挡任何点击；
+- 宽度按当前 `zoom` 反算（同 `.upd-bar` 的处理），手机不溢出。
+
+**② 学生作品附件从全量备份剥离**
+
+- `/api/v2/teacher/export?full=1` **默认不再返回 `files`**（几十上百 MB 的 base64 是
+  备份又大又慢的主因），只回 `files_meta`：`{omitted:true, count, bytes}`；
+- 需要连附件一起带的老调用传 `nofiles=0`，行为与以前完全一致（可回退）；
+- 导出后会明确提示「附件不在备份里，请用导出/导入资料包迁移」；导入含 `omitted`
+  的备份时也会提醒一句；
+- **边界**：老备份（带 files）照常恢复；新备份不含 files 时前端**不写 `files:{}`**
+  —— 否则导入端会按 `'files' in sv` 误判成"清空附件"。
+
+**③ 文章改成按「类别」分配**
+
+- 选文章从"挑某一篇"改为"选哪一类"（故事 / 写景散文 / 科普 / 诗歌 / 古文 / 古诗 /
+  课文 / 全部分类），下方 10 关从该类别里**按字数由短到长**依次取文章，一关一篇；
+- 小类别（古诗 6 篇）打满后从头循环，不会 10 关全一样；
+- 同一关任何时候进来都是同一篇（确定性），成绩与断点才对得上；
+- 老 localStorage 里的单篇选择（`wb-typing-art`）在启动时迁移成它所属的类别后清掉。
 
 ### 打字冒险岛·文章切换同步（2.0.22）
 

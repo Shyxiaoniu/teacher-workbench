@@ -3009,7 +3009,49 @@ body.seat-rsz-dragging .seat:hover { transform:none; box-shadow:none; }
   .upd-bar .ub-go{ display:none; }
   .upd-bar .ub-txt{ white-space:normal; }   /* 窄屏允许折行，不硬截断 */
 }
-/* 更新说明：逐条短句 + 序号徽标，长句截断，不糊成一大段 */
+/* ---------- 长任务进度卡（2026-11-05） ----------
+   导入/导出这类长任务原来靠 toast 报进度，而 toast 是「删旧节点 + 建新节点」，
+   每 64KB 调一次 = 8MB 重建 128 次，整窗跟着闪。
+   这里改成：**节点只建一次**，之后只改 textContent 和进度条 width，
+   没有任何 insert/remove，也就没有重排重绘和闪烁。
+   pointer-events:none 保证不挡操作；进度条宽度带 transition，走起来是连续的。 */
+.bk-prog{
+  position:fixed; left:50%; bottom:calc(26px + env(safe-area-inset-bottom, 0px));
+  transform:translateX(-50%); z-index:3200;
+  /* 不用 CSS min()：这台 Edge 会整条丢弃（见 T-09） */
+  width:420px; max-width:calc(100vw - 32px);
+  padding:12px 14px 13px;
+  background:var(--bg-surface);
+  border:1px solid color-mix(in srgb, var(--brand-primary) 30%, var(--border));
+  border-radius:13px;
+  box-shadow:0 12px 30px rgba(15,23,20,.2), 0 1px 2px rgba(15,23,20,.06);
+  font-size:13px; color:var(--text-primary);
+  pointer-events:none;                     /* 不挡点击 */
+  opacity:0; transition:opacity .18s ease;
+}
+.bk-prog.on{ opacity:1; }
+.bk-prog .bkp-tx{ display:flex; align-items:center; gap:8px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-bottom:9px; }
+.bk-prog .bkp-pct{ margin-left:auto; font-variant-numeric:tabular-nums;
+  color:var(--brand); font-weight:700; font-size:12.5px; }
+.bk-prog .bkp-bar{ height:6px; border-radius:99px; background:var(--bg-page);
+  overflow:hidden; }
+.bk-prog .bkp-bar i{ display:block; height:100%; width:0%;
+  border-radius:99px;
+  background:linear-gradient(90deg, var(--brand), var(--brand-primary));
+  transition:width .18s linear;            /* 只让进度条自己动 */
+}
+/* 不确定进度（还在解密前的准备阶段）：整条来回扫 */
+.bk-prog.indet .bkp-bar i{ width:100% !important;
+  background:linear-gradient(90deg, transparent,
+    color-mix(in srgb, var(--brand-primary) 45%, transparent), transparent);
+  background-size:45% 100%; background-repeat:no-repeat;
+  animation:bkpSweep 1.1s linear infinite; }
+@keyframes bkpSweep{ from{background-position:-45% 0} to{background-position:145% 0} }
+@media(max-width:520px){
+  .bk-prog{ bottom:calc(14px + env(safe-area-inset-bottom, 0px));
+    padding:11px 12px 12px; }
+}
 .upd-notes{ counter-reset:updN; list-style:none; display:flex; flex-direction:column; gap:5px;
   margin:8px 0 0; padding:0; }
 .upd-notes li{ counter-increment:updN; display:flex; align-items:flex-start; gap:8px;

@@ -130,7 +130,7 @@ CFG["update"].setdefault("interval_hours", 24) # 检查间隔（小时）
 PET_IDS = ["cat", "dog", "rabbit", "penguin", "panda", "dino", "unicorn", "dragon"]
 COND = threading.Condition()
 STARTED = time.time()
-VERSION = "2.0.22"
+VERSION = "2.0.23"
 ONLINE_WINDOW = 300      # 5 分钟内活跃算在线
 # 可内联直出的附件类型（其余一律按下载处理，防止同源执行脚本）
 _INLINE_EXTS = {"png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "pdf",
@@ -2698,8 +2698,24 @@ class Handler(LEG.Handler):
             # 课堂活动（2026-11-03 方案 B）：活动/提交/附件已并入工作台自己的库，
             # 备份口径随之合一——活动数据也在本库里，导出导入一并处理。
             data["activity"] = _act_snapshot()
+            # 附件（学生作品）2.0.23 起默认不进全量备份：
+            #   · 它们动辄几十上百 MB，是备份又大又慢的主因（导出要序列化 + 加密，
+            #     导入要解密，纯 JS 只有 0.5MB/s）；
+            #   · 真正的二进制迁移有更合适的通道 ——「导出资料包」走 zip，不占内存。
+            # 需要连附件一起带的场景（老调用 / 手工排查）传 nofiles=0 即可，
+            # 行为与以前完全一致；默认 nofiles=1 只回清单（files_meta），
+            # 恢复后提示"附件未包含，请用资料包另行迁移"。
+            nofiles = (qs.get("nofiles") or ["1"])[0] not in ("0", "false")
             files, meta = _sub_files_snapshot()
-            if files:
+            if nofiles:
+                meta = dict(meta or {})
+                meta["omitted"] = True
+                meta["count"] = len(files or {})
+                try:
+                    meta["bytes"] = sum(len(v) for v in (files or {}).values())
+                except Exception:
+                    meta["bytes"] = 0
+            elif files:
                 data["files"] = files
             data["files_meta"] = meta
         body = json.dumps(data, ensure_ascii=False).encode("utf-8")

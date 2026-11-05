@@ -435,6 +435,7 @@
   /** 明确的失败出口：优先弹窗，没有 uiAlert 才退回 toast */
   function fail(title, msg, hint) {
     var env = E();
+    progressDone();            /* 失败一定要收掉进度卡，别让它挡在弹窗下面 */
     var body = String(msg || '未知错误');
     if (hint) body += '\n\n' + hint;
     if (root.uiAlert) {
@@ -464,6 +465,73 @@
   }
 
   function busy(msg) { try { E().toast(msg); } catch (e) {} }
+
+  /* ---------------- 长任务进度卡（2026-11-05） ----------------
+     为什么不用 busy()：busy 走 toast，而 toast 每次「删旧节点 + 建新节点」，
+     解密回调每 64KB 调一次（8MB=128 次）→ 整窗反复重建，用户看到的就是闪烁。
+     这里节点只建一次，更新时只改 textContent / style.width：
+       · 不 insert、不 remove → 没有重排，没有闪烁；
+       · 进度条 width 带 transition，走起来连续；
+       · 容器 pointer-events:none，不挡任何操作。
+     用法：progress('正在解密 42%', 0.42) / progressDone()。 */
+  var _prog = null;
+  function progress(msg, pct) {
+    try {
+      if (!_prog) {
+        var d = document.createElement('div');
+        d.className = 'bk-prog';
+        d.innerHTML = '<div class="bkp-tx"><span class="bkp-msg"></span>' +
+                      '<span class="bkp-pct"></span></div>' +
+                      '<div class="bkp-bar"><i></i></div>';
+        document.body.appendChild(d);
+        var msgEl = d.querySelector('.bkp-msg');
+        var pctEl = d.querySelector('.bkp-pct');
+        /* 用真正的 Text 节点承载文字：之后只改 nodeValue，
+           连「替换文本节点」这种 mutation 都不会产生（0 重建）。 */
+        var msgTx = document.createTextNode('');
+        var pctTx = document.createTextNode('');
+        msgEl.appendChild(msgTx);
+        pctEl.appendChild(pctTx);
+        _prog = { el: d, msg: msgEl, pct: pctEl, msgTx: msgTx, pctTx: pctTx,
+                  bar: d.querySelector('.bkp-bar i'), id: 0 };
+        /* 整站字号缩放用的是 documentElement.style.zoom（默认 1.16）：
+           fixed 元素的宽高会被再放大一次，420px 会占 487 视觉像素、手机上溢出。
+           按当前 zoom 反算（与 .upd-bar / --sb-h 同一套处理）。 */
+        try {
+          var Z = parseFloat(document.documentElement.style.zoom || '1') || 1;
+          d.style.width = Math.round(420 / Z) + 'px';
+          d.style.maxWidth = Math.round((window.innerWidth - 32) / Z) + 'px';
+        } catch (e0) {}
+        /* 下一帧再加 on，让淡入从 0 开始，避免"闪现" */
+        _prog.id = requestAnimationFrame(function () { d.classList.add('on'); });
+      }
+      if (typeof msg === 'string') _prog.msgTx.nodeValue = msg;
+      var known = (typeof pct === 'number' && isFinite(pct));
+      _prog.el.classList.toggle('indet', !known);
+      if (known) {
+        var p = Math.max(0, Math.min(1, pct));
+        _prog.bar.style.width = (p * 100).toFixed(1) + '%';
+        _prog.pctTx.nodeValue = Math.round(p * 100) + '%';
+      } else {
+        _prog.pctTx.nodeValue = '';
+      }
+    } catch (e) {}
+  }
+  function progressDone() {
+    var p = _prog; _prog = null;
+    if (!p) return;
+    try {
+      if (p.id) cancelAnimationFrame(p.id);
+      p.el.classList.remove('on');
+      setTimeout(function () { try { p.el.remove(); } catch (e) {} }, 200);
+    } catch (e) {}
+  }
+  /* 自动化验收入口（和 window.startLevel 同一套思路）：
+     用来断言「连续更新进度时节点不会被重建」——重建就是闪烁的根源。 */
+  try {
+    root.__bkProgress = progress;
+    root.__bkProgressDone = progressDone;
+  } catch (e) {}
 
   function fmtSize(n) {
     n = Number(n) || 0;
@@ -612,21 +680,29 @@
     var fm = server.files_meta || {};
     var typN = (server.typing && server.typing.students)
       ? Object.keys(server.typing.students).length : 0;
+    var srvPart = {
+      app_version: server.version, exported_at: server.exported_at,
+      tables: tables, config: server.config || {},
+      creds: server.creds || [],
+      sub: server.sub || null,           /* 提交系统：题目/花名册/提交记录 */
+      typing: server.typing || {},       /* 打字练习：成绩/积分/装扮 */
+      files_meta: fm
+    };
+    /* 附件（学生作品）2.0.23 起默认不进备份：几十上百 MB 的 base64 是备份又大又慢
+       的主因（导出要序列化+加密、导入要解密，纯 JS 只有 0.5MB/s）。
+       二进制迁移走「导出资料包」zip，更快也更省内存。
+       注意：**没有附件时不能写 files:{}** —— 导入端按 'files' in sv 判断，
+       空对象会被当成"清空附件"。 */
+    if (server.files && Object.keys(server.files).length) {
+      srvPart.files = server.files;
+    }
     var dump = {
       app: APP, version: VER, kind: 'full',
       at: new Date().toISOString().slice(0, 16).replace('T', ' '),
       encrypted: true, count: n, sum: sumOf(ls, env),
       term: env.termCfg(), appDate: env.appDate() || '',
       ls: ls,
-      server: {
-        app_version: server.version, exported_at: server.exported_at,
-        tables: tables, config: server.config || {},
-        creds: server.creds || [],
-        sub: server.sub || null,           /* 提交系统：题目/花名册/提交记录 */
-        typing: server.typing || {},       /* 打字练习：成绩/积分/装扮 */
-        files: server.files || {},         /* 学生作品附件（含提交附件与增强模块数据） */
-        files_meta: fm
-      }
+      server: srvPart
     };
     var salt = randomSalt(env);
     var k = deriveKey(pwd, salt, env);
@@ -637,9 +713,20 @@
 
     var extra = [];
     if (typN) extra.push('打字成绩 ' + typN + ' 人');
-    if (fm.included) extra.push('作品附件 ' + fm.included + ' 个');
+    if (!fm.omitted && fm.included) extra.push('作品附件 ' + fm.included + ' 个');
     env.toast('已导出全量备份：服务端 ' + tblN + ' 张表 + 本机 ' + n + ' 项'
-      + (extra.length ? ' + ' + extra.join(' + ') : ''));
+      + (extra.length ? ' + ' + extra.join(' + ') : '')
+      + (fm.omitted ? '（不含作品附件）' : ''));
+
+    /* 附件已剥离（2.0.23 起默认）：明确告诉用户附件还在服务端、怎么迁 */
+    if (fm.omitted && fm.count) {
+      fail('备份已导出（不含作品附件）',
+        '作品附件 ' + fm.count + ' 个（约 ' + fmtSize(fm.bytes || 0) + '）不在这个备份文件里。\n\n'
+        + '· 换设备 / 重装：先恢复这份备份，再到「数据与备份」点「导出资料包」，'
+        + '把 zip 拷到新机器用「导入资料包」放回去；\n'
+        + '· 附件本身仍完整保存在服务端的 submissions 目录里，没有删除任何东西。',
+        '');
+    }
 
     /* 超大附件没进包时要明说，别让用户以为「全都在里面」 */
     if (fm.skipped && fm.skipped.length) {
@@ -674,18 +761,20 @@
       };
       r.onload = async function () {
         var parsed;
-        busy('正在校验备份文件…');
+        progress('正在读取备份文件…', null);
         try {
-          /* 进度回调：大备份解密要几十秒，没有反馈用户会以为卡死 */
+          /* 进度回调：大备份解密要几十秒。这里用 progress()（节点只建一次、
+             只改文字和宽度），不用 busy()/toast —— 后者每次都会重建节点，
+             8MB 备份会重建 128 次，整窗跟着闪。 */
           parsed = await decode(String(r.result || ''), function (p) {
-            busy('正在解密备份 ' + Math.round(p * 100) + '%…');
+            progress('正在解密备份', p);
           });
         }
         catch (e) {
           fail('导入失败', (e && e.message) || e, '本机数据没有任何改动。');
           return;
         }
-        if (!parsed) return;                 /* 用户取消了密码输入 / 关掉了弹窗 */
+        if (!parsed) { progressDone(); return; }   /* 用户取消了密码输入 / 关掉了弹窗 */
 
         var dump = parsed.dump, key = parsed.key;
         var n = Object.keys(dump.ls || {}).length;
@@ -722,7 +811,7 @@
             return;
           }
 
-          busy('本机已还原，正在写入服务端…');
+          progress('正在写入服务端…', null);
           var r1 = await postImport(sv, false);
 
           /* 服务端认为「数据量骤减」，要求二次确认 —— 带 force 重试一次 */
@@ -732,12 +821,13 @@
               + '继续将以备份内容覆盖服务端现有数据，且无法撤销。',
               '确认要用它覆盖吗', '仍然导入');
             if (!go2) {
+              progressDone();
               await alertBox('已停止恢复',
                 '服务端数据保持原样（本机界面数据已按备份还原）。\n'
                 + '刷新页面即可回到服务端当前的数据。');
               return;
             }
-            busy('正在按你的确认覆盖服务端数据…');
+            progress('正在按你的确认覆盖服务端数据…', null);
             r1 = await postImport(sv, true);
           }
 
@@ -748,12 +838,17 @@
           }
 
           var warn = (r1.j.warnings || []).slice();
+          if (fm.omitted) {
+            warn.push('这份备份不含作品附件（2.0.23 起默认剥离）。数据已恢复，'
+              + '附件请到「导出资料包 / 导入资料包」单独迁移。');
+          }
           if (fm.skipped && fm.skipped.length) {
             warn.push('备份里有 ' + fm.skipped.length + ' 个附件当年没打进去，'
               + '换机时需另行拷贝 submissions 目录。');
           }
           var okMsg = '已恢复：服务端 ' + (r1.j.rows || 0) + ' 行 / ' + tblN + ' 张表，'
             + '本机 ' + cnt + ' 项';
+          progressDone();
           if (warn.length) await alertBox('恢复完成，但有提示', okMsg + '\n\n' + warn.join('\n'));
           else env.toast(okMsg + '，正在重新载入…');
           setTimeout(function () { env.reload(); }, warn.length ? 700 : 900);
