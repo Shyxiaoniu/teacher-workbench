@@ -376,6 +376,10 @@ class ActivityStore(object):
                      info["mime"], ts))
             self.conn.commit()
         return {"id": sub_id, "attachment": data.get("attachment"),
+                # 本次真正落盘的文件（原文件名 / 大小 / MIME）：提交后要立刻
+                # 自动归档到资料夹，调用方不必再查一次库（2026-11-05）。
+                "files": [{"url": u, "name": i["orig"], "size": i["size"],
+                           "mime": i["mime"]} for u, i in zip(urls, infos)],
                 "submitted_at": ts}
 
     def submissions(self, task_key):

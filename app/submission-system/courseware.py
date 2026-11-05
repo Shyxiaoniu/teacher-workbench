@@ -26,6 +26,7 @@ import json
 import html
 import shutil
 import zipfile
+import threading
 import datetime
 import urllib.parse
 import urllib.request
@@ -77,10 +78,11 @@ def _paths():
                 "data": p.get("data") or DATA,
                 "cfg": p.get("cfg") or CFG_PATH,
                 "root": os.path.normpath(p.get("root") or DEFAULT_ROOT),
+                "activity": p.get("activity") or "",
             }
         except Exception:
             pass
-    return {"data": DATA, "cfg": CFG_PATH, "root": DEFAULT_ROOT}
+    return {"data": DATA, "cfg": CFG_PATH, "root": DEFAULT_ROOT, "activity": ""}
 
 
 def _now():
@@ -867,6 +869,11 @@ def _index_path():
     return os.path.join(DATA, "archive-index.json")
 
 
+# 归档索引是「读—改—写」，一个班几十人同时提交时会互相覆盖条目，
+# 结果就是清空提交时漏删副本。归档动作本身不重，直接串行（2026-11-05）。
+_IDX_LOCK = threading.Lock()
+
+
 def _load_index():
     try:
         with open(_index_path(), "r", encoding="utf-8") as f:
@@ -921,7 +928,74 @@ def _unique_target(dir_path, name):
     return os.path.join(dir_path, "%s (%d)%s" % (base, 200, ext)), True
 
 
+def _activity_dirs():
+    """活动附件的候选目录（按优先级）：当前账号 → 数据根 activity → 其他教师账号。
+
+    2026-11-05 修：以前只认 `<WB_DATA_DIR>/activity`，可多教师账号的附件其实是
+    `<WB_DATA_DIR>/accounts/<id>/activity/`；而 rel 又被多加了一层 `activity/`，
+    拼出来是 `activity/activity/<活动>/<文件>` —— 永远读不到。读不到就只能走
+    HTTP 兜底，可前端传的 base 是 `…/api/act`，拼出来 `…/api/act/static/uploads/…`
+    必然 404，最后表现为「学生交了文件，资料里却没有」。
+    """
+    out = []
+    try:
+        p = _paths()
+        if p.get("activity"):
+            out.append(p["activity"])
+    except Exception:
+        pass
+    base = os.environ.get("WB_DATA_DIR") or os.path.join(WB_ROOT, "data")
+    out.append(os.path.join(base, "activity"))
+    acc_root = os.path.join(base, "accounts")
+    try:
+        for n in sorted(os.listdir(acc_root)):
+            d = os.path.join(acc_root, n, "activity")
+            if os.path.isdir(d):
+                out.append(d)
+    except Exception:
+        pass
+    seen, res = set(), []
+    for d in out:
+        k = os.path.normpath(d)
+        if k.lower() not in seen:
+            seen.add(k.lower())
+            res.append(k)
+    return res
+
+
+def _rel_from_url(url):
+    """把附件地址还原成 `<活动>/<文件>`（相对 activity 目录）。
+
+    认三种写法：`/static/uploads/<活动>/<文件>`（服务端产出的规范地址）、
+    `/api/act/static/uploads/…`（前端拼前缀后的地址）、`/activity/<活动>/<文件>`。
+    """
+    rel = str(url or "").lstrip("/").replace("\\", "/")
+    if rel.startswith("api/act/"):
+        rel = rel[len("api/act/"):]
+    for pre in ("static/uploads/", "activity/"):
+        if rel.startswith(pre):
+            rel = rel[len(pre):]
+            break
+    return rel
+
+
+def _norm_base(base):
+    """归档的 HTTP 兜底地址：前端可能传 `…/api/act`，要还原成站点根。"""
+    b = str(base or "").rstrip("/")
+    for suf in ("/api/act", "/api/cw", "/api/v2"):
+        if b.endswith(suf):
+            b = b[:-len(suf)]
+            break
+    return b.rstrip("/")
+
+
 def archive_items(course, activity, base, items, cls=""):
+    """归档入口：索引文件是读改写，多学生同时提交要串行，避免条目互相覆盖。"""
+    with _IDX_LOCK:
+        return _archive_items_locked(course, activity, base, items, cls)
+
+
+def _archive_items_locked(course, activity, base, items, cls=""):
     """把活动提交的文件复制进 <课程>/<班级>/<学号+姓名>/。
 
     2026-11-05 调整（牛哥要求）：原来是 <课程>/_活动作品/<活动名>/<学生>_<文件名>
@@ -937,18 +1011,28 @@ def archive_items(course, activity, base, items, cls=""):
     course_dir = abs_of(safe_course(course))
     if not course_dir:
         return {"ok": False, "msg": "课程名不合法"}
-    cls_dir = os.path.join(course_dir, _safe_folder(cls, "未分班"))
-    try:
-        os.makedirs(cls_dir, exist_ok=True)
-    except Exception as e:
-        return {"ok": False, "msg": "无法创建班级文件夹：%s" % e}
     base = str(base or "").rstrip("/")
     act = _safe_folder(activity, "未命名活动")
-    idx_key = _index_key(course, cls, act)
     index = _load_index()
-    mine = set(index.get(idx_key) or [])
+    mine = {}          # idx_key -> {相对路径}
     saved, skipped = [], []
+    classes = []
     for it in (items or []):
+        # 每个文件可以带自己的班级（服务端自动归档按学生班级传；手动归档用大屏选中的班）
+        k_cls = _safe_folder(it.get("class") or cls, "未分班")
+        if k_cls not in classes:
+            classes.append(k_cls)
+        cls_dir = os.path.join(course_dir, k_cls)
+        try:
+            os.makedirs(cls_dir, exist_ok=True)
+        except Exception as e:
+            skipped.append({"name": safe_name(str(it.get("name") or "").strip() or "file"),
+                            "student": _student_folder(it.get("no"), it.get("student")),
+                            "msg": "无法创建班级文件夹：%s" % e})
+            continue
+        idx_key = _index_key(course, k_cls, act)
+        if idx_key not in mine:
+            mine[idx_key] = set(index.get(idx_key) or [])
         url = str(it.get("url") or "")
         # 文件名优先用提交里带过来的「原始文件名」，没有才退回 URL 最后一段
         raw_name = str(it.get("name") or "").strip() or url.rsplit("/", 1)[-1] or "file"
@@ -965,17 +1049,9 @@ def archive_items(course, activity, base, items, cls=""):
         #    `/../../data/config.json` 这种能顺着拼出程序目录外的任意文件，
         #    读出来再落到课件库里就能被下载走（任意文件读取）。
         if url.startswith("/"):
-            rel = url.lstrip("/").replace("\\", "/")
+            rel = _rel_from_url(url)
             if ".." not in rel.split("/"):
-                # 附件地址统一剥成 static/uploads/<活动>/<文件> 再到活动附件目录找。
-                for pre in ("static/uploads/",):
-                    if rel.startswith(pre):
-                        rel = "activity/" + rel[len(pre):]
-                        break
-                for base_dir in (os.path.join((os.environ.get("WB_DATA_DIR")
-                                               or os.path.join(WB_ROOT, "data")),
-                                              "activity"),
-                                 WB_ROOT):
+                for base_dir in _activity_dirs():
                     c = os.path.normpath(os.path.join(base_dir, rel))
                     try:
                         if os.path.commonpath([os.path.normpath(base_dir), c]) != os.path.normpath(base_dir):
@@ -992,7 +1068,8 @@ def archive_items(course, activity, base, items, cls=""):
         # ② 退回 HTTP 拉取（附件不在本机数据目录时兜底）
         if blob is None and base:
             try:
-                req = urllib.request.Request(base + (url if url.startswith("/") else "/" + url),
+                req = urllib.request.Request(_norm_base(base)
+                                             + (url if url.startswith("/") else "/" + url),
                                              headers={"User-Agent": "class-workbench"})
                 with urllib.request.urlopen(req, timeout=20) as r:
                     blob = r.read()
@@ -1014,7 +1091,7 @@ def archive_items(course, activity, base, items, cls=""):
                 if os.path.getsize(first) == len(blob):
                     skipped.append({"name": nm, "student": stu_dir_name,
                                     "msg": "已是最新", "rel": rel_of(stu_dir)})
-                    mine.add(rel_of(first))
+                    mine[idx_key].add(rel_of(first))
                     continue
             except Exception:
                 pass
@@ -1022,23 +1099,34 @@ def archive_items(course, activity, base, items, cls=""):
         try:
             with open(target, "wb") as fh:
                 fh.write(blob)
-            mine.add(rel_of(target))
+            mine[idx_key].add(rel_of(target))
             saved.append({"name": os.path.basename(target), "origin": nm,
                           "student": stu_dir_name, "renamed": renamed,
                           "size_text": human_size(len(blob)),
                           "rel": rel_of(target)})
         except Exception as e:
             skipped.append({"name": nm, "student": stu_dir_name, "msg": "写入失败：%s" % e})
+    for k, paths in mine.items():
+        if paths:
+            index[k] = sorted(paths)
     if mine:
-        index[idx_key] = sorted(mine)
         _save_index(index)
+    cls_label = classes[0] if len(classes) == 1 else (classes[0] + " 等" if classes else "未分班")
+    first_cls_dir = os.path.join(course_dir, classes[0]) if classes else course_dir
     return {"ok": True, "saved": saved, "skipped": skipped,
-            "dir": cls_dir, "rel": rel_of(cls_dir), "class": _safe_folder(cls, "未分班"),
+            "dir": first_cls_dir, "rel": rel_of(first_cls_dir), "class": cls_label,
+            "classes": classes,
             "msg": "已归档 %d 个文件到 %s / %s" % (len(saved), safe_course(course),
-                                                  _safe_folder(cls, "未分班"))}
+                                                  cls_label)}
 
 
 def archive_clear(course, activity, cls=""):
+    """清空入口（同样要串行，理由见 _IDX_LOCK）。"""
+    with _IDX_LOCK:
+        return _archive_clear_locked(course, activity, cls)
+
+
+def _archive_clear_locked(course, activity, cls=""):
     """清空某个活动归档出来的副本（2026-11-05）。
 
     清空大屏提交时一并调用：按归档索引删掉该活动的文件，并把空出来的
@@ -1050,8 +1138,15 @@ def archive_clear(course, activity, cls=""):
         return {"ok": False, "msg": "课程名不合法"}
     act = _safe_folder(activity, "未命名活动")
     index = _load_index()
-    key = _index_key(course, cls, act)
-    paths = index.pop(key, [])
+    # 2026-11-05：清空要覆盖「这个活动在所有班级下」的副本 —— 自动归档按
+    # 学生自己的班级落目录，可能不止大屏当前选中的那一个班；只清一个 key
+    # 会让别的班留下旧作品，看着像「清空没清干净」。
+    prefix = safe_course(course) + "|"
+    suffix = "|" + act
+    hit_keys = [k for k in list(index.keys()) if k.startswith(prefix) and k.endswith(suffix)]
+    paths = []
+    for k in hit_keys:
+        paths.extend(index.pop(k, []) or [])
     root = root_dir()
     removed, failed = 0, 0
     dirs = set()

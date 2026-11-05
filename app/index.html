@@ -16752,7 +16752,25 @@ async function actSelectTask(silent) {
      文件夹名，也是学习单 {{COURSE}} 的取值来源。旧任务（2026-11-04 之前建的）
      只有 title、没有 course，靠 title 兜底也能对，但归档 / 分组查询会漏。
      这里就地补齐内存字段，后续读写都以 course 为准。 */
-  if (t && !String(t.course || '').trim()) t.course = course;
+  const _curCourse = String(t ? (t.course || '') : '').trim();
+  /* 只在两种情况下写课程归属：① 任务还没有 course（老任务，补齐）；
+     ② 老师主动换选（silent=false）。页面加载时的程序性选中不覆盖已有归属，
+     否则打开大屏就可能把任务写到别的课程文件夹里。 */
+  if (t && _curCourse !== course && (!_curCourse || !silent)) {
+    t.course = course;
+    /* 持久化到服务端（2026-11-05）：自动归档现在由服务端在提交时做，它只认
+       act_task.course。以前这里只改内存字段，服务端读不到 → 老任务永远不归档，
+       老师换台电脑/刷新页面后课程归属又没了。 */
+    try {
+      fetch('/api/v2/teacher/activity/save', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ task_id: t.task_id, title: t.title || course,
+                               description: t.description || '',
+                               class_id: t.class_id || 0, course: course })
+      }).catch(function () {});
+    } catch (e) {}
+  }
   // 课程归属统一入口（2026-11-04 定版）：① 里选的课程就是归属，
   // 同步写 courseware_links 给自动归档用；「课程归属」条已从大屏移除
   if (actActiveId) {
@@ -36508,9 +36526,14 @@ function actTaskTitle() {
 /** 归档：把本活动的作品文件 + 提交数据（CSV）写进课程目录 */
 async function cwArchiveTask(silent) {
   const link = cwLinkOf(actActiveId);
-  if (!link || !link.course) { if (!silent) toast('请先选一门课程'); return; }
+  if (!link || !link.course) { if (!silent) toast('请先选一门课程'); return false; }
   const title = actTaskTitle();
   const rows = (actLastMatched || []);
+  /* 兜底班级：文件自己带了班级就用它，没有才用大屏当前选中的班，
+     再取不到交给服务端落到「未分班」，绝不让归档失败。（2026-11-05） */
+  const clsName = actCurClsName
+    || ((dbT('classes') || []).find(c => Number(c.id) === Number(actCurClass())) || {}).name
+    || '';
   const items = [];
   rows.forEach(s => {
     const who = actRosterName(s);
@@ -36521,15 +36544,13 @@ async function cwArchiveTask(silent) {
         name: f.name || (f.url.split('?')[0].split('/').pop() || 'file'),  // 学生交的原文件名
         url: f.url,
         student: who,
-        no: no
+        no: no,
+        /* 每个文件带自己的班级：服务端自动归档按学生班级落目录，
+           这里如果统一用大屏选中的班，跨班补归档会多建一个文件夹（2026-11-05） */
+        class: String(s['班级'] || s.cls || '').trim() || clsName
       });
     });
   });
-  /* 归档目标：<课程>/<班级>/<学号+姓名>/（2026-11-05）
-     班级取当前大屏选中的班；取不到就交给服务端落到「未分班」，绝不让归档失败。 */
-  const clsName = actCurClsName
-    || ((dbT('classes') || []).find(c => Number(c.id) === Number(actCurClass())) || {}).name
-    || '';
   const say = (html, ok) => {
     cwLastArchive[actActiveId] = { ok: ok, html: html };
     /* 归属条已移除（2026-11-04）：归档结果改用 toast 告知 */
@@ -36539,11 +36560,14 @@ async function cwArchiveTask(silent) {
   if (!items.length) {
     if (!silent) say('这个活动还没有文件可归档（学生提交里没有附件）。数据表已同步归档。', true);
     await cwArchiveDataCsv(link.course, title, rows);
-    return;
+    return true;
   }
   try {
+    /* base 必须是「站点根」：服务端要拿它拼 /static/uploads/… 下载附件。
+       以前传的是 actAbsBase()（…/api/act），拼出来 404，归档永远「下载失败」
+       —— 这是「学生交了文件却进不了资料夹」的直接原因之一（2026-11-05 修）。 */
     const r = await cwReq('archive', { course: link.course, activity: title,
-                                      cls: clsName, base: actAbsBase(), items: items });
+                                      cls: clsName, base: location.origin, items: items });
     if (!r.ok) throw new Error(r.msg || '归档失败');
     const savedN = (r.saved || []).length, skipN = (r.skipped || []).length;
     const renameN = (r.saved || []).filter(x => x.renamed).length;
@@ -36557,9 +36581,11 @@ async function cwArchiveTask(silent) {
         + (dataMsg ? '；' + esc(dataMsg) : '')
         + '<br><span style="font-size:12px">位置：' + esc(r.rel || '') + '（每位学生一个「学号+姓名」文件夹）</span>', true);
     if (!silent) toast('归档完成：' + (parts.join('、') || '无变化'));
+    return true;
   } catch (e) {
     say('归档失败：' + esc(e.message || e), false);
     if (!silent) toast('归档失败：' + (e.message || e));
+    return false;
   }
 }
 window.cwArchiveTask = cwArchiveTask;
@@ -36589,7 +36615,8 @@ async function cwArchiveDataCsv(course, activity, rows) {
 }
 window.cwArchiveDataCsv = cwArchiveDataCsv;
 
-/** 自动归档：匹配好课程后，新提交到达时增量归档（30 秒节流，不打断课堂） */
+/** 自动归档（补偿）：服务端在提交时就归档了，这里只补「历史提交」和
+ *  「当时没绑定课程、后补选课程」的情况。失败不记账，下次刷新重试。 */
 function cwArchiveTick() {
   const link = cwLinkOf(actActiveId);
   if (!link || !link.course) return;
@@ -36599,8 +36626,11 @@ function cwArchiveTick() {
   if (cwArchiveTimer) return;
   cwArchiveTimer = setTimeout(() => {
     cwArchiveTimer = null;
-    cwArchiveStamp[actActiveId] = stamp;
-    cwArchiveTask(true).catch(() => {});
+    cwArchiveTask(true).then(done => {
+      /* 只记成功：以前不管成败都把 stamp 写死，第一次失败（比如课程还没选）
+         之后就再也不会自动归档，看起来像「自动保存坏了」。 */
+      if (done) cwArchiveStamp[actActiveId] = stamp;
+    }).catch(() => {});
   }, 3000);
 }
 window.cwArchiveTick = cwArchiveTick;

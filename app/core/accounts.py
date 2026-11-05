@@ -93,6 +93,10 @@ class Workspace(object):
             "data": p["submissions"],
             "cfg": os.path.join(p["submissions"], "courseware.json"),
             "root": p["courseware"],
+            # 活动附件目录（2026-11-05）：归档时要把学生上传的原文件从
+            # <账号>/activity/<活动>/ 读出来，不能只认 DATA_DIR/activity
+            # —— 多教师账号下附件在 accounts/<id>/activity/ 里。
+            "activity": p["activity"],
         }
 
     # ---- 注入给 app/submission-system/server.py ----

@@ -108,6 +108,58 @@ TYPING = ACC.WorkspaceProxy(_typing_for)
 LEG.PATH_FN = WS.legacy_paths
 LEG.CW.PATH_FN = WS.courseware_paths
 LEG.ENH.PATH_FN = WS.enhance_paths
+
+
+def _archive_after_submit(task, who, res):
+    """学生提交成功后立刻归档到「资料」对应文件夹（2026-11-05）。
+
+    为什么放在服务端：以前是「大屏刷新时顺带归档」，老师没打开大屏、或页面
+    被关掉，学生交的文件就一直进不去资料夹（表现为「传了文件但资料里没有」）。
+
+    落点：<课程>/<班级>/<学号+姓名>/<原文件名>
+      · 课程 = act_task.course（大屏选课程时写入）；没有就不猜，避免在资料里
+        凭空建一个以活动标题命名的文件夹；
+      · 班级 = 学生自己登录时带的班级，比大屏当前选中的班更准；
+      · 纯数据提交（没有文件）直接返回，不建任何文件夹。
+
+    失败绝不影响提交：异常全部吞掉，只是这次没归档，老师仍可在大屏点「归档」。
+    """
+    try:
+        files = (res or {}).get("files") or []
+        if not files:
+            return None
+        t = ACT.get_task(task) or {}
+        title = str(t.get("title") or "").strip() or str(task)
+        course = str(t.get("course") or "").strip()
+        if not course:
+            try:
+                courses, _err = LEG.CW.list_courses()
+                names = {str(c.get("name") or "") for c in (courses or [])}
+            except Exception:
+                names = set()
+            if title in names:
+                course = title
+        if not course:
+            return None
+        items = [{"name": str(f.get("name") or ""), "url": str(f.get("url") or ""),
+                  "student": str((who or {}).get("姓名") or ""),
+                  "no": str((who or {}).get("学号") or "")} for f in files]
+        out = LEG.CW.archive_items(course, title, "", items,
+                                   cls=str((who or {}).get("班级") or ""))
+        if not (out or {}).get("ok"):
+            # 归档失败不影响提交，但要留一条痕迹，方便老师反馈「文件没进资料」时排查
+            try:
+                STORE.audit("system", "auto-archive-fail",
+                            "%s → %s：%s" % (task, course, (out or {}).get("msg") or "未知原因"))
+            except Exception:
+                pass
+        return out
+    except Exception as e:
+        try:
+            STORE.audit("system", "auto-archive-fail", "%s：%s" % (task, e))
+        except Exception:
+            pass
+        return None
 if not isinstance(CFG.get("typing"), dict):
     CFG["typing"] = {}
 CFG["typing"].setdefault("enabled", False)
@@ -131,7 +183,7 @@ CFG["update"].setdefault("interval_hours", 24) # 检查间隔（小时）
 PET_IDS = ["cat", "dog", "rabbit", "penguin", "panda", "dino", "unicorn", "dragon"]
 COND = threading.Condition()
 STARTED = time.time()
-VERSION = "2.0.35"
+VERSION = "2.0.36"
 ONLINE_WINDOW = 300      # 5 分钟内活跃算在线
 # 可内联直出的附件类型（其余一律按下载处理，防止同源执行脚本）
 _INLINE_EXTS = {"png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "pdf",
@@ -859,8 +911,15 @@ class Handler(LEG.Handler):
             return self._json_cors({"ok": False, "message": str(e)}, 413)
         except LookupError:
             return self._json_cors({"ok": False, "message": "任务不存在"}, 404)
+        # 提交成功立刻就归档（匿名口没有票，身份按提交里带的认）
+        _who = {"学号": str(fields.get("学号") or fields.get("sid") or ""),
+                "姓名": str(fields.get("姓名") or fields.get("name") or ""),
+                "班级": str(fields.get("班级") or fields.get("cls") or "")}
+        _arc = _archive_after_submit(task_key, _who, res)
         _out = {"message": "提交成功", "id": res["id"], "kind": _kind or "legacy",
                 "attachment": res.get("attachment")}
+        if _arc and _arc.get("ok"):
+            _out["archived"] = len(_arc.get("saved") or [])
         if _ignored:
             _out["ignored_files"] = _ignored
         return self._json_cors_success(_out)
@@ -1757,9 +1816,13 @@ class Handler(LEG.Handler):
             return self._json_cors({"ok": False, "msg": str(e)}, 413)
         except LookupError:
             return self._json_cors({"ok": False, "msg": "任务不存在"}, 404)
+        # 提交成功立刻就归档：文件直接进「资料」的课程/班级/学号+姓名 文件夹
+        arc = _archive_after_submit(task, who, res)
         out = {"ok": True, "message": "提交成功", "id": res["id"],
                "kind": kind or "legacy",
                "attachment": res.get("attachment")}
+        if arc and arc.get("ok"):
+            out["archived"] = len(arc.get("saved") or [])
         if ignored:
             out["ignored_files"] = ignored
         return self._json_cors(out, 200)
