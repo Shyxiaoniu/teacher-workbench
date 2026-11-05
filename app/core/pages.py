@@ -386,7 +386,8 @@ ADMIN_UI = """
       ov.addEventListener('pointerdown',function(e){if(e.target===ov)cancel();});
       function onKey(e){
         if(e.key==='Escape'){e.preventDefault();e.stopPropagation();cancel();}
-        else if(e.key==='Enter'&&(!e.target||e.target.tagName!=='TEXTAREA')){
+        /* isComposing：中文输入法回车选词不能当成「确定」提交 */
+        else if(e.key==='Enter'&&!e.isComposing&&(!e.target||e.target.tagName!=='TEXTAREA')){
           e.preventDefault();e.stopPropagation();ok();
         }
       }
