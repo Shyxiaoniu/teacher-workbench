@@ -3,7 +3,7 @@
 > 给班主任和任课老师用的一套**班级工作台**：教师端与学生端共用一个网页入口，
 > 数据全部存在自己的服务器上，不依赖任何第三方云服务。
 
-当前版本：**2.0.24**（版本号唯一代码源：`app/server.py` 的 `VERSION`）
+当前版本：**2.0.25**（版本号唯一代码源：`app/server.py` 的 `VERSION`）
 
 ```
 http://<服务器局域网 IP>:8080/        ← Docker 部署的入口；直接运行时是 :20020
@@ -378,9 +378,9 @@ docker compose up -d --build
 
 | # | 文件 | 位置 |
 |---|---|---|
-| 1 | `app/server.py` | `VERSION = "2.0.24"` —— **唯一代码源** |
-| 2 | `.env.example` | `IMAGE_TAG=2.0.24` |
-| 3 | `docker-compose.yml` | `image: …:${IMAGE_TAG:-2.0.24}`（init 与 workbench **两处**） |
+| 1 | `app/server.py` | `VERSION = "2.0.25"` —— **唯一代码源** |
+| 2 | `.env.example` | `IMAGE_TAG=2.0.25` |
+| 3 | `docker-compose.yml` | `image: …:${IMAGE_TAG:-2.0.25}`（init 与 workbench **两处**） |
 | 4 | `README.md` | 文首「当前版本」 |
 | 5 | `version.json` | 由 `tools/make_release.py` 自动同步 |
 
@@ -408,6 +408,20 @@ python tools/make_release.py --out D:\dist   # 指定输出目录（默认 dist/
 > 「创建发行版」并上传 zip 才会有内容。在线更新走的是 `version.json`（manifest）+
 > raw 直链，不依赖 Releases 功能；想把 zip 同时挂到 Releases 也可以，把
 > `version.json` 的 `zip` 字段改成完整 URL 即可。
+
+### 学习单身份不再重复显示（2.0.25）
+
+- **现象**：学生打开学习单，左上角一条「已识别：七1班 · 肖泽楷（20250108）」，
+  标题下方还有模板自带的「👤 七1班 · 肖泽楷（20250108）」，两条并排。
+- **原因**：`actBuildCustomPage()` 注入的运行时里，`if (WB_SID)` 分支**无条件**把
+  `#actHi` 插到 `<body>` 最前面。而不少学习单模板自己就画了身份胶囊
+  （模板 JS 把班级/姓名/学号填进去），于是重复。
+- **改法**：插入前先扫一遍页面 —— 已经有含**学号或姓名**的短文本（≤80 字的叶子节点，
+  排除 `#actHi` 自己）就不再插，保留模板那条；模板确实没有身份显示时才补平台这条。
+  原有 `#actHi` 存在时仍只更新文字，不重复创建。
+- **验证 b30**（用真实 `actBuildCustomPage` 生成注入页）：
+  - 模板自带胶囊 → 全页 1 处身份、无 `#actHi`、提交按钮正常、登录浮层已摘；
+  - 模板没有身份 → 平台补 1 条「已识别：…」，全页仍只有 1 处。
 
 ### 学生端站内跳转回到当前标签（2.0.24）
 

@@ -17144,11 +17144,29 @@ function actBuildCustomPage(html, opts) {
   R.push('}');
   R.push('window.addEventListener("DOMContentLoaded",actInitCustom);');
   /* 带票进来 = 学生身份已经确定：立刻摘掉登录浮层，别让他再输一遍学号。
-     这段脚本在 </body> 前执行，浮层元素此时已经解析出来了。 */
+     这段脚本在 </body> 前执行，浮层元素此时已经解析出来了。
+
+     2026-11-05 修重复（牛哥截图：左上「已识别：七1班 · 肖泽楷」+ 标题下模板自带的
+     「👤 七1班 · 肖泽楷」两条并排）：
+     以前无条件 insertBefore 到 body 最前面，而不少学习单模板**自己就画了身份胶囊**
+     （模板 JS 会把 `${cls} · ${name}（${sid}）` 填进去）。现在先扫一遍页面：
+     已经有含学号或姓名的短文本（且不是我们这条 #actHi）就不再插，
+     让模板那条留着；模板确实没有身份显示时才补平台这条，保底不丢身份。 */
   R.push('if(WB_SID){ACT_USER={sid:WB_SID,name:WB_NAME,cls:WB_CLS};'
     + 'var lg0=document.getElementById("actLogin");if(lg0&&lg0.parentNode){lg0.parentNode.removeChild(lg0)}'
+    + 'var _sid=String(WB_SID||""),_nm=String(WB_NAME||""),_own=false;'
+    + 'if(_sid||_nm){'
+    + 'var _all=document.body.querySelectorAll("*");'
+    + 'for(var _i=0;_i<_all.length;_i++){var _e=_all[_i];'
+    + 'if(_e.id==="actHi")continue;'
+    + 'if(_e.children&&_e.children.length)continue;'   /* 只看叶子，避免整段命中 */
+    + 'var _t=(_e.textContent||"").trim();'
+    + 'if(!_t||_t.length>80)continue;'
+    + 'if((_sid&&_t.indexOf(_sid)>=0)||(_nm&&_t.indexOf(_nm)>=0)){_own=true;break}'
+    + '}}'
     + 'var hi=document.getElementById("actHi");'
-    + 'if(hi){hi.textContent="已识别："+(WB_CLS?WB_CLS+" · ":"")+WB_NAME+"（"+WB_SID+"）"}else{'
+    + 'if(hi){hi.textContent="已识别："+(WB_CLS?WB_CLS+" · ":"")+WB_NAME+"（"+WB_SID+"）"}'
+    + 'else if(!_own){'
     + 'var d=document.createElement("div");d.id="actHi";'
     + 'd.textContent="已识别："+(WB_CLS?WB_CLS+" · ":"")+WB_NAME+"（"+WB_SID+"）";'
     + 'd.style.cssText="font-size:13px;color:#0F6E56;font-weight:600;margin:10px 0";'
