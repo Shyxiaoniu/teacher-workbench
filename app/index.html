@@ -9030,6 +9030,24 @@ function _decryptStr(stored, key) {
   return new TextDecoder().decode(JS_CIPHER.aesCbcDecrypt(key, iv, ct));
 }
 function decStr(stored) { return _decryptStr(stored, DATA_KEY); }
+/* 分片版（2026-11-05）：只给「导入大备份」用。同步版留着不动 —— 日常读
+   localStorage 的密文都很小，没必要异步；而 10~50MB 的全量备份用同步版
+   会把主线程占死几十秒，表现就是「导入卡死」。 */
+async function _decryptStrAsync(stored, key, onProgress) {
+  if (typeof stored !== 'string' || stored.indexOf(ENC_PREFIX + ':') !== 0) return stored;
+  if (!key) throw new Error('尚未解锁，无法解密');
+  const body = stored.slice(ENC_PREFIX.length + 1);
+  if (body[0] !== 'c') return stored;
+  const p = body.split(':');
+  if (p.length !== 4) return stored;
+  const iv = JS_CIPHER.b64ToBytes(p[1]);
+  const mac = JS_CIPHER.b64ToBytes(p[2]);
+  const ct = JS_CIPHER.b64ToBytes(p[3]);
+  const calc = JS_CIPHER.hmacSha256(key, ct);
+  if (!constEq(calc, mac)) throw new Error('数据完整性校验失败');
+  const plain = await JS_CIPHER.aesCbcDecryptAsync(key, iv, ct, onProgress);
+  return new TextDecoder().decode(plain);
+}
 /** 用「密码 + 指定盐值」直接解密（不依赖当前会话密钥）。
    用于换设备导入：备份文件自带盐值，即使本机盐值和旧设备不同也能解开。 */
 function decryptWithPwd(stored, pwd, saltStr) {
@@ -13936,6 +13954,8 @@ function __backupEnv() {
   return {
     cipher: JS_CIPHER, iters: ENC_ITERS, encPrefix: ENC_PREFIX,
     enc: encStr, dec: _decryptStr,
+    /* 分片解密：导入大备份时用，避免几十秒的主线程冻结（见 _decryptStrAsync） */
+    decAsync: (s, k, cb) => _decryptStrAsync(s, k, cb),
     dbKeys: DB_KEYS, dbPrefix: DB_LS_PREFIX, todoKey: TODO_LOCAL,
     keySet: () => !!DATA_KEY_SET, key: () => DATA_KEY,
     lockActive, lockSalt, curDate, termCfg,

@@ -197,8 +197,15 @@
    * · 返回 null = 用户取消了密码输入
    * · 解不开 / 不是本应用的文件 → throw（调用方提示，且不改动本机数据）
    */
-  async function decode(text) {
+  async function decode(text, onProgress) {
     var env = E();
+    /* 大块解密走分片版（有 decAsync 时）：全量备份常有 10~50MB，纯 JS AES
+       只有 ~0.5 MB/s，同步解会把主线程占死几十秒——用户看到的就是「导入卡死」。
+       小块的 ls 值仍在 apply() 里同步解，没必要异步。 */
+    var decBig = async function (s, k) {
+      if (env.decAsync) return await env.decAsync(s, k, onProgress);
+      return env.dec(s, k);
+    };
     var raw = String(text || '').replace(/^\uFEFF/, '');      /* 去掉可能的 BOM */
     if (!raw.trim()) throw new Error('文件是空的');
     var parsed = null;
@@ -237,7 +244,7 @@
     if (parsed && parsed.app === ENV) {
       if (!parsed.payload) throw new Error('备份文件不完整（缺少 payload，可能没下载完）');
       if (env.keySet()) {
-        try { return { dump: JSON.parse(env.dec(parsed.payload, env.key())), key: env.key(), mode: 'enc' }; }
+        try { return { dump: JSON.parse(await decBig(parsed.payload, env.key())), key: env.key(), mode: 'enc' }; }
         catch (e) { /* 本机密钥解不开 → 走密码框 */ }
       }
       var pwd = await askPassword('此备份已加密',
@@ -245,7 +252,7 @@
       if (!pwd) return null;
       var k = deriveKey(pwd, parsed.salt || '', env);
       var plain;
-      try { plain = env.dec(parsed.payload, k); }
+      try { plain = await decBig(parsed.payload, k); }
       catch (e) { throw new Error('密码不对，或备份文件已损坏'); }
       var d = null;
       try { d = JSON.parse(plain); } catch (e) { throw new Error('备份内容损坏（解密后不是有效数据）'); }
@@ -255,7 +262,7 @@
     /* ③ 旧版格式：整串密文，没有外壳（盐值没写进文件，只能按本机盐试） */
     if (raw.indexOf(env.encPrefix + ':') === 0) {
       if (env.keySet()) {
-        try { return { dump: JSON.parse(env.dec(raw, env.key())), key: env.key(), mode: 'enc' }; }
+        try { return { dump: JSON.parse(await decBig(raw, env.key())), key: env.key(), mode: 'enc' }; }
         catch (e) { /* 继续走密码框 */ }
       }
       if (!env.lockSalt()) {
@@ -266,7 +273,7 @@
       if (!pwd2) return null;
       var k2 = deriveKey(pwd2, env.lockSalt(), env);
       var plain2;
-      try { plain2 = env.dec(raw, k2); }
+      try { plain2 = await decBig(raw, k2); }
       catch (e) { throw new Error('密码不对，或这是别的设备的旧版备份（不含盐值，无法跨设备还原）'); }
       var d2 = null;
       try { d2 = JSON.parse(plain2); } catch (e) { throw new Error('备份内容损坏'); }
@@ -668,7 +675,12 @@
       r.onload = async function () {
         var parsed;
         busy('正在校验备份文件…');
-        try { parsed = await decode(String(r.result || '')); }
+        try {
+          /* 进度回调：大备份解密要几十秒，没有反馈用户会以为卡死 */
+          parsed = await decode(String(r.result || ''), function (p) {
+            busy('正在解密备份 ' + Math.round(p * 100) + '%…');
+          });
+        }
         catch (e) {
           fail('导入失败', (e && e.message) || e, '本机数据没有任何改动。');
           return;

@@ -3,7 +3,7 @@
 > 给班主任和任课老师用的一套**班级工作台**：教师端与学生端共用一个网页入口，
 > 数据全部存在自己的服务器上，不依赖任何第三方云服务。
 
-当前版本：**2.0.20**（版本号唯一代码源：`app/server.py` 的 `VERSION`）
+当前版本：**2.0.21**（版本号唯一代码源：`app/server.py` 的 `VERSION`）
 
 ```
 http://<服务器局域网 IP>:8080/        ← Docker 部署的入口；直接运行时是 :20020
@@ -378,9 +378,9 @@ docker compose up -d --build
 
 | # | 文件 | 位置 |
 |---|---|---|
-| 1 | `app/server.py` | `VERSION = "2.0.20"` —— **唯一代码源** |
-| 2 | `.env.example` | `IMAGE_TAG=2.0.20` |
-| 3 | `docker-compose.yml` | `image: …:${IMAGE_TAG:-2.0.20}`（init 与 workbench **两处**） |
+| 1 | `app/server.py` | `VERSION = "2.0.21"` —— **唯一代码源** |
+| 2 | `.env.example` | `IMAGE_TAG=2.0.21` |
+| 3 | `docker-compose.yml` | `image: …:${IMAGE_TAG:-2.0.21}`（init 与 workbench **两处**） |
 | 4 | `README.md` | 文首「当前版本」 |
 | 5 | `version.json` | 由 `tools/make_release.py` 自动同步 |
 
@@ -408,6 +408,19 @@ python tools/make_release.py --out D:\dist   # 指定输出目录（默认 dist/
 > 「创建发行版」并上传 zip 才会有内容。在线更新走的是 `version.json`（manifest）+
 > raw 直链，不依赖 Releases 功能；想把 zip 同时挂到 Releases 也可以，把
 > `version.json` 的 `zip` 字段改成完整 URL 即可。
+
+### 导入不再卡死：解密分片化（2.0.21）
+
+- **卡在哪**：全量备份的解密是纯 JS（局域网 `http://` 下 `crypto.subtle` 不可用），
+  AES 只有 **0.54 MB/s**。实测：2MB 要 3.7 秒、8MB 要 14.9 秒、20MB 超过 35 秒，
+  而且全程**同步占用主线程**，页面定格、按钮点不动 —— 用户看到的就是「导入卡死」。
+  PBKDF2 15 万轮另算 1.1 秒；服务端导入反而很快（3700 行 0.38 秒）。
+- **怎么改**：`cipher.js` 新增 `aesCbcDecryptAsync`，按 64KB 分片解密、每片让出主线程
+  （每片约 120ms，低于"可感知卡顿"阈值），并提供进度回调；`backup.js` 的大块解密改走
+  这条路，期间显示「正在解密备份 42%…」。同步版保留给小块数据（localStorage 里的密文）。
+- **代价**：总耗时只多约 5%（实测 3994ms vs 3792ms），但界面全程可响应。
+- 顺带确认：**服务端从来不是瓶颈**（`import_snapshot` 1000 行 0.13 秒），
+  以后遇到"导入慢"先测前端解密，别去改数据库。
 
 ### 更新提醒改成底部提示条（2.0.20）
 

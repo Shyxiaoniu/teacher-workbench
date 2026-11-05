@@ -148,6 +148,43 @@
     const pad = out[out.length-1];
     return out.slice(0, out.length - (pad > 0 && pad <= 16 ? pad : 0));
   }
+  /**
+   * 分片解密（2026-11-05 加）：同一套算法，每 256KB 让出一次主线程。
+   *
+   * 为什么需要：全量备份里的服务端数据 + 附件 base64 常有 10~50MB，纯 JS
+   * AES 只有 ~0.5 MB/s —— 同步解密 20MB 要 35 秒以上，期间主线程完全占死，
+   * 页面定格、按钮点不动，用户看到的就是「本地数据导入卡死」。
+   * 切成分片后总耗时基本不变，但界面能转、进度能走、能取消。
+   *
+   * 不足 16 字节的尾部用 padding 处理，与同步版逐字节一致（b25 有对拍）。
+   */
+  function aesCbcDecryptAsync(key, iv, ciphertext, onProgress, chunkBytes){
+    /* 默认 64KB ≈ 每块 120ms（纯 JS 约 0.5MB/s）：小块才能让浏览器在块间
+       真正刷新一次。256KB 一块要 470ms，实测定时器只跳 8 次，界面还是顿。 */
+    const CH = Math.max(16, ((chunkBytes || 65536) >> 4) << 4);   /* 16 字节对齐 */
+    const { w, Nr } = keyExpansion(key);
+    const out = new Uint8Array(ciphertext.length);
+    let prev = iv.slice(0,16);
+    let off = 0;
+    return new Promise(function(resolve, reject){
+      function step(){
+        try{
+          const end = Math.min(ciphertext.length, off + CH);
+          for(; off < end; off += 16){
+            const blk = ciphertext.slice(off, off+16);
+            const d = invCipher(blk,w,Nr);
+            for(let i=0;i<16;i++) out[off+i]=d[i]^prev[i];
+            prev = blk;
+          }
+          if(onProgress) onProgress(ciphertext.length ? off/ciphertext.length : 1);
+          if(off < ciphertext.length){ setTimeout(step, 0); return; }
+          const pad = out[out.length-1];
+          resolve(out.slice(0, out.length - (pad > 0 && pad <= 16 ? pad : 0)));
+        }catch(e){ reject(e); }
+      }
+      setTimeout(step, 0);
+    });
+  }
   function hmacSha256(key, msg){
     const blockSize=64; let k=key;
     if(k.length>blockSize) k=sha256(k);
@@ -179,6 +216,7 @@
     if(typeof atob==='function'){ const bin=atob(s); const o=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) o[i]=bin.charCodeAt(i); return o; }
     return new Uint8Array(Buffer.from(s,'base64'));
   }
-  const api = { sha256, aesCbcEncrypt, aesCbcDecrypt, hmacSha256, pbkdf2, bytesToB64, b64ToBytes };
+  const api = { sha256, aesCbcEncrypt, aesCbcDecrypt, aesCbcDecryptAsync,
+                hmacSha256, pbkdf2, bytesToB64, b64ToBytes };
   root.JS_CIPHER = api;
 })(typeof window !== 'undefined' ? window : globalThis);
