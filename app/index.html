@@ -17427,7 +17427,7 @@ function actBuildCustomPage(html, opts) {
   R.push('function actRoster(){if(!ACT_CLASS)return Promise.resolve(false);return fetch(location.origin+"/api/roster?class="+encodeURIComponent(ACT_CLASS),{cache:"no-store"}).then(function(r){return r.ok?r.json():null}).then(function(j){var a=(j&&j.students)||[];if(!a.length)return false;ACT_ROSTER={c:j.cls||ACT_CLASS,s:a.map(function(x){return [String(x.sid||"").trim(),String(x.name||"").trim()]}).filter(function(x){return x[0]})};ACT_ROSTER.s.forEach(function(p){ACT_MAP[p[0]]=p[1]});return true}).catch(function(){return false})}');
   R.push('function actShowLogin(){var no=(document.getElementById("actSid")||{}).value;var h=document.getElementById("actLoginHint");if(!no){if(h)h.textContent="";return}if(!ACT_ROSTER){if(h)h.textContent="（未取到花名册，将以你填写的为准）";return}var nm=ACT_MAP[no.trim()];if(nm){if(h){h.style.color="#1D9E75";h.textContent="匹配到："+nm}}else{if(h){h.style.color="#E24B4A";h.textContent="学号不在本班名单"}}}');
   R.push('function actDoLogin(){var no=(document.getElementById("actSid")||{}).value;no=(no||"").trim();if(!no){var h=document.getElementById("actLoginHint");if(h){h.style.color="#E24B4A";h.textContent="请填写学号"}return}var nm="",cls="";if(ACT_ROSTER){nm=ACT_MAP[no]||"";cls=ACT_ROSTER.c||"";if(!nm){var m=document.getElementById("actLoginMsg");if(m)m.textContent="该学号不在本班名单，请核对。";var h=document.getElementById("actLoginHint");if(h){h.style.color="#E24B4A";h.textContent="学号不在本班名单"}return}}ACT_USER={sid:no,name:nm,cls:cls};var lg=document.getElementById("actLogin");if(lg)lg.style.display="none";document.querySelectorAll("[data-act-needlogin]").forEach(function(b){b.disabled=false})}');
-  R.push('function actGather(c){var fd=new FormData();var els=c.querySelectorAll("input[name],textarea[name],select[name],input[data-f],textarea[data-f],select[data-f]");els.forEach(function(e){var k=e.getAttribute("name")||e.getAttribute("data-f");if(!k)return;if(e.type==="file"){for(var i=0;i<e.files.length;i++)fd.append(k,e.files[i],e.files[i].name)}else if(e.type==="radio"||e.type==="checkbox"){if(e.checked)fd.append(k,e.value)}else{fd.append(k,e.value)}});return fd}');
+  R.push('function actGather(c,withFiles){var fd=new FormData();var els=c.querySelectorAll("input[name],textarea[name],select[name],input[data-f],textarea[data-f],select[data-f]");els.forEach(function(e){var k=e.getAttribute("name")||e.getAttribute("data-f");if(!k)return;if(e.type==="file"){if(!withFiles)return;for(var i=0;i<e.files.length;i++)fd.append(k,e.files[i],e.files[i].name)}else if(e.type==="radio"||e.type==="checkbox"){if(e.checked)fd.append(k,e.value)}else{fd.append(k,e.value)}});return fd}');
   /* 存档快照（2026-11-05）：提交瞬间克隆整页，把当前输入回写进属性再序列化。
      必须「先克隆、改克隆」—— 直接改真实 DOM 会动到学生正在看的页面
      （value/checked 一改，光标和回显都会跳）。file 控件不回写：文件本身
@@ -17452,7 +17452,7 @@ function actBuildCustomPage(html, opts) {
     + 'for(var m=0;m<all.length;m++){var at=all[m].attributes;for(var n=at.length-1;n>=0;n--){var an=at[n].name.toLowerCase();if(an.indexOf("on")===0)all[m].removeAttribute(at[n].name)}}'
     + 'return "<!doctype html>"+root.outerHTML'
     + '}catch(err){return ""}}');
-  R.push('function actSubmitBlock(btn,container,label){if(!ACT_USER){var s9=container.querySelector("[data-act-status]");if(s9){s9.textContent="请先在上面填写学号登录";s9.className="act-st err"}return}var _fi=(container!==document.body&&container.querySelectorAll)?container.querySelectorAll("input[type=file]"):[];if(_fi&&_fi.length){var _has=false;for(var _i=0;_i<_fi.length;_i++){var _fl=_fi[_i].files;if(_fl){for(var _j=0;_j<_fl.length;_j++){if(_fl[_j]&&_fl[_j].size>0){_has=true}}}}var _allow=(container.getAttribute&&container.getAttribute("data-allow-empty")==="1");if(!_has&&!_allow){var _s0=container.querySelector("[data-act-status]");if(_s0){_s0.textContent="本题要求上传文件，请选择文件后再提交（老师未开启「允许空文件提交」）。";_s0.className="act-st err"}return}}var _ti=container.querySelectorAll?container.querySelectorAll("input,textarea,select"):[];var _hasTextField=false,_filled=false,_fileSel=false;for(var _a=0;_a<_ti.length;_a++){var _e2=_ti[_a],_tp2=(_e2.type||"").toLowerCase();if(_e2.disabled||_tp2==="hidden")continue;if(_e2.id==="actSid"||(_e2.closest&&_e2.closest("#actLogin")))continue;if(_tp2==="file"){if(_e2.files){for(var _b=0;_b<_e2.files.length;_b++){if(_e2.files[_b]&&_e2.files[_b].size>0)_fileSel=true}}continue}_hasTextField=true;if(_tp2==="checkbox"||_tp2==="radio"){if(_e2.checked)_filled=true}else if(String(_e2.value||"").trim()!==""){_filled=true}}if(_hasTextField&&!_filled&&!_fileSel){var _sc2=container.querySelector("[data-act-status]");if(_sc2){_sc2.textContent="请先填写内容再提交";_sc2.className="act-st err"}return}btn.disabled=true;var st=container.querySelector("[data-act-status]");if(st){st.textContent="准备提交…";st.className="act-st"}actResolveApi().then(function(tgt){if(!tgt){if(st){st.textContent="这一页还没接上提交地址，请让老师检查活动绑定";st.className="act-st err"}btn.disabled=false;return}var fd=actGather(container);try{var _arc=actArchiveHtml();if(_arc&&_arc.length<2500000)fd.append("__archive",_arc)}catch(e){}if(WB_SUBMIT){fd.append("按钮",label)}else{fd.append("学号",ACT_USER.sid);fd.append("姓名",ACT_USER.name);fd.append("班级",ACT_USER.cls);fd.append("按钮",label)}if(st){st.textContent="提交中…";st.className="act-st"}fetch(tgt,{method:"POST",body:fd,mode:"cors"}).then(function(r){return r.json().catch(function(){return{}}).then(function(j){return {ok:r.ok,j:j}})}).then(function(o){var ok=o.ok||(o.j&&(o.j.ok||o.j.success));if(st){st.textContent=ok?"提交成功":"提交失败";st.className="act-st "+(ok?"ok":"err")}btn.disabled=false}).catch(function(e){if(st){st.textContent="网络错误：连不上提交服务，请确认与老师在同一局域网";st.className="act-st err"}btn.disabled=false})})}');
+  R.push('function actSubmitBlock(btn,container,label){if(!ACT_USER){var s9=container.querySelector("[data-act-status]");if(s9){s9.textContent="请先在上面填写学号登录";s9.className="act-st err"}return}var _needFiles=!!(container.getAttribute&&container.getAttribute("data-need-file")==="1");if(!_needFiles&&container.querySelectorAll){_needFiles=container.querySelectorAll("input[type=file]").length>0}var _fi=(container!==document.body&&container.querySelectorAll)?container.querySelectorAll("input[type=file]"):[];if(_fi&&_fi.length){var _has=false;for(var _i=0;_i<_fi.length;_i++){var _fl=_fi[_i].files;if(_fl){for(var _j=0;_j<_fl.length;_j++){if(_fl[_j]&&_fl[_j].size>0){_has=true}}}}var _allow=(container.getAttribute&&container.getAttribute("data-allow-empty")==="1");if(!_has&&!_allow){var _s0=container.querySelector("[data-act-status]");if(_s0){_s0.textContent="本题要求上传文件，请选择文件后再提交（老师未开启「允许空文件提交」）。";_s0.className="act-st err"}return}}var _ti=container.querySelectorAll?container.querySelectorAll("input,textarea,select"):[];var _hasTextField=false,_filled=false,_fileSel=false;for(var _a=0;_a<_ti.length;_a++){var _e2=_ti[_a],_tp2=(_e2.type||"").toLowerCase();if(_e2.disabled||_tp2==="hidden")continue;if(_e2.id==="actSid"||(_e2.closest&&_e2.closest("#actLogin")))continue;if(_tp2==="file"){if(_e2.files){for(var _b=0;_b<_e2.files.length;_b++){if(_e2.files[_b]&&_e2.files[_b].size>0)_fileSel=true}}continue}_hasTextField=true;if(_tp2==="checkbox"||_tp2==="radio"){if(_e2.checked)_filled=true}else if(String(_e2.value||"").trim()!==""){_filled=true}}if(_hasTextField&&!_filled&&!_fileSel){var _sc2=container.querySelector("[data-act-status]");if(_sc2){_sc2.textContent="请先填写内容再提交";_sc2.className="act-st err"}return}btn.disabled=true;var st=container.querySelector("[data-act-status]");if(st){st.textContent="准备提交…";st.className="act-st"}actResolveApi().then(function(tgt){if(!tgt){if(st){st.textContent="这一页还没接上提交地址，请让老师检查活动绑定";st.className="act-st err"}btn.disabled=false;return}var fd=actGather(container,_needFiles);try{var _arc=actArchiveHtml();if(_arc&&_arc.length<2500000)fd.append("__archive",_arc)}catch(e){}fd.append("__kind",_needFiles?"file":"data");if(WB_SUBMIT){fd.append("按钮",label)}else{fd.append("学号",ACT_USER.sid);fd.append("姓名",ACT_USER.name);fd.append("班级",ACT_USER.cls);fd.append("按钮",label)}if(st){st.textContent="提交中…";st.className="act-st"}fetch(tgt,{method:"POST",body:fd,mode:"cors"}).then(function(r){return r.json().catch(function(){return{}}).then(function(j){return {ok:r.ok,j:j}})}).then(function(o){var ok=o.ok||(o.j&&(o.j.ok||o.j.success));if(st){st.textContent=ok?"提交成功":"提交失败";st.className="act-st "+(ok?"ok":"err")}btn.disabled=false}).catch(function(e){if(st){st.textContent="网络错误：连不上提交服务，请确认与老师在同一局域网";st.className="act-st err"}btn.disabled=false})})}');
   R.push('function actTestSubmit(){actResolveApi().then(function(tgt){if(!tgt){alert("未接上提交地址，请确认活动已绑定");return}var fd=new FormData();fd.append("学号","TEST"+Date.now().toString().slice(-6));fd.append("姓名","测试同学");fd.append("班级",ACT_CLASS||"测试班");fd.append("按钮","测试提交");fd.append("测试内容","「查看-测试提交」模拟数据 "+new Date().toLocaleTimeString());fetch(tgt,{method:"POST",body:fd,mode:"cors"}).then(function(r){return r.json().catch(function(){return{}}).then(function(j){return{ok:r.ok,j:j}})}).then(function(o){var ok=o.ok||(o.j&&(o.j.ok||o.j.success));alert(ok?"✅ 测试提交成功，请切到数据大屏查看":"❌ 提交失败："+(o.j&&o.j.msg||r.status))}).catch(function(e){alert("网络错误："+e.message)})})}');
   R.push('function actInitCustom(){');
   R.push('if(ACT_TEST){var lg0=document.getElementById("actLogin");if(lg0&&lg0.parentNode)lg0.parentNode.removeChild(lg0);ACT_USER={sid:"TEST"+(Date.now()+"").slice(-6),name:"测试同学",cls:ACT_CLASS||"测试班"};}');
@@ -17536,7 +17536,7 @@ function actBuildCustomPage(html, opts) {
  *    ③ 其余 → 整页一个「提交整个页面」（记录里的「按钮」= 整页提交）。
  */
 function actScanLayout(rawHtml, perQ) {
-  const out = { mode: 'perq', buttons: [], source: 'scan' };
+  const out = { mode: 'perq', buttons: [], file_buttons: [], source: 'scan' };
   let doc;
   try { doc = new DOMParser().parseFromString(String(rawHtml || ''), 'text/html'); }
   catch (e) { return out; }
@@ -17556,20 +17556,42 @@ function actScanLayout(rawHtml, perQ) {
     return norm(h && h.textContent);
   };
   const addBtn = label => { label = norm(label); if (label && out.buttons.indexOf(label) < 0) out.buttons.push(label); };
+  /* 这个任务要不要收文件（2026-11-05）：
+     判据 = 题目块里有没有 <input type="file">，或者块上显式写了 data-need-file="1"
+     （老师先摆好任务结构、文件控件稍后再加时用）。存进 layout.file_buttons，
+     提交时前端按它收集、服务端按它兜底，纯数据任务不会被塞进文件。 */
+  const wantFile = el => {
+    try {
+      if (!el || !el.querySelector) return false;
+      if (String(el.getAttribute && el.getAttribute('data-need-file') || '') === '1') return true;
+      return !!el.querySelector('input[type=file]');
+    } catch (e) { return false; }
+  };
+  const addFileBtn = label => {
+    label = norm(label);
+    if (label && out.file_buttons.indexOf(label) < 0) out.file_buttons.push(label);
+  };
   const custom = blocks.filter(b => String(b.getAttribute('data-submit-label') || '').trim());
   if (custom.length) {
     out.mode = 'perq';
-    custom.forEach(b => addBtn(String(b.getAttribute('data-submit-label') || '').trim()));
+    custom.forEach(b => {
+      const label = String(b.getAttribute('data-submit-label') || '').trim();
+      addBtn(label);
+      if (wantFile(b)) addFileBtn(label);
+    });
   } else if (perQ !== false && blocks.length) {
     out.mode = 'perq';
     blocks.forEach((b, i) => {
       const label = String(b.getAttribute('data-btn') || '').trim() || titleOf(b) || ('第' + (i + 1) + '题');
       addBtn(label);
+      if (wantFile(b)) addFileBtn(label);
     });
   } else {
     out.mode = 'page';
     addBtn('整页提交');
+    if (wantFile(doc.body)) addFileBtn('整页提交');
   }
+  out.file_buttons = out.file_buttons.map(norm).filter((v, i, a) => v && a.indexOf(v) === i);
   out.buttons = out.buttons.map(norm).filter((v, i, a) => v && a.indexOf(v) === i);
   out.updated_at = new Date().toISOString();
   return out;
@@ -17760,7 +17782,9 @@ function actSubId(s) {
   const base = perQ ? (no || nm) : (nm || no);
   return base ? (perQ ? base + '#' + btn : base) : '';
 }
-/* 先按提交标识去重（保留提交时间更晚的一条），再按提交时间升序（提交越晚排序越靠后） */
+/* 先按提交标识去重（保留提交时间更晚的一条），再按提交时间升序（提交越晚排序越靠后）。
+   同一条标识下如果后来那次没带文件，把之前那次的附件继承过来（actKeepFiles），
+   避免「先交文件、后又交了一次纯数据」导致大屏上文件消失。 */
 function actDedupAsc(rows) {
   const byId = new Map();
   (rows || []).forEach((r, i) => {
@@ -17768,7 +17792,11 @@ function actDedupAsc(rows) {
     const key = id || ('_' + i);
     const t = String(r.submitted_at || '');
     const prev = byId.get(key);
-    if (!prev || t >= String(prev.r.submitted_at || '')) byId.set(key, { r, i });
+    if (!prev || t >= String(prev.r.submitted_at || '')) {
+      const keep = Object.assign({}, r);
+      if (prev) actKeepFiles(keep, prev.r);
+      byId.set(key, { r: keep, i });
+    }
   });
   const kept = [...byId.values()].map(x => x.r);
   kept.sort((a, b) => {
@@ -17782,6 +17810,31 @@ function actDedupAsc(rows) {
 function actTaskOf(s) {
   const b = String((s && s['按钮']) || '').trim();
   return b === '测试提交' ? '' : b;
+}
+/* 合并提交时保留附件的「继承」规则（2026-11-05）
+   同一学生先交文件、后交了一次纯数据（或反过来），按时间去重只留最新那条 ——
+   如果最新的没有附件，文件就从大屏上消失了。这里把旧记录里的附件 / 学习单存档
+   带过来：文件不会因为一次纯数据提交而丢，但也不会覆盖新记录自己的字段。 */
+function actKeepFiles(keep, older) {
+  if (!keep || !older) return keep;
+  const a = actAttachments(keep), b = actAttachments(older);
+  if (!a.length && b.length) {
+    keep.attachment = older.attachment;
+    if ((!keep._files || !keep._files.length) && older._files && older._files.length)
+      keep._files = older._files.slice();
+  } else if (a.length && b.length) {
+    const all = a.slice();
+    b.forEach(u => { if (all.indexOf(u) < 0) all.push(u); });
+    keep.attachment = all.length === 1 ? all[0] : all;
+    if (keep._files && older._files) {
+      const seen = {};
+      keep._files.forEach(f => { seen[f.url] = 1; });
+      older._files.forEach(f => { if (f && f.url && !seen[f.url]) keep._files.push(f); });
+    }
+  }
+  if (!keep._sheet && older._sheet) keep._sheet = older._sheet;
+  if (!keep._kind && older._kind) keep._kind = older._kind;
+  return keep;
 }
 /* 按人合并：同一学生的多次提交收成一条（2026-11-05）
    —— _tasks 记他交过哪几个任务（窗口标题用）、_count 记原始条数、
@@ -17807,6 +17860,7 @@ function actDedupByPerson(rows) {
       merged._tasks = tasks;
       merged._count = cnt;
       if (merged._submission_id == null) merged._submission_id = sid;
+      actKeepFiles(merged, cur);
       m.set(k, merged);
     }
   });

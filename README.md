@@ -3,7 +3,7 @@
 > 给班主任和任课老师用的一套**班级工作台**：教师端与学生端共用一个网页入口，
 > 数据全部存在自己的服务器上，不依赖任何第三方云服务。
 
-当前版本：**2.0.33**（版本号唯一代码源：`app/server.py` 的 `VERSION`）
+当前版本：**2.0.34**（版本号唯一代码源：`app/server.py` 的 `VERSION`）
 
 ```
 http://<服务器局域网 IP>:8080/        ← Docker 部署的入口；直接运行时是 :20020
@@ -378,9 +378,9 @@ docker compose up -d --build
 
 | # | 文件 | 位置 |
 |---|---|---|
-| 1 | `app/server.py` | `VERSION = "2.0.33"` —— **唯一代码源** |
-| 2 | `.env.example` | `IMAGE_TAG=2.0.33` |
-| 3 | `docker-compose.yml` | `image: …:${IMAGE_TAG:-2.0.33}`（init 与 workbench **两处**） |
+| 1 | `app/server.py` | `VERSION = "2.0.34"` —— **唯一代码源** |
+| 2 | `.env.example` | `IMAGE_TAG=2.0.34` |
+| 3 | `docker-compose.yml` | `image: …:${IMAGE_TAG:-2.0.34}`（init 与 workbench **两处**） |
 | 4 | `README.md` | 文首「当前版本」 |
 | 5 | `version.json` | 由 `tools/make_release.py` 自动同步 |
 
@@ -444,6 +444,41 @@ python tools/make_release.py --out D:\dist   # 指定输出目录（默认 dist/
 | 工具页 | 显示最新一张推送（现已移除） |
 | 今日页 | 「老师刚推送的截图」小卡（现已移除） |
 | 接口 | `GET /api/v2/tool/latest`、`GET /api/v2/tool/img?id=`（现已 404） |
+
+### 学习单提交按任务类型分流：文件任务 / 纯数据任务（2.0.34）
+
+**① 适用范围**
+
+只作用于**课堂学习单（活动提交）**这一条链路：学生端点学习单里的提交按钮 →
+`/api/v2/student/submit`（带票）或 `/api/act/<活动>`（匿名口）。作业收交、资料上传、
+作品归档这些功能不走这套判断，行为不变。
+
+**② 判断条件（三级，先细后粗）**
+
+| 顺序 | 依据 | 说明 |
+|---|---|---|
+| ① | 前端 `__kind` | 点提交时看**当前题目块**里有没有 `input[type=file]`（或块上写了 `data-need-file="1"`）：有 → `file`，没有 → `data` |
+| ② | 下发扫描的 `layout.file_buttons` | 老页面没有 `__kind`（2.0.33 之前下发）时，按按钮名查扫描结果 |
+| ③ | 都没有 | 保持旧行为「收到什么存什么」，不拦老模板 |
+
+**③ 收集与存储**
+
+| 类型 | 收集 | 存到哪 |
+|---|---|---|
+| 文件任务 | 字段 + 文件（`FormData` 带 file） | `act_submission.data.attachment` = 附件 URL（多个为数组）；`act_file` 一行一个文件（含原始文件名/大小/MIME）；读接口额外给 `_files` |
+| 纯数据任务 | **只收字段**，`type=file` 一律跳过 | 只有 `act_submission.data`（各字段 + 学号/姓名/班级 + `_kind: "data"`）；**不写盘、不产生 `attachment`、不占 `act_file` 行** |
+| 两者都有 | 学习单整页存档 | `data._sheet` = 存档 HTML 地址；**不算学生作品**，`_files` 里已排除 |
+
+服务端还有一道兜底：`kind=data` 时即使请求里带了文件也直接丢弃（响应回
+`ignored_files: N`），`ACT.add_submission` 里再兜一次 —— 纯数据任务永远不会落附件。
+
+**④ 互不冲突**
+
+- 同一学生「先交文件、后又交了一次纯数据」时，按人去重会保留最新一条；
+  `actKeepFiles()` 把旧记录的 `attachment / _files / _sheet` 继承过来，
+  文件不会因为一次纯数据提交而消失；
+- 反过来（先数据后文件）以新记录为准，附件自然是新的；
+- 逐题提交时每个按钮独立记录（key 含按钮名），文件任务和数据任务互不覆盖。
 
 ### 作品在线预览与自动归档 / 清空彻底化（2.0.33）
 

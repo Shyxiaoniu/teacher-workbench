@@ -132,7 +132,7 @@ CFG["update"].setdefault("interval_hours", 24) # 检查间隔（小时）
 PET_IDS = ["cat", "dog", "rabbit", "penguin", "panda", "dino", "unicorn", "dragon"]
 COND = threading.Condition()
 STARTED = time.time()
-VERSION = "2.0.33"
+VERSION = "2.0.34"
 ONLINE_WINDOW = 300      # 5 分钟内活跃算在线
 # 可内联直出的附件类型（其余一律按下载处理，防止同源执行脚本）
 _INLINE_EXTS = {"png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "pdf",
@@ -848,16 +848,25 @@ class Handler(LEG.Handler):
                 "姓名": str(fields.get("姓名") or fields.get("name") or ""),
                 "班级": str(fields.get("班级") or fields.get("cls") or "")}
         _arc = self._sheet_archive(task_key, fields.pop("__archive", ""), _who)
+        # 任务类型（2026-11-05）：纯数据任务丢掉误带的文件，与带票提交口保持一致
+        _allow, _kind = self._accept_files(task_key, fields)
+        _ignored = 0
+        if _allow is False and files:
+            _ignored = len(files)
+            files = []
         try:
             res = ACT.add_submission(task_key, fields, files,
-                                     ip=self._client_ip_safe(), archive=_arc)
+                                     ip=self._client_ip_safe(), archive=_arc,
+                                     kind=_kind)
         except ValueError as e:
             return self._json_cors({"ok": False, "message": str(e)}, 413)
         except LookupError:
             return self._json_cors({"ok": False, "message": "任务不存在"}, 404)
-        return self._json_cors_success({"message": "提交成功",
-                                        "id": res["id"],
-                                        "attachment": res.get("attachment")})
+        _out = {"message": "提交成功", "id": res["id"], "kind": _kind or "legacy",
+                "attachment": res.get("attachment")}
+        if _ignored:
+            _out["ignored_files"] = _ignored
+        return self._json_cors_success(_out)
 
     def _client_ip_safe(self):
         try:
@@ -1682,6 +1691,31 @@ class Handler(LEG.Handler):
         except Exception:
             return None
 
+    def _accept_files(self, task, fields):
+        """这次提交收不收文件（2026-11-05）。
+
+        判断顺序（先细后粗，保证老页面也能用）：
+          ① 前端提交时按「当前题目块里有没有 file 控件」写进来的 __kind：
+             file = 文件任务，data = 纯数据任务 —— 最贴近学生实际操作的这一块；
+          ② 没有 __kind（2.0.33 之前下发的页面）→ 查下发时扫描的 layout.file_buttons；
+          ③ 两者都没有（更老的模板）→ None：保持「收到什么存什么」的旧行为。
+
+        返回 (allow, kind)；allow=False 时调用方必须把 files 丢掉 ——
+        纯数据任务不写盘、不产生 attachment，也不占 act_file 行。
+        """
+        f = fields if isinstance(fields, dict) else {}
+        kind = str(f.pop("__kind", "") or "").strip().lower()
+        if kind in ("file", "data"):
+            return kind == "file", kind
+        lay = self._task_layout(task) or {}
+        fb = lay.get("file_buttons")
+        if isinstance(fb, list):
+            btn = str(f.get("按钮") or "").strip()
+            names = [str(x or "").strip() for x in fb]
+            hit = btn in names
+            return hit, ("file" if hit else "data")
+        return None, ""
+
     def _student_submit(self, qs):
         tok = (qs.get("t") or [""])[0] or self.headers.get("X-WB-Ticket") or ""
         gt = get_gticket(tok)
@@ -1745,16 +1779,25 @@ class Handler(LEG.Handler):
         archive = self._sheet_archive(task, fields.pop("__archive", ""), who)
         # 身份以服务端签的票为准，页面自己填的一律覆盖（防冒名）
         fields.update(who)
+        # 任务类型：纯数据任务即使前端误带了文件，也在这里丢掉（不写盘、不产生 attachment）
+        allow_files, kind = self._accept_files(task, fields)
+        ignored = 0
+        if allow_files is False and files:
+            ignored = len(files)
+            files = []
         try:
             res = ACT.add_submission(task, fields, files, ip=self._client_ip_safe(),
                                      sid=who.get("学号"), name=who.get("姓名"),
-                                     cls=who.get("班级"), archive=archive)
+                                     cls=who.get("班级"), archive=archive, kind=kind)
         except ValueError as e:
             return self._json_cors({"ok": False, "msg": str(e)}, 413)
         except LookupError:
             return self._json_cors({"ok": False, "msg": "任务不存在"}, 404)
         out = {"ok": True, "message": "提交成功", "id": res["id"],
+               "kind": kind or "legacy",
                "attachment": res.get("attachment")}
+        if ignored:
+            out["ignored_files"] = ignored
         return self._json_cors(out, 200)
 
     def _json_cors(self, obj, code=200):

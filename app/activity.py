@@ -321,8 +321,12 @@ class ActivityStore(object):
     # 提交
     # ------------------------------------------------------------------
     def add_submission(self, task_key, data, files=None, ip="", sid="", name="", cls="",
-                       archive=None):
+                       archive=None, kind=""):
         """收一条提交。files = [{name, data, mime}]，写盘后把 URL 挂进 data['attachment']。
+
+        kind（2026-11-05）：任务类型 —— "file" 文件任务 / "data" 纯数据任务。
+        只作为内部字段写进 data["_kind"]（下划线开头，导出与表格都不展示），
+        用来区分「这条提交本来该不该有附件」；调用方负责在 data 任务里不传 files。
 
         archive（2026-11-05）：学习单的整页快照 {name,data,mime}，单独落一份 .html，
         地址记在 data['_sheet']。不混进 attachment —— 那是学生上传的作品文件，
@@ -332,6 +336,11 @@ class ActivityStore(object):
         if not self.get_task(task_key):
             raise LookupError("活动不存在")
         data = dict(data or {})
+        if kind in ("file", "data"):
+            data["_kind"] = kind
+        # 双保险：纯数据任务哪怕被误传了 files，也不落盘、不产生 attachment
+        if data.get("_kind") == "data":
+            files = []
         urls, infos, total = [], [], 0
         for f in (files or []):
             blob = f.get("data") or b""
@@ -434,7 +443,10 @@ class ActivityStore(object):
             sid = d.get("_submission_id")
             fs = fmap.get(int(sid)) if sid is not None else None
             if fs:
-                d["_files"] = fs
+                # 学习单存档（_sheet）不是学生交的作品，别混进 _files
+                fs = [f for f in fs if f.get("url") != d.get("_sheet")]
+                if fs:
+                    d["_files"] = fs
         return out
 
     def count(self, task_key):
@@ -521,7 +533,7 @@ class ActivityStore(object):
         extra = []
         for s in subs:
             for k in s:
-                if k in ("_submission_id", "_ip", "submitted_at", "_files") or k in fixed:
+                if k in ("_submission_id", "_ip", "submitted_at", "_files", "_kind") or k in fixed:
                     continue
                 if k not in extra:
                     extra.append(k)
