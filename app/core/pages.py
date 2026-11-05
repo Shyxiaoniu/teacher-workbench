@@ -268,33 +268,155 @@ def login_page_setup(msg=""):
 
 # ---------------------------------------------------------------------------
 # 管理员控制台（2.0.13）：只管教师账号，不承接任何业务设置
-# 2026-11-05：改名 / 重置密码 / 删除原来是浏览器原生 prompt() / confirm()，
-# 外观和整个工作台完全脱节。统一换成页内弹窗（dlg）：
-# 同一张卡片语言（白卡 + 品牌绿描边 + 16px 圆角），危险操作用红色主按钮。
 # ---------------------------------------------------------------------------
-ADMIN_DLG_CSS = """
-.dlg-ov{position:fixed;inset:0;background:rgba(22,35,31,.42);display:flex;
-  align-items:center;justify-content:center;z-index:99;padding:20px}
-.dlg{background:#fff;border:1px solid rgba(15,110,86,.16);border-radius:16px;
-  box-shadow:0 12px 40px rgba(15,110,86,.18);width:100%;max-width:360px;
-  padding:22px 24px;animation:dlgIn .16s ease}
-@keyframes dlgIn{from{transform:translateY(10px) scale(.97);opacity:0}
-  to{transform:none;opacity:1}}
-.dlg h3{margin:0 0 6px;font-size:16px;color:#16231F}
-.dlg .d{font-size:12.8px;color:#5F6E68;line-height:1.7;margin:0 0 12px}
-.dlg input{margin:2px 0 0}
-.dlg .btns{display:flex;gap:10px;justify-content:flex-end;margin-top:8px}
-.dlg .btns button{padding:9px 16px;font-size:13.5px}
-.dlg .btns .cancel{background:#EAF4F0;color:#0F6E56}
-.dlg .btns .cancel:hover{background:#DCEEE6}
-.dlg .btns .dlg-ok{background:#0F6E56}
-.dlg .btns .dlg-ok:hover{background:#1D9E75}
-.dlg .btns .dlg-ok.danger{background:#B3261E}
-.dlg .btns .dlg-ok.danger:hover{background:#C6352C}
+# 弹窗组件（2026-11-05 牛哥反馈：管理员页还在用浏览器原生 prompt/confirm，
+# 顶着「192.168.x.x 显示」的浏览器标题缩在屏幕一角，和工作台完全脱节）。
+# 这里按教师端 .modal 的视觉语言重做一套：同款半透明模糊遮罩、16px 圆角白卡、
+# 15px 标题 / 13.5px 正文、右对齐按钮区、危险操作红色主按钮；
+# 成功提示不再写进表单红字，统一走右下角浮层 toast。
+ADMIN_UI = """
+<style>
+.ad-ov{position:fixed;inset:0;z-index:4000;padding:20px;display:flex;
+  align-items:center;justify-content:center;background:rgba(20,30,26,.34);
+  -webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);
+  animation:ad-fade .18s ease both}
+@keyframes ad-fade{from{opacity:0}to{opacity:1}}
+@keyframes ad-in{from{opacity:0;transform:translate3d(0,14px,0) scale(.96)}
+  to{opacity:1;transform:translate3d(0,0,0) scale(1)}}
+.ad-dlg{width:100%;max-width:400px;background:#fff;border-radius:16px;
+  border:1px solid rgba(15,110,86,.16);box-shadow:0 20px 60px rgba(0,0,0,.22);
+  overflow:hidden;animation:ad-in .22s cubic-bezier(.22,1.2,.36,1) both}
+.ad-head{padding:16px 18px 13px;border-bottom:1px solid #E4EDE8;
+  font-size:15px;font-weight:600;color:#16231F;letter-spacing:-.1px}
+.ad-body{padding:14px 18px;font-size:13.5px;line-height:1.85;color:#3D4F49;
+  white-space:pre-wrap;word-break:break-word}
+.ad-body b{color:#0F6E56;font-weight:600}
+.ad-inp{display:block;width:100%;margin-top:11px;padding:10px 12px;
+  border:1px solid #D6E3DE;border-radius:10px;background:#FBFDFC;color:#16231F;
+  font-size:14px;line-height:1.5;font-family:inherit;outline:none}
+.ad-inp:focus{border-color:#1D9E75;box-shadow:0 0 0 3px rgba(29,158,117,.14)}
+.ad-acts{display:flex;gap:8px;justify-content:flex-end;
+  padding:13px 18px;border-top:1px solid #E4EDE8;background:#fff}
+.ad-btn{padding:9px 17px;border:1px solid transparent;border-radius:10px;
+  font-size:13.5px;font-weight:600;font-family:inherit;cursor:pointer;
+  transition:background .15s,border-color .15s,box-shadow .15s}
+.ad-btn.ghost{background:#F1F7F4;color:#0F6E56;border-color:#DCEAE4}
+.ad-btn.ghost:hover{background:#E4F1EB}
+.ad-btn.ok{background:#0F6E56;color:#fff}
+.ad-btn.ok:hover{background:#1D9E75}
+.ad-btn.danger{background:#B3261E;color:#fff}
+.ad-btn.danger:hover{background:#C23332}
+.ad-btn:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(29,158,117,.22)}
+.ad-toasts{position:fixed;right:24px;bottom:24px;z-index:5000;display:flex;
+  flex-direction:column;gap:8px;align-items:flex-end;pointer-events:none}
+.ad-toast{max-width:320px;padding:11px 16px;border-radius:12px;background:#16231F;
+  color:#fff;font-size:13.5px;line-height:1.6;box-shadow:0 12px 32px rgba(16,24,21,.26);
+  animation:ad-in .2s ease both;transition:opacity .24s,transform .24s}
+.ad-toast.ok{background:#0F6E56}
+.ad-toast.err{background:#B3261E}
+.ad-toast.out{opacity:0;transform:translate3d(0,6px,0)}
+/* 表格里的行内操作按钮：轻量 ghost，危险操作浅红，避免一排实心绿按钮压过内容 */
+.ad-row-btn{padding:5px 11px;border:1px solid #DCEAE4;border-radius:8px;
+  background:#F1F7F4;color:#0F6E56;font-size:12.5px;font-weight:600;
+  font-family:inherit;cursor:pointer;transition:background .15s,border-color .15s}
+.ad-row-btn:hover{background:#E4F1EB;border-color:#BFDCD2}
+.ad-row-btn.danger{background:#FDF3F2;color:#B3261E;border-color:#F2D6D4}
+.ad-row-btn.danger:hover{background:#FAE7E5}
+@media(max-width:520px){.ad-ov{padding:14px}.ad-dlg{max-width:100%}}
+</style>
+<script>
+/* 独立命名 adEsc：本脚本在 <head> 里执行，页面底部的 esc() 还没定义 */
+(function(){
+  function adEsc(s){
+    return String(s==null?'':s).replace(/[&<>"']/g,function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});
+  }
+  var toastBox=null;
+  function box(){
+    if(!toastBox||!toastBox.parentNode){
+      toastBox=document.createElement('div');
+      toastBox.className='ad-toasts';
+      document.body.appendChild(toastBox);
+    }
+    return toastBox;
+  }
+  window.adToast=function(msg,kind){
+    if(!msg)return;
+    var el=document.createElement('div');
+    el.className='ad-toast'+(kind?' '+kind:'');
+    el.textContent=String(msg);
+    box().appendChild(el);
+    setTimeout(function(){
+      el.classList.add('out');
+      setTimeout(function(){if(el.parentNode)el.parentNode.removeChild(el);},240);
+    },2600);
+  };
+  window.adDialog=function(opt){
+    opt=opt||{};
+    return new Promise(function(resolve){
+      var ov=document.createElement('div');ov.className='ad-ov';
+      var hasCancel=opt.cancelText!==null&&opt.cancelText!==undefined;
+      var acts='';
+      if(hasCancel){
+        acts+='<button type="button" class="ad-btn ghost" data-ad="cancel">'
+          +adEsc(opt.cancelText||'取消')+'</button>';
+      }
+      acts+='<button type="button" class="ad-btn '+(opt.danger?'danger':'ok')
+        +'" data-ad="ok">'+adEsc(opt.okText||'确定')+'</button>';
+      var field=opt.input
+        ? '<input class="ad-inp" value="'+adEsc(opt.input.value||'')+'" placeholder="'
+          +adEsc(opt.input.placeholder||'')+'" autocomplete="off" spellcheck="false">'
+        : '';
+      ov.innerHTML='<div class="ad-dlg" role="dialog" aria-modal="true">'
+        +'<div class="ad-head">'+adEsc(opt.title||'提示')+'</div>'
+        +'<div class="ad-body">'+(opt.html||'')+field+'</div>'
+        +'<div class="ad-acts">'+acts+'</div></div>';
+      document.body.appendChild(ov);
+      var inp=ov.querySelector('.ad-inp');
+      function close(v){
+        document.removeEventListener('keydown',onKey,true);
+        if(ov.parentNode)ov.parentNode.removeChild(ov);
+        resolve(v);
+      }
+      function ok(){close(opt.input?((inp&&inp.value.trim())||''):true);}
+      function cancel(){close(opt.input?null:false);}
+      ov.querySelector('[data-ad="ok"]').onclick=ok;
+      var cb=ov.querySelector('[data-ad="cancel"]');
+      if(cb)cb.onclick=cancel;
+      ov.addEventListener('pointerdown',function(e){if(e.target===ov)cancel();});
+      function onKey(e){
+        if(e.key==='Escape'){e.preventDefault();e.stopPropagation();cancel();}
+        else if(e.key==='Enter'&&(!e.target||e.target.tagName!=='TEXTAREA')){
+          e.preventDefault();e.stopPropagation();ok();
+        }
+      }
+      document.addEventListener('keydown',onKey,true);
+      if(inp){inp.focus();inp.select();}
+      else{var b=ov.querySelector('[data-ad="ok"]');if(b)b.focus();}
+    });
+  };
+  window.adConfirm=function(msg,opt){
+    opt=opt||{};
+    return window.adDialog({title:opt.title||'请确认',html:msg,
+      okText:opt.okText||'确定',cancelText:opt.cancelText||'取消',
+      danger:opt.danger!==false});
+  };
+  window.adPrompt=function(msg,opt){
+    opt=opt||{};
+    return window.adDialog({title:opt.title||'请输入',html:msg,
+      okText:opt.okText||'确定',cancelText:opt.cancelText||'取消',
+      input:{value:opt.value==null?'':opt.value,placeholder:opt.placeholder||''}});
+  };
+  window.adAlert=function(msg,opt){
+    opt=opt||{};
+    return window.adDialog({title:opt.title||'提示',html:msg,
+      okText:opt.okText||'知道了',cancelText:null});
+  };
+})();
+</script>
 """
 
 ADMIN_BODY = """
-<style>__DLG_CSS__</style>
 <div class="card" style="max-width:760px;margin:5vh auto 0">
   <div class="brand">__LOGO__<div><div style="font-weight:750;font-size:15px">班级工作台 · 管理员</div>
   <div style="font-size:12px;color:#849690">教师账号管理</div></div></div>
@@ -340,44 +462,9 @@ function A(u,b){return fetch(u,{method:'POST',credentials:'same-origin',
   .then(function(r){return r.json().catch(function(){return {};});});}
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){
   return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
-function toast(el,msg){el.textContent=msg;if(msg)setTimeout(function(){el.textContent='';},4000);}
-
-/* 工作台风格弹窗（替代浏览器原生 prompt / confirm）。
-   cfg: {title, desc, input, type, value, placeholder, ok, danger, empty, validate}
-   返回 Promise：确定 → 输入框的值（无输入框时 true），取消 / 点遮罩 / Esc → null。 */
-function dlg(cfg){
-  return new Promise(function(res){
-    var ov=document.createElement('div');ov.className='dlg-ov';
-    ov.innerHTML='<div class="dlg" role="dialog" aria-modal="true">'+
-      '<h3>'+esc(cfg.title||'')+'</h3>'+
-      (cfg.desc?'<p class="d">'+esc(cfg.desc)+'</p>':'')+
-      (cfg.input?'<input id="dlgIn" type="'+(cfg.type||'text')+'" value="'+
-        esc(cfg.value||'')+'" placeholder="'+esc(cfg.placeholder||'')+'" autocomplete="off">':'')+
-      '<div class="err" style="margin-top:8px" id="dlgErr"></div>'+
-      '<div class="btns"><button type="button" class="cancel">取消</button>'+
-      '<button type="button" class="dlg-ok'+(cfg.danger?' danger':'')+'">'+
-      esc(cfg.ok||'确定')+'</button></div></div>';
-    document.body.appendChild(ov);
-    var inp=ov.querySelector('#dlgIn'),err=ov.querySelector('#dlgErr');
-    function close(v){document.removeEventListener('keydown',onKey);ov.remove();res(v);}
-    function ok(){
-      if(!cfg.input)return close(true);
-      var v=(inp.value||'').trim();
-      if(!v){err.textContent=cfg.empty||'请填写内容';inp.focus();return;}
-      if(cfg.validate){var m=cfg.validate(v);if(m){err.textContent=m;inp.focus();return;}}
-      close(v);
-    }
-    function onKey(e){
-      if(e.key==='Escape')close(null);
-      else if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();ok();}
-    }
-    ov.querySelector('.cancel').onclick=function(){close(null);};
-    ov.querySelector('.dlg-ok').onclick=ok;
-    ov.addEventListener('mousedown',function(e){if(e.target===ov)close(null);});
-    document.addEventListener('keydown',onKey);
-    if(inp){inp.focus();inp.select();}else{ov.querySelector('.dlg-ok').focus();}
-  });
-}
+/* 字段级错误留在表单内（红字紧贴输入框），成功提示一律走右下角 adToast，
+   不再出现「成功也用红字」的混搭（2026-11-05）。 */
+function formErr(id,msg){var el=document.getElementById(id);if(el)el.textContent=msg||'';}
 
 async function load(){
   var r=await fetch('/api/v2/admin/teachers',{credentials:'same-origin'});
@@ -395,59 +482,55 @@ async function load(){
         '<td style="padding:8px 4px">'+esc(t.name||'—')+'</td>'+
         '<td style="padding:8px 4px">'+(t.has_password?'已设密码':'<span style="color:#B4692E">未设密码</span>')+
         (t.builtin?' · 默认账号':'')+'</td>'+
-        '<td style="padding:8px 4px;white-space:nowrap">'+
-        '<button type="button" data-act="name" data-id="'+esc(t.id)+'" data-u="'+esc(t.username)+'">改名</button> '+
-        '<button type="button" data-act="pwd" data-id="'+esc(t.id)+'">重置密码</button> '+
-        (t.builtin?'':'<button type="button" data-act="del" data-id="'+esc(t.id)+'">删除</button>')+
-        '</td></tr>';
+        '<td style="padding:8px 4px"><div style="display:flex;gap:6px;flex-wrap:wrap">'+
+        '<button type="button" class="ad-row-btn" data-act="name" data-id="'+esc(t.id)+'" data-u="'+esc(t.username)+'">改名</button>'+
+        '<button type="button" class="ad-row-btn" data-act="pwd" data-id="'+esc(t.id)+'">重置密码</button>'+
+        (t.builtin?'':'<button type="button" class="ad-row-btn danger" data-act="del" data-id="'+esc(t.id)+'">删除</button>')+
+        '</div></td></tr>';
     }).join('')+'</tbody></table>';
   box.querySelectorAll('button[data-act]').forEach(function(b){
     b.onclick=async function(){
       var id=b.getAttribute('data-id'), act=b.getAttribute('data-act');
       if(act==='name'){
-        var u=await dlg({title:'修改登录账号',
-          desc:'教师用这个账号登录教师端与登录页，改完请及时告知本人。',
-          input:true,value:b.getAttribute('data-u')||'',
-          placeholder:'新的登录账号名',ok:'保存',empty:'请填写账号名',
-          validate:function(v){return v.length>=2?'':'账号名至少 2 个字符';}});
+        var u=await adPrompt('新的登录账号名：',{title:'修改登录账号',
+          value:b.getAttribute('data-u')||'',placeholder:'登录账号'});
         if(!u)return; var r=await A('/api/v2/admin/teacher/update',{id:id,username:u});
-        toast(document.getElementById('addErr'),r.ok?'已改名':(r.msg||'失败')); load();
+        adToast(r.ok?'账号名已更新':(r.msg||'改名失败'),r.ok?'ok':'err');
+        if(r.ok)load();
       }else if(act==='pwd'){
-        var p=await dlg({title:'重置初始密码',
-          desc:'重置后请把新密码告知这位老师，TA 登录后可在设置里自行修改。',
-          input:true,type:'password',placeholder:'新密码（至少 8 位）',ok:'重置',
-          empty:'请填写新密码',
-          validate:function(v){return v.length>=8?'':'密码至少 8 位';}});
+        var p=await adPrompt('新的初始密码（至少 8 位）：',{title:'重置密码',
+          placeholder:'至少 8 位'});
         if(!p)return; var r=await A('/api/v2/admin/teacher/update',{id:id,password:p});
-        toast(document.getElementById('addErr'),r.ok?'密码已重置':(r.msg||'失败'));
+        adToast(r.ok?'密码已重置':(r.msg||'重置失败'),r.ok?'ok':'err');
       }else{
-        var sure=await dlg({title:'删除教师账号',
-          desc:'删除后这位教师将无法登录；其数据目录会保留，不会自动清空。',
-          ok:'删除',danger:true});
-        if(!sure)return;
+        var yes=await adConfirm('确定删除这个教师账号吗？<br><b>其数据目录会保留，不会自动清空。</b>',
+          {title:'删除教师账号',okText:'删除',danger:true});
+        if(!yes)return;
         var r=await A('/api/v2/admin/teacher/delete',{id:id});
-        toast(document.getElementById('addErr'),r.ok?'已删除':(r.msg||'失败')); load();
+        adToast(r.ok?'账号已删除':(r.msg||'删除失败'),r.ok?'ok':'err');
+        if(r.ok)load();
       }
     };
   });
 }
 document.getElementById('addForm').onsubmit=async function(e){
   e.preventDefault();
-  var err=document.getElementById('addErr'); err.textContent='';
+  formErr('addErr','');
   var r=await A('/api/v2/admin/teacher/add',{
     username:document.getElementById('nu').value.trim(),
     name:document.getElementById('nn').value.trim(),
     password:document.getElementById('np').value});
   if(r.ok){document.getElementById('nu').value='';document.getElementById('nn').value='';
-    document.getElementById('np').value='';toast(err,'已创建教师账号');load();}
-  else toast(err,r.msg||'创建失败');
+    document.getElementById('np').value='';adToast('教师账号已创建','ok');load();}
+  else formErr('addErr',r.msg||'创建失败');
 };
 document.getElementById('pwdForm').onsubmit=async function(e){
-  e.preventDefault();var err=document.getElementById('pwdErr');
+  e.preventDefault();formErr('pwdErr','');
   var r=await A('/api/v2/admin/password',{
     old:document.getElementById('oldP').value,new:document.getElementById('newP').value});
-  if(r.ok){document.getElementById('oldP').value='';document.getElementById('newP').value='';toast(err,'已修改');}
-  else toast(err,r.msg||'修改失败');
+  if(r.ok){document.getElementById('oldP').value='';document.getElementById('newP').value='';
+    adToast('管理员密码已修改','ok');}
+  else formErr('pwdErr',r.msg||'修改失败');
 };
 document.getElementById('logout').onclick=async function(){
   await A('/api/v2/auth/logout',{}); location.href='/teacher/login';
@@ -458,8 +541,7 @@ load();
 
 def admin_page():
     return _page("管理员控制台 · 班级工作台",
-                 ADMIN_BODY.replace("__LOGO__", LOGO)
-                           .replace("__DLG_CSS__", ADMIN_DLG_CSS))
+                 ADMIN_BODY.replace("__LOGO__", LOGO), ADMIN_UI)
 
 
 FORGOT_BODY = """
