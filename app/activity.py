@@ -33,6 +33,12 @@ import threading
 import time
 import uuid
 
+try:                                   # 文件名错码还原（2026-11-05）
+    from core.textfix import fix_filename
+except Exception:                      # 独立运行时（没有 app 在 sys.path）不阻断
+    def fix_filename(name, max_len=0):
+        return str(name or "")
+
 # 单个文件与整份提交的上限：与 server.py 里的学生提交中转保持一致
 MAX_FILE = 40 * 1024 * 1024
 MAX_TOTAL = 40 * 1024 * 1024
@@ -86,6 +92,11 @@ def parse_multipart(raw, ctype):
         filename = part.get_filename()
         payload = part.get_payload(decode=True) or b""
         if filename:
+            # 中文文件名走 HTTP 头，历史上有三种解码口径（latin-1 / ascii+
+            # surrogateescape / 客户端 GBK），错一环名字就是乱码，而且会
+            # 一路存进 act_file.orig、被归档原样复制进「资料」。这里在入库
+            # 前统一还原（2026-11-05 牛哥反馈「归档文件名认不出是谁」）。
+            filename = fix_filename(filename, max_len=200)
             files.append({"field": name, "name": filename,
                           "mime": part.get_content_type() or "application/octet-stream",
                           "data": payload})
@@ -289,7 +300,7 @@ class ActivityStore(object):
         os.makedirs(d, exist_ok=True)
         with open(os.path.join(d, name), "wb") as f:
             f.write(blob)
-        info = {"stored": name, "orig": str(filename or name)[:200],
+        info = {"stored": name, "orig": fix_filename(filename or name, max_len=200),
                 "size": len(blob), "mime": str(mime or "")[:100]}
         return "/static/uploads/%s/%s" % (task_key, name), info
 
@@ -414,9 +425,11 @@ class ActivityStore(object):
                 "SELECT sub_id, stored, orig, size, mime FROM act_file "
                 "WHERE task_key=? AND sub_id>0 ORDER BY id ASC", (str(task_key),)).fetchall()
         for fr in frows:
+            # 老记录里的 orig 可能是错码（见 core/textfix.py），读出来统一还原：
+            # 大屏「文件」列、归档、作品墙都按这个 name 显示/落盘。
             fmap.setdefault(int(fr["sub_id"]), []).append({
                 "url": "/static/uploads/%s/%s" % (task_key, fr["stored"]),
-                "name": fr["orig"] or fr["stored"],
+                "name": fix_filename(fr["orig"] or fr["stored"], max_len=200),
                 "size": int(fr["size"] or 0),
                 "mime": fr["mime"] or "",
             })

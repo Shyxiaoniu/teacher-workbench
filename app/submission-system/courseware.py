@@ -32,6 +32,19 @@ import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 
+# 文件名错码还原（2026-11-05）：与 app/core/textfix.py 同一套实现。
+# 归档名、学生文件夹名都过这一道，否则旧记录里的 ä½œä¸š 会被原样复制进资料。
+try:
+    from core.textfix import fix_filename, looks_like_uuid_name
+except Exception:
+    try:
+        from textfix import fix_filename, looks_like_uuid_name   # 独立运行时（core 在 path 上）
+    except Exception:
+        def fix_filename(name, max_len=0):
+            return str(name or "")
+        def looks_like_uuid_name(name):
+            return False
+
 ROOT = os.path.dirname(os.path.abspath(__file__))          # submission-system/
 WB_ROOT = os.path.dirname(ROOT)                            # 工作台根
 # 同 submission-server：容器部署时由 WB_SUBMISSION_DATA_DIR 指到数据卷
@@ -847,8 +860,12 @@ def save_stream(course, name, stream, length, sub=""):
 
 
 def _safe_folder(text, fallback="未命名"):
-    """文件夹名：复用 safe_name，另把 / 换成 -，限长，空值给兜底。"""
-    s = safe_name(text or "").replace("/", "-").strip()
+    """文件夹名：复用 safe_name，另把 / 换成 -，限长，空值给兜底。
+
+    2026-11-05：先还原错码再清洗 —— 班级名 / 姓名 / 学号都可能带着
+    UTF-8→latin-1 的错码进来，直接拿去建目录就是一个看不懂的文件夹名。
+    """
+    s = safe_name(fix_filename(text) or "").replace("/", "-").strip()
     if not s or s == "未命名":
         s = ""
     return (s or fallback)[:60]
@@ -898,19 +915,32 @@ def _index_key(course, cls, activity):
 
 
 
-def _student_folder(no, name):
-    """「学号+姓名」文件夹名（2026-11-05 牛哥要求）。
+def _student_folder(no, name, cls_dir=""):
+    """「学号-姓名」文件夹名（2026-11-05 牛哥定版：中间加短横）。
 
     约定与异常兜底：
-      · 学号、姓名都有 → 20250108张三
+      · 学号、姓名都有 → 20250108-张三
       · 只有学号       → 20250108
       · 只有姓名       → 张三
       · 都没有         → 未命名学生
-    两段都做安全清洗（去路径分隔符/控制字符），限长 60，保证一定是一个合法目录名。
+    兼容：2.0.36 及以前已按「20250108张三」（无短横）建过目录的，
+    同一班级里若老目录已存在就沿用，避免一个学生出现两个文件夹。
+    两段都做安全清洗（去路径分隔符/控制字符）并还原错码，限长 60。
     """
     s_no = _safe_folder(no, "")
     s_nm = _safe_folder(name, "")
-    return (s_no + s_nm)[:60] or "未命名学生"
+    if s_no and s_nm:
+        new = (s_no + "-" + s_nm)[:60]
+        old = (s_no + s_nm)[:60]
+        if cls_dir:
+            try:
+                if not os.path.isdir(os.path.join(cls_dir, new)) \
+                        and os.path.isdir(os.path.join(cls_dir, old)):
+                    return old
+            except Exception:
+                pass
+        return new
+    return (s_no or s_nm)[:60] or "未命名学生"
 
 
 def _unique_target(dir_path, name):
@@ -999,7 +1029,7 @@ def _archive_items_locked(course, activity, base, items, cls=""):
     """把活动提交的文件复制进 <课程>/<班级>/<学号+姓名>/。
 
     2026-11-05 调整（牛哥要求）：原来是 <课程>/_活动作品/<活动名>/<学生>_<文件名>
-    平铺，交两次就分不清谁是谁。现在按「课程 → 班级 → 学号+姓名」三级建目录，
+    平铺，交两次就分不清谁是谁。现在按「课程 → 班级 → 学号-姓名」三级建目录，
     学生交的原始文件名保持不变，一个学生的所有作品都在自己文件夹里。
 
     异常处理：
@@ -1026,18 +1056,27 @@ def _archive_items_locked(course, activity, base, items, cls=""):
         try:
             os.makedirs(cls_dir, exist_ok=True)
         except Exception as e:
-            skipped.append({"name": safe_name(str(it.get("name") or "").strip() or "file"),
-                            "student": _student_folder(it.get("no"), it.get("student")),
+            skipped.append({"name": safe_name(fix_filename(it.get("name")) or "file"),
+                            "student": _student_folder(it.get("no"), it.get("student"), cls_dir),
                             "msg": "无法创建班级文件夹：%s" % e})
             continue
         idx_key = _index_key(course, k_cls, act)
         if idx_key not in mine:
             mine[idx_key] = set(index.get(idx_key) or [])
         url = str(it.get("url") or "")
-        # 文件名优先用提交里带过来的「原始文件名」，没有才退回 URL 最后一段
-        raw_name = str(it.get("name") or "").strip() or url.rsplit("/", 1)[-1] or "file"
+        # 文件名优先用提交里带过来的「原始文件名」，没有才退回 URL 最后一段。
+        # 2026-11-05：先还原错码（ä½œä¸š / surrogateescape）并解 %XX 百分号编码，
+        # 否则旧记录里的乱码名会被原样复制进「资料」，老师认不出是谁交的。
+        raw_name = fix_filename(str(it.get("name") or "").strip())
+        if not raw_name:
+            raw_name = urllib.parse.unquote(url.rsplit("/", 1)[-1]) or "file"
+        raw_name = fix_filename(raw_name)
         nm = safe_name(raw_name)
-        stu_dir_name = _student_folder(it.get("no"), it.get("student"))
+        stu_dir_name = _student_folder(it.get("no"), it.get("student"), cls_dir)
+        # 认不出原名（只剩服务端落盘名：12 位 hex）→ 改名成「学号-姓名.扩展名」，
+        # 至少老师一眼能看出这是谁交的；同一人多份仍走 (2)、(3) 不覆盖。
+        if looks_like_uuid_name(nm) and stu_dir_name != "未命名学生":
+            nm = safe_name(stu_dir_name + (os.path.splitext(nm)[1] or ""))
         stu_dir = os.path.join(cls_dir, stu_dir_name)
         if not url:
             skipped.append({"name": nm, "student": stu_dir_name,

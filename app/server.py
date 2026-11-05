@@ -183,7 +183,7 @@ CFG["update"].setdefault("interval_hours", 24) # 检查间隔（小时）
 PET_IDS = ["cat", "dog", "rabbit", "penguin", "panda", "dino", "unicorn", "dragon"]
 COND = threading.Condition()
 STARTED = time.time()
-VERSION = "2.0.36"
+VERSION = "2.0.37"
 ONLINE_WINDOW = 300      # 5 分钟内活跃算在线
 # 可内联直出的附件类型（其余一律按下载处理，防止同源执行脚本）
 _INLINE_EXTS = {"png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "pdf",
@@ -1072,6 +1072,42 @@ class Handler(LEG.Handler):
                 q2 = urllib.parse.parse_qs(u.query)
                 _task = (q2.get("task") or [""])[0]
                 _cname = (q2.get("class") or [""])[0]
+                # 身份兜底（2026-11-05 牛哥反馈「重新登录后打开学习单，提示没从
+                # 教师端打开、学生信息也读不出来」）：学生明明已经登录，可链接里
+                # 没有票 / 票已过期 / 是别人的票（收藏夹、老师发的裸链接、重新登录
+                # 后回到旧标签、从 /cw/ 直接点进来）——页面就只能停在「请输学号」，
+                # 模板等不到注入的提交按钮，还会弹「本页未从教师端打开」的预览提示。
+                # 这里按会话里的真实身份重新签一张票，302 到带参数的同一页。
+                if _task and "/" not in _task and ".." not in _task:
+                    _s0 = self._session()
+                    _r0 = student_row(_s0.get("student_id")) if (
+                        _s0 and _s0.get("role") == "student") else None
+                    _tok0 = (q2.get("wbT") or [""])[0]
+                    _gt0 = get_gticket(_tok0) if _tok0 else None
+                    # 票是自己的、且就是这份学习单 → 不再折腾（避免重定向循环）
+                    _own = bool(_gt0
+                                and str(_gt0.get("task") or "") == _task
+                                and str(_gt0.get("no") or "")
+                                == str(_r0.get("student_no") or "")) if _r0 else False
+                    if _r0 and not _own:
+                        _cls0 = self._class_name(_r0.get("class_id"))
+                        _qs0 = {k: (v or [""])[0] for k, v in q2.items()}
+                        _qs0.update({
+                            "wbT": new_gticket({
+                                "sid": str(_r0.get("id") or ""),
+                                "no": str(_r0.get("student_no") or ""),
+                                "name": str(_r0.get("name") or ""),
+                                "cls": _cls0, "gid": "", "idx": 0, "task": _task,
+                            }),
+                            "wbSid": str(_r0.get("student_no") or ""),
+                            "wbName": str(_r0.get("name") or ""),
+                            "wbCls": _cls0,
+                            "wbTask": _task,
+                            "wbBase": public_base(self.headers),
+                        })
+                        return self._redirect(public_base(self.headers)
+                                              + "/submit/custom.html?"
+                                              + urllib.parse.urlencode(_qs0))
                 if _task and _cname:
                     _cls = next((c for c in STORE.table_rows("classes")
                                  if not c.get("deleted")
@@ -1334,6 +1370,88 @@ class Handler(LEG.Handler):
                 "老师可能已经移动或删除了这个文件。"), 404)
         return full, None
 
+    def _task_of_course(self, course):
+        """课程名 → 课堂活动号（标题或 course 字段对上就算）。"""
+        name = str(course or "").strip()
+        if not name:
+            return ""
+        for t in ACT.tasks():
+            if (str(t.get("title") or "").strip() == name
+                    or str(t.get("course") or "").strip() == name):
+                return str(t.get("task_id") or "")
+        return ""
+
+    def _sheet_task_of_file(self, fid, class_id="", full=""):
+        """这个课件文件是不是某门课的「学习单」？→ (课程名, 活动号)。
+
+        2026-11-05：学生直接打开 /cw/<学习单.html>（收藏夹、老师发的文件链接、
+        旧标签）时，以前给的是**原始网页**：没有平台注入的登录/提交按钮，
+        模板等 900ms 等不到 .act-submit-btn 就弹「本页未从教师端打开」的
+        预览提示，学生也读不到自己的班级姓名。这里认出它是学习单，
+        统一转去带身份的注入页。
+
+        两条判据（与资料入口一致）：
+          ① 资料里给这门课「设为学习单」的就是它（正式标记）；
+          ② 没设过标记：它是网页，而且已经推给这个班、本课程又有部署好的
+             学习单页 —— 老师只在大屏下发、没点「设为学习单」是常态。
+        """
+        fid = str(fid or "").strip("/")
+        if not fid:
+            return "", ""
+        try:
+            courses, _err = LEG.CW.list_courses()
+        except Exception:
+            courses = []
+        for c in (courses or []):
+            name = str((c or {}).get("name") or "").strip()
+            if not name:
+                continue
+            try:
+                if str(LEG.CW.sheet_of(name) or "").strip("/") != fid:
+                    continue
+            except Exception:
+                continue
+            task = self._task_of_course(name)
+            if task and self._custom_page_ready(task):
+                return name, task
+        # ② 没设标记：按「资料里推给本班的这条网页」认
+        mid = self._material_of_file(fid, class_id)
+        if mid:
+            row = None
+            for m in STORE.table_rows("materials"):
+                if str(m.get("id") or "") == str(mid):
+                    row = m
+                    break
+            if row:
+                course = str(row.get("lesson") or row.get("subject") or "").strip()
+                task = self._task_of_course(course)
+                # 还得对得上「就是这一份网页」（标题/正文指纹），或者这门课
+                # 本来就只有这一份网页资料 —— 否则同课程别的 html 会被误当学习单。
+                if (task and self._custom_page_ready(task)
+                        and (self._page_from_file(task, full)
+                             or self._only_html_material(fid, class_id, course))):
+                    return course, task
+        return "", ""
+
+    def _material_of_file(self, fid, class_id):
+        """学生在「资料」里对应这份文件的条目 id（没有就返回空串）。"""
+        want = str(fid or "").strip("/")
+        for m in STORE.table_rows("materials"):
+            if m.get("deleted"):
+                continue
+            if str(m.get("class_id") or "") != str(class_id or ""):
+                continue
+            u = str(m.get("url") or "")
+            if not u.startswith("/cw/"):
+                continue
+            try:
+                rel = urllib.parse.unquote(u[len("/cw/"):]).strip("/")
+            except Exception:
+                rel = u[len("/cw/"):].strip("/")
+            if rel == want:
+                return str(m.get("id") or "")
+        return ""
+
     def _courseware_gate(self, path):
         # do_GET 入口已对整个 path 做过一次 unquote，课件 id 里的「课程/文件名」
         # 斜杠已被还原 —— 不能再 split/unquote，否则 id 会被从斜杠处切断。
@@ -1341,6 +1459,20 @@ class Handler(LEG.Handler):
         full, err = self._courseware_resolve(fid)
         if err:
             return err
+        # 学生打开网页学习单 → 转到带票的注入页（见 _sheet_task_of_file）。
+        # 老师预览不受影响（role=teacher）；图片/PDF 等非网页也不动。
+        s = self._session()
+        if (s and s.get("role") == "student"
+                and _ext_of(full) in ("html", "htm")):
+            r = student_row(s.get("student_id"))
+            course, task = self._sheet_task_of_file(
+                fid, (r or {}).get("class_id") or "", full)
+            if task and r:
+                mid = self._material_of_file(fid, r.get("class_id"))
+                if mid:
+                    return self._redirect(
+                        "/g/mat/" + urllib.parse.quote(mid, safe=""))
+                return self._redirect(self._sheet_entry_url(r, task, course))
         return self._serve_abs(full)
 
     def _courseware_preview_gate(self, path):
@@ -1473,6 +1605,66 @@ class Handler(LEG.Handler):
             for a in STORE.table_rows("attendance")
             if str(a.get("student_id")) == str(r.get("id"))
             and str(a.get("date") or "") == d and not a.get("deleted"))
+
+    def _task_page_html(self, task):
+        """该活动已部署的学习单页面 HTML（没有就空串）。"""
+        try:
+            cfg = LEG.get_config()
+            tpls = cfg.get("custom_templates") if isinstance(cfg, dict) else None
+            return str(tpls.get(str(task)) or "") if isinstance(tpls, dict) else ""
+        except Exception:
+            return ""
+
+    def _page_from_file(self, task, full):
+        """这份网页是不是就是「该活动部署的那一页」？
+
+        为什么需要：老师常常只在「大屏」下发过、没在资料里点「设为学习单」，
+        这时没有显式标记。不能因此把同一课程里**任何** html 都当学习单打开
+        （一门课可能有好几份网页资料），所以拿标题 / 正文前 40 个有效字符
+        做指纹，比对部署页里是否含着这份文件的内容（2026-11-05）。
+        """
+        page = self._task_page_html(task)
+        if not page or not full:
+            return False
+        try:
+            with open(full, "r", encoding="utf-8", errors="ignore") as fh:
+                raw = fh.read(400000)
+        except Exception:
+            return False
+        norm = lambda s: re.sub(r"\s+", "", s or "")
+        m = re.search(r"<title[^>]*>([\s\S]*?)</title>", raw, re.I)
+        key = norm(m.group(1))[:60] if m else ""
+        if key and key in norm(page):
+            return True
+        body = re.sub(r"<(script|style)[\s\S]*?</\1>", " ", raw, flags=re.I)
+        txt = norm(re.sub(r"<[^>]+>", "", body))[:40]
+        return bool(txt) and txt in norm(page)
+
+    def _only_html_material(self, fid, class_id, course):
+        """本班这门课里，网页资料只有这一份吗？（只有一份时按学习单处理）"""
+        n, hit = 0, False
+        want = str(fid or "").strip("/")
+        for m in STORE.table_rows("materials"):
+            if m.get("deleted"):
+                continue
+            if str(m.get("class_id") or "") != str(class_id or ""):
+                continue
+            lesson = str(m.get("lesson") or m.get("subject") or "").strip()
+            if lesson and course and lesson != course:
+                continue
+            u = str(m.get("url") or "")
+            if not u.lower().split("?")[0].endswith((".html", ".htm")):
+                continue
+            try:
+                rel = urllib.parse.unquote(u).strip("/")
+            except Exception:
+                rel = u.strip("/")
+            if rel.startswith("cw/"):
+                rel = rel[3:]
+            n += 1
+            if rel.strip("/") == want:
+                hit = True
+        return n == 1 and hit
 
     def _custom_page_ready(self, task):
         """该活动是否已经部署过学习单页面（custom_templates 里有非空 HTML）。
@@ -1665,7 +1857,26 @@ class Handler(LEG.Handler):
                 sheet_rel = str(LEG.CW.sheet_of(course) or "").strip("/")
             except Exception:
                 sheet_rel = ""
-            if sheet_rel and sheet_rel == fid.strip("/"):
+            # 标记指向的文件被删 / 改名 → 视为没设过，别再拿它比（否则这份网页
+            # 永远匹配不上，学生只能拿到原始页）。2026-11-05
+            if sheet_rel:
+                try:
+                    if not LEG.CW.abs_of(sheet_rel, must_exist=True):
+                        sheet_rel = ""
+                except Exception:
+                    pass
+            is_html = ext in ("html", "htm")
+            # 走注入页的条件（2026-11-05 放宽）：
+            #   · 设过学习单 → 只有这份文件本身算；
+            #   · 没设过 / 标记失效 → 只要它是网页且本课程已有部署好的学习单页，
+            #     就按学习单打开。老师常常只在大屏「下发」过、没在资料里点
+            #     「设为学习单」，以前这种网页点开就是原始 /cw 页：没有身份、
+            #     没有提交按钮，模板还会弹「本页未从教师端打开」。
+            route = bool(sheet_rel and sheet_rel == fid.strip("/")) \
+                or (not sheet_rel and is_html and self._custom_page_ready(task)
+                    and (self._page_from_file(task, full)
+                         or self._only_html_material(fid, r.get("class_id"), course)))
+            if route:
                 push = None
                 for p in STORE.table_rows("activity_pushes"):
                     if (not p.get("deleted")

@@ -35711,7 +35711,7 @@ function cwPaintTree() {
           + '<button type="button" class="ti-del" title="删除整个文件夹" onclick="event.stopPropagation();cwDeleteCourse(this.dataset.c)" data-c="' + esc(c.name) + '">🗑</button>'
           + '</span>';
       return '<div class="cw-tree-item' + (c.name === cwState.course && !cwState.sub ? ' on' : '') + '"'
-        + ' data-course="' + esc(c.name) + '" data-sub="" onclick="cwPickCourse(this.dataset.course)"'
+        + ' data-course="' + esc(c.name) + '" data-sub="" onclick="cwPickCourseRoot(this.dataset.course)"'
         + ' title="' + esc(c.name + '（' + c.count + ' 个文件）') + '">'
         + '<span class="ti-ic">' + (loose ? '📥' : '📁') + '</span>'
         + '<span class="ti-nm">' + esc(c.name) + '</span>'
@@ -35752,12 +35752,17 @@ async function cwPickCourse(name, keep) {
   /* 换课节时勾选清空：不同课节的文件混在一份"已选"里，下发时容易发错 */
   const changed = String(name || '') !== String(cwState.course || '');
   cwState.course = name || '';
-  if (changed) { cwState.sel = new Set(); cwState.selLast = -1; }
-  cwState.sub = '';                        // 换课程回到根目录
+  if (changed) {
+    cwState.sel = new Set(); cwState.selLast = -1;
+    /* 只有「真的换了课程」才回到根目录（2026-11-05 牛哥反馈：在子文件夹里
+       删完文件，列表会突然跳回课程首页）。同一个课程刷新（删除 / 上传 /
+       移动后的 keep=true 重画）必须留在当前子文件夹。 */
+    cwState.sub = '';
+  }
   /* 树形目录选中态（2026-11-04 资源管理器改版） */
   document.querySelectorAll('.cw-tree-item').forEach(el => {
     el.classList.toggle('on', el.dataset.course === cwState.course
-      && (el.dataset.sub || '') === '');
+      && (el.dataset.sub || '') === (cwState.sub || ''));
   });
   const area = document.getElementById('cwFileArea');
   if (area) area.innerHTML = '<div class="cw-empty">读取文件…</div>';
@@ -35766,6 +35771,8 @@ async function cwPickCourse(name, keep) {
     cwState.files = j.files || [];
     cwState.sheet = String(j.sheet || '');   // 该课程已设的学习单网页（列表行据此打标）
     cwState.subs = j.subs || [];             // 课程内一级子文件夹（树里挂课程下）
+    /* 子文件夹被删 / 改名后不能停在一个已经不存在的位置 */
+    if (cwState.sub && cwState.subs.indexOf(cwState.sub) < 0) cwState.sub = '';
     cwPaintFiles(cwState.files);
     /* 子文件夹列表跟着刷新：新建 / 删除文件夹后不用整页重载也能立刻在树里看到 */
     cwPaintTree();
@@ -35774,6 +35781,13 @@ async function cwPickCourse(name, keep) {
   }
 }
 window.cwPickCourse = cwPickCourse;
+/** 点课程名 = 明确要回这门课的根目录（cwPickCourse 在「同一课程刷新」时会保留
+    当前子文件夹，所以这里先把 sub 清掉再进去，2026-11-05） */
+async function cwPickCourseRoot(name) {
+  cwState.sub = '';
+  return cwPickCourse(name);
+}
+window.cwPickCourseRoot = cwPickCourseRoot;
 
 /* 进入课程内的子文件夹（2026-11-04 新建文件夹功能）：
    文件列表是前端按 rel_dir 过滤的（服务端本来就递归返回全部文件） */
