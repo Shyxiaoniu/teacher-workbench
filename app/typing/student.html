@@ -1363,7 +1363,13 @@ var DEMO_LB_NAMES = ['李晓明','王小虎','张思思','陈快乐','刘一一'
 /* ---------------- 启动 ---------------- */
 function boot() {
   var qs = new URLSearchParams(location.search);
-  S.art.id = readArtId() || (window.TA ? TA.DEFAULT_ID : '');
+  /* 2026-11-05：默认是「自动轮换」（引擎按卷/关自动配文章），只有学生
+     从文章库主动固定过某一篇才带 id。以前这里兜底成 TA.DEFAULT_ID，
+     于是默认状态就是"已固定"，可下方关卡卡片按自动轮换显示别的文章 ——
+     上下两处对不上（牛哥反馈的「切换后不同步」就是这个）。
+     另外选「自动轮换」时保存的是空串，被这个兜底又变回固定篇，
+     等于"退不回自动"，一并去掉。 */
+  S.art.id = readArtId();
   /* 学生端框架内嵌模式：收窄边距，视觉上融入外层页面 */
   if (qs.get('embed') === '1') document.body.classList.add('embed');
   api('/api/v2/typing/config').then(function (cfg) {
@@ -1702,13 +1708,18 @@ function viewMap() {
     var boss = lv === 10;
     var b = (S.progress.best || {})['s' + stg + 'c' + ch + 'l' + lv];
     var stars = b ? b.stars : 0;
-    /* 文章篇章：每张卡直接写这一关配到的文章 —— 自动轮换时一眼
-       就能看到「一关一篇不重样」，固定单篇时则十关同一篇。 */
-    var nm = esc(TL.topicOf(stg, lv) || levelName(stage, boss));
-    if (stg === 6 && TL.articleOf) {
-      var _art = TL.articleOf(ch, lv);
-      if (_art) nm = '《' + esc(_art.title) + '》';
+    /* 文章篇章：每张卡直接写这一关配到的文章。
+       固定了某一篇（S.art.id）时，10 关都是这一篇 —— 必须跟着变，
+       否则上方文章条写着《A》、下面卡片还是自动轮换的《B》《C》，
+       学生根本分不清点进去会打什么（2026-11-05 牛哥反馈）。
+       没固定时仍按引擎的确定性轮换显示。 */
+    var _nm, _art = null;
+    if (stg === 6) {
+      if (S.art.id && window.TA && TA.get(S.art.id)) _art = TA.get(S.art.id);
+      else if (TL.articleOf) _art = TL.articleOf(ch, lv);
+      if (_art) _nm = '《' + esc(_art.title) + '》';
     }
+    var nm = _nm || esc(TL.topicOf(stg, lv) || levelName(stage, boss));
     nodes += '<button class="lv' + (boss ? ' boss' : '') + (open ? '' : ' lock') + '" data-lv="' +
       stg + ',' + ch + ',' + lv + '">' +
       (boss ? '<span class="boss-tag">BOSS</span>' : '') +
@@ -1765,7 +1776,8 @@ function artBar() {
         '<div class="ab-t"><b>' + esc(a.title) + '</b>' +
           '<span class="ab-type">' + esc(a.typeName) + '</span>' +
           '<span class="ab-hard">' + starsHtml(a.hard) + '</span></div>' +
-        '<div class="ab-meta">' + esc(a.author || '') + ' · ' + a.count + ' 行 / ' + a.chars + ' 字 · 已固定这一篇</div>' +
+        '<div class="ab-meta">' + esc(a.author || '') + ' · ' + a.count + ' 行 / ' + a.chars +
+          ' 字 · 已固定，本卷 10 关都读这一篇</div>' +
       '</div>' +
       '<button class="btn line sm" id="artOpen">换一篇</button>' +
     '</div>';
@@ -2255,8 +2267,11 @@ window.kbDebugLevel = function () {
 /* ---------------- 练习引擎 ---------------- */
 function startLevel(st, ch, lv) {
   /* 断点续打（2026-11-05）：上次没打完的这一关（教师关闭练习时自动存过草稿），
-     3 天内再进来先问一句 —— 接着打，还是从头开始。 */
-  var dr = (!S.demo && S.role === 'student' && S.progress) ? (S.progress.draft || null) : null;
+     3 天内再进来先问一句 —— 接着打，还是从头开始。
+     固定了某一篇文章（S.art.id）时不续打：草稿里存的是上次那篇的正文，
+     换了文章再拿它续，等于让学生接着打旧文章（2026-11-05 牛哥反馈的「数据不同步」）。 */
+  var dr = (!S.demo && S.role === 'student' && S.progress && !S.art.id)
+    ? (S.progress.draft || null) : null;
   if (dr && dr.k === ('s' + st + 'c' + ch + 'l' + lv)
       && (Date.now() / 1000 - (dr.ts || 0)) < 3 * 86400) {
     uiConfirm({
