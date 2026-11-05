@@ -249,7 +249,7 @@ def main():
 
     port, state = PORTX.pick_port(
         want, cfg_path=CONFIG, is_mine=mine, no_dialog=args.no_dialog,
-        log=log)
+        reuse_ok=True, log=log)
     if state == "mine":
         url = "http://127.0.0.1:%d/teacher/" % port
         log("  端口上已有本工作台在运行 → 直接复用（不会起第二个实例）")
@@ -281,7 +281,13 @@ def main():
     env["PYTHONUTF8"] = "1"
     env["PYTHONUNBUFFERED"] = "1"
     proc = subprocess.Popen([sys.executable, os.path.join(ROOT, "server.py"),
-                             "--port", str(port), "--bind", args.bind],
+                             "--port", str(port), "--bind", args.bind,
+                             # 端口由启动器负责：子进程绝不能再弹端口窗。
+                             # 以前没带这个参数，更新重启时子进程发现端口还在
+                             # TIME_WAIT 就会自己弹一个 Tk 窗（macOS 上看到的
+                             # 「选择端口号」就是它），选完端口服务起在别处，
+                             # 老师的书签还指着老地址 → 表现为怎么都起不来。
+                             "--no-dialog"],
                             cwd=ROOT, env=env,
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                             text=True, errors="replace", bufsize=1)

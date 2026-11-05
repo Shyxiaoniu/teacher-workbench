@@ -51,6 +51,7 @@ from activity import ActivityStore, parse_multipart   # noqa: E402  课堂活动
 from typing_store import TypingStore   # noqa: E402
 from updater import Updater            # noqa: E402  在线更新（检查/下载/安装/回滚）
 import ooxml_preview as OOX            # noqa: E402  课件在线预览（纯 Python 解析 OOXML）
+import sheet_archive as SHEET_ARC      # noqa: E402  学习单提交存档（独立网页）
 
 # 数据目录：默认与程序同级的 data/（不设环境变量时）；
 # 容器部署时用 WB_DATA_DIR 指到挂载卷，两者行为一致。
@@ -130,7 +131,7 @@ CFG["update"].setdefault("interval_hours", 24) # 检查间隔（小时）
 PET_IDS = ["cat", "dog", "rabbit", "penguin", "panda", "dino", "unicorn", "dragon"]
 COND = threading.Condition()
 STARTED = time.time()
-VERSION = "2.0.27"
+VERSION = "2.0.28"
 ONLINE_WINDOW = 300      # 5 分钟内活跃算在线
 # 可内联直出的附件类型（其余一律按下载处理，防止同源执行脚本）
 _INLINE_EXTS = {"png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "pdf",
@@ -841,9 +842,14 @@ class Handler(LEG.Handler):
                                                      keep_blank_values=True))
             except Exception:
                 fields = {"data": raw.decode("utf-8", "replace")[:5000]}
+        # 学习单存档：匿名口没有票，身份按提交里带的认（和下面入库口径一致）
+        _who = {"学号": str(fields.get("学号") or fields.get("sid") or ""),
+                "姓名": str(fields.get("姓名") or fields.get("name") or ""),
+                "班级": str(fields.get("班级") or fields.get("cls") or "")}
+        _arc = self._sheet_archive(task_key, fields.pop("__archive", ""), _who)
         try:
             res = ACT.add_submission(task_key, fields, files,
-                                     ip=self._client_ip_safe())
+                                     ip=self._client_ip_safe(), archive=_arc)
         except ValueError as e:
             return self._json_cors({"ok": False, "message": str(e)}, 413)
         except LookupError:
@@ -1642,6 +1648,39 @@ class Handler(LEG.Handler):
     #   ② 地址一旦写进页面，老师换机器就要全班改一遍；
     #   ③ 身份字段如果由页面自己填，学生改个数字就能冒充别人。
     # 走这里：学生只带一张票，身份由服务端补，活动服务只需要在内网可达。
+    def _sheet_archive(self, task, raw, who):
+        """把「学习单整页快照」做成独立网页存档；任何异常都返回 None。
+
+        存档失败绝不能拖累提交 —— 学生答完题交不上去，比少一份存档严重得多。
+        只有确实部署过学习单模板的活动才存（防止这个公开提交口被当成图床）。
+        """
+        try:
+            if not isinstance(raw, str) or not raw.strip():
+                return None
+            cfg = LEG.get_config() or {}
+            tpls = cfg.get("custom_templates") if isinstance(cfg, dict) else None
+            if not (isinstance(tpls, dict) and str(tpls.get(task) or "").strip()):
+                return None
+            arc = SHEET_ARC.build(raw, {
+                "task": task,
+                "title": (ACT.get_task(task) or {}).get("title") or "",
+                "cls": (who or {}).get("班级") or "",
+                "name": (who or {}).get("姓名") or "",
+                "sid": (who or {}).get("学号") or "",
+                "time": time.strftime("%Y-%m-%d %H:%M:%S"),
+            })
+            if not arc:
+                return None
+            tag = re.sub(r"[^\w\u4e00-\u9fa5-]+", "_",
+                         "%s_%s" % ((who or {}).get("姓名") or "学生",
+                                    (who or {}).get("学号") or ""))[:60].strip("_")
+            return {"name": "学习单-%s-%s.html" % (tag or "学生",
+                                                  time.strftime("%Y%m%d-%H%M%S")),
+                    "data": arc.encode("utf-8"),
+                    "mime": "text/html; charset=utf-8"}
+        except Exception:
+            return None
+
     def _student_submit(self, qs):
         tok = (qs.get("t") or [""])[0] or self.headers.get("X-WB-Ticket") or ""
         gt = get_gticket(tok)
@@ -1699,12 +1738,16 @@ class Handler(LEG.Handler):
                 fields = dict(urllib.parse.parse_qsl(txt, keep_blank_values=True))
             except Exception:
                 fields = {"答案": txt[:5000]}
+        # 学习单存档（2026-11-05）：页面把「填好答案的整页快照」放在 __archive。
+        # 先摘出来 —— 它不是一道题的答案，混进 fields 会在大屏上多出一列
+        # 巨大文本。身份用服务端票里的（who），页面自报的不算数。
+        archive = self._sheet_archive(task, fields.pop("__archive", ""), who)
         # 身份以服务端签的票为准，页面自己填的一律覆盖（防冒名）
         fields.update(who)
         try:
             res = ACT.add_submission(task, fields, files, ip=self._client_ip_safe(),
                                      sid=who.get("学号"), name=who.get("姓名"),
-                                     cls=who.get("班级"))
+                                     cls=who.get("班级"), archive=archive)
         except ValueError as e:
             return self._json_cors({"ok": False, "msg": str(e)}, 413)
         except LookupError:
@@ -4876,17 +4919,32 @@ def main():
         except Exception:
             return False
 
+    if restarting:
+        # 自动更新重启（2026-11-05 修 macOS「更新后起不来」）：
+        # 这个端口是我自己刚放开的，但旧进程可能还没退干净，浏览器那边的
+        # SSE / keep-alive 连接也会让端口短暂停在 TIME_WAIT。这期间：
+        #   ① 绝不弹端口设置窗 —— 那个 Tk 窗就是 macOS 上看到的「选择端口号」；
+        #   ② 绝不换端口 —— 换了以后老师的书签、桌面图标全指着老地址，等于没起来。
+        # 先等它变成「起服务能绑上」的状态（带 SO_REUSEADDR 判断），最多 20 秒。
+        _t0 = time.time()
+        while time.time() - _t0 < 20:
+            # trust=True：这个端口上一刻还是本进程自己的监听口，不再做
+            # 「有没有别人接着」的探测（Windows 关掉监听后端口会挂起，
+            # 探测只会一直超时，把重启拖死）。
+            if PORTX.can_bind(want, trust=True):
+                break
+            time.sleep(0.2)
     port, state = PORTX.pick_port(want, cfg_path=CONFIG_PATH, is_mine=mine,
-                                  no_dialog=args.no_dialog)
+                                  no_dialog=args.no_dialog or restarting,
+                                  reuse_ok=True, trust_own=restarting)
     if restarting and state == "mine":
-        # 重启出来的新进程：端口上那个「本工作台实例」是还没退干净的旧自己，
-        # 不是重复启动。等它把 socket 放掉（最多 8 秒）再接着用这个端口。
-        # 8 秒还占着 = 旧进程根本没退成功，服务其实还在跑 —— 保持 mine，
-        # 下面按「已有实例在运行」退出，绝不抢端口造出两个实例抢流量。
+        # 新的进程映像起来了，但旧进程还没把 socket 放掉（Windows 上 execv 是
+        # 「起新进程 → 退旧进程」，有一段并存窗口）。等它放掉；
+        # 8 秒还占着 = 旧进程根本没退，服务其实还在跑，保持 mine 走「已有实例」。
         t0 = time.time()
-        while time.time() - t0 < 8 and not PORTX.is_free(want):
+        while time.time() - t0 < 8 and not PORTX.can_bind(want, trust=True):
             time.sleep(0.15)
-        if PORTX.is_free(want):
+        if PORTX.can_bind(want, trust=True):
             port, state = want, "free"
     if state == "mine":
         print("[workbench] 端口 %d 上已有一个本工作台实例在运行，不重复启动。" % port)

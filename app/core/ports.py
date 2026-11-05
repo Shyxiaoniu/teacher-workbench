@@ -27,6 +27,7 @@ import os
 import sys
 import json
 import time
+import errno
 import socket
 import threading
 import webbrowser
@@ -67,6 +68,90 @@ def is_free(port, host="127.0.0.1", timeout=0.35):
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         s.settimeout(timeout)
+        s.bind((host, port))
+        return True
+    except OSError:
+        return False
+    finally:
+        try:
+            s.close()
+        except Exception:
+            pass
+
+
+def _conn_refused(host, port, timeout=0.4):
+    """连一下，**只**在「明确被拒绝」时返回 True。
+
+    为什么不能直接看 connect_ex 的返回值：带 settimeout 的 socket 在
+    Windows 上是非阻塞的，connect_ex 会立刻返回 10035(EWOULDBLOCK)，
+    而不是像 POSIX 那样等在那里 —— 拿它当结论会把「有人监听」和
+    「端口空着」判成同一件事（2026-11-05 实测）。
+    正确做法：等 select 可写，再看 SO_ERROR。
+    """
+    c = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        c.settimeout(timeout)
+        rc = c.connect_ex((host, port))
+        if rc == 0:
+            return False                     # 连上了 → 有人在监听
+        if rc not in (errno.EINPROGRESS, errno.EWOULDBLOCK, 10035, 10036):
+            return rc in (errno.ECONNREFUSED, 10061)
+        try:
+            import select
+            _, w, x = select.select([], [c], [c], timeout)
+        except Exception:
+            return False
+        if not w and not x:
+            return False                     # 超时：当作被占用，宁可不动
+        err = c.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
+        return err in (errno.ECONNREFUSED, 10061)
+    except Exception:
+        return False
+    finally:
+        try:
+            c.close()
+        except Exception:
+            pass
+
+
+def can_bind(port, host="127.0.0.1", timeout=0.4, trust=False):
+    """「现在起服务能不能绑上这个端口」—— 故意带 SO_REUSEADDR。
+
+    和 is_free 的分工（两者不能合并）：
+
+      · is_free  回答「这个端口有没有被别人占」，**不能**带 SO_REUSEADDR
+        （Windows 上那个选项会让人 bind 到别人的端口，看起来成功，
+        实际流量全被原进程接走），所以它把 TIME_WAIT 也算成「不可用」；
+      · can_bind 回答「我自己现在能不能在这个端口上起服务」，服务端
+        （http.server.HTTPServer）本来就是带 SO_REUSEADDR 绑的，所以
+        这里也必须带上，才能得到同一个答案。
+
+    为什么需要它：自动更新重启时，旧进程刚关掉监听 socket，浏览器那边
+    还有 SSE / keep-alive 连接没断，端口会在 TIME_WAIT 停几十秒。
+    用 is_free 去判会一直「不可用」→ 弹出端口设置窗 → 服务换端口起在
+    别处，而老师的书签还指着老地址，看起来就是「更新后怎么都起不来」
+    （2026-11-05 macOS 反馈，Windows 同样会发生）。
+
+    仍然先 connect 一次：只要还有人接着，就绝不抢（避免真的顶掉别人）。
+    判定只认「明确的连接被拒绝」：超时 / 不可达一律按「被占用」处理。
+
+    trust=True 只给「自动更新重启」用：这个端口上一刻还是本进程自己的
+    监听口，跳过连接探测。为什么必须跳过 —— Windows 上关掉监听后端口会
+    挂起一段时间（新 SYN 被丢弃、既不拒绝也不接受），和「别人 backlog 满」
+    表现完全一样，探测不出来；而 macOS 会立刻回 RST，不跳过也没事。
+    """
+
+    try:
+        port = int(port)
+    except Exception:
+        return False
+    if not (MIN_PORT <= port <= MAX_PORT):
+        return False
+    if not trust and not _conn_refused(host, port, timeout):
+        return False          # 有人接着 / 超时 / 不可达：一律不抢
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         s.bind((host, port))
         return True
     except OSError:
@@ -470,7 +555,8 @@ def ask_port(current, reason="", cfg_path=None, avoid=(), timeout=300, log=print
     return _ask_console(int(current), reason, ports, cfg_path)
 
 
-def pick_port(want, cfg_path=None, is_mine=None, no_dialog=False, log=print, tries=8):
+def pick_port(want, cfg_path=None, is_mine=None, no_dialog=False, log=print, tries=8,
+              reuse_ok=False, trust_own=False):
     """确定最终端口。
 
     返回 (port, state)：
@@ -478,11 +564,22 @@ def pick_port(want, cfg_path=None, is_mine=None, no_dialog=False, log=print, tri
               "mine"      端口上跑的就是本工作台（复用，不起第二个）
               "busy"      被别的程序占着且用户不想/不能改
               "cancelled" 用户主动取消
+
+    reuse_ok=True（重启 / 启动器用）：is_free 为假但 can_bind 为真时也当作
+    可用 —— 那说明端口上只剩刚关闭的旧连接（TIME_WAIT），没有别的程序在
+    监听，服务带着 SO_REUSEADDR 能直接绑上。不加这一步，更新重启就会
+    误报「端口被占用」并弹出端口设置窗（2026-11-05 macOS）。
     """
     port = int(want)
     used = []
     for _ in range(max(1, tries)):
         if is_free(port):
+            return port, "free"
+        if reuse_ok and can_bind(port, trust=trust_own):
+            try:
+                log("  端口 %d 上的旧连接正在收尾（TIME_WAIT），直接复用" % port)
+            except Exception:
+                pass
             return port, "free"
         if is_mine:
             try:

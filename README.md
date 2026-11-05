@@ -3,7 +3,7 @@
 > 给班主任和任课老师用的一套**班级工作台**：教师端与学生端共用一个网页入口，
 > 数据全部存在自己的服务器上，不依赖任何第三方云服务。
 
-当前版本：**2.0.27**（版本号唯一代码源：`app/server.py` 的 `VERSION`）
+当前版本：**2.0.28**（版本号唯一代码源：`app/server.py` 的 `VERSION`）
 
 ```
 http://<服务器局域网 IP>:8080/        ← Docker 部署的入口；直接运行时是 :20020
@@ -378,9 +378,9 @@ docker compose up -d --build
 
 | # | 文件 | 位置 |
 |---|---|---|
-| 1 | `app/server.py` | `VERSION = "2.0.27"` —— **唯一代码源** |
-| 2 | `.env.example` | `IMAGE_TAG=2.0.27` |
-| 3 | `docker-compose.yml` | `image: …:${IMAGE_TAG:-2.0.27}`（init 与 workbench **两处**） |
+| 1 | `app/server.py` | `VERSION = "2.0.28"` —— **唯一代码源** |
+| 2 | `.env.example` | `IMAGE_TAG=2.0.28` |
+| 3 | `docker-compose.yml` | `image: …:${IMAGE_TAG:-2.0.28}`（init 与 workbench **两处**） |
 | 4 | `README.md` | 文首「当前版本」 |
 | 5 | `version.json` | 由 `tools/make_release.py` 自动同步 |
 
@@ -408,6 +408,49 @@ python tools/make_release.py --out D:\dist   # 指定输出目录（默认 dist/
 > 「创建发行版」并上传 zip 才会有内容。在线更新走的是 `version.json`（manifest）+
 > raw 直链，不依赖 Releases 功能；想把 zip 同时挂到 Releases 也可以，把
 > `version.json` 的 `zip` 字段改成完整 URL 即可。
+
+### 打字岛只钉标题行 / 学习单存档独立网页 / Mac 更新重启（2.0.28）
+
+**① 打字冒险岛：只让标题行吸顶**
+
+| 项 | 说明 |
+|---|---|
+| 定位方式 | `.stick-top{position:sticky;top:-14px}`；`margin-top:-20px` 抵消 `padding-top:20px`，静止时位置与普通块完全一致（不跳动），滚动时卡片停在离顶端 6px |
+| z-index | **30**：高于页面卡片（auto / 1~6），低于弹层（`.py-pop` 40 / `.mask` 50），滚下去的内容被实底背景挡住，文章库和提示窗仍盖在它上面 |
+| 不再吸顶 | 演示条、教师练习条、三个页签都移出容器，随页面正常滚走 —— 1080p 上可视内容多出约 130px |
+| 窄屏 | ≤760px 时顶栏折成「标题一行 + 数据 chip 一行」（原来 chip 折三四行，吸顶后占掉半屏） |
+| 牧场 | `fitViewScroll()` 改成按 `#view` 到视口的实际距离算高度，不再用「视口 − sticky 高度」硬减（页签已不在 sticky 里，硬减会多出一条滚动条） |
+
+**② 学习单提交存成独立网页**
+
+- 提交瞬间，页面把**整页 DOM 克隆**一份，把用户输入回写进属性（`value` / `checked` /
+  `selected` / textarea 文本），摘掉脚本、登录浮层、身份条、提交按钮，作为
+  `__archive` 字段随提交一起发上来。
+- 服务端 `app/core/sheet_archive.py` 再洗一遍（脚本、`on*`、`javascript:`、
+  iframe/object、meta refresh 全部移除，`<form>` 降级成 `<div>`），
+  加上身份/时间存档条，落成 `<数据目录>/activity/<活动>/<随机>.html`。
+- 地址记在提交的 `_sheet` 字段：数据大屏「文件」列会多一个 📄 链接，
+  **以附件下发**（避免学生内容在教师端同源执行），老师下载后双击即可独立打开。
+- 只有**部署过学习单模板**的活动才存；存档失败不影响提交本身。
+
+**③ macOS 更新后起不来、弹「选择端口号」**
+
+- **根因**：更新完点「重启」，服务端 `os.execv` 换进程映像。旧进程关掉监听后，
+  浏览器那边的 SSE / keep-alive 连接让端口短暂处于 TIME_WAIT；新进程 `main()` 里
+  `pick_port()` 用 `is_free()`（**故意不带 SO_REUSEADDR**）判断 → 一直「不可用」，
+  于是弹出 Tk 端口设置窗；选了新端口后服务起在别处，而老师书签还指着老地址，
+  看起来就是「怎么都起不来」。
+- **修法**：
+  1. `ports.can_bind()`：按「服务端真正绑端口的方式」（带 SO_REUSEADDR）判断能不能起，
+     `_conn_refused()` 用 `select + SO_ERROR` 取代不可靠的 `connect_ex` 返回值；
+  2. `pick_port(reuse_ok=True)`：`is_free` 为假但 `can_bind` 为真时，判定「旧连接在收尾」，
+     **留在原端口**；
+  3. `server.py` 重启路径：先等 20 秒让端口变成可绑，`no_dialog=args.no_dialog or restarting`
+     —— **重启出来的进程绝不弹端口窗**，也不再换端口；
+  4. `launch.py` 给子进程加 `--no-dialog`：端口只由启动器负责，子进程不参与选择。
+- **边界**：`can_bind(trust=True)` 只给「刚放开自己端口」的重启用 —— Windows 上关掉监听后
+  端口会挂起一段时间，和「别人 backlog 满」表现一样，探测区分不了；普通启动仍走严格判定，
+  绝不抢别人的端口。
 
 ### 大屏问卷正确率 + 一条提交不再显示两次（2.0.27）
 

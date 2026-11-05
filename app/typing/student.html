@@ -112,12 +112,19 @@ button{font-family:inherit;cursor:pointer;border:none;background:none}
 /* 顶栏 */
 .top{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);
   border-radius:18px;padding:10px 16px;box-shadow:0 6px 20px var(--shadow)}
-/* 吸顶区（2026-11-05）：顶栏 + 教师练习条 + 页签整体常驻。
-   排行榜动辄几十行，往下翻的时候星数/积分/宠物还得看得见，
-   否则学生翻到一半就不知道自己在看谁的榜。
-   实现要点：留出 padding 让卡片离屏幕顶 6px，用负 margin 把这段 padding
-   吃回去（静止时位置不变）；top 取负值让背景色向上铺满，
-   滚动时不会有内容从缝里透出来（半透明+模糊那版实测会透出卡片边缘）。 */
+/* 吸顶区（2026-11-05 调整）：只钉「打字冒险岛」标题行。
+   之前顶栏 + 演示条 + 教师练习条 + 页签整块常驻，1080p 上吃掉近 200px，
+   地图只剩半屏；现在只有标题行跟随滚动，其余内容随页面正常滚走，
+   可视区回到接近满屏。
+   实现要点：
+     · position:sticky + top:-14px：留出 padding 让卡片离屏幕顶 6px，
+       再用负 margin 把这段 padding 吃回去，静止时位置与普通块完全一致
+       （不产生 layout 跳动）；
+     · z-index:30：高于页面卡片（默认 auto / 1~6），低于弹层
+       （.py-pop 40 / .mask 50），所以滚到标题下面的内容会被遮住，
+       而文章库、提示弹窗仍然盖在它上面；
+     · 背景复制 body 那一套（同样 fixed）：滚动时下方内容不会从
+       缝里透出来（半透明+模糊实测会透出卡片边缘）。 */
 .stick-top{position:sticky;top:-14px;z-index:30;
   margin:-20px -6px 0;padding:20px 6px 6px;
   /* 背景 = 与 body 完全相同的一套（同样 fixed），这样它是实底的、挡得住
@@ -1096,11 +1103,15 @@ body.embed .credit{display:none}
 }
 @media (max-width:760px){
   #app{padding:10px 12px 18px}
-  #app .top{padding:10px 14px;border-radius:16px}
+  /* 顶栏折成两段：标题一行、数据 chip 一行（2026-11-05）。
+     以前 logo 和 chip 抢同一行，390px 上 chip 被挤成三四行、顶栏 210px 高，
+     现在标题行要吸顶，那等于半屏都被它占着 —— 折开以后约 120px。 */
+  #app .top{padding:10px 14px;border-radius:16px;flex-wrap:wrap;gap:8px}
+  #app .meter{margin-left:0;width:100%;gap:6px}
   #app .logo{font-size:20px}
   #app .logo small{display:none}
-  #app .top .chip{padding:6px 12px;font-size:14px}
-  #app .top .pet-mini{width:44px;height:44px}
+  #app .top .chip{padding:5px 10px;font-size:13px;gap:4px}
+  #app .top .pet-mini{width:40px;height:40px;border-radius:12px}
   #app .tabs{gap:7px}
   #app .tabs button{padding:10px 14px;font-size:15px;flex:1}
   #view .map-head{grid-template-columns:repeat(2,1fr);gap:8px}
@@ -1543,6 +1554,9 @@ function render() {
             + (themeIsDark() ? '☀' : '🌙') + '</button>' +
         '</div>' +
       '</div>' +
+    '</div>' +
+      /* ↑ .stick-top 到此结束：只有标题行吸顶。
+         演示条 / 教师练习条 / 页签以下都在容器外，随页面正常滚动。 */
       (S.demo && S.role !== 'teacher'
         ? '<div class="demo-bar">🎬 演示模式：当前未登录，展示的是示例数据，成绩只存在本机。' +
           '学生登录后进入这里，成绩会真实记录并上榜。</div>' : '') +
@@ -1575,7 +1589,6 @@ function render() {
             tabBtn('map', '🗺 冒险地图') + tabBtn('lb', '🏆 排行榜') + tabBtn('ranch', '🐾 宠物牧场') +
           '</div>'
         : '') +
-    '</div>' +
     (enrolled ? '' :
       '<div class="off-bar"><div class="big">🚧</div><h2>老师还没开放打字练习</h2>' +
         '<p>等老师在教师端打开开关，这里就会变成打字冒险岛。<br>先回「今日」页看看别的任务吧。</p></div>') +
@@ -1598,19 +1611,26 @@ function render() {
   if (scrollable) { v.scrollTop = 0; fitViewScroll(); }
 }
 
-/* 牧场滚动容器的高度：视口 - 吸顶区 - 页脚 - #app 上下内边距。
-   切页签、缩放窗口、手机转屏都要重算（resize 只绑一次，见文件末尾）。 */
+/* 牧场滚动容器的高度：视口 - 吸顶区 - 页脚 - 上下内边距。
+   切页签、缩放窗口、手机转屏都要重算（resize 只绑一次，见文件末尾）。
+
+   2026-11-05：吸顶区只剩标题行，页签不再算在吸顶高度里，所以不能再用
+   「innerHeight - stickTop.offsetHeight」拍脑袋减 —— 那样会把页签那 40px
+   漏掉，容器比可视区高、整页跟着多出一条滚动条。
+   改成按 #view 自己到视口的实际距离算：页面没滚动时取它在文档里的位置，
+   已经滚过吸顶区时按「吸顶卡片下沿」算，两种情况都不会溢出。 */
 function fitViewScroll() {
   var v = document.getElementById('view');
   if (!v || !v.classList.contains('view-scroll')) return;
   var st = document.querySelector('.stick-top');
-  var top = st ? st.offsetHeight : 0;
+  var stickH = st ? st.offsetHeight : 0;
   var credit = document.querySelector('.credit');
   var foot = credit ? credit.offsetHeight + 18 : 0;
-  var app = document.getElementById('app');
-  var cs = app ? getComputedStyle(app) : null;
-  var pad = cs ? (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0) : 0;
-  var h = window.innerHeight - top - foot - pad - 8;
+  var sy = window.scrollY || document.documentElement.scrollTop || 0;
+  var docTop = v.getBoundingClientRect().top + sy;   /* #view 在文档中的位置 */
+  /* 已经往下滚了的话，可用的上边界是吸顶卡片下沿（含 6px 呼吸位） */
+  var visibleTop = Math.max(docTop, sy + stickH + 6);
+  var h = window.innerHeight - (visibleTop - sy) - foot - 12;
   v.style.maxHeight = Math.max(220, Math.round(h)) + 'px';
 }
 /* 窗口变化会让回显层换行位置改变，浮动输入框 / 光标 / 候选框要跟着重算 */

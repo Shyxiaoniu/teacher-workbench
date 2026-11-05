@@ -17141,7 +17141,31 @@ function actBuildCustomPage(html, opts) {
   R.push('function actShowLogin(){var no=(document.getElementById("actSid")||{}).value;var h=document.getElementById("actLoginHint");if(!no){if(h)h.textContent="";return}if(!ACT_ROSTER){if(h)h.textContent="（未取到花名册，将以你填写的为准）";return}var nm=ACT_MAP[no.trim()];if(nm){if(h){h.style.color="#1D9E75";h.textContent="匹配到："+nm}}else{if(h){h.style.color="#E24B4A";h.textContent="学号不在本班名单"}}}');
   R.push('function actDoLogin(){var no=(document.getElementById("actSid")||{}).value;no=(no||"").trim();if(!no){var h=document.getElementById("actLoginHint");if(h){h.style.color="#E24B4A";h.textContent="请填写学号"}return}var nm="",cls="";if(ACT_ROSTER){nm=ACT_MAP[no]||"";cls=ACT_ROSTER.c||"";if(!nm){var m=document.getElementById("actLoginMsg");if(m)m.textContent="该学号不在本班名单，请核对。";var h=document.getElementById("actLoginHint");if(h){h.style.color="#E24B4A";h.textContent="学号不在本班名单"}return}}ACT_USER={sid:no,name:nm,cls:cls};var lg=document.getElementById("actLogin");if(lg)lg.style.display="none";document.querySelectorAll("[data-act-needlogin]").forEach(function(b){b.disabled=false})}');
   R.push('function actGather(c){var fd=new FormData();var els=c.querySelectorAll("input[name],textarea[name],select[name],input[data-f],textarea[data-f],select[data-f]");els.forEach(function(e){var k=e.getAttribute("name")||e.getAttribute("data-f");if(!k)return;if(e.type==="file"){for(var i=0;i<e.files.length;i++)fd.append(k,e.files[i],e.files[i].name)}else if(e.type==="radio"||e.type==="checkbox"){if(e.checked)fd.append(k,e.value)}else{fd.append(k,e.value)}});return fd}');
-  R.push('function actSubmitBlock(btn,container,label){if(!ACT_USER){var s9=container.querySelector("[data-act-status]");if(s9){s9.textContent="请先在上面填写学号登录";s9.className="act-st err"}return}var _fi=(container!==document.body&&container.querySelectorAll)?container.querySelectorAll("input[type=file]"):[];if(_fi&&_fi.length){var _has=false;for(var _i=0;_i<_fi.length;_i++){var _fl=_fi[_i].files;if(_fl){for(var _j=0;_j<_fl.length;_j++){if(_fl[_j]&&_fl[_j].size>0){_has=true}}}}var _allow=(container.getAttribute&&container.getAttribute("data-allow-empty")==="1");if(!_has&&!_allow){var _s0=container.querySelector("[data-act-status]");if(_s0){_s0.textContent="本题要求上传文件，请选择文件后再提交（老师未开启「允许空文件提交」）。";_s0.className="act-st err"}return}}var _ti=container.querySelectorAll?container.querySelectorAll("input,textarea,select"):[];var _hasTextField=false,_filled=false,_fileSel=false;for(var _a=0;_a<_ti.length;_a++){var _e2=_ti[_a],_tp2=(_e2.type||"").toLowerCase();if(_e2.disabled||_tp2==="hidden")continue;if(_e2.id==="actSid"||(_e2.closest&&_e2.closest("#actLogin")))continue;if(_tp2==="file"){if(_e2.files){for(var _b=0;_b<_e2.files.length;_b++){if(_e2.files[_b]&&_e2.files[_b].size>0)_fileSel=true}}continue}_hasTextField=true;if(_tp2==="checkbox"||_tp2==="radio"){if(_e2.checked)_filled=true}else if(String(_e2.value||"").trim()!==""){_filled=true}}if(_hasTextField&&!_filled&&!_fileSel){var _sc2=container.querySelector("[data-act-status]");if(_sc2){_sc2.textContent="请先填写内容再提交";_sc2.className="act-st err"}return}btn.disabled=true;var st=container.querySelector("[data-act-status]");if(st){st.textContent="准备提交…";st.className="act-st"}actResolveApi().then(function(tgt){if(!tgt){if(st){st.textContent="这一页还没接上提交地址，请让老师检查活动绑定";st.className="act-st err"}btn.disabled=false;return}var fd=actGather(container);if(WB_SUBMIT){fd.append("按钮",label)}else{fd.append("学号",ACT_USER.sid);fd.append("姓名",ACT_USER.name);fd.append("班级",ACT_USER.cls);fd.append("按钮",label)}if(st){st.textContent="提交中…";st.className="act-st"}fetch(tgt,{method:"POST",body:fd,mode:"cors"}).then(function(r){return r.json().catch(function(){return{}}).then(function(j){return {ok:r.ok,j:j}})}).then(function(o){var ok=o.ok||(o.j&&(o.j.ok||o.j.success));if(st){st.textContent=ok?"提交成功":"提交失败";st.className="act-st "+(ok?"ok":"err")}btn.disabled=false}).catch(function(e){if(st){st.textContent="网络错误：连不上提交服务，请确认与老师在同一局域网";st.className="act-st err"}btn.disabled=false})})}');
+  /* 存档快照（2026-11-05）：提交瞬间克隆整页，把当前输入回写进属性再序列化。
+     必须「先克隆、改克隆」—— 直接改真实 DOM 会动到学生正在看的页面
+     （value/checked 一改，光标和回显都会跳）。file 控件不回写：文件本身
+     走附件通道，把 base64 塞进 HTML 只会把存档撑到几十 MB。
+     脚本、登录浮层、身份条、提交按钮都在克隆体上摘掉，服务端还会再洗一遍。 */
+  R.push('function actArchiveHtml(){try{'
+    + 'var SEL="input,textarea,select";'
+    + 'var live=document.querySelectorAll(SEL);'
+    + 'var root=document.documentElement.cloneNode(true);'
+    + 'var cp=root.querySelectorAll(SEL);'
+    + 'for(var i=0;i<live.length&&i<cp.length;i++){'
+    + 'var a=live[i],b=cp[i],tp=(a.type||"").toLowerCase();'
+    + 'if(tp==="file"){if(b.parentNode)b.parentNode.removeChild(b);continue}'
+    + 'if(tp==="checkbox"||tp==="radio"){if(a.checked)b.setAttribute("checked","checked");else b.removeAttribute("checked")}'
+    + 'else if(a.tagName==="SELECT"){var oa=a.options,ob=b.options;for(var k=0;k<oa.length&&k<ob.length;k++){if(oa[k].selected)ob[k].setAttribute("selected","selected");else ob[k].removeAttribute("selected")}}'
+    + 'else if(a.tagName==="TEXTAREA"){b.textContent=a.value}'
+    + 'else{b.setAttribute("value",a.value)}'
+    + '}'
+    + 'var kill=root.querySelectorAll("script,#actLogin,#actHi,.act-submit-btn,[data-act-status],noscript");'
+    + 'for(var j=kill.length-1;j>=0;j--){var e=kill[j];if(e.parentNode)e.parentNode.removeChild(e)}'
+    + 'var all=root.querySelectorAll("*");'
+    + 'for(var m=0;m<all.length;m++){var at=all[m].attributes;for(var n=at.length-1;n>=0;n--){var an=at[n].name.toLowerCase();if(an.indexOf("on")===0)all[m].removeAttribute(at[n].name)}}'
+    + 'return "<!doctype html>"+root.outerHTML'
+    + '}catch(err){return ""}}');
+  R.push('function actSubmitBlock(btn,container,label){if(!ACT_USER){var s9=container.querySelector("[data-act-status]");if(s9){s9.textContent="请先在上面填写学号登录";s9.className="act-st err"}return}var _fi=(container!==document.body&&container.querySelectorAll)?container.querySelectorAll("input[type=file]"):[];if(_fi&&_fi.length){var _has=false;for(var _i=0;_i<_fi.length;_i++){var _fl=_fi[_i].files;if(_fl){for(var _j=0;_j<_fl.length;_j++){if(_fl[_j]&&_fl[_j].size>0){_has=true}}}}var _allow=(container.getAttribute&&container.getAttribute("data-allow-empty")==="1");if(!_has&&!_allow){var _s0=container.querySelector("[data-act-status]");if(_s0){_s0.textContent="本题要求上传文件，请选择文件后再提交（老师未开启「允许空文件提交」）。";_s0.className="act-st err"}return}}var _ti=container.querySelectorAll?container.querySelectorAll("input,textarea,select"):[];var _hasTextField=false,_filled=false,_fileSel=false;for(var _a=0;_a<_ti.length;_a++){var _e2=_ti[_a],_tp2=(_e2.type||"").toLowerCase();if(_e2.disabled||_tp2==="hidden")continue;if(_e2.id==="actSid"||(_e2.closest&&_e2.closest("#actLogin")))continue;if(_tp2==="file"){if(_e2.files){for(var _b=0;_b<_e2.files.length;_b++){if(_e2.files[_b]&&_e2.files[_b].size>0)_fileSel=true}}continue}_hasTextField=true;if(_tp2==="checkbox"||_tp2==="radio"){if(_e2.checked)_filled=true}else if(String(_e2.value||"").trim()!==""){_filled=true}}if(_hasTextField&&!_filled&&!_fileSel){var _sc2=container.querySelector("[data-act-status]");if(_sc2){_sc2.textContent="请先填写内容再提交";_sc2.className="act-st err"}return}btn.disabled=true;var st=container.querySelector("[data-act-status]");if(st){st.textContent="准备提交…";st.className="act-st"}actResolveApi().then(function(tgt){if(!tgt){if(st){st.textContent="这一页还没接上提交地址，请让老师检查活动绑定";st.className="act-st err"}btn.disabled=false;return}var fd=actGather(container);try{var _arc=actArchiveHtml();if(_arc)fd.append("__archive",_arc)}catch(e){}if(WB_SUBMIT){fd.append("按钮",label)}else{fd.append("学号",ACT_USER.sid);fd.append("姓名",ACT_USER.name);fd.append("班级",ACT_USER.cls);fd.append("按钮",label)}if(st){st.textContent="提交中…";st.className="act-st"}fetch(tgt,{method:"POST",body:fd,mode:"cors"}).then(function(r){return r.json().catch(function(){return{}}).then(function(j){return {ok:r.ok,j:j}})}).then(function(o){var ok=o.ok||(o.j&&(o.j.ok||o.j.success));if(st){st.textContent=ok?"提交成功":"提交失败";st.className="act-st "+(ok?"ok":"err")}btn.disabled=false}).catch(function(e){if(st){st.textContent="网络错误：连不上提交服务，请确认与老师在同一局域网";st.className="act-st err"}btn.disabled=false})})}');
   R.push('function actTestSubmit(){actResolveApi().then(function(tgt){if(!tgt){alert("未接上提交地址，请确认活动已绑定");return}var fd=new FormData();fd.append("学号","TEST"+Date.now().toString().slice(-6));fd.append("姓名","测试同学");fd.append("班级",ACT_CLASS||"测试班");fd.append("按钮","测试提交");fd.append("测试内容","「查看-测试提交」模拟数据 "+new Date().toLocaleTimeString());fetch(tgt,{method:"POST",body:fd,mode:"cors"}).then(function(r){return r.json().catch(function(){return{}}).then(function(j){return{ok:r.ok,j:j}})}).then(function(o){var ok=o.ok||(o.j&&(o.j.ok||o.j.success));alert(ok?"✅ 测试提交成功，请切到数据大屏查看":"❌ 提交失败："+(o.j&&o.j.msg||r.status))}).catch(function(e){alert("网络错误："+e.message)})})}');
   R.push('function actInitCustom(){');
   R.push('if(ACT_TEST){var lg0=document.getElementById("actLogin");if(lg0&&lg0.parentNode)lg0.parentNode.removeChild(lg0);ACT_USER={sid:"TEST"+(Date.now()+"").slice(-6),name:"测试同学",cls:ACT_CLASS||"测试班"};}');
@@ -17961,13 +17985,20 @@ function actTableHtml(subs, limit) {
     rows.map(s => {
       const atts = actAttachments(s);
       const sid = s._submission_id != null ? s._submission_id : '';
+      /* 学习单存档（2026-11-05）：学生提交时存的独立网页，点开可看/下载。
+         和作品附件分开显示，老师一眼能分清「学生交的文件」和「学习单本身」。 */
+      const sheetA = s._sheet
+        ? `<a href="${actAttUrl(s._sheet)}" target="_blank" rel="noopener" title="学习单存档（独立网页，可另存）">📄</a>` : '';
+      const fileCell = [sheetA,
+        atts.length ? atts.map(a => `<a href="${actAttUrl(a)}" target="_blank">📎</a>`).join(' ') : ''
+      ].filter(Boolean).join(' ') || '—';
       return `<tr>
         <td>${esc(s['姓名'] || s['name'] || '—')}</td>
         <td>${esc(s['学号'] || s['student_no'] || s['sid'] || '—')}</td>
         ${hasTaskCol ? `<td>${esc(btnOf(s) || '—')}</td>` : ''}
         <td>${esc(s['作品标题'] || s['title'] || '—')}</td>
         <td>${esc(String(s['作品简介'] || s['desc'] || '').slice(0, 30))}</td>
-        <td>${atts.length ? atts.map(a => `<a href="${actAttUrl(a)}" target="_blank">📎</a>`).join(' ') : '—'}</td>
+        <td>${fileCell}</td>
         <td class="act-muted">${esc((s.submitted_at || '').slice(5))}</td>
         <td>${sid !== '' ? `<button class="act-del-btn" onclick="actDelSub('${sid}')">删除</button>` : '—'}</td>
       </tr>`;
@@ -17996,7 +18027,8 @@ function actDrawCharts(j, subs) {
   if (days.length > 10) days = days.slice(-10);
   const trend = days.map(d => ({ label: d.slice(5), v: byDay[d] }));
   actDrawBars('actChartTrend', trend, '提交数');
-  const ignore = new Set(['_ip', 'submitted_at', 'attachment', '姓名', '学号', '作品链接', 'file']);
+  const ignore = new Set(['_ip', '_sheet', '_tasks', '_submission_id', 'submitted_at',
+    'attachment', '姓名', '学号', '作品链接', 'file']);
   const fieldCount = {};
   subs.forEach(s => Object.keys(s).forEach(k => {
     if (ignore.has(k)) return;
