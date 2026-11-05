@@ -130,7 +130,7 @@ CFG["update"].setdefault("interval_hours", 24) # 检查间隔（小时）
 PET_IDS = ["cat", "dog", "rabbit", "penguin", "panda", "dino", "unicorn", "dragon"]
 COND = threading.Condition()
 STARTED = time.time()
-VERSION = "2.0.13"
+VERSION = "2.0.14"
 ONLINE_WINDOW = 300      # 5 分钟内活跃算在线
 # 可内联直出的附件类型（其余一律按下载处理，防止同源执行脚本）
 _INLINE_EXTS = {"png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "pdf",
@@ -1371,7 +1371,14 @@ class Handler(LEG.Handler):
         学习单入口（/g/act）与资料入口打开学习单（/g/mat）共用这一条闸门，
         两个入口的判断标准必须完全一致，否则学生会发现「从资料点进去
         不用签到、从今日点进去要签到」这种自相矛盾的行为。
+
+        2026-11-05 修复：老师已在设置页关闭「课堂签到」时直接放行。
+        原因：签到关掉后 _write_checkin / _student_checkin 都会拒绝落库，
+        学生永远攒不出一条有效签到记录，这道闸门就会把所有学习单
+        永久拦在「请先签到」——教师端的开关必须在这里同步生效。
         """
+        if not self._checkin_enabled():
+            return True                     # 签到已关闭：闸门整体失效
         d = time.strftime("%Y-%m-%d")
         ok_st = ("checked", "late", "sick", "personal", "present", "early_leave")
         return any(

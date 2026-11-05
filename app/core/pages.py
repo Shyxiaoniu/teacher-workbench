@@ -268,8 +268,33 @@ def login_page_setup(msg=""):
 
 # ---------------------------------------------------------------------------
 # 管理员控制台（2.0.13）：只管教师账号，不承接任何业务设置
+# 2026-11-05：改名 / 重置密码 / 删除原来是浏览器原生 prompt() / confirm()，
+# 外观和整个工作台完全脱节。统一换成页内弹窗（dlg）：
+# 同一张卡片语言（白卡 + 品牌绿描边 + 16px 圆角），危险操作用红色主按钮。
 # ---------------------------------------------------------------------------
+ADMIN_DLG_CSS = """
+.dlg-ov{position:fixed;inset:0;background:rgba(22,35,31,.42);display:flex;
+  align-items:center;justify-content:center;z-index:99;padding:20px}
+.dlg{background:#fff;border:1px solid rgba(15,110,86,.16);border-radius:16px;
+  box-shadow:0 12px 40px rgba(15,110,86,.18);width:100%;max-width:360px;
+  padding:22px 24px;animation:dlgIn .16s ease}
+@keyframes dlgIn{from{transform:translateY(10px) scale(.97);opacity:0}
+  to{transform:none;opacity:1}}
+.dlg h3{margin:0 0 6px;font-size:16px;color:#16231F}
+.dlg .d{font-size:12.8px;color:#5F6E68;line-height:1.7;margin:0 0 12px}
+.dlg input{margin:2px 0 0}
+.dlg .btns{display:flex;gap:10px;justify-content:flex-end;margin-top:8px}
+.dlg .btns button{padding:9px 16px;font-size:13.5px}
+.dlg .btns .cancel{background:#EAF4F0;color:#0F6E56}
+.dlg .btns .cancel:hover{background:#DCEEE6}
+.dlg .btns .dlg-ok{background:#0F6E56}
+.dlg .btns .dlg-ok:hover{background:#1D9E75}
+.dlg .btns .dlg-ok.danger{background:#B3261E}
+.dlg .btns .dlg-ok.danger:hover{background:#C6352C}
+"""
+
 ADMIN_BODY = """
+<style>__DLG_CSS__</style>
 <div class="card" style="max-width:760px;margin:5vh auto 0">
   <div class="brand">__LOGO__<div><div style="font-weight:750;font-size:15px">班级工作台 · 管理员</div>
   <div style="font-size:12px;color:#849690">教师账号管理</div></div></div>
@@ -317,6 +342,43 @@ function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){
   return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 function toast(el,msg){el.textContent=msg;if(msg)setTimeout(function(){el.textContent='';},4000);}
 
+/* 工作台风格弹窗（替代浏览器原生 prompt / confirm）。
+   cfg: {title, desc, input, type, value, placeholder, ok, danger, empty, validate}
+   返回 Promise：确定 → 输入框的值（无输入框时 true），取消 / 点遮罩 / Esc → null。 */
+function dlg(cfg){
+  return new Promise(function(res){
+    var ov=document.createElement('div');ov.className='dlg-ov';
+    ov.innerHTML='<div class="dlg" role="dialog" aria-modal="true">'+
+      '<h3>'+esc(cfg.title||'')+'</h3>'+
+      (cfg.desc?'<p class="d">'+esc(cfg.desc)+'</p>':'')+
+      (cfg.input?'<input id="dlgIn" type="'+(cfg.type||'text')+'" value="'+
+        esc(cfg.value||'')+'" placeholder="'+esc(cfg.placeholder||'')+'" autocomplete="off">':'')+
+      '<div class="err" style="margin-top:8px" id="dlgErr"></div>'+
+      '<div class="btns"><button type="button" class="cancel">取消</button>'+
+      '<button type="button" class="dlg-ok'+(cfg.danger?' danger':'')+'">'+
+      esc(cfg.ok||'确定')+'</button></div></div>';
+    document.body.appendChild(ov);
+    var inp=ov.querySelector('#dlgIn'),err=ov.querySelector('#dlgErr');
+    function close(v){document.removeEventListener('keydown',onKey);ov.remove();res(v);}
+    function ok(){
+      if(!cfg.input)return close(true);
+      var v=(inp.value||'').trim();
+      if(!v){err.textContent=cfg.empty||'请填写内容';inp.focus();return;}
+      if(cfg.validate){var m=cfg.validate(v);if(m){err.textContent=m;inp.focus();return;}}
+      close(v);
+    }
+    function onKey(e){
+      if(e.key==='Escape')close(null);
+      else if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();ok();}
+    }
+    ov.querySelector('.cancel').onclick=function(){close(null);};
+    ov.querySelector('.dlg-ok').onclick=ok;
+    ov.addEventListener('mousedown',function(e){if(e.target===ov)close(null);});
+    document.addEventListener('keydown',onKey);
+    if(inp){inp.focus();inp.select();}else{ov.querySelector('.dlg-ok').focus();}
+  });
+}
+
 async function load(){
   var r=await fetch('/api/v2/admin/teachers',{credentials:'same-origin'});
   if(r.status===401){location.href='/teacher/login';return;}
@@ -343,15 +405,26 @@ async function load(){
     b.onclick=async function(){
       var id=b.getAttribute('data-id'), act=b.getAttribute('data-act');
       if(act==='name'){
-        var u=prompt('新的登录账号名：',b.getAttribute('data-u')||'');
+        var u=await dlg({title:'修改登录账号',
+          desc:'教师用这个账号登录教师端与登录页，改完请及时告知本人。',
+          input:true,value:b.getAttribute('data-u')||'',
+          placeholder:'新的登录账号名',ok:'保存',empty:'请填写账号名',
+          validate:function(v){return v.length>=2?'':'账号名至少 2 个字符';}});
         if(!u)return; var r=await A('/api/v2/admin/teacher/update',{id:id,username:u});
         toast(document.getElementById('addErr'),r.ok?'已改名':(r.msg||'失败')); load();
       }else if(act==='pwd'){
-        var p=prompt('新的初始密码（至少 8 位）：','');
+        var p=await dlg({title:'重置初始密码',
+          desc:'重置后请把新密码告知这位老师，TA 登录后可在设置里自行修改。',
+          input:true,type:'password',placeholder:'新密码（至少 8 位）',ok:'重置',
+          empty:'请填写新密码',
+          validate:function(v){return v.length>=8?'':'密码至少 8 位';}});
         if(!p)return; var r=await A('/api/v2/admin/teacher/update',{id:id,password:p});
         toast(document.getElementById('addErr'),r.ok?'密码已重置':(r.msg||'失败'));
       }else{
-        if(!confirm('确定删除这个教师账号吗？其数据目录会保留，不会自动清空。'))return;
+        var sure=await dlg({title:'删除教师账号',
+          desc:'删除后这位教师将无法登录；其数据目录会保留，不会自动清空。',
+          ok:'删除',danger:true});
+        if(!sure)return;
         var r=await A('/api/v2/admin/teacher/delete',{id:id});
         toast(document.getElementById('addErr'),r.ok?'已删除':(r.msg||'失败')); load();
       }
@@ -385,7 +458,8 @@ load();
 
 def admin_page():
     return _page("管理员控制台 · 班级工作台",
-                 ADMIN_BODY.replace("__LOGO__", LOGO))
+                 ADMIN_BODY.replace("__LOGO__", LOGO)
+                           .replace("__DLG_CSS__", ADMIN_DLG_CSS))
 
 
 FORGOT_BODY = """
