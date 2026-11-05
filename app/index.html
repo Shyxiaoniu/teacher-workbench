@@ -32239,12 +32239,19 @@ const DEMO_RENDER = {
 
       <div style="height:1px;background:var(--border);margin:14px 0 12px"></div>
 
-      <div data-set="data" style="font-size:14px;font-weight:500;margin-bottom:10px">数据与备份（换设备 / 重装用）${hq('backup', '备份包含什么 · 怎么恢复 · 有哪些限制')}</div>
+      <div data-set="data" style="font-size:14px;font-weight:500;margin-bottom:6px">数据与备份（换设备 / 重装用）${hq('backup', '备份包含什么 · 怎么恢复 · 有哪些限制')}</div>
+      <!-- 2.0.19 起导入只在这里：登录页的「数据导入」入口已移除（谁都能打开的页面
+           不该摆「一键恢复全部数据」）。全新部署先登录进来，再点「一键恢复」。 -->
+      <div class="term-hint" style="margin:0 0 10px">
+        换新电脑或重装系统后，在这里点<b>「一键恢复」</b>，选旧机器导出的
+        <code>.cwbackup</code>，输入当时设的备份密码，班级 / 学生 / 成绩 / 教师账号
+        会一起回来。
+      </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-primary" style="width:auto;padding:8px 16px;font-size:13px"
           onclick="exportFullData()">一键导出全量备份</button>
         <button class="btn" style="width:auto;padding:8px 16px;font-size:13px"
-          onclick="importFullData()">一键恢复</button>
+          onclick="importFullData()">一键恢复（导入备份）</button>
         <button class="btn btn-ghost" style="width:auto;padding:8px 16px;font-size:13px"
           onclick="exportCoursewarePack()"
           title="把课件库里的文件（资料 / 课件 / 素材）打成一个 zip">导出资料包</button>

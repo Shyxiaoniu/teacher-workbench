@@ -3,7 +3,7 @@
 > 给班主任和任课老师用的一套**班级工作台**：教师端与学生端共用一个网页入口，
 > 数据全部存在自己的服务器上，不依赖任何第三方云服务。
 
-当前版本：**2.0.18**（版本号唯一代码源：`app/server.py` 的 `VERSION`）
+当前版本：**2.0.19**（版本号唯一代码源：`app/server.py` 的 `VERSION`）
 
 ```
 http://<服务器局域网 IP>:8080/        ← Docker 部署的入口；直接运行时是 :20020
@@ -378,9 +378,9 @@ docker compose up -d --build
 
 | # | 文件 | 位置 |
 |---|---|---|
-| 1 | `app/server.py` | `VERSION = "2.0.18"` —— **唯一代码源** |
-| 2 | `.env.example` | `IMAGE_TAG=2.0.18` |
-| 3 | `docker-compose.yml` | `image: …:${IMAGE_TAG:-2.0.18}`（init 与 workbench **两处**） |
+| 1 | `app/server.py` | `VERSION = "2.0.19"` —— **唯一代码源** |
+| 2 | `.env.example` | `IMAGE_TAG=2.0.19` |
+| 3 | `docker-compose.yml` | `image: …:${IMAGE_TAG:-2.0.19}`（init 与 workbench **两处**） |
 | 4 | `README.md` | 文首「当前版本」 |
 | 5 | `version.json` | 由 `tools/make_release.py` 自动同步 |
 
@@ -408,6 +408,22 @@ python tools/make_release.py --out D:\dist   # 指定输出目录（默认 dist/
 > 「创建发行版」并上传 zip 才会有内容。在线更新走的是 `version.json`（manifest）+
 > raw 直链，不依赖 Releases 功能；想把 zip 同时挂到 Releases 也可以，把
 > `version.json` 的 `zip` 字段改成完整 URL 即可。
+
+### Mac 更新后无法启动 / 导入后学生登录不了 / 导入入口（2.0.19）
+
+- **macOS 更新后重启不了**：更新器解压时用 `open(target,"wb")` 落地，文件的 Unix
+  权限位被重置成 `0666 & ~umask`（通常 644），zip 里存的 755 全丢 —— 换装后
+  `app/启动教师端.command`、`docker/*.sh` 不可执行，双击就是「没有权限」。
+  现在解压后按 zip 里的 `external_attr` 补 `os.chmod`；服务启动时 `_heal_exec_bits()`
+  再兜一次，**已经被旧版本更新坏的机器升级后会自动修好**。
+- **导入数据后学生端「没有班级」、登录不了**：`ACCOUNTS.restore()` 会整体替换
+  `teachers` 列表，而备份可能来自旧版本或另一台机器（没有 `default` 条目）。
+  但业务数据一律落在 **default 工作区** —— 学生登录遍历 `teacher_ids()` 时扫不到
+  default，就报「没找到这个学生」。现在 `AccountStore` 启动时自愈补回 `default`
+  （builtin、密码留空，管理员可在 `/admin/` 重置），`restore()` 之后也补一次。
+- **导入入口移到设置里**：登录页不再有「📥 数据导入」。换设备 / 重装后，先登录，
+  再到 **系统设置 → 数据与备份 → 「一键恢复（导入备份）」**，选 `.cwbackup` 输入
+  备份密码即可。登录页的「？」说明也同步改了文案。
 
 ### 登录页不再显示默认密码（2.0.18）
 

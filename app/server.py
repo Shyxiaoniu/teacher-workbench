@@ -130,7 +130,7 @@ CFG["update"].setdefault("interval_hours", 24) # 检查间隔（小时）
 PET_IDS = ["cat", "dog", "rabbit", "penguin", "panda", "dino", "unicorn", "dragon"]
 COND = threading.Condition()
 STARTED = time.time()
-VERSION = "2.0.18"
+VERSION = "2.0.19"
 ONLINE_WINDOW = 300      # 5 分钟内活跃算在线
 # 可内联直出的附件类型（其余一律按下载处理，防止同源执行脚本）
 _INLINE_EXTS = {"png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "pdf",
@@ -3045,6 +3045,11 @@ class Handler(LEG.Handler):
                     self.server.server_close()
                 except Exception:
                     pass
+                # 顺手把更新换装弄丢的可执行位补回来，免得重启完下次双击打不开
+                try:
+                    _heal_exec_bits()
+                except Exception:
+                    pass
                 os.environ["WB_RESTARTING"] = "1"
                 sys.stdout.flush()
                 sys.stderr.flush()
@@ -4719,6 +4724,33 @@ def absent_sweeper():
             pass                          # 扫描失败不影响主服务
 
 
+def _heal_exec_bits():
+    """把更新换装弄丢的可执行位补回来（2026-11-05，macOS / Linux）。
+
+    老版本 updater 解压时用 open(target, "wb") 落地，zip 里存的 755 全丢了；
+    换装后 app/启动教师端.command 变成 0644，老师下次双击启动就是「没有权限」。
+    updater 已修（解压时 chmod），这里再兜一次：服务每次启动都检查并补上，
+    已经在用坏版本更新过、卡在「打不开」的机器升级后能自动恢复。
+    """
+    if os.name == "nt":
+        return
+    base = os.path.dirname(os.path.abspath(__file__))
+    root = os.path.dirname(base)
+    for rel in ("app/启动教师端.command", "app/启动教师端.sh",
+                "app/submission-system/run.command", "docker/entrypoint.sh",
+                "启动工作台.command"):
+        p = os.path.join(root, rel.replace("/", os.sep))
+        if not os.path.isfile(p):
+            continue
+        try:
+            st = os.stat(p)
+            if not (st.st_mode & 0o111):
+                os.chmod(p, (st.st_mode & 0o777) | 0o755)
+                print("[workbench] 已补回可执行权限：%s" % rel)
+        except Exception:
+            pass
+
+
 def _print_admin_hint():
     """默认管理员账号/密码只在启动终端出现（2026-11-05 牛哥要求：登录页不再展示）。
 
@@ -4747,6 +4779,7 @@ def main():
     ap.add_argument("--no-dialog", action="store_true", help="端口被占时不弹窗")
     args = ap.parse_args()
     global PORT
+    _heal_exec_bits()
     # 自动更新重启标记（2026-11-05）：/api/v2/update/restart 用 os.execv 换进程，
     # Windows 上会有一段「新旧进程并存」的窗口，端口还被旧进程占着。
     # 这个标记让本进程知道「端口是我自己的，等它空出来即可，别判成重复启动」。

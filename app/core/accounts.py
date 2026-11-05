@@ -170,6 +170,48 @@ class AccountStore(object):
         # 部署时可用环境变量覆盖管理员账号；只在显式要求时重置口令，
         # 避免每次重启都把管理员密码悄悄改回默认值。
         self._apply_env_admin()
+        # 2.0.19：账号表可能因为「全量恢复」丢了 default 条目，启动时自愈。
+        self._ensure_default_teacher()
+
+    def _ensure_default_teacher(self):
+        """保证 default 教师条目一定在 teachers 里（2.0.19）。
+
+        背景：`restore()` 会整体替换 teachers 列表，而备份可能来自
+        · 2.0.12 之前的单账号版本（那时还没有 teachers 数组），或
+        · 另一台机器（账号 id 是 t2 / t3，根本没有 default）。
+        但业务数据（班级 / 学生 / 成绩）一律落在 **default 工作区** ——
+        teachers 里少了 default，学生登录遍历 `teacher_ids()` 时就扫不到它，
+        表现为「教师端能看到班级，学生端显示没有班级、登录不了」
+        （2026-11-05 牛哥反馈的正是这个）。
+
+        这里补一条 builtin 的 default：密码留空，管理员在 /admin/ 重置即可；
+        用户名自动避让，不会顶掉已有的同名账号。
+        """
+        ts = self.data.get("teachers")
+        if not isinstance(ts, list):
+            ts = []
+            self.data["teachers"] = ts
+        if any(str(t.get("id")) == DEFAULT_TEACHER_ID for t in ts):
+            return False
+        names = {str(t.get("username") or "") for t in ts}
+        uname, n = "teacher", 2
+        while uname in names:
+            uname = "teacher%d" % n
+            n += 1
+        ts.insert(0, {
+            "id": DEFAULT_TEACHER_ID,
+            "username": uname,
+            "password_hash": "",
+            "security": {"question": "", "answer_hash": ""},
+            "name": "默认教师",
+            "created": int(time.time()),
+            "builtin": True,
+        })
+        try:
+            self._save()
+        except Exception:
+            pass
+        return True
 
     # ---------------- 底层 ----------------
     def _load(self):
@@ -297,6 +339,9 @@ class AccountStore(object):
             self.data = json.loads(json.dumps(data))
             self.data["admin"] = keep_admin
             self._save()
+        # 备份里的 teachers 可能不含 default（旧版本 / 另一台机器），
+        # 而业务数据都在 default 工作区 —— 不补回去学生会登录不了。
+        self._ensure_default_teacher()
         return True
 
     def peers(self, exclude):

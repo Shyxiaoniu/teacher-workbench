@@ -549,6 +549,17 @@ def zipfile_guard(zip_path, dest):
             os.makedirs(os.path.dirname(target), exist_ok=True)
             with z.open(info) as src, open(target, "wb") as dst:
                 shutil.copyfileobj(src, dst)
+            # 权限位必须自己补回来（2026-11-05 牛哥反馈：Mac 上更新完重启不了）。
+            # open(target, "wb") 建出来的是 0666 & ~umask（通常 0644），zip 里存的
+            # 755 被彻底丢掉；换装后 app/启动教师端.command、docker/*.sh 全部
+            # 不可执行 —— 老师点「重启」或下次双击启动就是「没有权限」。
+            # 注意 mode 为 0 说明打包时没写权限（老版本 make_release），保持默认即可。
+            mode = (info.external_attr >> 16) & 0o777
+            if mode:
+                try:
+                    os.chmod(target, mode)
+                except Exception:
+                    pass
     yield
 
 

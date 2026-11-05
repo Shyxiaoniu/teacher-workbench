@@ -100,16 +100,14 @@ LOGIN_BODY = """
   <div id="forgotWrap" style="margin-top:14px;font-size:13px;text-align:center">
     <a href="/teacher/forgot" style="color:#0F6E56;text-decoration:none">忘记密码？</a>
   </div>
-  <div style="margin-top:8px;font-size:13px;text-align:center">
-    <a href="javascript:void 0" id="impLink" style="color:#5F6E68;text-decoration:none">📥 数据导入</a>
-  </div>
+  <!-- 备份恢复入口在 2.0.19 已移到「登录后 → 教师端 系统设置 → 数据与备份」：
+       登录页谁都能打开，摆一个「一键恢复全部数据」既不安全也不好解释。 -->
   <div class="tip" style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap">
     <span>学生入口 <code>/s/</code></span>
     <button id="helpBtn" type="button" class="qbtn" aria-label="查看登录页说明">？</button>
   </div>
 </div>
 <script>
-document.getElementById('impLink').onclick=function(){LoginIO.open();};
 document.getElementById('helpBtn').onclick=function(){LoginIO.help('login');};
 var lgRole='admin';
 function lgSet(r){
