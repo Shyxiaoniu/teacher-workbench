@@ -3,7 +3,7 @@
 > 给班主任和任课老师用的一套**班级工作台**：教师端与学生端共用一个网页入口，
 > 数据全部存在自己的服务器上，不依赖任何第三方云服务。
 
-当前版本：**2.0.29**（版本号唯一代码源：`app/server.py` 的 `VERSION`）
+当前版本：**2.0.30**（版本号唯一代码源：`app/server.py` 的 `VERSION`）
 
 ```
 http://<服务器局域网 IP>:8080/        ← Docker 部署的入口；直接运行时是 :20020
@@ -378,9 +378,9 @@ docker compose up -d --build
 
 | # | 文件 | 位置 |
 |---|---|---|
-| 1 | `app/server.py` | `VERSION = "2.0.29"` —— **唯一代码源** |
-| 2 | `.env.example` | `IMAGE_TAG=2.0.29` |
-| 3 | `docker-compose.yml` | `image: …:${IMAGE_TAG:-2.0.29}`（init 与 workbench **两处**） |
+| 1 | `app/server.py` | `VERSION = "2.0.30"` —— **唯一代码源** |
+| 2 | `.env.example` | `IMAGE_TAG=2.0.30` |
+| 3 | `docker-compose.yml` | `image: …:${IMAGE_TAG:-2.0.30}`（init 与 workbench **两处**） |
 | 4 | `README.md` | 文首「当前版本」 |
 | 5 | `version.json` | 由 `tools/make_release.py` 自动同步 |
 
@@ -408,6 +408,17 @@ python tools/make_release.py --out D:\dist   # 指定输出目录（默认 dist/
 > 「创建发行版」并上传 zip 才会有内容。在线更新走的是 `version.json`（manifest）+
 > raw 直链，不依赖 Releases 功能；想把 zip 同时挂到 Releases 也可以，把
 > `version.json` 的 `zip` 字段改成完整 URL 即可。
+
+### 学生端网页一律新标签打开（2.0.30）
+
+| 项 | 说明 |
+|---|---|
+| 行为 | 学习单、课件 html、`.url` 快捷方式、以及页面上任何网页链接，都在**新标签页**独立打开；学生端原页不跳转、不关闭，随时切回来看别的资料 |
+| 复用 | 按绝对地址记住已开的标签：同一份资料再点一次 = **切到那个标签**（`focus`），不会越点越多；关掉后再点会重新打开 |
+| 安全 | `window.open` 后立即 `opener = null`，新标签拿不到学生端的 window |
+| 被拦 | 浏览器拦截弹窗时只提示，**绝不用 `location.href` 兜底**（那会把学生端顶掉，正是要避免的） |
+| 不拦截 | `#锚点`、`javascript:`、`download` 下载、已显式写 `target` 的链接 |
+| 涉及入口 | `app/student/app.js` 的 `openNewTab()`、`openMatSheet()`（资料「打开」）、全局 `a[href]` 兜底 |
 
 ### 大屏统计区不再吸顶 + 问卷逐题归位（2.0.29）
 

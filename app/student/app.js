@@ -41,33 +41,32 @@
     });
   }
   function todayIdx() { return (new Date().getDay() + 6) % 7; }   // 周一=0
-  /* ---------------- 站内跳转 vs 外链（2026-11-05 下午改版） ----------------
-     上午的做法是「所有离开当前页的跳转一律开新标签」，初衷是别把学生端顶掉。
-     实际用下来更糟：点资料 → 新标签打开学习单 → 学生在那边点返回，浏览器回到的
-     还是旧标签里的学生端，看着像"点一次多一个页面"；新标签与原页的会话、滚动位置
-     各自独立，学生还会以为数据丢了。
-     现在按目标区分：
-       · 站内（同源，含 /g/mat 这种相对路径）→ **当前标签直接跳**，返回即原页面；
-       · 真正的外部站点 → 仍然新标签，避免把学生端顶掉后回不来。 */
-  function isSameSite(url) {
-    try {
-      var u = new URL(url, location.href);
-      return u.origin === location.origin;
-    } catch (e) { return true; }   /* 解析不了就当站内，宁可同标签 */
-  }
+  /* ---------------- 网页 / 学习单一律新标签打开（2026-11-05 晚定版） ----------------
+     上午的做法是「站内同标签、站外新标签」，下午牛哥要求改回来：
+     学习单网页、其他网页文件都要在**新标签页**里独立打开，学生端页面不能被顶掉
+     —— 学生要能随时切回来翻别的资料、看今天的任务。
+
+     既要「原页不关」又要「别越点越多」，所以按绝对地址记住已经开过的标签：
+     同一份资料再点一次 = 切到那个标签（focus），不会又开一个。
+       · 站内 / 站外一视同仁（学习单 /g/mat、.url、课件 html 都在站内）；
+       · noopener：新标签拿不到学生端的 window；
+       · 被浏览器拦下时只提示，绝不用 location.href 把学生端顶掉（那正是要避免的）。 */
+  var _wbTabs = {};                     /* 绝对地址 → window 引用 */
   function openNewTab(url) {
-    /* 函数名沿用（调用点多），行为已改为「站内同标签、站外新标签」。 */
-    if (isSameSite(url)) {
-      location.href = url;
-      return true;
+    var abs = String(url || '');
+    try { abs = new URL(abs, location.href).href; } catch (e) {}
+    var old = abs ? _wbTabs[abs] : null;
+    if (old && !old.closed) {
+      try { old.focus(); return true; } catch (e) {}
     }
     var w = null;
-    try { w = window.open(url, '_blank'); } catch (e) { w = null; }
+    try { w = window.open(abs, '_blank'); } catch (e) { w = null; }
     if (!w) {
-      toast('浏览器拦住了新窗口：请允许本站弹出窗口，或按住 Ctrl 再点一次');
+      toast('浏览器拦住了新标签页：请允许本站弹出窗口，或长按链接选「在新标签页打开」');
       return false;
     }
     try { w.opener = null; } catch (e) {}   // 断开引用，别人拿不到本页的 window
+    if (abs) _wbTabs[abs] = w;
     return true;
   }
   function todayStr() {
@@ -1719,11 +1718,12 @@
   }
 
   /* 全局兜底（2026-11-05）：学生端页面上任何 <a href> 都走 openNewTab ——
-     它内部按目标决定：站内同标签跳、站外新标签。
-     覆盖：外链 URL、站内页面、弹窗里动态拼出来的链接，以及以后新加的任何
-     链接——不用逐个记得写 target。
+     网页链接统一在新标签打开，学生端页面始终留着，随时能切回来。
+     覆盖：外链 URL、站内页面（学习单 / 课件 html / 资料入口）、弹窗里动态拼出来的
+     链接，以及以后新加的任何链接——不用逐个记得写 target。
      跳过四类：① #锚点（本页内跳转）；② javascript:（脚本动作）；
-     ③ 已显式写 target 的（它自己声明了打开方式）；④ download 下载。
+     ③ 已显式写 target 的（它自己声明了打开方式，如「下载原文件」的 _blank）；
+     ④ download 下载（下载不该占一个标签页）。
      用冒泡阶段而不是捕获：业务代码先跑，它若已 preventDefault（自定义
      预览器等），这里就不再插手，避免把别人的交互吃掉。 */
   document.addEventListener('click', function (e) {
