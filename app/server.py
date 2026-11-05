@@ -97,37 +97,6 @@ def _typing_for(a):
     return TypingStore(WS.paths_for(a)["typing"])
 
 
-# ---------------------------------------------------------------------------
-# 工具页 · 截图推送（2026-11-05）
-# 教师端「工具 → 截图工具」截完图一键推给学生；图片落当前账号工作区，
-# 多教师账号天然隔离，学生只能看到自己老师推的那份。
-# 只存最近 12 张：课堂截图是「这会儿要看」的东西，不是资料库。
-# ---------------------------------------------------------------------------
-TOOL_KEEP = 12
-
-
-def _tool_dir():
-    d = os.path.join(WS.paths_for(ACC.current_account())["dir"], "tools")
-    os.makedirs(d, exist_ok=True)
-    return d
-
-
-def _tool_items():
-    p = os.path.join(_tool_dir(), "index.json")
-    try:
-        with open(p, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        items = data.get("items") if isinstance(data, dict) else None
-        return [x for x in (items or []) if isinstance(x, dict) and x.get("id")]
-    except Exception:
-        return []
-
-
-def _tool_save_items(items):
-    p = os.path.join(_tool_dir(), "index.json")
-    with open(p, "w", encoding="utf-8") as f:
-        json.dump({"items": items}, f, ensure_ascii=False, indent=1)
-
 # 三个模块级单例改成「按当前请求账号懒加载的代理」：业务代码里几百处
 # STORE.xxx / ACT.xxx / TYPING.xxx 一行都不用改，数据自动按账号隔离。
 # 课堂活动附件落 <工作区>/activity/<活动号>/，URL 仍是 /static/uploads/…。
@@ -163,7 +132,7 @@ CFG["update"].setdefault("interval_hours", 24) # 检查间隔（小时）
 PET_IDS = ["cat", "dog", "rabbit", "penguin", "panda", "dino", "unicorn", "dragon"]
 COND = threading.Condition()
 STARTED = time.time()
-VERSION = "2.0.31"
+VERSION = "2.0.32"
 ONLINE_WINDOW = 300      # 5 分钟内活跃算在线
 # 可内联直出的附件类型（其余一律按下载处理，防止同源执行脚本）
 _INLINE_EXTS = {"png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "pdf",
@@ -1877,45 +1846,6 @@ class Handler(LEG.Handler):
                                "has_qa": has_qa(), "config_rev": CFG_VER[0],
                                "port": _port(), "version": VERSION,
                                "activity_tasks": len(ACT.tasks())})
-        # ---- 工具页 · 截图推送（2026-11-05）----
-        # 学生端「工具」页和「今日」卡片都用 latest；教师端列表用 list。
-        # 图片本身要登录才给，避免被随便抓走（学生 / 老师都算已登录）。
-        if path in ("/api/v2/tool/latest", "/api/v2/tool/list"):
-            s = self._session()
-            if not s:
-                return self._json({"ok": False, "msg": "未登录"}, 401)
-            items = _tool_items()
-            if path == "/api/v2/tool/list":
-                if s.get("role") != "teacher":
-                    return self._json({"ok": False, "msg": "未登录"}, 401)
-                return self._json({"ok": True, "items": items})
-            return self._json({"ok": True, "item": (items[0] if items else None)})
-        if path == "/api/v2/tool/img":
-            if not self._session():
-                return self._json({"ok": False, "msg": "未登录"}, 401)
-            q2 = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
-            tid = str((q2.get("id") or [""])[0] or "")
-            if not re.match(r"^[A-Za-z0-9_-]{4,40}$", tid):
-                return self._json({"ok": False, "msg": "参数不对"}, 400)
-            fp = os.path.join(_tool_dir(), tid + ".png")
-            if not os.path.isfile(fp):
-                return self._json({"ok": False, "msg": "这张截图已经不在了"}, 404)
-            try:
-                with open(fp, "rb") as f:
-                    blob = f.read()
-            except OSError:
-                return self._json({"ok": False, "msg": "读取失败"}, 500)
-            self._sec_sent = False
-            self.send_response(200)
-            self.send_header("Content-Type", "image/png")
-            self.send_header("Content-Length", str(len(blob)))
-            self.send_header("Cache-Control", "private, max-age=600")
-            self.end_headers()
-            try:
-                self.wfile.write(blob)
-            except (BrokenPipeError, ConnectionResetError):
-                pass
-            return
         if path == "/api/v2/auth/session":
             s = self._session()
             if not s:
@@ -3052,50 +2982,6 @@ class Handler(LEG.Handler):
         if body is None:
             return          # 请求体过大，_read_json 已经回过 413 了
         # 数据大屏：清空本活动全部提交 / 删除单条提交（需求 5，2026-11-02）
-        # ---- 工具页 · 截图推送（2026-11-05）----
-        # 只收 PNG dataURL（前端 canvas.toDataURL 产出），最大 8MB。
-        # 落盘后写索引，只保留最近 TOOL_KEEP 张，旧图一并删掉。
-        if path == "/api/v2/tool/push":
-            if not self._is_teacher():
-                return self._json({"ok": False, "msg": "未登录"}, 401)
-            img = str(body.get("image") or "")
-            if not img.startswith("data:image/png;base64,"):
-                return self._json({"ok": False, "msg": "只支持 PNG 截图"}, 400)
-            try:
-                blob = base64.b64decode(img.split(",", 1)[1])
-            except Exception:
-                return self._json({"ok": False, "msg": "图片解码失败"}, 400)
-            if not blob:
-                return self._json({"ok": False, "msg": "截图是空的"}, 400)
-            if len(blob) > 8 * 1024 * 1024:
-                return self._json({"ok": False, "msg": "截图太大（上限 8MB）"}, 413)
-            d = _tool_dir()
-            tid = os.urandom(6).hex()
-            try:
-                with open(os.path.join(d, tid + ".png"), "wb") as f:
-                    f.write(blob)
-            except OSError as e:
-                return self._json({"ok": False, "msg": "保存失败：%s" % e}, 500)
-            item = {"id": tid,
-                    "title": str(body.get("title") or "课堂截图")[:60],
-                    "at": time.strftime("%Y-%m-%d %H:%M"),
-                    "size": len(blob),
-                    "url": "/api/v2/tool/img?id=" + tid}
-            items = [item] + [x for x in _tool_items() if x.get("id") != tid]
-            items = items[:TOOL_KEEP]
-            try:
-                _tool_save_items(items)
-            except OSError as e:
-                return self._json({"ok": False, "msg": "索引写入失败：%s" % e}, 500)
-            keep = {x.get("id") for x in items}
-            try:
-                for fn in os.listdir(d):
-                    if fn.endswith(".png") and fn[:-4] not in keep:
-                        os.remove(os.path.join(d, fn))
-            except OSError:
-                pass
-            STORE.audit("teacher", "tool-push", "%s %dKB" % (tid, len(blob) // 1024))
-            return self._json({"ok": True, "item": item})
         # 参数走查询串（前端 fetch 只带 URL），body 为空时用 body 兜底。
         # 必须教师登录：学生页与教师页同源，只靠同源校验拦不住学生乱调。
         if path in ("/api/v2/act-clear", "/api/v2/act-del-sub"):

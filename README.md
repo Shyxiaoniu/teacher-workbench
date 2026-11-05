@@ -3,7 +3,7 @@
 > 给班主任和任课老师用的一套**班级工作台**：教师端与学生端共用一个网页入口，
 > 数据全部存在自己的服务器上，不依赖任何第三方云服务。
 
-当前版本：**2.0.31**（版本号唯一代码源：`app/server.py` 的 `VERSION`）
+当前版本：**2.0.32**（版本号唯一代码源：`app/server.py` 的 `VERSION`）
 
 ```
 http://<服务器局域网 IP>:8080/        ← Docker 部署的入口；直接运行时是 :20020
@@ -378,9 +378,9 @@ docker compose up -d --build
 
 | # | 文件 | 位置 |
 |---|---|---|
-| 1 | `app/server.py` | `VERSION = "2.0.31"` —— **唯一代码源** |
-| 2 | `.env.example` | `IMAGE_TAG=2.0.31` |
-| 3 | `docker-compose.yml` | `image: …:${IMAGE_TAG:-2.0.31}`（init 与 workbench **两处**） |
+| 1 | `app/server.py` | `VERSION = "2.0.32"` —— **唯一代码源** |
+| 2 | `.env.example` | `IMAGE_TAG=2.0.32` |
+| 3 | `docker-compose.yml` | `image: …:${IMAGE_TAG:-2.0.32}`（init 与 workbench **两处**） |
 | 4 | `README.md` | 文首「当前版本」 |
 | 5 | `version.json` | 由 `tools/make_release.py` 自动同步 |
 
@@ -409,7 +409,7 @@ python tools/make_release.py --out D:\dist   # 指定输出目录（默认 dist/
 > raw 直链，不依赖 Releases 功能；想把 zip 同时挂到 Releases 也可以，把
 > `version.json` 的 `zip` 字段改成完整 URL 即可。
 
-### 导入名单按钮吸底 + 截图工具（2.0.31）
+### 导入名单按钮吸底（2.0.31；截图工具已于 2.0.32 移除）
 
 **① 导入名单弹窗：确认按钮吸底**
 
@@ -421,7 +421,11 @@ python tools/make_release.py --out D:\dist   # 指定输出目录（默认 dist/
 | 兼容 | 不传 `footer` 的弹窗结构完全不变 |
 | 顺手修 | `openImportClass` 用 `x.id === Number(id)` 严格比，id 是字符串时找不到班 → 点「导入名单」没反应；改成字符串比 |
 
-**② 教师端工具页 · 截图工具**
+**② ~~教师端工具页 · 截图工具~~（2.0.32 已按要求整体删除）**
+
+> 下面这段只作为历史记录保留。2.0.32 起：教师端工具页没有「截图工具」卡片，
+> 整套画布 / 标注 / 推送代码与 `/api/v2/tool/*` 接口全部移除，
+> 学生端「课堂工具」页与今日页截图卡也一并下线。
 
 - 工具页「内置工具」第一张卡：📷 截图工具，点开是全屏工作区（不是浮窗）。
 - 参照微信截图：**拉框选区 → 标注 → 保存/复制/推送**。
@@ -432,16 +436,51 @@ python tools/make_release.py --out D:\dist   # 指定输出目录（默认 dist/
 - **一键推送**：`POST /api/v2/tool/push`（教师）→ 存 `<账号目录>/tools/<id>.png` + `index.json`，
   只保留最近 12 张。
 
-**③ 学生端工具页（新增）**
+**③ ~~学生端工具页~~（2.0.32 已删除）**
 
-| 位置 | 表现 |
+| 位置 | 当时的实现 |
 |---|---|
-| 底部/侧边导航 | 新增「🧰 工具」，排在「资料」后面 |
-| 工具页 | 显示最新一张推送：标题、时间、整图；点图在**新标签**放大（学生端不关闭）；右上「刷新」 |
-| 今日页 | 一张小卡「老师刚推送的截图」（左侧缩略图 + 标题时间），点一下进「工具」页 |
-| 接口 | `GET /api/v2/tool/latest`（学生/教师，需登录）、`GET /api/v2/tool/img?id=`（需登录，PNG） |
+| 底部/侧边导航 | 「🧰 工具」，排在「资料」后面（现已移除） |
+| 工具页 | 显示最新一张推送（现已移除） |
+| 今日页 | 「老师刚推送的截图」小卡（现已移除） |
+| 接口 | `GET /api/v2/tool/latest`、`GET /api/v2/tool/img?id=`（现已 404） |
 
-> 截图不进 `/api/v2/sync` 快照：几百 KB 的 PNG 塞进每次同步会拖慢整页，改成进页面时按需拉一次。
+### 大屏去掉问卷准确率 / 截屏工具下线 / 打字归「其他」/ 好句字号（2.0.32）
+
+**① 数据大屏：只统计「谁交了」，不算正确率**
+
+| 项 | 改动 |
+|---|---|
+| 逐题统计 | `actQuizStatsHtml` 整块删除（选项条、正确率、✓ 标记、整体分布全部不再渲染） |
+| 结构扫描 | `actScanLayout` 只扫按钮（`{mode, buttons, source, updated_at}`），不再扫题目 / 选项 / 正确答案 |
+| 归属汇总 | 任务窗口仍按「按钮」分组：同一学生在同一窗口只出现一次，换个任务就在另一个窗口各一条；按钮名先归一化（trim + 折叠空白）再去重 |
+| 单按钮 | 只有一个提交按钮时不再单开窗口（与下方名单重复） |
+| 自动补结构 | `actHealLayout`（老学习单补 questions）删除，老数据里留着的 `questions` 字段不影响显示 |
+
+**② 截屏工具整体删除**
+
+- 前端：`.shot-*` 样式、画布 / 标注 / 推送全部代码、工具页内置卡。
+- 服务端：`_tool_dir / _tool_items / _tool_save_items / TOOL_KEEP` 与三个接口（push / latest / img）。
+- 学生端：导航「工具」、`vTools`、今日页截图卡、相关样式与 `loadTool`。
+- 已推送过的旧图片仍留在数据目录 `<账号>/tools/`，要清可直接删这个文件夹（不影响任何功能）。
+
+**③ 打字页从「教学」移到「其他」**
+
+`NAV_GROUPS`：`教学 = [guide, courseware, homework, scores]`，
+`其他 = [todos, tools, typing]`。路由 `#typing` 没变，旧书签、`ROUTE_REDIRECT` 都不受影响。
+
+**④ 好句编辑支持字号**
+
+| 项 | 说明 |
+|---|---|
+| 编辑区 | `textarea` 换成 `contenteditable`（`.qs-rich`），字体/颜色按侧栏好句渲染，所见即所得 |
+| 选中字号 | `#qsSelSize`（12–32px）+「应用到选中」→ 把选区包成 `<span style="font-size:Npx">`；内部旧字号先清掉，避免压不住 |
+| 整体字号 | `#qsWholeSize`（13–24px，默认 15.5）→ 整句基准字号；不选文字直接点「应用到选中」也走整句 |
+| 清除 | 「清除选中字号」清掉与选区相交的 span 的字号并拆掉空壳；不选文字则整句回默认 |
+| 实时预览 | 编辑区下方 `.qs-prev` 用同一套规则渲染，输入 / 应用 / 改整句立即更新 |
+| 存储 | `wb-quote-custom-html`（白名单富文本）+ `wb-quote-custom`（纯文本，兼容旧版与 title）+ `wb-quote-size` |
+| 清洗 | `quoteCleanHtml`：只留 span/b/i/u/br，span 只留 11–40px 的 font-size；div/p 拆成 `<br>`，杜绝任意 HTML 进侧栏 |
+| 首屏 | 侧栏改用 `quoteCardHtml()` 渲染，刷新页面不会退回纯文本（字号不丢） |
 
 ### 学生端网页一律新标签打开（2.0.30）
 

@@ -19,9 +19,7 @@
 
   var S = { me: null, rev: 0, T: {}, flags: {}, vis: {}, view: 'today', es: null,
             now: null,   /* 服务端「现在第几节」（loadNow 定期刷新，2026-11-04） */
-            loading: true, seatmap: null,
-            /* 老师从「工具 → 截图工具」推过来的那张截图（2026-11-05） */
-            tool: null, toolLoaded: false };
+            loading: true, seatmap: null };
   var WD = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 
   /* ---------------- 工具 ---------------- */
@@ -424,7 +422,6 @@
       '</div>' +
       ckHtml +
       typingHtml +
-      toolTodayHtml() +
       '<div class="cols2">' +
       '<div class="card"><h3>' + (tm.fresh ? '本课资料' : '最近下发的资料') +
         '<span class="more">点一下直接打开</span></h3>' + matsHtml + '</div>' +
@@ -560,20 +557,16 @@
     /* 2026-11-04 牛哥定版：原「科目」改为「资料」——只列老师下发的资料，
        不再显示课表里的科目（课表那套对学生不再有意义）。 */
     { id: 'courses', name: '资料', ic: '📁' },
-    /* 工具（2026-11-05）：展示老师从教师端推过来的截图，
-       点图片在新标签页放大，学生端原页不动。 */
-    { id: 'tools', name: '工具', ic: '🧰' },
     /* 座位表（2026-11-03）：与教师端同一张图，讲台固定朝上，自己高亮 */
     { id: 'seat', name: '座位', ic: '🪑' },
     /* 打字冒险岛：老师开放后显示，站内 iframe 内嵌（2026-11-02） */
     { id: 'typing', name: '打字', ic: '⌨️' }
   ];
-  var VIEWS = ['today', 'homework', 'courses', 'tools', 'seat', 'typing'];
+  var VIEWS = ['today', 'homework', 'courses', 'seat', 'typing'];
   var TITLES = {
     today: ['今日', '签到 · 课堂学习单 · 要交的作业'],
     homework: ['我的作业', '全部作业与提交状态 · 点一条查看详情'],
     courses: ['我的资料', '老师下发的资料 · 点一下直接打开，不用下载'],
-    tools: ['课堂工具', '老师推送的截图 · 点一下放大看'],
     seat: ['我的座位', '座位表 · 讲台固定在上方 · 高亮你自己的位置'],
     typing: ['打字冒险岛', '闯关练打字 · 赢星星 · 孵宠物 · 上排行榜']
   };
@@ -629,9 +622,7 @@
     /* 座位表走独立接口（整间教室的网格），首次进页面时拉一次；
        拿到数据后 loadSeatmap 自己再 render 一遍（2026-11-03）。 */
     if (S.view === 'seat' && !S.seatmap) loadSeatmap();
-    /* 工具页：老师推的截图走独立接口（不进 sync 快照，避免大图塞进每次同步） */
-    if ((S.view === 'tools' || S.view === 'today') && !S.toolLoaded) loadTool();
-    var map = { today: vToday, homework: vHwAll, courses: vCourses, tools: vTools,
+    var map = { today: vToday, homework: vHwAll, courses: vCourses,
                 seat: vSeat, typing: vTyping };
     var t = TITLES[S.view] || TITLES.today;
     app.innerHTML =
@@ -1002,54 +993,6 @@
     html += '</div>';
     return html;
   }
-  /* ---------------- 工具页：老师推送的截图（2026-11-05） ----------------
-     为什么单独走接口、不塞进 sync 快照：截图是几百 KB 的 PNG，
-     放进每次同步的 JSON 里会让整页刷新变慢，而且只有少数时候用得到。
-     这里进「今日」或「工具」页时才拉一次 latest，失败就当没有。 */
-  function loadTool(force) {
-    if (S.toolLoaded && !force) return;
-    api('/api/v2/tool/latest', { cache: 'no-store' }).then(function (j) {
-      S.toolLoaded = true;
-      S.tool = (j && j.ok) ? (j.item || null) : null;
-      if (S.view === 'tools' || S.view === 'today') render();
-    }).catch(function () {
-      S.toolLoaded = true;
-      if (S.view === 'tools') render();
-    });
-  }
-
-  function toolTodayHtml() {
-    var it = S.tool;
-    if (!it) return '';
-    return '<div class="card tool-today" data-tool-go' +
-      ' style="cursor:pointer;display:flex;align-items:center;gap:12px">' +
-      '<img class="tool-thumb" src="' + esc(it.url) + '" alt="">' +
-      '<div style="flex:1;min-width:0">' +
-      '<b style="font-size:15.5px">老师刚推送的截图</b>' +
-      '<div style="font-size:12.5px;color:var(--text-secondary);margin-top:3px">' +
-      esc(it.title || '课堂截图') + ' · ' + esc(it.at || '') + '</div></div>' +
-      '<span class="tag hot">查看 ›</span></div>';
-  }
-
-  function vTools() {
-    var it = S.tool;
-    if (!S.toolLoaded) return '<div class="empty">正在读取老师推送的内容…</div>';
-    if (!it) {
-      return '<div class="card"><div class="empty" style="padding:26px 0">' +
-        '老师还没有推送截图<br><span style="font-size:12.5px">老师端「工具 → 截图工具」截完图点' +
-        '「推送到学生端」，这里就会出现。</span></div></div>';
-    }
-    return '<div class="card tool-view">' +
-      '<div class="tool-hd">' +
-      '<div class="t"><b>' + esc(it.title || '课堂截图') + '</b>' +
-      '<span class="dim">' + esc(it.at || '') + '</span></div>' +
-      '<button class="btn btn-ghost btn-sm" type="button" id="toolRefresh">刷新</button></div>' +
-      '<div class="tool-shot" data-tool-open title="点一下在新标签页放大">' +
-      '<img src="' + esc(it.url) + '" alt="' + esc(it.title || '课堂截图') + '"></div>' +
-      '<div class="note">点图片在新标签页放大；学生端页面不会关，随时可以切回来。</div>' +
-      '</div>';
-  }
-
   /** 资源在线预览：按文件类型选最合适的浏览器内联方式（2026-11-02 重写）
       · 图片 → <img>   · 音频 → <audio>   · 视频 → <video>
       · PDF / 文本 / HTML → <iframe>（/cwpv 闸门原样输出）
@@ -1561,17 +1504,6 @@
   }
 
   function bind() {
-    /* 工具：今日卡片点一下进「工具」页；工具页的图点一下在新标签放大 */
-    document.querySelectorAll('[data-tool-go]').forEach(function (el) {
-      el.onclick = function () { go('tools'); };
-    });
-    document.querySelectorAll('[data-tool-open]').forEach(function (el) {
-      el.onclick = function () {
-        if (S.tool && S.tool.url) openNewTab(S.tool.url);
-      };
-    });
-    var tr = $('#toolRefresh');
-    if (tr) tr.onclick = function () { S.toolLoaded = false; loadTool(true); };
     var ck = $('#ckBtn');
     if (ck) ck.onclick = function () {
       ck.disabled = true; ck.textContent = '签到中…';

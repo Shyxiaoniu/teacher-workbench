@@ -1974,36 +1974,26 @@ body.seat-rsz-dragging .seat:hover { transform:none; box-shadow:none; }
 .float-foot .btn { width:auto; }
 .float-foot .ff-hint { margin-left:auto; font-size:12px; color:var(--text-secondary); }
 
-/* ===== 截图工具（2026-11-05）=====
-   全屏工作区（不是浮窗）：截屏后要拉框、要标注，浮窗太小。
-   结构 = 顶部说明条 + 中间画布（可滚动/等比缩放） + 底部工具栏，
-   整层 fixed + 深色半透明遮罩，和微信截图的「先框选再标注」顺序一致。 */
-.shot-layer{position:fixed;inset:0;z-index:3000;background:rgba(16,20,18,.62);
-  display:flex;flex-direction:column;gap:8px;padding:10px;backdrop-filter:blur(2px)}
-.shot-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;
-  background:var(--bg-surface);border:1px solid var(--border);border-radius:12px;
-  padding:8px 12px;font-size:13px}
-.shot-head b{font-size:14px}
-.shot-stage{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center;
-  overflow:auto;padding:10px;background:rgba(0,0,0,.28);border-radius:12px}
-.shot-stage canvas{background:#0B0F0D;border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,.45);
-  cursor:crosshair;display:block}
-.shot-empty{color:#fff;text-align:center;line-height:2;font-size:14px;opacity:.92}
-.shot-empty .dim{color:rgba(255,255,255,.62)}
-.shot-bar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;
-  background:var(--bg-surface);border:1px solid var(--border);border-radius:12px;padding:7px 10px}
-.shot-t{width:34px;height:30px;border-radius:8px;border:1px solid transparent;
-  background:var(--bg-page);color:var(--text-primary);font-size:15px;line-height:1;cursor:pointer}
-.shot-t:hover{background:var(--brand-soft)}
-.shot-t.on{background:var(--brand-soft);border-color:var(--brand-primary);color:var(--brand-primary)}
-.shot-sep{width:1px;height:22px;background:var(--border);margin:0 4px}
-.shot-color{width:22px;height:22px;border-radius:50%;display:inline-block;cursor:pointer;
-  border:2px solid var(--bg-surface);box-shadow:0 0 0 1px var(--border)}
-.shot-color.on{box-shadow:0 0 0 2px var(--brand-primary)}
-@media(max-width:760px){
-  .shot-head .fl-inp{width:110px!important}
-  .shot-t{width:30px;height:28px}
-}
+/* ===== 好句编辑：字号工具条 + 所见即所得编辑区 + 预览（2026-11-05） =====
+   编辑区按侧栏好句的字体/颜色渲染，所见即所得；下方再给一条「整句实际效果」的
+   预览（含整句基准字号），两处都用 --brand-primary，避免编辑时看着是黑字、保存后变绿。 */
+.qs-tools{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
+.qs-tools select{padding:6px 8px;font-size:12.5px;border:1px solid var(--border);
+  border-radius:8px;background:var(--bg-surface);color:var(--text-primary)}
+.qs-tools .btn{padding:5px 10px;font-size:12.5px;width:auto;flex:1 1 auto;justify-content:center}
+.qs-rich{width:100%;min-height:78px;max-height:170px;overflow:auto;padding:10px 12px;
+  border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-surface);
+  color:var(--brand-primary);font-family:var(--font-art);line-height:1.55;outline:none;
+  overflow-wrap:anywhere;word-break:break-word;box-sizing:border-box}
+.qs-rich:focus{border-color:var(--brand-primary);box-shadow:0 0 0 3px var(--brand-soft)}
+.qs-rich:empty::before{content:attr(data-ph);color:var(--text-secondary);opacity:.72}
+.qs-prev{margin-top:8px;border:1px dashed var(--border);border-radius:10px;padding:8px 10px;
+  background:var(--bg-page)}
+.qs-prev .qs-prev-t{display:block;font-size:11px;color:var(--text-secondary);margin-bottom:4px}
+.qs-prev .gs-main{display:block;flex:none}
+.qs-count{float:right;font-size:11.5px;color:var(--text-secondary);font-weight:400}
+.qs-count.over{color:var(--status-error)}
+
 /* 收作业等宽面板：加宽浮窗，容纳学生网格 */
 .float-layer.wide .float-box { width:min(820px, 100%); }
 /* 课表时间设置浮窗 */
@@ -7420,9 +7410,12 @@ const DARK_BASE  = { forest:'#0B1210', mist:'#0F0D17', sky:'#090F17', deep:'#0A0
    旧链接 / 旧书签由 renderPage 里的 ROUTE_REDIRECT 统一 302。 */
 const NAV_GROUPS = [
   { name:'常用', items:['home','seats','timetable'] },   // 考勤并入座位表（v2）
-  { name:'教学', items:['guide','courseware','homework','scores','typing'] },
+  { name:'教学', items:['guide','courseware','homework','scores'] },
   { name:'班务', items:['classes','students'] },
-  { name:'其他', items:['todos','tools'] }      // 设置只保留顶栏右上角入口
+  /* 打字（2026-11-05 牛哥要求）：从「教学」挪到「其他」——
+     它更像练手小工具，和课堂发放/作业/成绩不是一类。
+     路由 #typing 没变，旧书签照样能打开。 */
+  { name:'其他', items:['todos','tools','typing'] }      // 设置只保留顶栏右上角入口
 ];
 
 const NAV = [
@@ -8246,12 +8239,27 @@ function quoteOfDay(offset=0) {
    - custom 用户自定义文本（设置浮窗里写）
    wb-quote-interval：0=每次打开换一句，>0=每 N 分钟自动换
    ============================================================ */
+/* 自定义好句的字号（2026-11-05 牛哥要求）
+ *  · wb-quote-custom       纯文本：兼容旧数据、给在线/内置来源兜底、卡片 title 用
+ *  · wb-quote-custom-html  富文本：只保留 <span style="font-size"> 这类字号标记
+ *  · wb-quote-size         整句基准字号（px），侧栏卡片与预览共用
+ *  富文本只允许我们自己的白名单标签/属性（见 quoteCleanHtml），避免把任意 HTML
+ *  塞进侧栏；改字号只影响这一句，不动全局外观设置里的字号。 */
+const QUOTE_SIZE_MIN = 11, QUOTE_SIZE_MAX = 40, QUOTE_SIZE_DEF = 15.5;
+function quoteSizeClamp(v) {
+  const n = Number(v);
+  if (!isFinite(n) || n <= 0) return QUOTE_SIZE_DEF;
+  return Math.max(QUOTE_SIZE_MIN, Math.min(QUOTE_SIZE_MAX, Math.round(n * 10) / 10));
+}
+
 function quoteCfg() {
   // 纯本地工具：file:// 双击打开时默认用内置语录（离线可用），不再联网取句
   const def = (location.protocol === 'file:') ? 'local' : 'online';
   return {
     mode: LS.get('wb-quote-mode', def),
     custom: LS.get('wb-quote-custom', ''),
+    html: LS.get('wb-quote-custom-html', ''),
+    size: quoteSizeClamp(LS.get('wb-quote-size', QUOTE_SIZE_DEF)),
     interval: Number(LS.get('wb-quote-interval', 0)) || 0,
   };
 }
@@ -8261,20 +8269,82 @@ function quoteCacheRead() {
 }
 function currentQuote() {
   const c = quoteCfg();
-  if (c.mode === 'custom' && c.custom.trim()) return { text: c.custom.trim() };
+  if (c.mode === 'custom' && (c.custom.trim() || c.html)) {
+    return { text: c.custom.trim(), html: c.html || '', size: c.size };
+  }
   if (c.mode === 'online') {
     const cache = quoteCacheRead();
     if (cache && cache.text) return { text: cache.text };
   }
   return { text: quoteOfDay() };
 }
-function showQuote(text) {
+
+/** 好句富文本白名单清洗：只留字号相关的 span + 少量行内标签。
+ *  · 其它标签（div / p / 字体标签…）拆掉但保留里面的文字，块级补一个 <br>
+ *  · span 只保留 font-size，且夹在 11–40px —— 有人手动改 localStorage 也害不了版式 */
+function quoteCleanHtml(raw) {
+  let doc;
+  try { doc = new DOMParser().parseFromString('<div id="qsRoot">' + String(raw || '') + '</div>', 'text/html'); }
+  catch (e) { return ''; }
+  const root = doc && doc.getElementById('qsRoot');
+  if (!root) return '';
+  const KEEP = { SPAN: 1, B: 1, STRONG: 1, I: 1, EM: 1, U: 1 };
+  const BLOCK = { DIV: 1, P: 1, LI: 1, SECTION: 1, ARTICLE: 1 };
+  const walk = node => {
+    let out = '';
+    Array.prototype.forEach.call(node.childNodes, n => {
+      if (n.nodeType === 3) { out += esc(n.nodeValue); return; }
+      if (n.nodeType !== 1) return;
+      const tag = String(n.tagName || '').toUpperCase();
+      if (tag === 'BR') { out += '<br>'; return; }
+      const inner = walk(n);
+      if (!KEEP[tag]) {
+        out += inner + (BLOCK[tag] ? '<br>' : '');
+        return;
+      }
+      let style = '';
+      if (tag === 'SPAN') {
+        const fs = String((n.style && n.style.fontSize) || '').trim();
+        const m = /^(\d{1,2}(?:\.\d)?)px$/.exec(fs);
+        if (m) style = ' style="font-size:' + quoteSizeClamp(m[1]) + 'px"';
+      }
+      out += '<' + tag.toLowerCase() + style + '>' + inner + '</' + tag.toLowerCase() + '>';
+    });
+    return out;
+  };
+  return walk(root).replace(/(?:<br>)+$/, '').trim();
+}
+
+/** 把一条好句画到元素上：有富文本用 innerHTML，否则纯文本；
+ *  自定义好句用「整句字号」，其它来源清掉内联字号、回到 CSS 的默认值。 */
+function paintQuoteEl(el, q) {
+  if (!el) return;
+  const obj = (q && typeof q === 'object') ? q : { text: q };
+  const html = obj.html ? quoteCleanHtml(obj.html) : '';
+  const text = String(obj.text || '');
+  const next = html || text;
+  const cur = html ? el.innerHTML : el.textContent;
+  el.style.fontSize = obj.size ? quoteSizeClamp(obj.size) + 'px' : '';
+  if (cur === next) { el.title = text || el.textContent || ''; return; }
+  if (html) el.innerHTML = html; else el.textContent = text;
+  el.title = text || el.textContent || '';
+}
+function showQuote(q) {
   const el = document.getElementById('greetQuote');
-  if (el && el.textContent !== text) {
-    el.textContent = text;
-    el.title = text;   // 长句被截断时，悬停看全文
+  if (!el) return;
+  const before = el.innerHTML;
+  paintQuoteEl(el, q);
+  if (el.innerHTML !== before) {
     el.classList.remove('gs-q-in'); void el.offsetWidth; el.classList.add('gs-q-in');
   }
+}
+/** 侧栏好句的初始 HTML（首屏渲染用）：与 showQuote 同一套清洗与字号规则，
+ *  否则「刷新页面」会退回纯文本、把自定义字号丢掉，看着像没保存。 */
+function quoteCardHtml() {
+  const q = currentQuote();
+  const style = q.size ? ' style="font-size:' + quoteSizeClamp(q.size) + 'px"' : '';
+  return '<span class="gs-main" id="greetQuote" title="' + esc(q.text || '') + '"' + style + '>'
+    + (q.html ? quoteCleanHtml(q.html) : esc(q.text || '')) + '</span>';
 }
 /** 一条一言格式的对象 → 「句子 —— 作者《出处》」 */
 function fmtQuoteLine(j) {
@@ -8414,12 +8484,34 @@ function openGreetSetting() {
       </select>
     </div>
     <div class="field">
-      <label>自定义好句</label>
-      <textarea id="qsCustom" maxlength="60" placeholder="写一句给自己打气的话"
-        style="width:100%;min-height:64px;resize:vertical;padding:11px 12px;
-        border:1px solid var(--border);border-radius:var(--radius);
-        background:var(--bg-surface);color:var(--text-primary);font-family:inherit;
-        font-size:14px;box-sizing:border-box">${esc(c.custom)}</textarea>
+      <label>自定义好句<span class="qs-count" id="qsCount">0/60</span></label>
+      <div class="qs-tools">
+        <select id="qsWholeSize" title="整句的基准字号">
+          <option value="13">整句 13px</option>
+          <option value="15.5" selected>整句 15.5px（默认）</option>
+          <option value="18">整句 18px</option>
+          <option value="21">整句 21px</option>
+          <option value="24">整句 24px</option>
+        </select>
+        <select id="qsSelSize" title="选中文字后单独设置的字号">
+          <option value="12">12px</option>
+          <option value="14">14px</option>
+          <option value="16" selected>16px</option>
+          <option value="18">18px</option>
+          <option value="21">21px</option>
+          <option value="24">24px</option>
+          <option value="28">28px</option>
+          <option value="32">32px</option>
+        </select>
+        <button type="button" class="btn btn-ghost" onclick="qsApplySize()">应用到选中</button>
+        <button type="button" class="btn btn-ghost" onclick="qsClearSize()">清除选中字号</button>
+      </div>
+      <div id="qsCustom" class="qs-rich" contenteditable="true" spellcheck="false"
+        data-ph="写一句给自己打气的话；选中几个字可以单独调大小"></div>
+      <div class="qs-prev">
+        <span class="qs-prev-t">预览（与侧栏好句一致）</span>
+        <span class="gs-main" id="qsQuotePrev"></span>
+      </div>
     </div>
     <div class="field">
       <label>更换频率</label>
@@ -8438,16 +8530,150 @@ function openGreetSetting() {
     </div>
   </div>`;
   showFloat('问候与好句设置', body);
+
+  /* 编辑器初始化（2026-11-05）：浮窗是同步渲染的，这里可以直接拿到节点。
+     · 内容用「富文本 → 没有就退回纯文本」，字号用上次保存的整句基准值
+     · input / keyup 实时刷新下方预览；mouseup 把字号下拉切到选区当前值
+     · 不设 maxlength（contenteditable 不可靠），改在保存时校验 60 字 */
+  const ed = document.getElementById('qsCustom');
+  if (ed) {
+    ed.innerHTML = c.html ? quoteCleanHtml(c.html) : esc(c.custom);
+    ed.style.fontSize = c.size + 'px';
+    const whole = document.getElementById('qsWholeSize');
+    if (whole) {
+      whole.value = String(c.size);
+      /* 值不在预设里（老数据/手改）就补一个选项，别让下拉显示成空白 */
+      if (whole.value !== String(c.size)) {
+        const o = document.createElement('option');
+        o.value = String(c.size); o.textContent = '整句 ' + c.size + 'px';
+        whole.appendChild(o); whole.value = String(c.size);
+      }
+      whole.onchange = function () { qsSetBase(this.value); };
+    }
+    ed.addEventListener('input', qsPreview);
+    ed.addEventListener('keyup', qsSyncSelSize);
+    ed.addEventListener('mouseup', qsSyncSelSize);
+    qsPreview();
+    qsSyncSelSize();
+  }
 }
 window.openGreetSetting = openGreetSetting;
+
+/* ---------- 好句编辑：字号（2026-11-05） ----------
+   选区取在编辑框内才算数；没选中时把字号当「整句」处理，符合
+   「选中文本或整体内容」两种用法。改完只刷新预览，不动侧栏，
+   点保存才真正落到本地存储并更新侧栏卡片。 */
+function qsEdRange() {
+  const ed = document.getElementById('qsCustom');
+  if (!ed) return null;
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount) return null;
+  const range = sel.getRangeAt(0);
+  if (!ed.contains(range.commonAncestorContainer)) return null;
+  return { ed: ed, sel: sel, range: range };
+}
+function qsPreview() {
+  const ed = document.getElementById('qsCustom');
+  const pv = document.getElementById('qsQuotePrev');
+  if (!ed || !pv) return;
+  pv.innerHTML = quoteCleanHtml(ed.innerHTML);   // 清洗后再插入，预览与保存同一套规则
+  pv.title = ed.textContent || '';
+  const n = String(ed.textContent || '').replace(/\s+/g, ' ').trim().length;
+  const cnt = document.getElementById('qsCount');
+  if (cnt) { cnt.textContent = n + '/60'; cnt.classList.toggle('over', n > 60); }
+}
+window.qsPreview = qsPreview;
+
+function qsSetBase(px) {
+  const v = quoteSizeClamp(px);
+  const ed = document.getElementById('qsCustom');
+  if (ed) ed.style.fontSize = v + 'px';
+  const pv = document.getElementById('qsQuotePrev');
+  if (pv) pv.style.fontSize = v + 'px';
+  const whole = document.getElementById('qsWholeSize');
+  if (whole) whole.value = String(v);
+  qsPreview();
+}
+window.qsSetBase = qsSetBase;
+
+/** 光标落在带字号的文字里时，把「选中字号」下拉切到那个值，避免误改 */
+function qsSyncSelSize() {
+  const ctx = qsEdRange();
+  if (!ctx || ctx.range.collapsed) return;
+  let node = ctx.sel.anchorNode;
+  if (node && node.nodeType === 3) node = node.parentNode;
+  let px = 0;
+  while (node && node !== ctx.ed) {
+    const fs = node.style && node.style.fontSize;
+    if (fs) { px = parseFloat(fs) || 0; break; }
+    node = node.parentNode;
+  }
+  if (!px) return;
+  const s = document.getElementById('qsSelSize');
+  if (!s) return;
+  const v = String(Math.round(px));
+  if (!Array.prototype.some.call(s.options, o => o.value === v)) {
+    const o = document.createElement('option');
+    o.value = v; o.textContent = v + 'px';
+    s.appendChild(o);
+  }
+  s.value = v;
+}
+
+function qsApplySize() {
+  const ctx = qsEdRange();
+  if (!ctx) { toast('先把光标放进好句编辑框，再选中要改的字'); return; }
+  const s = document.getElementById('qsSelSize');
+  const px = quoteSizeClamp(s ? s.value : 16);
+  if (ctx.range.collapsed) {          // 没选 → 整句
+    qsSetBase(px);
+    toast('没有选中文字，已把整句设为 ' + px + 'px');
+    return;
+  }
+  const span = document.createElement('span');
+  span.style.fontSize = px + 'px';
+  const frag = ctx.range.extractContents();
+  span.appendChild(frag);
+  /* 选区里原有的字号标记让位：否则内层 span 会盖住这次设置，看着「点了没变」 */
+  Array.prototype.forEach.call(span.querySelectorAll('span'), el => { el.style.fontSize = ''; });
+  ctx.range.insertNode(span);
+  ctx.sel.removeAllRanges();
+  const r2 = document.createRange();
+  r2.selectNodeContents(span);
+  ctx.sel.addRange(r2);
+  qsPreview();
+}
+window.qsApplySize = qsApplySize;
+
+function qsClearSize() {
+  const ctx = qsEdRange();
+  if (!ctx) { toast('先把光标放进好句编辑框'); return; }
+  if (ctx.range.collapsed) { qsSetBase(QUOTE_SIZE_DEF); toast('没有选中文字，整句已回到默认字号'); return; }
+  /* 不能 extractContents 再慢慢清：选区若正好是 span 的「内容」，
+     被取走的只是里面的文字，带样式的 span 元素本身仍留在编辑框里，
+     结果就是「点了清除还在」。直接找与选区相交的 span 清属性、必要时拆壳。 */
+  const ed = ctx.ed;
+  Array.prototype.slice.call(ed.querySelectorAll('span')).forEach(sp => {
+    let hit = false;
+    try { hit = ctx.range.intersectsNode(sp); } catch (e) { hit = false; }
+    if (!hit) return;
+    sp.style.fontSize = '';
+    if (!String(sp.getAttribute('style') || '').trim()) {
+      while (sp.firstChild) sp.parentNode.insertBefore(sp.firstChild, sp);
+      if (sp.parentNode) sp.parentNode.removeChild(sp);
+    }
+  });
+  qsPreview();
+}
+window.qsClearSize = qsClearSize;
 
 function quoteRefreshNow() {
   const c = quoteCfg();
   if (c.mode === 'online') { fetchQuote(true); return; }
   /* 自定义来源：「换一句」就是回到自己写的那句（以前会跳去内置语录池，像没保存一样） */
   if (c.mode === 'custom') {
-    if (!c.custom.trim()) { toast('先在「自定义」框里写一句话再换'); return; }
-    showQuote(c.custom.trim()); return;
+    if (!c.custom.trim() && !c.html) { toast('先在「自定义」框里写一句话再换'); return; }
+    showQuote({ text: c.custom.trim(), html: c.html, size: c.size }); return;
   }
   // 本地来源：内置语录池随机换一条立即看效果
   const el = document.getElementById('greetQuote');
@@ -8461,8 +8687,16 @@ window.quoteRefreshNow = quoteRefreshNow;
 function saveGreetSetting() {
   const _hon = $('#qsHonor');
   if (_hon) LS.set('wb-honorific', (_hon.value || '').trim().slice(0, 10) || '老师');
+  /* 好句正文改成富文本编辑框（2026-11-05）：保存前统一清洗一次，
+     同时写纯文本 —— 旧版本 / 在线来源 / title 都还按纯文本读。 */
+  const ed = document.getElementById('qsCustom');
+  const html = ed ? quoteCleanHtml(ed.innerHTML) : '';
+  const plain = ed ? String(ed.textContent || '').replace(/\s+/g, ' ').trim() : '';
+  if (plain.length > 60) { toast('好句最多 60 个字（现在 ' + plain.length + ' 个），请精简一下'); return; }
   LS.set('wb-quote-mode', $('#qsMode').value);
-  LS.set('wb-quote-custom', ($('#qsCustom').value || '').trim());
+  LS.set('wb-quote-custom', plain);
+  LS.set('wb-quote-custom-html', html);
+  LS.set('wb-quote-size', String(quoteSizeClamp((document.getElementById('qsWholeSize') || {}).value)));
   LS.set('wb-quote-interval', Number($('#qsInterval').value) || 0);
   closeFloat();
   replayGreet();   // 品牌位问候立即生效
@@ -8471,7 +8705,7 @@ function saveGreetSetting() {
      quoteInit 对 custom/local 来源是直接 return 的，而 replayGreet 在问候文字
      没变时只抖一下图标就 early-return，谁都不会去刷新好句行。
      这里保存后显式按新配置刷一次，选「自定义」当下就能看到自己那句话。 */
-  showQuote(currentQuote().text);
+  showQuote(currentQuote());
 }
 window.saveGreetSetting = saveGreetSetting;
 
@@ -10932,8 +11166,7 @@ async function goToApp(returnTo) {
         onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.hash='#settings';}"
         >
         <div class="gs-row">
-          <span class="gs-main" id="greetQuote" title="${esc(currentQuote().text)}">${esc(currentQuote().text)}</span>
-          <!-- 铅笔角标：必须自己吃掉点击（pointer-events 见 .gs-edit），
+          ${quoteCardHtml()}          <!-- 铅笔角标：必须自己吃掉点击（pointer-events 见 .gs-edit），
                否则事件冒泡到整卡只做 location.hash='#settings' ——
                已经在设置页时 hash 不变、什么都不发生，看起来就是「点了没反应」。 -->
           <span class="gs-edit" role="button" tabindex="0" title="编辑问候语与好句"
@@ -12145,434 +12378,6 @@ function toolOpenLink(url) {
   if (!w) toast('浏览器拦截了新标签页，请允许弹窗后重试');
 }
 window.toolOpenLink = toolOpenLink;
-
-/* ============================================================
-   截图工具（2026-11-05）
-   参照微信截图的操作顺序：截屏/粘贴 → 拉框选区 → 标注 → 保存/复制/推送。
-   · 屏幕捕获用 getDisplayMedia，只在「安全上下文」可用（127.0.0.1 / https）。
-     学校局域网 http://192.168.x.x 下浏览器不给这个能力，所以另外三条路兜底：
-     上传图片、Ctrl+V 粘贴、拖拽进窗口 —— 三条都不依赖安全上下文。
-   · 标注全部画在同一张 canvas 上：底图 + 形状列表，任何一步改动都整屏重绘，
-     撤销 = 弹掉最后一个形状，简单可靠。
-   ============================================================ */
-const SHOT = { open: false, base: null, cv: null, ctx: null,
-               sel: null, tool: 'rect', color: '#E24B4A', width: 3,
-               shapes: [], drag: null, layer: null };
-
-function shotEl(id) { return document.getElementById(id); }
-
-function shotOpen() {
-  if (SHOT.open) return;
-  const layer = document.createElement('div');
-  layer.className = 'shot-layer';
-  layer.id = 'shotLayer';
-  layer.innerHTML =
-    `<div class="shot-head">
-       <b>📷 截图工具</b>
-       <span class="dim" id="shotHint">拖动框选要截取的区域；也可以 Ctrl+V 粘贴、拖入图片</span>
-       <span style="flex:1"></span>
-       <input id="shotTitle" class="fl-inp" value="课堂截图" maxlength="30"
-              style="width:150px;padding:5px 9px;font-size:12.5px" title="推送到学生端时显示的标题">
-       <button class="btn btn-ghost btn-sm" type="button" onclick="shotCapture()">截取屏幕</button>
-       <label class="btn btn-ghost btn-sm" style="cursor:pointer">上传图片
-         <input id="shotFile" type="file" accept="image/*" style="display:none"></label>
-       <button class="btn btn-ghost btn-sm" type="button" onclick="closeShot()">关闭</button>
-     </div>
-     <div class="shot-stage" id="shotStage">
-       <div class="shot-empty" id="shotEmpty">
-         <div style="font-size:34px">🖼️</div>
-         <div>点「截取屏幕」或把图片拖进来 / 按 Ctrl+V 粘贴</div>
-         <div class="dim" style="font-size:12.5px">局域网 HTTP 地址下浏览器不给屏幕捕获权限，用粘贴或上传同样可以标注</div>
-       </div>
-       <canvas id="shotCanvas" style="display:none"></canvas>
-     </div>
-     <div class="shot-bar">
-       <button class="shot-t on" type="button" data-shot-tool="rect" title="矩形">▭</button>
-       <button class="shot-t" type="button" data-shot-tool="ellipse" title="椭圆">◯</button>
-       <button class="shot-t" type="button" data-shot-tool="arrow" title="箭头">↗</button>
-       <button class="shot-t" type="button" data-shot-tool="pen" title="画笔">✎</button>
-       <button class="shot-t" type="button" data-shot-tool="text" title="文字">T</button>
-       <button class="shot-t" type="button" data-shot-tool="mosaic" title="马赛克">▦</button>
-       <span class="shot-sep"></span>
-       <span id="shotColors" style="display:flex;gap:5px;align-items:center"></span>
-       <span class="shot-sep"></span>
-       <select id="shotWidth" class="act-rt-sel" style="padding:5px 8px;font-size:12px">
-         <option value="2">细</option><option value="3" selected>中</option><option value="6">粗</option>
-       </select>
-       <span class="shot-sep"></span>
-       <button class="btn btn-ghost btn-sm" type="button" onclick="shotUndo()">撤销</button>
-       <button class="btn btn-ghost btn-sm" type="button" onclick="shotResetSel()">重选区</button>
-       <span style="flex:1"></span>
-       <button class="btn btn-ghost btn-sm" type="button" onclick="shotSave()">保存 PNG</button>
-       <button class="btn btn-ghost btn-sm" type="button" onclick="shotCopy()">复制</button>
-       <button class="btn btn-primary btn-sm" type="button" onclick="shotPush()">📤 推送到学生端</button>
-     </div>`;
-  document.body.appendChild(layer);
-  SHOT.open = true;
-  SHOT.layer = layer;
-  SHOT.cv = shotEl('shotCanvas');
-  SHOT.ctx = SHOT.cv.getContext('2d');
-  SHOT.base = null; SHOT.sel = null; SHOT.shapes = []; SHOT.drag = null;
-
-  /* 颜色（微信常用红/黄/蓝/黑） */
-  const colors = ['#E24B4A', '#EF9F27', '#378ADD', '#111111', '#1D9E75'];
-  shotEl('shotColors').innerHTML = colors.map((c, i) =>
-    `<span class="shot-color${i === 0 ? ' on' : ''}" data-shot-color="${c}"
-       style="background:${c}" title="${c}"></span>`).join('');
-
-  layer.addEventListener('click', shotToolbarClick);
-  shotEl('shotFile').addEventListener('change', shotFilePicked);
-  shotEl('shotWidth').addEventListener('change', function () {
-    SHOT.width = Number(this.value) || 3;
-  });
-  /* 粘贴 / 拖拽：不依赖安全上下文，是最通用的两条路 */
-  document.addEventListener('paste', shotPaste);
-  ['dragover', 'drop'].forEach(ev => layer.addEventListener(ev, shotDrop));
-  window.addEventListener('resize', shotFit);
-
-  const cv = SHOT.cv;
-  cv.addEventListener('mousedown', shotDown);
-  cv.addEventListener('mousemove', shotMove);
-  window.addEventListener('mouseup', shotUp);
-  shotHint('拖动框选要截取的区域；也可以 Ctrl+V 粘贴、拖入图片');
-}
-
-function shotClose() {
-  const l = shotEl('shotLayer');
-  if (l) l.remove();
-  document.removeEventListener('paste', shotPaste);
-  window.removeEventListener('mouseup', shotUp);
-  window.removeEventListener('resize', shotFit);
-  SHOT.open = false; SHOT.layer = null; SHOT.cv = null; SHOT.ctx = null;
-  SHOT.base = null; SHOT.sel = null; SHOT.shapes = [];
-}
-window.shotOpen = shotOpen; window.closeShot = shotClose;
-
-function shotHint(t) { const e = shotEl('shotHint'); if (e) e.textContent = t; }
-function shotToast(t) { try { toast(t); } catch (e) {} }
-
-function shotCanvasPos(e) {
-  const cv = SHOT.cv, r = cv.getBoundingClientRect();
-  return {
-    x: (e.clientX - r.left) * (cv.width / Math.max(1, r.width)),
-    y: (e.clientY - r.top) * (cv.height / Math.max(1, r.height)),
-  };
-}
-
-function shotSetImage(dataUrl) {
-  const img = new Image();
-  img.onload = function () {
-    const cv = SHOT.cv;
-    cv.width = img.naturalWidth;
-    cv.height = img.naturalHeight;
-    SHOT.base = img;
-    SHOT.sel = null; SHOT.shapes = [];
-    cv.style.display = 'block';
-    const em = shotEl('shotEmpty'); if (em) em.style.display = 'none';
-    shotFit();
-    shotRedraw();
-    shotHint('拖动框选要截取的区域（选好后可以继续标注）');
-  };
-  img.onerror = function () { shotToast('这张图片读不出来，换一张试试'); };
-  img.src = dataUrl;
-}
-
-/* 画布按舞台大小等比缩放（只改 CSS 尺寸，像素坐标不变，标注仍然准） */
-function shotFit() {
-  const cv = SHOT.cv, stage = shotEl('shotStage');
-  if (!cv || !stage || !cv.width) return;
-  const pad = 10;
-  const maxW = stage.clientWidth - pad * 2, maxH = stage.clientHeight - pad * 2;
-  const s = Math.min(1, maxW / cv.width, maxH / cv.height);
-  cv.style.width = Math.max(80, Math.round(cv.width * s)) + 'px';
-  cv.style.height = Math.max(60, Math.round(cv.height * s)) + 'px';
-}
-
-function shotRedraw() {
-  const cv = SHOT.cv, ctx = SHOT.ctx;
-  if (!cv || !ctx) return;
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.clearRect(0, 0, cv.width, cv.height);
-  if (!SHOT.base) return;
-  ctx.drawImage(SHOT.base, 0, 0);
-  if (SHOT.sel) {
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(SHOT.sel.x, SHOT.sel.y, SHOT.sel.w, SHOT.sel.h);
-    ctx.clip();
-    SHOT.shapes.forEach(s => shotDrawShape(ctx, s));
-    ctx.restore();
-    /* 选区外压暗 + 绿色边框（微信同款视觉） */
-    const { x, y, w, h } = SHOT.sel;
-    ctx.save();
-    ctx.fillStyle = 'rgba(8,12,10,.55)';
-    ctx.beginPath();
-    ctx.rect(0, 0, cv.width, cv.height);
-    ctx.rect(x, y, w, h);
-    ctx.fill('evenodd');
-    ctx.restore();
-    ctx.strokeStyle = '#39D98A';
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(x + .75, y + .75, w - 1.5, h - 1.5);
-  } else {
-    SHOT.shapes.forEach(s => shotDrawShape(ctx, s));
-  }
-  if (SHOT.drag && SHOT.drag.mode === 'draw') shotDrawShape(ctx, SHOT.drag.shape, true);
-}
-
-function shotDrawShape(ctx, s, preview) {
-  ctx.save();
-  ctx.strokeStyle = s.color; ctx.fillStyle = s.color;
-  ctx.lineWidth = s.width; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-  if (s.kind === 'mosaic') {
-    shotMosaic(ctx, s);
-  } else if (s.kind === 'text') {
-    ctx.font = 'bold ' + Math.max(14, s.width * 6) + 'px "PingFang SC","Microsoft YaHei",sans-serif';
-    ctx.textBaseline = 'top';
-    ctx.fillText(s.text, s.x1, s.y1);
-  } else if (s.kind === 'pen') {
-    ctx.beginPath();
-    (s.pts || []).forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
-    ctx.stroke();
-  } else if (s.kind === 'arrow') {
-    const dx = s.x2 - s.x1, dy = s.y2 - s.y1;
-    const len = Math.hypot(dx, dy);
-    if (len < 2) { ctx.restore(); return; }
-    const ux = dx / len, uy = dy / len;
-    const hl = Math.min(18 + s.width * 2, len * 0.5);
-    ctx.beginPath(); ctx.moveTo(s.x1, s.y1); ctx.lineTo(s.x2, s.y2); ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(s.x2, s.y2);
-    ctx.lineTo(s.x2 - ux * hl - uy * hl * 0.55, s.y2 - uy * hl + ux * hl * 0.55);
-    ctx.lineTo(s.x2 - ux * hl + uy * hl * 0.55, s.y2 - uy * hl - ux * hl * 0.55);
-    ctx.closePath(); ctx.fill();
-  } else {
-    const x = Math.min(s.x1, s.x2), y = Math.min(s.y1, s.y2);
-    const w = Math.abs(s.x2 - s.x1), h = Math.abs(s.y2 - s.y1);
-    if (w < 1 || h < 1) { ctx.restore(); return; }
-    ctx.beginPath();
-    if (s.kind === 'ellipse') ctx.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
-    else ctx.rect(x, y, w, h);
-    ctx.stroke();
-  }
-  ctx.restore();
-}
-
-/* 马赛克：把底图对应区域缩到很小再放大（关掉插值），画笔经过的地方糊成格 */
-function shotMosaic(ctx, s) {
-  const bx = Math.max(0, Math.min(s.x1, s.x2));
-  const by = Math.max(0, Math.min(s.y1, s.y2));
-  const bw = Math.abs(s.x2 - s.x1), bh = Math.abs(s.y2 - s.y1);
-  if (bw < 4 || bh < 4) return;
-  const block = 9;
-  const tw = Math.max(1, Math.round(bw / block)), th = Math.max(1, Math.round(bh / block));
-  const tmp = document.createElement('canvas');
-  tmp.width = tw; tmp.height = th;
-  const tc = tmp.getContext('2d');
-  tc.imageSmoothingEnabled = true;
-  tc.drawImage(SHOT.base, bx, by, bw, bh, 0, 0, tw, th);
-  ctx.save();
-  ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(tmp, 0, 0, tw, th, bx, by, bw, bh);
-  ctx.restore();
-}
-
-function shotDown(e) {
-  if (!SHOT.base) return;
-  const p = shotCanvasPos(e);
-  if (!SHOT.sel) { SHOT.drag = { mode: 'sel', x0: p.x, y0: p.y }; return; }
-  const sel = SHOT.sel;
-  if (p.x < sel.x || p.x > sel.x + sel.w || p.y < sel.y || p.y > sel.y + sel.h) return;
-  const base = { color: SHOT.color, width: SHOT.width };
-  if (SHOT.tool === 'pen') {
-    SHOT.drag = { mode: 'draw', shape: Object.assign({ kind: 'pen', pts: [p] }, base) };
-  } else if (SHOT.tool === 'text') {
-    uiPrompt('输入要标注的文字', { title: '文字标注', value: '' }).then(t => {
-      if (!t) return;
-      SHOT.shapes.push(Object.assign({ kind: 'text', x1: p.x, y1: p.y, text: String(t).slice(0, 60) }, base));
-      shotRedraw();
-    });
-    return;
-  } else {
-    SHOT.drag = { mode: 'draw', shape: Object.assign({ kind: SHOT.tool, x1: p.x, y1: p.y, x2: p.x, y2: p.y }, base) };
-  }
-  shotRedraw();
-}
-
-function shotMove(e) {
-  if (!SHOT.drag) return;
-  const p = shotCanvasPos(e);
-  if (SHOT.drag.mode === 'sel') {
-    SHOT.drag.x1 = p.x; SHOT.drag.y1 = p.y;
-    shotRedrawSelection();
-    return;
-  }
-  const s = SHOT.drag.shape;
-  if (s.kind === 'pen') s.pts.push(p);
-  else { s.x2 = p.x; s.y2 = p.y; }
-  shotRedraw();
-}
-
-function shotRedrawSelection() {
-  /* 拖选过程中也要看到「选区框」，但还没定下来 → 用一个临时形状画框 */
-  const d = SHOT.drag;
-  if (!d || d.mode !== 'sel' || d.x1 == null) return;
-  const ctx = SHOT.ctx, cv = SHOT.cv;
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.clearRect(0, 0, cv.width, cv.height);
-  ctx.drawImage(SHOT.base, 0, 0);
-  const x = Math.min(d.x0, d.x1), y = Math.min(d.y0, d.y1);
-  const w = Math.abs(d.x1 - d.x0), h = Math.abs(d.y1 - d.y0);
-  ctx.save();
-  ctx.fillStyle = 'rgba(8,12,10,.55)';
-  ctx.beginPath();
-  ctx.rect(0, 0, cv.width, cv.height);
-  ctx.rect(x, y, w, h);
-  ctx.fill('evenodd');
-  ctx.restore();
-  ctx.strokeStyle = '#39D98A'; ctx.lineWidth = 1.5;
-  ctx.strokeRect(x + .75, y + .75, Math.max(0, w - 1.5), Math.max(0, h - 1.5));
-}
-
-function shotUp() {
-  const d = SHOT.drag;
-  if (!d) return;
-  SHOT.drag = null;
-  if (d.mode === 'sel') {
-    const x = Math.min(d.x0, d.x1), y = Math.min(d.y0, d.y1);
-    const w = Math.abs(d.x1 - d.x0), h = Math.abs(d.y1 - d.y0);
-    if (w < 8 || h < 8) { shotRedraw(); return; }   // 手抖不算选区
-    SHOT.sel = { x, y, w, h };
-    shotRedraw();
-    shotHint('已选 ' + Math.round(w) + '×' + Math.round(h) + '，用下方工具标注，或直接推送');
-  } else {
-    SHOT.shapes.push(d.shape);
-    shotRedraw();
-  }
-}
-
-function shotResetSel() {
-  SHOT.sel = null;
-  SHOT.shapes = [];
-  shotRedraw();
-  shotHint('重新拖动框选区域（已画的内容会清掉）');
-}
-window.shotUndo = function () {
-  if (SHOT.shapes.length) { SHOT.shapes.pop(); shotRedraw(); }
-  else shotToast('没有可撤销的标注了');
-};
-window.shotResetSel = shotResetSel;
-
-function shotToolbarClick(e) {
-  const t = e.target.closest('[data-shot-tool]');
-  if (t) {
-    SHOT.tool = t.getAttribute('data-shot-tool');
-    SHOT.layer.querySelectorAll('[data-shot-tool]').forEach(b => b.classList.toggle('on', b === t));
-    return;
-  }
-  const c = e.target.closest('[data-shot-color]');
-  if (c) {
-    SHOT.color = c.getAttribute('data-shot-color');
-    SHOT.layer.querySelectorAll('[data-shot-color]').forEach(b => b.classList.toggle('on', b === c));
-  }
-}
-
-function shotFilePicked(ev) {
-  const f = ev.target.files && ev.target.files[0];
-  if (f) shotReadFile(f);
-}
-function shotReadFile(f) {
-  const r = new FileReader();
-  r.onload = () => shotSetImage(String(r.result || ''));
-  r.readAsDataURL(f);
-}
-function shotPaste(e) {
-  if (!SHOT.open || !e.clipboardData) return;
-  const items = Array.from(e.clipboardData.items || []);
-  const it = items.find(x => String(x.type || '').startsWith('image/'));
-  if (!it) return;
-  const f = it.getAsFile();
-  if (f) { e.preventDefault(); shotReadFile(f); }
-}
-function shotDrop(e) {
-  e.preventDefault();
-  if (!SHOT.open) return;
-  const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-  if (f) shotReadFile(f);
-}
-window.shotCapture = async function () {
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
-    shotToast('当前地址不支持截屏：请用 127.0.0.1 打开教师端，或按 Ctrl+V 粘贴截图');
-    return;
-  }
-  let stream;
-  try {
-    stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
-  } catch (e) { return; }           // 用户取消
-  try {
-    const v = document.createElement('video');
-    v.srcObject = stream; v.muted = true; v.playsInline = true;
-    await v.play();
-    await new Promise(r => setTimeout(r, 200));   // 等首帧稳定
-    const c = document.createElement('canvas');
-    c.width = v.videoWidth || 1280;
-    c.height = v.videoHeight || 720;
-    c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
-    shotSetImage(c.toDataURL('image/png'));
-  } catch (e) {
-    shotToast('截屏失败：' + (e.message || e));
-  } finally {
-    try { stream.getTracks().forEach(t => t.stop()); } catch (e) {}
-  }
-};
-
-function shotExport() {
-  const sel = SHOT.sel;
-  if (!sel || sel.w < 4 || sel.h < 4) return '';
-  const out = document.createElement('canvas');
-  out.width = Math.round(sel.w); out.height = Math.round(sel.h);
-  out.getContext('2d').drawImage(SHOT.cv, sel.x, sel.y, sel.w, sel.h, 0, 0, out.width, out.height);
-  return out.toDataURL('image/png');
-}
-window.shotSave = function () {
-  const d = shotExport();
-  if (!d) { shotToast('先拖动框选一个区域'); return; }
-  const a = document.createElement('a');
-  a.href = d;
-  a.download = '截图-' + new Date().toISOString().slice(0, 10) + '.png';
-  document.body.appendChild(a); a.click(); a.remove();
-};
-window.shotCopy = async function () {
-  const d = shotExport();
-  if (!d) { shotToast('先拖动框选一个区域'); return; }
-  try {
-    const blob = await (await fetch(d)).blob();
-    if (!navigator.clipboard || !window.ClipboardItem) throw new Error('no clipboard');
-    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-    shotToast('已复制到剪贴板，可以直接粘贴到微信/文档');
-  } catch (e) {
-    shotToast('这个浏览器不给复制权限，已改为下载 PNG');
-    window.shotSave();
-  }
-};
-window.shotPush = async function () {
-  const d = shotExport();
-  if (!d) { shotToast('先拖动框选一个区域'); return; }
-  const titleEl = shotEl('shotTitle');
-  const title = (titleEl && titleEl.value || '课堂截图').trim() || '课堂截图';
-  try {
-    const r = await fetch('/api/v2/tool/push', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ image: d, title: title }),
-    });
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok || !j.ok) { shotToast(j.msg || ('推送失败（' + r.status + '）')); return; }
-    shotToast('已推送到学生端：学生「今日」和「工具」页都能看到');
-    closeShot();
-  } catch (e) {
-    shotToast('推送失败：连不上服务端');
-  }
-};
 
 /* 新增 / 编辑工具（弹框） */
 function openToolDialog(id) {
@@ -16498,35 +16303,6 @@ function renderActivity() {
   .act-win-row .no{font-size:12px;color:var(--text-secondary)}
   .act-win-row .ts{margin-left:auto;font-size:12px;color:var(--text-secondary);font-variant-numeric:tabular-nums}
   .act-win-empty{color:var(--text-secondary);font-size:13px;padding:16px 0;text-align:center}
-  .act-qstat{margin-top:12px;border-top:1px dashed var(--border);padding-top:11px}
-  /* 没登记题目结构时的提示条：说明下面的分布是从提交数据推断的 */
-  .act-infer-note{font-size:11.5px;color:var(--text-secondary);background:var(--brand-soft);
-    border-radius:8px;padding:6px 9px;margin:10px 0 2px;line-height:1.5}
-  .act-qstat-t{font-size:13px;font-weight:700;color:var(--text-primary);margin-bottom:9px;
-    display:flex;gap:8px;align-items:baseline;line-height:1.5}
-  .act-qstat-t span{font-weight:400;font-size:12px;color:var(--text-secondary);white-space:nowrap}
-  .act-opt{display:grid;grid-template-columns:minmax(64px,1.1fr) 2fr auto;align-items:center;gap:9px;margin-bottom:7px;font-size:12.5px}
-  .act-opt-l{color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .act-opt-track{display:block;height:9px;border-radius:5px;background:var(--brand-soft);overflow:hidden}
-  .act-opt-fill{display:block;height:100%;border-radius:5px;background:var(--brand-primary);transition:width .5s}
-  .act-opt-v{color:var(--text-secondary);font-variant-numeric:tabular-nums;white-space:nowrap}
-  /* 2.0.27：正确答案标绿 + 每题正确率 + 整体汇总 */
-  .act-opt.act-opt-good .act-opt-l{color:var(--status-ok);font-weight:700}
-  .act-opt.act-opt-good .act-opt-fill{background:var(--status-ok)}
-  .act-opt .act-ok{color:var(--status-ok);font-weight:800}
-  .act-qstat-t .act-rate{color:var(--status-ok);font-weight:700}
-  .act-qstat-t .act-noans{color:var(--text-secondary);font-style:normal;opacity:.8}
-  .act-quiz-sum{margin-top:14px;border-top:1px dashed var(--border);padding-top:12px}
-  .aqs-hd{font-size:13px;font-weight:700;color:var(--text-primary);margin-bottom:10px}
-  .aqs-hd span{font-weight:400;font-size:12px;color:var(--text-secondary);margin-left:8px}
-  .aqs-kpis{display:flex;gap:10px;flex-wrap:wrap}
-  .aqs-kpi{flex:1 1 0;min-width:86px;background:var(--brand-soft);border-radius:10px;
-    padding:9px 12px;text-align:center}
-  .aqs-kpi b{display:block;font-size:20px;color:var(--brand-primary);line-height:1.2;
-    font-variant-numeric:tabular-nums}
-  .aqs-kpi span{font-size:11.5px;color:var(--text-secondary)}
-  .aqs-dist{font-size:12px;color:var(--text-secondary);margin-top:9px;line-height:1.7;
-    font-variant-numeric:tabular-nums}
   .act-allsubs[open] summary{margin-bottom:12px}
 
   /* ===== ④ 自定义上传（教师自制网页模板） ===== */
@@ -17714,13 +17490,16 @@ function actBuildCustomPage(html, opts) {
   return doc;
 }
 
-/** 扫描学习单网页：这份页面下发给学生后会产生几个提交按钮、每题有哪些选项。
+/** 扫描学习单网页：这份页面下发给学生后会产生几个提交按钮。
  *
  *  为什么要算这个（2026-11-05 牛哥反馈）：
  *  大屏原来只能看「提交数据里出现过哪些按钮」，页面换了 / 还没人交就完全看不到
  *  任务结构；同一学生先后交任务一、任务二时，两条记录全糊进同一个总表，看着像
- *  「一个人交了三次」。下发时先把结构扫出来存好，大屏就能为每个按钮预建一个
+ *  「一个人交了三次」。下发时先把按钮清单扫出来存好，大屏就能为每个按钮预建一个
  *  独立收集窗口（0 份也显示），同一学生在每个窗口里只出现一次。
+ *
+ *  2.0.32（牛哥要求）：只统计「哪个任务收了多少人」，不再扫题目 / 选项 / 正确答案，
+ *  大屏也不再算正确率。questions 字段不再产出 —— 老 layout 里留着也不影响。
  *
  *  分支必须与 actBuildCustomPage 的注入逻辑严格一致，否则窗口名对不上真实按钮：
  *    ① 任意块带 data-submit-label → 只为这些块生成按钮（其余块没有按钮）；
@@ -17729,115 +17508,41 @@ function actBuildCustomPage(html, opts) {
  *    ③ 其余 → 整页一个「提交整个页面」（记录里的「按钮」= 整页提交）。
  */
 function actScanLayout(rawHtml, perQ) {
-  const out = { mode: 'perq', buttons: [], questions: [], hasQuiz: false, source: 'scan' };
+  const out = { mode: 'perq', buttons: [], source: 'scan' };
   let doc;
   try { doc = new DOMParser().parseFromString(String(rawHtml || ''), 'text/html'); }
   catch (e) { return out; }
   if (!doc) return out;
-  // 注入后的页面里带着登录浮层和运行时脚本：先摘掉，否则学号输入框会被当成题目
+  // 注入后的页面里带着登录浮层和运行时脚本：先摘掉，避免误把浮层里的输入框当题目块
   doc.querySelectorAll('#actLogin, script, style, noscript').forEach(n => { if (n.parentNode) n.parentNode.removeChild(n); });
   /* 题目块只取最外层（2026-11-05）：模板里 .act-q 套 .act-q 很常见，
-     以前里外各扫一遍，同一组 input 被登记两次 → 大屏出现两张一模一样的题卡，
-     数字也一样，看着就是「同一题重复显示两条」。 */
+     里外各扫一遍会让同一块登记两次 → 大屏同一任务出现两个一模一样窗口。 */
   const blocksAll = Array.from(doc.querySelectorAll('.act-q, .q-block'));
   const blocks = blocksAll.filter(b =>
     !(b.parentElement && b.parentElement.closest('.act-q, .q-block')));
   /* 标签统一归一化：模板标题里常有换行/缩进/连续空格，直接 trim 只能去掉首尾，
-     中间的空格会让「提交按钮」和 layout 里的 btn 对不上 → 题目统计整块丢失。 */
+     中间的空格会让「提交按钮」和 layout 里的 btn 对不上 → 窗口找不到归属。 */
   const norm = v => String(v || '').replace(/\s+/g, ' ').trim();
   const titleOf = el => {
     const h = el.querySelector('h1,h2,h3,h4,h5');
     return norm(h && h.textContent);
   };
   const addBtn = label => { label = norm(label); if (label && out.buttons.indexOf(label) < 0) out.buttons.push(label); };
-  /* 正确答案（2026-11-05 加）：下发时扫出来存进 layout.questions[].answer，
-     大屏才能算「正确率」。模板可以三选一标注，扫不到就只出选项分布：
-       ① 题目容器上写 data-answer="B" / data-answer="A,C"（多选逗号分隔）
-       ② 正确选项的 input 上写 data-correct="1"
-       ③ 正确选项的 input 或它的 label 带 class="correct" */
-  const pickAnswer = (el, nm) => {
-    const out = [];
-    const da = String(el.getAttribute('data-answer') ||
-                      el.getAttribute('data-correct') || '').trim();
-    if (da) {
-      da.split(/[,，;；\s]+/).forEach(x => { x = x.trim(); if (x) out.push(x); });
-    }
-    if (!out.length) {
-      Array.from(el.querySelectorAll('input[type=radio],input[type=checkbox]'))
-        .forEach(inp => {
-          if (String(inp.getAttribute('name') || '').trim() !== nm) return;
-          const ok = String(inp.getAttribute('data-correct') || '').toLowerCase();
-          const own = String(inp.className || '');
-          const par = String((inp.parentNode && inp.parentNode.className) || '');
-          const isC = (segs) => /(^|\s)correct(\s|$)/.test(segs);
-          if (ok === '1' || ok === 'true' || isC(own) || isC(par)) {
-            const v = String(inp.getAttribute('value') != null
-                             ? inp.getAttribute('value') : '').trim();
-            if (v) out.push(v);
-          }
-        });
-    }
-    return out;
-  };
-  const scanQ = (el, btn, seq) => {
-    const title = titleOf(el) || ('第' + (seq + 1) + '题');
-    const choices = Array.from(el.querySelectorAll('input[type=radio],input[type=checkbox]'));
-    if (choices.length) {
-      const groups = {}, order = [];
-      choices.forEach(inp => {
-        const nm = String(inp.getAttribute('name') || '').trim();
-        if (!nm) return;
-        if (!groups[nm]) {
-          groups[nm] = { multiple: inp.type === 'checkbox', options: [] };
-          order.push(nm);
-        }
-        const v = String(inp.getAttribute('value') != null ? inp.getAttribute('value') : '').trim();
-        if (v && groups[nm].options.indexOf(v) < 0) groups[nm].options.push(v);
-      });
-      order.forEach(nm => out.questions.push({
-        btn: btn, title: title, kind: 'choice', name: nm,
-        multiple: groups[nm].multiple, options: groups[nm].options,
-        answer: pickAnswer(el, nm),
-      }));
-      out.hasQuiz = order.length > 0 || out.hasQuiz;
-      if (order.length) return;
-    }
-    Array.from(el.querySelectorAll('input[name],textarea[name]'))
-      .map(e => String(e.getAttribute('name') || '').trim())
-      .filter((v, i, a) => v && a.indexOf(v) === i)
-      .forEach(nm => out.questions.push({ btn: btn, title: title, kind: 'text', name: nm }));
-  };
   const custom = blocks.filter(b => String(b.getAttribute('data-submit-label') || '').trim());
   if (custom.length) {
     out.mode = 'perq';
-    custom.forEach((b, i) => {
-      const label = String(b.getAttribute('data-submit-label') || '').trim();
-      addBtn(label);
-      scanQ(b, label, i);
-    });
+    custom.forEach(b => addBtn(String(b.getAttribute('data-submit-label') || '').trim()));
   } else if (perQ !== false && blocks.length) {
     out.mode = 'perq';
     blocks.forEach((b, i) => {
       const label = String(b.getAttribute('data-btn') || '').trim() || titleOf(b) || ('第' + (i + 1) + '题');
       addBtn(label);
-      scanQ(b, label, i);
     });
   } else {
     out.mode = 'page';
     addBtn('整页提交');
-    blocks.forEach((b, i) => scanQ(b, '整页提交', i));
   }
   out.buttons = out.buttons.map(norm).filter((v, i, a) => v && a.indexOf(v) === i);
-  /* 同一个窗口里同名字段只登记一次（2026-11-05）：
-     模板在不同块里复用 name（都叫 q1 / answer）或者结构重复时，
-     以前会登记两条一模一样的题 → 大屏一张卡变两张、数字还完全相同。 */
-  const seenQ = {};
-  out.questions = out.questions.filter(q => {
-    const k = norm(q.btn) + '|' + String(q.name || '');
-    if (seenQ[k]) return false;
-    seenQ[k] = 1;
-    return true;
-  });
   out.updated_at = new Date().toISOString();
   return out;
 }
@@ -17900,7 +17605,8 @@ async function actCustomView() {
  *  旧实现 = 从「已经提交上来的数据」反向分组：没人交就看不到任务结构、老师换过页面
  *  窗口名还会过期；同一名学生交了几个任务，就在几个窗口各出现一次，看着像重复。
  *  新实现 = 以「下发时扫描出的按钮清单」为准预建窗口（0 份也显示，老师能对上号），
- *  窗口内按人去重只留最新一条；选择题直接把选项分布画出来。 */
+ *  窗口内按人去重只留最新一条。
+ *  2.0.32（牛哥要求）：窗口里只列「谁交了」，不再画选项分布与正确率。 */
 function actTaskWindowsHtml(allMatched, layout) {
   const lay = (layout && typeof layout === 'object') ? layout : {};
   /* 按钮名归一化再去重（2.0.27）：
@@ -17917,12 +17623,7 @@ function actTaskWindowsHtml(allMatched, layout) {
   const taskBtns = btns.filter(b => b && b !== '整页提交');
   // 只有「一份学习单里确实有多个提交按钮」才开窗口区：
   // 整页提交 / 只有一个按钮时，窗口和下面的学生名单完全重复，没有意义。
-  // 2026-11-05 例外：只有一个按钮、但确实有题目字段时也要开 —— 否则单选题的
-  // 答题分布整块消失，老师会以为「识别不到题目」。
-  const hasQuizField = (lay.questions || []).length > 0 || rows.some(s =>
-    Object.keys(s || {}).some(k => k && k.charAt(0) !== '_' && !ACT_QUIZ_RESERVED[k]
-      && String(s[k] == null ? '' : s[k]).trim() !== ''));
-  if (taskBtns.length < 2 && !(taskBtns.length === 1 && hasQuizField)) return '';
+  if (taskBtns.length < 2) return '';
   const cards = taskBtns.map(b => {
     const one = actDedupByPerson(rows.filter(s => norm(actTaskOf(s)) === b));  // 同窗口内一人一条
     const list = one.length
@@ -17935,194 +17636,16 @@ function actTaskWindowsHtml(allMatched, layout) {
     return '<div class="act-win"><div class="act-win-hd"><b>' + esc(b) + '</b>'
       + '<span class="n">已交 <em>' + one.length + '</em> 人</span></div>'
       + '<div class="act-win-list">' + list + '</div>'
-      + actQuizStatsHtml(one, lay, b)
       + '</div>';
   }).join('');
   return '<div class="act-sec"><h3>任务收集窗口（每个提交按钮一个）</h3>'
-    + '<div class="act-note">' + (taskBtns.length > 1
-        ? '这份学习单里有 <b>' + taskBtns.length + '</b> 个提交按钮，下面按按钮分成 '
-          + taskBtns.length + ' 个窗口。同一名学生在同一个窗口里只出现一次；交了几个任务，就在几个窗口里各有一条。'
-        : '这份学习单只有一个提交按钮，下面单独给出这个任务的收集情况与答题分布。')
+    + '<div class="act-note">这份学习单里有 <b>' + taskBtns.length + '</b> 个提交按钮，下面按按钮分成 '
+    + taskBtns.length + ' 个窗口。同一名学生在同一个窗口里只出现一次；交了几个任务，就在几个窗口里各有一条。'
     + '</div>'
     + '<div class="act-wins">' + cards + '</div></div>';
 }
 window.actTaskWindowsHtml = actTaskWindowsHtml;
 
-/* 问卷 / 选择题统计（2026-11-05；2.0.27 加正确率与整体汇总）
- *
- *  数据来源：每条提交就是一条作答记录（表单字段名 = 题目 input 的 name）。
- *  正确答案来自**下发时扫描**存进 layout.questions[].answer（模板用 data-answer /
- *  data-correct / class="correct" 标注）。没标答案的题只出选项分布，不算正确率。
- *
- *  展示：
- *    · 每题一张卡：题干 + 「正确 x/y · z%」，下面每个选项一条进度条（人数 · 占比），
- *      正确答案那一条打 ✓ 并标绿；
- *    · 全题之后一个整体块：参与人数、平均正确率、答对题数分布（对 3 题 x 人…）。
- *
- *  为什么按「人」而不是按「记录」算：同一窗口里已按学号去重（actDedupByPerson），
- *  传进来的 rows 就是一人一条；这里再按 学号→答对题数 累计，避免同名撞车。 */
-function actQuizStatsHtml(rows, layout, btn) {
-  const norm = v => String(v || '').replace(/\s+/g, ' ').trim();
-  const nb = norm(btn);
-  const list = rows || [];
-  /* ① 归属筛选用归一化后的按钮名：模板标题带换行/连续空格时，
-        以前 String(q.btn) === String(btn) 永远不成立 → 整个窗口一道题都不显示。
-     ② 同名字段只出一张卡：模板复用 name（都叫 q1 / answer）或老 layout 重复登记时，
-        否则同一道题印两张、数字一模一样，看着像「重复两条数据」。 */
-  const seen = {};
-  let qs = ((layout && layout.questions) || []).filter(q =>
-    q && q.kind === 'choice' && (!q.btn || norm(q.btn) === nb));
-  qs = qs.filter(q => {
-    const k = String(q.name || '');
-    if (!k || seen[k]) return false;
-    seen[k] = 1;
-    return true;
-  });
-  /* ③ 这个窗口一道题都没登记 → 按学生实际填的字段自动识别（老学习单没扫过 layout 也能出数） */
-  let inferred = false;
-  if (!qs.length) { qs = actInferQuizQs(list); inferred = qs.length > 0; }
-  if (!qs.length) return '';
-
-  const isRight = (q, picked) => {
-    const ans = (q.answer || []).map(String);
-    if (!ans.length) return null;                 /* 没标答案 → 不算对错 */
-    const p = picked.map(String);
-    if (q.multiple) {
-      const a = ans.slice().sort(), b = p.slice().sort();
-      return a.length === b.length && a.every((v, i) => v === b[i]);
-    }
-    return p.length === 1 && p[0] === ans[0];
-  };
-  const pickOf = (s, q) => {
-    const v = s[q.name];
-    const arr = Array.isArray(v) ? v : (v == null ? [] : [v]);
-    return arr.map(x => String(x).trim()).filter(Boolean);
-  };
-
-  let ratedQ = 0, rateSum = 0;      /* 有答案的题数 / 正确率之和 */
-  const cards = qs.map((q, qi) => {
-    const counts = {}, extra = [];
-    let answered = 0, right = 0;
-    const ans = (q.answer || []).map(String);
-
-    list.forEach(s => {
-      const picked = pickOf(s, q);
-      if (picked.length) answered++;
-      picked.forEach(k => {
-        if (!(k in counts)) { counts[k] = 0; if ((q.options || []).indexOf(k) < 0) extra.push(k); }
-        counts[k]++;
-      });
-      if (ans.length && picked.length && isRight(q, picked)) right++;
-    });
-
-    const opts = (q.options || []).concat(extra);
-    if (!opts.length) return '';
-    const rate = (ans.length && answered) ? Math.round(right / answered * 100) : null;
-    if (rate !== null) { ratedQ++; rateSum += rate; }
-
-    const lines = opts.map(o => {
-      const c = counts[o] || 0;
-      const pct = answered ? Math.round(c / answered * 100) : 0;
-      const good = ans.indexOf(String(o)) >= 0;
-      return '<div class="act-opt' + (good ? ' act-opt-good' : '')
-        + '" title="' + esc(o) + '：' + c + ' 人">'
-        + '<span class="act-opt-l">' + esc(o) + (good ? ' <b class="act-ok">✓</b>' : '') + '</span>'
-        + '<span class="act-opt-track"><i class="act-opt-fill" style="width:' + pct + '%"></i></span>'
-        + '<span class="act-opt-v">' + c + (answered ? ' · ' + pct + '%' : '') + '</span></div>';
-    }).join('');
-
-    return '<div class="act-qstat"><div class="act-qstat-t">'
-      + esc(q.title || ('第' + (qi + 1) + '题'))
-      + '<span>' + answered + ' 人作答' + (q.multiple ? '（多选）' : '')
-      + (rate !== null
-          ? ' · <b class="act-rate">正确 ' + right + '/' + answered + ' · ' + rate + '%</b>'
-          : ' · <i class="act-noans">未标正确答案</i>')
-      + '</span></div>' + lines + '</div>';
-  }).join('');
-
-  /* 整体：参与人数 / 平均正确率 / 答对题数分布（只统计标了答案的题） */
-  const qsRated = qs.filter(q => (q.answer || []).length);
-  let summary = '';
-  if (qsRated.length) {
-    const per = {};                    /* 学号（或姓名）→ 答对题数 */
-    let participants = 0;
-    list.forEach(s => {
-      const key = String(actRosterNo(s) || actRosterName(s) || '');
-      let n = 0, touched = false;
-      qsRated.forEach(q => {
-        const picked = pickOf(s, q);
-        if (!picked.length) return;
-        touched = true;
-        if (isRight(q, picked)) n++;
-      });
-      if (!key) return;
-      if (touched) participants++;
-      per[key] = (per[key] || 0) + (touched ? n : 0);
-    });
-    const dist = {};
-    Object.keys(per).forEach(k => {
-      const n = per[k];
-      dist[n] = (dist[n] || 0) + 1;
-    });
-    const avg = ratedQ ? Math.round(rateSum / ratedQ) : 0;
-    const distStr = Object.keys(dist)
-      .map(Number).sort((a, b) => b - a)
-      .map(n => '对 ' + n + ' 题 ' + dist[n] + ' 人').join(' · ');
-    summary = '<div class="act-quiz-sum">'
-      + '<div class="aqs-hd">整体答题情况<span>共 ' + qsRated.length + ' 道有答案的题</span></div>'
-      + '<div class="aqs-kpis">'
-      + '<div class="aqs-kpi"><b>' + (participants || list.length) + '</b><span>参与人数</span></div>'
-      + '<div class="aqs-kpi"><b>' + avg + '%</b><span>平均正确率</span></div>'
-      + '<div class="aqs-kpi"><b>' + (ratedQ ? Math.round(rateSum / ratedQ) : 0) + '%</b><span>逐题均值</span></div>'
-      + '</div>'
-      + (distStr ? '<div class="aqs-dist">' + esc(distStr) + '</div>' : '')
-      + '</div>';
-  }
-  return (inferred
-      ? '<div class="act-infer-note">这份学习单没登记题目结构，下面按学生实际填写的字段自动识别（同名同窗口只算一次）。</div>'
-      : '')
-    + cards + summary;
-}
-window.actQuizStatsHtml = actQuizStatsHtml;
-
-/* 从提交数据里推断「这道题有哪些选项」（2026-11-05）
- *
- *  什么时候用：老学习单在老版本下发的，layout 里没有 questions；
- *  或者模板结构和扫描结果对不上。这时候窗口里只剩一列名单，老师看不到答题分布。
- *
- *  口径：只认「短、少、可枚举」的字段 —— 不同取值 ≤ 8 个、每个 ≤ 24 字，
- *  才当成选择题出分布；长文本（作文、备注）不硬凑成选项，免得把一段话印成图例。
- *  身份/附件/内部字段一律跳过。 */
-const ACT_QUIZ_RESERVED = {
-  '学号': 1, '姓名': 1, '班级': 1, '按钮': 1, 'attachment': 1, 'submitted_at': 1,
-  '作品标题': 1, '作品简介': 1, '测试内容': 1, 'file': 1,
-};
-function actInferQuizQs(rows) {
-  const map = new Map();          /* 字段名 → 出现过的取值（保持表单顺序） */
-  (rows || []).forEach(r => {
-    Object.keys(r || {}).forEach(k => {
-      if (!k || k.charAt(0) === '_' || ACT_QUIZ_RESERVED[k]) return;
-      const v = r[k];
-      const arr = Array.isArray(v) ? v : [v];
-      arr.forEach(x => {
-        const s = String(x == null ? '' : x).trim();
-        if (!s) return;
-        if (!map.has(k)) map.set(k, []);
-        const a = map.get(k);
-        if (a.indexOf(s) < 0 && a.length <= 8) a.push(s);
-      });
-    });
-  });
-  const out = [];
-  map.forEach((vals, k) => {
-    if (vals.length < 1 || vals.length > 8) return;
-    if (!vals.every(v => v.length <= 24)) return;
-    out.push({ btn: '', title: '题目字段 ' + k, kind: 'choice', name: k,
-               multiple: false, options: vals.slice(), answer: [], inferred: true });
-  });
-  return out;
-}
-window.actInferQuizQs = actInferQuizQs;
 /* 兼容旧调用名 */
 function actButtonWindowsHtml(subs) { return actTaskWindowsHtml(subs, actTaskLayout); }
 
@@ -18271,38 +17794,6 @@ function actAttUrl(a) {
   return /^https?:\/\//i.test(a) ? a : (actApiBase() + a);
 }
 
-/* 老学习单自动补题目结构（2026-11-05）
- *
- *  2.0.10 之前下发的学习单没有 custom_layout，大屏只能看到一列名字，
- *  老师以为「系统识别不出题目」。这里取回已部署的页面，用**同一套**
- *  actScanLayout 扫一遍再存回去，下次进来就有逐题分布。
- *  · 每个活动只试一次（失败不重试，不打扰课堂）；
- *  · perQ 从页面里的 BLOCKS_PER_Q 读（注入时写死的），读不到再按提交记录推断；
- *  · 扫不出题就放弃，不写空 layout 覆盖已有数据。 */
-let actLayoutHealTried = {};
-async function actHealLayout(task, rows) {
-  if (!task || actLayoutHealTried[task]) return false;
-  actLayoutHealTried[task] = 1;
-  try {
-    const r = await fetch('/api/custom?task=' + encodeURIComponent(task), { cache: 'no-store' });
-    if (!r.ok) return false;
-    const html = await r.text();
-    if (!html || html.length < 40) return false;
-    const m = /BLOCKS_PER_Q\s*=\s*(true|false)/.exec(html);
-    const nb = new Set((rows || [])
-      .map(s => String(s['按钮'] || '').replace(/\s+/g, ' ').trim())
-      .filter(b => b && b !== '整页提交' && b !== '测试提交'));
-    const perQ = m ? (m[1] === 'true') : (nb.size > 1);
-    const lay = actScanLayout(html, perQ);
-    if (!lay || !(lay.questions || []).length) return false;
-    const r2 = await fetch('/api/custom', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ task: task, html: html, layout: lay }),
-    });
-    return !!(r2 && r2.ok);
-  } catch (e) { return false; }
-}
-
 async function actRenderDash() {
   // 大屏会整块重建 innerHTML（连"加载中"占位也会先写一次），这里在函数入口就记住
   // 搜索框的焦点与光标位置，渲染完成后还原 → 轮询刷新不会打断正在输入的搜索词
@@ -18338,11 +17829,6 @@ async function actRenderDash() {
   const clsObjNow = (dbT('classes') || []).find(c => Number(c.id) === Number(cls));
   actCurClsName = clsObjNow ? String(clsObjNow.name || '') : '';
   actTaskLayout = (j && j.layout && typeof j.layout === 'object') ? j.layout : {};
-  /* 老学习单没登记题目结构 → 后台补一次（成功会自己重绘，失败就按数据自动识别兜底） */
-  if (subs.length && !((actTaskLayout && actTaskLayout.questions) || []).length
-      && !actLayoutHealTried[actActiveId]) {
-    actHealLayout(actActiveId, subs).then(done => { if (done) actRenderDash(); });
-  }
   const matched = subs.filter(s => actSubMatchClass(s, clsStus));
   /* 一人一条（2026-11-05）：同一学生先后交任务一、任务二时，subs 里是两条不同
      按钮的记录（这是对的，要分进各自的任务窗口）。但顶部 KPI、学生作品、提交
@@ -18983,7 +18469,7 @@ function replayGreet() {
 
   const swap = () => {
     tx.textContent = next;
-    if (qt) qt.textContent = currentQuote().text;
+    if (qt) paintQuoteEl(qt, currentQuote());
     // 重播入场
     tx.classList.remove('gs-in'); void tx.offsetWidth; tx.classList.add('gs-in');
     if (qt) { qt.classList.remove('gs-q-in'); void qt.offsetWidth;
@@ -33622,8 +33108,6 @@ const DEMO_RENDER = {
     const links = arr.filter(t => t.type !== 'qr');
     const qrs = arr.filter(t => t.type === 'qr');
     const builtin = [
-      { key: 'shot', icon: '📷', name: '截图工具', desc: '框选、标注、打码，一键推送到学生端',
-        act: 'shotOpen()', extra: '推给学生看' },
       { key: 'roll', icon: '🎲', name: '随机点名', desc: '按学号或小组随机点人，可开不重复模式，一节课轮一遍',
         act: 'openRollCall()', extra: (() => {
           const rs = rollState();
