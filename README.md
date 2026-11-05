@@ -3,7 +3,7 @@
 > 给班主任和任课老师用的一套**班级工作台**：教师端与学生端共用一个网页入口，
 > 数据全部存在自己的服务器上，不依赖任何第三方云服务。
 
-当前版本：**2.0.16**（版本号唯一代码源：`app/server.py` 的 `VERSION`）
+当前版本：**2.0.17**（版本号唯一代码源：`app/server.py` 的 `VERSION`）
 
 ```
 http://<服务器局域网 IP>:8080/        ← Docker 部署的入口；直接运行时是 :20020
@@ -378,9 +378,9 @@ docker compose up -d --build
 
 | # | 文件 | 位置 |
 |---|---|---|
-| 1 | `app/server.py` | `VERSION = "2.0.16"` —— **唯一代码源** |
-| 2 | `.env.example` | `IMAGE_TAG=2.0.16` |
-| 3 | `docker-compose.yml` | `image: …:${IMAGE_TAG:-2.0.16}`（init 与 workbench **两处**） |
+| 1 | `app/server.py` | `VERSION = "2.0.17"` —— **唯一代码源** |
+| 2 | `.env.example` | `IMAGE_TAG=2.0.17` |
+| 3 | `docker-compose.yml` | `image: …:${IMAGE_TAG:-2.0.17}`（init 与 workbench **两处**） |
 | 4 | `README.md` | 文首「当前版本」 |
 | 5 | `version.json` | 由 `tools/make_release.py` 自动同步 |
 
@@ -408,6 +408,21 @@ python tools/make_release.py --out D:\dist   # 指定输出目录（默认 dist/
 > 「创建发行版」并上传 zip 才会有内容。在线更新走的是 `version.json`（manifest）+
 > raw 直链，不依赖 Releases 功能；想把 zip 同时挂到 Releases 也可以，把
 > `version.json` 的 `zip` 字段改成完整 URL 即可。
+
+### 管理弹窗类名与兜底（2.0.17）
+
+- **现象**：管理员控制台点「重置密码」，弹窗只剩外壳、正文一片空白。
+- **根因**：弹窗类名用了 `ad-*`（`.ad-ov / .ad-dlg / .ad-body / .ad-btn`）。uBlock、
+  AdBlock 一类广告拦截插件的泛化规则会把 `[class^="ad-"]`、`.ad-body` 当成广告块
+  `display:none` —— 卡片和按钮还在，中间的正文和输入框被隐藏，看起来就是一张空白弹窗。
+  代码本身在无插件的浏览器里完全正常（桌面 / 手机视口都验过）。
+- **修复**：类名统一改成 `wbd-*`（workbench dialog），函数名 `adDialog / adPrompt /
+  adToast` 保持不变（JS 标识符不受拦截规则影响，改名会让所有调用点失效）。
+- **兜底**：`adDialog` 外层包 `try/catch`，极端环境（无 Promise / DOM 异常）降级到
+  原生弹窗，不再出现「点了没反应」；正文为空时显示「（无更多说明）」而不是空白卡片。
+- **自查**：`/admin/` 底部显示当前版本号，若显示的是旧版本号说明浏览器拿的是缓存页，
+  强刷（Ctrl+F5）即可。
+- 详细台账见 `docs/问题排查记录.md` 的 P-019。
 
 ### 发行包权限（2.0.16）
 

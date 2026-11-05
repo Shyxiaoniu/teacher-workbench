@@ -276,53 +276,53 @@ def login_page_setup(msg=""):
 # 成功提示不再写进表单红字，统一走右下角浮层 toast。
 ADMIN_UI = """
 <style>
-.ad-ov{position:fixed;inset:0;z-index:4000;padding:20px;display:flex;
+.wbd-ov{position:fixed;inset:0;z-index:4000;padding:20px;display:flex;
   align-items:center;justify-content:center;background:rgba(20,30,26,.34);
   -webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);
-  animation:ad-fade .18s ease both}
-@keyframes ad-fade{from{opacity:0}to{opacity:1}}
-@keyframes ad-in{from{opacity:0;transform:translate3d(0,14px,0) scale(.96)}
+  animation:wbd-fade .18s ease both}
+@keyframes wbd-fade{from{opacity:0}to{opacity:1}}
+@keyframes wbd-in{from{opacity:0;transform:translate3d(0,14px,0) scale(.96)}
   to{opacity:1;transform:translate3d(0,0,0) scale(1)}}
-.ad-dlg{width:100%;max-width:400px;background:#fff;border-radius:16px;
+.wbd-dlg{width:100%;max-width:400px;background:#fff;border-radius:16px;
   border:1px solid rgba(15,110,86,.16);box-shadow:0 20px 60px rgba(0,0,0,.22);
-  overflow:hidden;animation:ad-in .22s cubic-bezier(.22,1.2,.36,1) both}
-.ad-head{padding:16px 18px 13px;border-bottom:1px solid #E4EDE8;
+  overflow:hidden;animation:wbd-in .22s cubic-bezier(.22,1.2,.36,1) both}
+.wbd-head{padding:16px 18px 13px;border-bottom:1px solid #E4EDE8;
   font-size:15px;font-weight:600;color:#16231F;letter-spacing:-.1px}
-.ad-body{padding:14px 18px;font-size:13.5px;line-height:1.85;color:#3D4F49;
+.wbd-body{padding:14px 18px;font-size:13.5px;line-height:1.85;color:#3D4F49;
   white-space:pre-wrap;word-break:break-word}
-.ad-body b{color:#0F6E56;font-weight:600}
-.ad-inp{display:block;width:100%;margin-top:11px;padding:10px 12px;
+.wbd-body b{color:#0F6E56;font-weight:600}
+.wbd-inp{display:block;width:100%;margin-top:11px;padding:10px 12px;
   border:1px solid #D6E3DE;border-radius:10px;background:#FBFDFC;color:#16231F;
   font-size:14px;line-height:1.5;font-family:inherit;outline:none}
-.ad-inp:focus{border-color:#1D9E75;box-shadow:0 0 0 3px rgba(29,158,117,.14)}
-.ad-acts{display:flex;gap:8px;justify-content:flex-end;
+.wbd-inp:focus{border-color:#1D9E75;box-shadow:0 0 0 3px rgba(29,158,117,.14)}
+.wbd-acts{display:flex;gap:8px;justify-content:flex-end;
   padding:13px 18px;border-top:1px solid #E4EDE8;background:#fff}
-.ad-btn{padding:9px 17px;border:1px solid transparent;border-radius:10px;
+.wbd-btn{padding:9px 17px;border:1px solid transparent;border-radius:10px;
   font-size:13.5px;font-weight:600;font-family:inherit;cursor:pointer;
   transition:background .15s,border-color .15s,box-shadow .15s}
-.ad-btn.ghost{background:#F1F7F4;color:#0F6E56;border-color:#DCEAE4}
-.ad-btn.ghost:hover{background:#E4F1EB}
-.ad-btn.ok{background:#0F6E56;color:#fff}
-.ad-btn.ok:hover{background:#1D9E75}
-.ad-btn.danger{background:#B3261E;color:#fff}
-.ad-btn.danger:hover{background:#C23332}
-.ad-btn:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(29,158,117,.22)}
-.ad-toasts{position:fixed;right:24px;bottom:24px;z-index:5000;display:flex;
+.wbd-btn.ghost{background:#F1F7F4;color:#0F6E56;border-color:#DCEAE4}
+.wbd-btn.ghost:hover{background:#E4F1EB}
+.wbd-btn.ok{background:#0F6E56;color:#fff}
+.wbd-btn.ok:hover{background:#1D9E75}
+.wbd-btn.danger{background:#B3261E;color:#fff}
+.wbd-btn.danger:hover{background:#C23332}
+.wbd-btn:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(29,158,117,.22)}
+.wbd-toasts{position:fixed;right:24px;bottom:24px;z-index:5000;display:flex;
   flex-direction:column;gap:8px;align-items:flex-end;pointer-events:none}
-.ad-toast{max-width:320px;padding:11px 16px;border-radius:12px;background:#16231F;
+.wbd-toast{max-width:320px;padding:11px 16px;border-radius:12px;background:#16231F;
   color:#fff;font-size:13.5px;line-height:1.6;box-shadow:0 12px 32px rgba(16,24,21,.26);
-  animation:ad-in .2s ease both;transition:opacity .24s,transform .24s}
-.ad-toast.ok{background:#0F6E56}
-.ad-toast.err{background:#B3261E}
-.ad-toast.out{opacity:0;transform:translate3d(0,6px,0)}
+  animation:wbd-in .2s ease both;transition:opacity .24s,transform .24s}
+.wbd-toast.ok{background:#0F6E56}
+.wbd-toast.err{background:#B3261E}
+.wbd-toast.out{opacity:0;transform:translate3d(0,6px,0)}
 /* 表格里的行内操作按钮：轻量 ghost，危险操作浅红，避免一排实心绿按钮压过内容 */
-.ad-row-btn{padding:5px 11px;border:1px solid #DCEAE4;border-radius:8px;
+.wbd-row-btn{padding:5px 11px;border:1px solid #DCEAE4;border-radius:8px;
   background:#F1F7F4;color:#0F6E56;font-size:12.5px;font-weight:600;
   font-family:inherit;cursor:pointer;transition:background .15s,border-color .15s}
-.ad-row-btn:hover{background:#E4F1EB;border-color:#BFDCD2}
-.ad-row-btn.danger{background:#FDF3F2;color:#B3261E;border-color:#F2D6D4}
-.ad-row-btn.danger:hover{background:#FAE7E5}
-@media(max-width:520px){.ad-ov{padding:14px}.ad-dlg{max-width:100%}}
+.wbd-row-btn:hover{background:#E4F1EB;border-color:#BFDCD2}
+.wbd-row-btn.danger{background:#FDF3F2;color:#B3261E;border-color:#F2D6D4}
+.wbd-row-btn.danger:hover{background:#FAE7E5}
+@media(max-width:520px){.wbd-ov{padding:14px}.wbd-dlg{max-width:100%}}
 </style>
 <script>
 /* 独立命名 adEsc：本脚本在 <head> 里执行，页面底部的 esc() 还没定义 */
@@ -331,19 +331,21 @@ ADMIN_UI = """
     return String(s==null?'':s).replace(/[&<>"']/g,function(c){
       return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});
   }
+  /* 脚本在 <head> 执行，调用时 body 正常已存在；仍兜一层，避免极端时序下 null */
+  function host(){return document.body||document.documentElement;}
   var toastBox=null;
   function box(){
     if(!toastBox||!toastBox.parentNode){
       toastBox=document.createElement('div');
-      toastBox.className='ad-toasts';
-      document.body.appendChild(toastBox);
+      toastBox.className='wbd-toasts';
+      host().appendChild(toastBox);
     }
     return toastBox;
   }
   window.adToast=function(msg,kind){
     if(!msg)return;
     var el=document.createElement('div');
-    el.className='ad-toast'+(kind?' '+kind:'');
+    el.className='wbd-toast'+(kind?' '+kind:'');
     el.textContent=String(msg);
     box().appendChild(el);
     setTimeout(function(){
@@ -353,48 +355,69 @@ ADMIN_UI = """
   };
   window.adDialog=function(opt){
     opt=opt||{};
-    return new Promise(function(resolve){
-      var ov=document.createElement('div');ov.className='ad-ov';
-      var hasCancel=opt.cancelText!==null&&opt.cancelText!==undefined;
-      var acts='';
-      if(hasCancel){
-        acts+='<button type="button" class="ad-btn ghost" data-ad="cancel">'
-          +adEsc(opt.cancelText||'取消')+'</button>';
-      }
-      acts+='<button type="button" class="ad-btn '+(opt.danger?'danger':'ok')
-        +'" data-ad="ok">'+adEsc(opt.okText||'确定')+'</button>';
-      var field=opt.input
-        ? '<input class="ad-inp" value="'+adEsc(opt.input.value||'')+'" placeholder="'
-          +adEsc(opt.input.placeholder||'')+'" autocomplete="off" spellcheck="false">'
-        : '';
-      ov.innerHTML='<div class="ad-dlg" role="dialog" aria-modal="true">'
-        +'<div class="ad-head">'+adEsc(opt.title||'提示')+'</div>'
-        +'<div class="ad-body">'+(opt.html||'')+field+'</div>'
-        +'<div class="ad-acts">'+acts+'</div></div>';
-      document.body.appendChild(ov);
-      var inp=ov.querySelector('.ad-inp');
-      function close(v){
-        document.removeEventListener('keydown',onKey,true);
-        if(ov.parentNode)ov.parentNode.removeChild(ov);
-        resolve(v);
-      }
-      function ok(){close(opt.input?((inp&&inp.value.trim())||''):true);}
-      function cancel(){close(opt.input?null:false);}
-      ov.querySelector('[data-ad="ok"]').onclick=ok;
-      var cb=ov.querySelector('[data-ad="cancel"]');
-      if(cb)cb.onclick=cancel;
-      ov.addEventListener('pointerdown',function(e){if(e.target===ov)cancel();});
-      function onKey(e){
-        if(e.key==='Escape'){e.preventDefault();e.stopPropagation();cancel();}
-        /* isComposing：中文输入法回车选词不能当成「确定」提交 */
-        else if(e.key==='Enter'&&!e.isComposing&&(!e.target||e.target.tagName!=='TEXTAREA')){
-          e.preventDefault();e.stopPropagation();ok();
+    try{
+      return new Promise(function(resolve){
+        var ov=document.createElement('div');ov.className='wbd-ov';
+        var hasCancel=opt.cancelText!==null&&opt.cancelText!==undefined;
+        var acts='';
+        if(hasCancel){
+          acts+='<button type="button" class="wbd-btn ghost" data-wbd="cancel">'
+            +adEsc(opt.cancelText||'取消')+'</button>';
         }
-      }
-      document.addEventListener('keydown',onKey,true);
-      if(inp){inp.focus();inp.select();}
-      else{var b=ov.querySelector('[data-ad="ok"]');if(b)b.focus();}
-    });
+        acts+='<button type="button" class="wbd-btn '+(opt.danger?'danger':'ok')
+          +'" data-wbd="ok">'+adEsc(opt.okText||'确定')+'</button>';
+        var field=opt.input
+          ? '<input class="wbd-inp" value="'+adEsc(opt.input.value||'')+'" placeholder="'
+            +adEsc(opt.input.placeholder||'')+'" autocomplete="off" spellcheck="false">'
+          : '';
+        /* 正文为空时给一行占位：宁可显示「（无更多说明）」也不要一张空白卡片 */
+        var bodyHtml=opt.html||'<span style="color:#849690">（无更多说明）</span>';
+        ov.innerHTML='<div class="wbd-dlg" role="dialog" aria-modal="true">'
+          +'<div class="wbd-head">'+adEsc(opt.title||'提示')+'</div>'
+          +'<div class="wbd-body">'+bodyHtml+field+'</div>'
+          +'<div class="wbd-acts">'+acts+'</div></div>';
+        host().appendChild(ov);
+        var inp=ov.querySelector('.wbd-inp');
+        function close(v){
+          document.removeEventListener('keydown',onKey,true);
+          if(ov.parentNode)ov.parentNode.removeChild(ov);
+          resolve(v);
+        }
+        function ok(){close(opt.input?((inp&&inp.value.trim())||''):true);}
+        function cancel(){close(opt.input?null:false);}
+        ov.querySelector('[data-wbd="ok"]').onclick=ok;
+        var cb=ov.querySelector('[data-wbd="cancel"]');
+        if(cb)cb.onclick=cancel;
+        ov.addEventListener('pointerdown',function(e){if(e.target===ov)cancel();});
+        function onKey(e){
+          if(e.key==='Escape'){e.preventDefault();e.stopPropagation();cancel();}
+          /* isComposing：中文输入法回车选词不能当成「确定」提交 */
+          else if(e.key==='Enter'&&!e.isComposing&&(!e.target||e.target.tagName!=='TEXTAREA')){
+            e.preventDefault();e.stopPropagation();ok();
+          }
+        }
+        document.addEventListener('keydown',onKey,true);
+        if(inp){inp.focus();inp.select();}
+        else{var b=ov.querySelector('[data-wbd="ok"]');if(b)b.focus();}
+      });
+    }catch(e){
+      /* 极端环境（没有 Promise / DOM 异常）：绝不留下「点了没反应」，
+         退回浏览器原生弹窗，功能先能用来。 */
+      try{console.error('[wbd] 弹窗组件异常，已降级：',e);}catch(_e){}
+      var plain=String(opt.html||opt.title||'').replace(/<[^>]*>/g,'').trim();
+      try{
+        if(opt.input){
+          var v=window.prompt(plain,(opt.input&&opt.input.value)||'');
+          return {then:function(f){return f(v);}};
+        }
+        if(opt.cancelText!==null&&opt.cancelText!==undefined){
+          var c=window.confirm(plain);
+          return {then:function(f){return f(c);}};
+        }
+        window.alert(plain);
+      }catch(_e2){}
+      return {then:function(f){return f(opt.input?null:false);}};
+    }
   };
   window.adConfirm=function(msg,opt){
     opt=opt||{};
@@ -455,6 +478,8 @@ ADMIN_BODY = """
   <div style="margin-top:18px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;font-size:13px">
     <a href="javascript:void 0" id="logout" style="color:#0F6E56;text-decoration:none">退出登录</a>
     <span style="color:#849690">账号信息保存在服务端 accounts.json；删除账号不会自动清空其数据目录。</span>
+    <!-- 版本号：升级后如果这里还是旧版本，说明浏览器拿的是缓存页，强刷即可 -->
+    <span style="color:#A8B6B0;font-size:12px" title="页面版本，用于确认是不是最新版">v__VER__</span>
   </div>
 </div>
 <script>
@@ -484,9 +509,9 @@ async function load(){
         '<td style="padding:8px 4px">'+(t.has_password?'已设密码':'<span style="color:#B4692E">未设密码</span>')+
         (t.builtin?' · 默认账号':'')+'</td>'+
         '<td style="padding:8px 4px"><div style="display:flex;gap:6px;flex-wrap:wrap">'+
-        '<button type="button" class="ad-row-btn" data-act="name" data-id="'+esc(t.id)+'" data-u="'+esc(t.username)+'">改名</button>'+
-        '<button type="button" class="ad-row-btn" data-act="pwd" data-id="'+esc(t.id)+'">重置密码</button>'+
-        (t.builtin?'':'<button type="button" class="ad-row-btn danger" data-act="del" data-id="'+esc(t.id)+'">删除</button>')+
+        '<button type="button" class="wbd-row-btn" data-act="name" data-id="'+esc(t.id)+'" data-u="'+esc(t.username)+'">改名</button>'+
+        '<button type="button" class="wbd-row-btn" data-act="pwd" data-id="'+esc(t.id)+'">重置密码</button>'+
+        (t.builtin?'':'<button type="button" class="wbd-row-btn danger" data-act="del" data-id="'+esc(t.id)+'">删除</button>')+
         '</div></td></tr>';
     }).join('')+'</tbody></table>';
   box.querySelectorAll('button[data-act]').forEach(function(b){
@@ -540,9 +565,11 @@ load();
 </script>"""
 
 
-def admin_page():
+def admin_page(version=""):
     return _page("管理员控制台 · 班级工作台",
-                 ADMIN_BODY.replace("__LOGO__", LOGO), ADMIN_UI)
+                 ADMIN_BODY.replace("__LOGO__", LOGO)
+                           .replace("__VER__", str(version or "")),
+                 ADMIN_UI)
 
 
 FORGOT_BODY = """
