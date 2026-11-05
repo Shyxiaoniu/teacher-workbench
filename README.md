@@ -3,7 +3,7 @@
 > 给班主任和任课老师用的一套**班级工作台**：教师端与学生端共用一个网页入口，
 > 数据全部存在自己的服务器上，不依赖任何第三方云服务。
 
-当前版本：**2.0.11**（版本号唯一代码源：`app/server.py` 的 `VERSION`）
+当前版本：**2.0.13**（版本号唯一代码源：`app/server.py` 的 `VERSION`）
 
 ```
 http://<服务器局域网 IP>:8080/        ← Docker 部署的入口；直接运行时是 :20020
@@ -378,9 +378,9 @@ docker compose up -d --build
 
 | # | 文件 | 位置 |
 |---|---|---|
-| 1 | `app/server.py` | `VERSION = "2.0.11"` —— **唯一代码源** |
-| 2 | `.env.example` | `IMAGE_TAG=2.0.11` |
-| 3 | `docker-compose.yml` | `image: …:${IMAGE_TAG:-2.0.11}`（init 与 workbench **两处**） |
+| 1 | `app/server.py` | `VERSION = "2.0.13"` —— **唯一代码源** |
+| 2 | `.env.example` | `IMAGE_TAG=2.0.13` |
+| 3 | `docker-compose.yml` | `image: …:${IMAGE_TAG:-2.0.13}`（init 与 workbench **两处**） |
 | 4 | `README.md` | 文首「当前版本」 |
 | 5 | `version.json` | 由 `tools/make_release.py` 自动同步 |
 
@@ -409,14 +409,39 @@ python tools/make_release.py --out D:\dist   # 指定输出目录（默认 dist/
 > raw 直链，不依赖 Releases 功能；想把 zip 同时挂到 Releases 也可以，把
 > `version.json` 的 `zip` 字段改成完整 URL 即可。
 
+### 管理员账号与多教师数据隔离（2.0.13）
+
+- **登录页默认展示管理员登录**：默认账号 `teacher` / 默认密码 `t12345678`；部署时可用
+  `.env` 的 `WB_ADMIN_USERNAME` / `WB_ADMIN_PASSWORD` 修改（仅首次初始化生效，
+  `WB_ADMIN_RESET=1` 可强制重置口令）。页上有「教师登录」切换入口。
+- **职责边界**：管理员控制台 `/admin/` 只负责教师账号的注册、改名、重置密码、删除，
+  以及修改管理员自己的密码；班级、学生、资料、课程与所有系统设置仍在教师端配置。
+  管理员不能进教师工作台，教师也不能访问管理员接口。
+- **教师端账号注册已取消**：`/api/v2/auth/setup` 关闭，登录页不再有创建账号表单，
+  `/teacher/console` 的「改账号」停用；教师自己的改密与密保问题保留不变。
+- **数据隔离规则**：账号表在 `<DATA_DIR>/accounts.json`；每个教师账号一个工作区
+  `<DATA_DIR>/accounts/<id>/`，内含 `workbench.db`、`typing.json`、`activity/`、
+  `submissions/`、`courseware/`。原单账号升级映射为 `id="default"`，工作区就是原
+  `<DATA_DIR>` 本身，**老数据零迁移、零丢失**。每个请求按会话的 `account` 绑定工作区；
+  学生登录时按班级 / 学号定位所属教师账号并绑定，后续读写都在同一工作区。
+- **资料共享**：教师端资料页每个文件有 🤝 按钮，勾选目标教师后服务端把文件**复制**到
+  对方课件目录（保持课程 / 子文件夹相对路径，重名自动加 `_共享N` 后缀）；不写数据库、
+  不推送给学生、不改动源文件。
+- **备份**：全量备份标记 `account` 并携带教师账号表（只含哈希）；导入不再用旧
+  `config.teacher` 段覆盖账号，覆盖策略恢复教师账号时保留本机管理员凭据。
+
 ### 在线更新（教师端 设置 → 软件更新）
 
 - 后台默认每 24 小时自动检查（1~720 小时可调），也可手动「检查更新」；
 - 发现新版本 → 显示版本号 / 日期 / 更新说明 → 「下载并安装」→ 「立即重启服务」生效；
 - **更新只替换程序文件，`app/data` 原地保留**；下载 / 校验失败什么都不改；
   换装失败自动回滚；也可手动「回滚到更新前」；
-- 更新源：默认 `https://gitee.com/shyxiaoniu/teacher-workbench/raw/main/version.json`
-  （manifest 含版本 / 日期 / zip 文件名 / sha256 / notes）；
+- 更新源：**固定** `https://gitee.com/shyxiaoniu/teacher-workbench/raw/main/version.json`
+  （manifest 含版本 / 日期 / zip 文件名 / sha256 / notes）；设置页不再提供源地址入口，
+  避免填错地址导致更新失败；启动发现新版本会在左下小窗与头像角标提醒；
+- `version.json` 的 `zip` 写**相对仓库根的路径** `dist/<包名>.zip`（发行包实际在 `dist/`）。
+  更新器兼容旧版只写纯文件名的 manifest（先试 `dist/`、再试仓库根）；全部 404 时明确提示
+  「安装包与 manifest 不一致」而不是笼统的「检查更新源地址」；
 - 发布一次更新的流程：改 `VERSION` → `python tools/make_release.py`（自动同步 manifest，
   notes 手工编辑）→ `git add -f dist/*.zip version.json` → 提交推送双远程；
 - 机制细节：版本逐段数字比较（`app/updater.py::vtuple`）；sha256 校验；zip-slip 逐条路径校验；

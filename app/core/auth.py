@@ -185,13 +185,19 @@ class Sessions(object):
         self._d = {}
         self._lock = threading.RLock()
 
-    def create(self, role, hours=12, student_id=None):
+    def create(self, role, hours=12, student_id=None, account=None):
+        """account = 教师账号 id（多教师数据隔离用）。
+
+        学生会话也要带 account：学生属于某位教师的班级，后续所有数据
+        读写都必须落到同一个工作区，不能串到别的教师账号去。
+        """
         token = secrets.token_urlsafe(24)
         now = time.time()
         with self._lock:
             self._d[token] = {
                 "role": role,
                 "student_id": student_id,
+                "account": str(account or "default"),
                 "exp": now + hours * 3600,
                 "seen": now,
             }

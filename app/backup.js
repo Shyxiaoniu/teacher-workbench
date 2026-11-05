@@ -616,7 +616,7 @@
         tables: tables, config: server.config || {},
         creds: server.creds || [],
         sub: server.sub || null,           /* 提交系统：题目/花名册/提交记录 */
-        typing: server.typing || {},       /* 打字练习：成绩/金币/装扮 */
+        typing: server.typing || {},       /* 打字练习：成绩/积分/装扮 */
         files: server.files || {},         /* 学生作品附件（含提交附件与增强模块数据） */
         files_meta: fm
       }

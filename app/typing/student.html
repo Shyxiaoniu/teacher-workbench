@@ -34,6 +34,7 @@
   --key-bd:#EADFD4;
   --key-ink:#6B6257;
   --dim:#C2B9AE;              /* 未敲到的字 */
+  --art-todo:#8C9AA5;         /* 文章逐行视图：待输入文字（冷灰蓝） */
   --cur-bg:#F7E2D2;           /* 当前字底纹 */
   --dim-bg:#EFE5D6;           /* 空格占位 */
   --brand-soft:#F6E7D6;
@@ -68,6 +69,7 @@ html[data-mode="dark"]{
   --key-bd:rgba(226,150,112,.20);
   --key-ink:#D9C8BA;
   --dim:#7C6B5F;
+  --art-todo:#8E9AA6;
   --cur-bg:rgba(228,146,108,.20);
   --dim-bg:#33271F;
   --brand-soft:rgba(228,146,108,.16);
@@ -111,7 +113,7 @@ button{font-family:inherit;cursor:pointer;border:none;background:none}
 .top{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);
   border-radius:18px;padding:10px 16px;box-shadow:0 6px 20px var(--shadow)}
 /* 吸顶区（2026-11-05）：顶栏 + 教师练习条 + 页签整体常驻。
-   排行榜动辄几十行，往下翻的时候星数/金币/宠物还得看得见，
+   排行榜动辄几十行，往下翻的时候星数/积分/宠物还得看得见，
    否则学生翻到一半就不知道自己在看谁的榜。
    实现要点：留出 padding 让卡片离屏幕顶 6px，用负 margin 把这段 padding
    吃回去（静止时位置不变）；top 取负值让背景色向上铺满，
@@ -134,6 +136,11 @@ body.embed .stick-top{margin:-20px -4px 0;padding:20px 4px 6px}
   display:flex;align-items:center;gap:5px}
 .chip.b{background:var(--sun-bg);color:var(--sun-ink)}
 .chip.p{background:color-mix(in srgb,var(--purple) 14%,transparent);color:var(--purple)}
+/* 统一积分 chip：数字单独一个节点，refreshPts 只改它，变动时轻微弹一下 */
+.pts-live{font-variant-numeric:tabular-nums;white-space:nowrap}
+.pts-live b{font-weight:800;font-size:14.5px;min-width:1.2em;text-align:center}
+.pts-live.pts-bump{animation:ptsBump .42s ease}
+@keyframes ptsBump{0%{transform:scale(1)}38%{transform:scale(1.14);filter:brightness(1.12)}100%{transform:scale(1)}}
 .pet-mini{width:44px;height:44px;border-radius:13px;flex:none;overflow:hidden;
   background:radial-gradient(72% 62% at 50% 74%,var(--paper) 0%,var(--card) 100%);
   border:1px solid var(--line);
@@ -250,11 +257,12 @@ body.embed .play-wrap{min-height:calc(100vh - 20px)}
 /* 长文（整篇文章）模式：课文区自己滚动，不把整页撑爆；字号略收一档，
    屏幕上能多看到几行，打字时不用频繁滚动找位置（2026-11-04） */
 .text-wrap.long .text-line{max-height:min(42vh,420px);overflow:auto;justify-content:flex-start}
-.text-wrap.long .ch .hz{font-size:23px;line-height:27px}
+.text-wrap.long .ch .hz{font-size:22px;line-height:28px}
 /* ===== 文章逐行视图（2026-11-05） =====
    牛哥要求：文章练习的输入区改成逐行显示，每行与原文行一一对应。
-   一行一块：上行是原文（逐字状态色 + 闪烁光标），下行是该行的上屏回显
-   （打对的字填进对应格、没打到的透明占位），当前行整块高亮并自动滚到视野里。 */
+   一行一块：上行是原文（待输入 / 已输入 / 当前），下行是该行的上屏回显
+   （打对的字填进对应格、没打到的透明占位），两行字号一致、逐字对齐；
+   当前行整块高亮并自动滚到视野里。闪烁光标在下方输入台里，不压课文。 */
 .art-box{position:relative;flex:1 1 auto;min-height:0;margin-top:8px;
   display:flex;flex-direction:column;gap:5px;overflow:auto;
   max-height:min(58vh,600px);padding:5px 4px 8px;
@@ -267,13 +275,20 @@ body.embed .play-wrap{min-height:calc(100vh - 20px)}
 .art-row.on .art-no{color:var(--brand)}
 .art-main{flex:1 1 auto;min-width:0}
 .art-orig{display:flex;flex-wrap:wrap;gap:2px 3px;align-content:flex-start}
-.art-orig .ch .hz{font-size:23px;line-height:29px}
+/* 逐行视图（2026-11-05 牛哥定版）：上行「待输入 + 已输入」的原文，
+   下行是这一行真正上屏的字。两行共用同一套字号 / 行高 / 字距，
+   第 N 个字上下严格对齐；待输入冷灰、已输入深色，只有打错的那个
+   已输入字是红色 —— 原文行永远显示原文，不跟着标红。 */
+.art-orig .ch .hz,.art-echo .ch .hz{font-size:22px;line-height:28px}
+.art-orig .ch.d .hz{color:var(--art-todo)}
+.art-orig .ch.o .hz{color:var(--ink)}
+.art-orig .ch.c .hz{color:var(--brand)}
 .art-orig.en-line{display:block;font-size:22px;line-height:1.62;letter-spacing:.6px;text-align:left}
-.art-echo{display:flex;flex-wrap:wrap;gap:1px 3px;min-height:20px;margin-top:2px;
+.art-echo{display:flex;flex-wrap:wrap;gap:2px 3px;min-height:28px;margin-top:2px;
   border-top:1px dashed color-mix(in srgb,var(--line) 90%,transparent);padding-top:3px}
-.art-echo .ch .hz{font-size:19px;line-height:22px}
 .art-echo .ch.d .hz{color:transparent}
 .art-echo .ch.o .hz{color:var(--brand)}
+.art-echo .ch.e .hz{color:var(--bad);background:var(--bad-soft)}
 .art-echo .ch.sp{width:12px;height:15px}
 .art-echo .ch.sp.d{background:transparent;box-shadow:none}
 .art-echo .ch.sp.o{background:var(--cur-bg);box-shadow:none}
@@ -297,13 +312,11 @@ body.embed .play-wrap{min-height:calc(100vh - 20px)}
 .ch.o .hz{color:var(--ok)}
 .ch.e .hz{color:var(--bad);background:var(--bad-soft);box-shadow:0 2px 0 color-mix(in srgb,var(--bad) 45%,transparent)}
 .ch.c .hz{color:var(--ink);background:var(--cur-bg);box-shadow:0 2px 0 var(--brand)}
-/* 当前格闪烁光标（2026-11-05 牛哥要求「输入框里要有闪烁光标，明确当前输入位置」）：
-   真 <input> 的文字和光标都是透明的（视觉交给回显层），学生看不到自己在第几个字，
-   所以把光标画在「课文当前格」的右侧 —— 位置永远等于 P.idx，闪烁 1 秒一次。 */
+/* 光标（2026-11-05 牛哥定版）：闪烁光标放在「输入台里」，不再盖在课文文字上。
+   中文关的课文当前格只用底纹提示位置，光标画在 .tb-field 里的 .tb-caret；
+   英文关没有输入台，只在当前格左缘留一根细线（left 是字外侧，不压字）。 */
 .ch.c{position:relative}
-.ch.c::after{content:'';position:absolute;right:-2px;top:2px;bottom:2px;width:2px;
-  border-radius:2px;background:var(--brand);animation:caretBlink 1.06s steps(1,end) infinite}
-.en-line .c::after{content:'';position:absolute;right:-2px;top:2px;bottom:2px;width:2px;
+.en-line .c::after{content:'';position:absolute;left:-2px;top:2px;bottom:2px;width:2px;
   border-radius:2px;background:var(--brand);animation:caretBlink 1.06s steps(1,end) infinite}
 @keyframes caretBlink{0%,48%{opacity:1}52%,100%{opacity:0}}
 /* 空格占位：画成一个可见的浅色小方块，已打变绿、当前变暖色 ——
@@ -377,12 +390,27 @@ body.embed .play-wrap{min-height:calc(100vh - 20px)}
 .tb-echo .ch.d .hz,.tb-echo .ch.o .hz{background:none;box-shadow:none}
 .tb-echo .ch.sp.d{background:transparent;box-shadow:none}
 .tb-echo .ch.sp.o{background:var(--cur-bg);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--brand) 34%,transparent)}
-/* 真输入框：铺满回显层、文字透明，只保留输入法能力 */
-.tb-input{position:absolute;inset:0;width:100%;height:100%;
+/* 真输入框（2026-11-05 重写）：不再是铺满整个输入台的透明大框。
+   以前它左对齐、回显层却居中，浏览器按 input 的 caret 放输入法候选框，
+   搜狗候选框就跑到最左边，跟正在打的那个字差了半屏。现在把 input 缩成
+   一个「浮动的小输入框」，由 placeTypingInput() 实时挪到第 idx 个字的格子上，
+   系统输入法的候选框自然跟着 caret 落在正确位置。文字仍然全透明，
+   视觉交给回显层；可见的闪烁光标由 .tb-caret 画在同一个格子里。 */
+.tb-input{position:absolute;left:8px;top:4px;width:34px;height:32px;
   border:none;outline:none;background:transparent;padding:0;margin:0;
   font-size:26px;line-height:30px;font-family:inherit;letter-spacing:0;
-  color:transparent;caret-color:transparent}
+  color:transparent;caret-color:transparent;overflow:hidden;white-space:pre;
+  z-index:4}
 .tb-input::placeholder{color:transparent}
+/* 输入台里的闪烁光标：与浮动 input 同位置、同高度，属于「输入框内」 */
+.tb-caret{position:absolute;z-index:5;width:2px;height:32px;border-radius:2px;
+  background:var(--brand);animation:caretBlink 1.06s steps(1,end) infinite;
+  pointer-events:none}
+.tb-caret[hidden]{display:none}
+/* 整篇文章（slim 输入台）：只显示本行已上屏的字，光标与候选框跟在它后面 */
+.tb-mini{display:inline-block;max-width:calc(100% - 60px);overflow:hidden;
+  text-overflow:ellipsis;white-space:pre;font-size:15px;line-height:24px;
+  font-weight:600;color:var(--brand);vertical-align:middle}
 /* 输入法组合中（2026-11-03 修复：拼音不再让 input 显形）
    旧做法是隐藏回显层、把真 input 的文字亮出来显示拼音 —— 但 input 是左对齐的，
    一组合整串「晋太元中，wu」就从框左边冒出来，和居中的课文完全对不上。
@@ -557,7 +585,17 @@ body.embed .credit{display:none}
 .r-cell span{font-size:11.5px;color:var(--ink3)}
 .r-reward{background:#FFF8E2;border:1.5px dashed #E8C96A;border-radius:14px;padding:10px 14px;font-size:13.5px;
   color:#8A6A1C;margin-bottom:16px}
-.r-btns{display:flex;gap:10px;justify-content:center}
+.r-btns{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+/* 结算界面键盘操作（2026-11-05）：↑↓ 切换选中项，↵ 确认（默认就是下一关），
+   Esc 回地图。选中态用 outline 而不是改尺寸，按钮不会跳来跳去。 */
+.r-btns .btn.sel{outline:3px solid color-mix(in srgb,var(--brand) 38%,transparent);
+  outline-offset:2px;box-shadow:0 4px 14px color-mix(in srgb,var(--brand) 32%,transparent)}
+.r-keys{margin-top:14px;display:flex;align-items:center;justify-content:center;gap:5px;
+  flex-wrap:wrap;font-size:12px;color:var(--ink3)}
+.r-keys kbd{font-family:Consolas,monospace;background:var(--surface);border:1.5px solid var(--line);
+  border-bottom-width:2.5px;border-radius:6px;padding:1px 7px;font-size:12px;
+  color:var(--ink);font-weight:700;line-height:1.5}
+.r-keys .rk-sep{margin:0 4px;opacity:.5}
 
 /* 排行榜 */
 .lb-card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:20px 22px;margin-top:14px}
@@ -794,7 +832,7 @@ body.embed .credit{display:none}
   padding:18px 20px 16px;box-shadow:0 24px 60px rgba(80,54,30,.24)}
 .sp-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
 .sp-head b{font-size:16px}
-.sp-coin{font-size:13px;font-weight:800;color:#A8720E;background:#FFF2D8;border-radius:999px;padding:3px 11px}
+.sp-pts{font-size:13px;font-weight:800;color:#A8720E;background:#FFF2D8;border-radius:999px;padding:3px 11px}
 .sp-list{display:flex;flex-direction:column;gap:10px}
 .sp-row{display:flex;gap:11px;align-items:flex-start;background:#fff;border:1.4px solid #EDE2D3;
   border-radius:13px;padding:11px 12px}
@@ -822,7 +860,7 @@ body.embed .credit{display:none}
 .w-head,.is-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:10px}
 .w-head b,.is-head b{font-size:14.5px;color:var(--ink)}
 .w-head span,.is-head span{font-size:11.5px;color:#B0A294}
-.w-coin{margin-left:auto;font-size:12px;font-weight:800;color:#A8720E;background:#FFF2D8;
+.w-pts{margin-left:auto;font-size:12px;font-weight:800;color:#A8720E;background:#FFF2D8;
   border-radius:999px;padding:2px 10px}
 .w-body{display:flex;flex-direction:column;gap:10px}
 .deco-sec{border-top:1px dashed #EBDDC9;padding-top:9px}
@@ -973,7 +1011,7 @@ body.embed .credit{display:none}
 #view .w-head,#view .is-head{gap:12px;margin-bottom:14px}
 #view .w-head b,#view .is-head b{font-size:19px}
 #view .w-head span,#view .is-head span{font-size:13.5px;line-height:1.5}
-#view .w-coin{font-size:15px;padding:4px 13px}
+#view .w-pts{font-size:15px;padding:4px 13px}
 #view .w-body{gap:14px}
 #view .deco-sec{padding-top:12px}
 #view .ds-head{gap:9px;margin-bottom:10px}
@@ -1100,7 +1138,7 @@ body.embed .credit{display:none}
    这一段只管「装饰性浅色面板」：结算弹层、排行榜、牧场展台、衣柜、商店、
    文章库抽屉。它们原来大量写死浅色渐变，逐条改令牌会把规则拆得很散，
    统一在这里按"暗一档的纸面 + 半透明品牌描边"重刷一遍。
-   金色系（星星 / 金币 / 蛋）保留但提亮，夜间不发脏。 */
+   金色系（星星 / 积分 / 蛋）保留但提亮，夜间不发脏。 */
 html[data-mode="dark"] .mask{background:rgba(0,0,0,.62)}
 html[data-mode="dark"] .result{box-shadow:0 24px 60px rgba(0,0,0,.55)}
 html[data-mode="dark"] .r-cell{background:var(--surface)}
@@ -1181,9 +1219,9 @@ html[data-mode="dark"] .ib-dot{background:var(--surface);border-color:var(--line
 html[data-mode="dark"] .ib-dot:hover{border-color:var(--brand);background:var(--paper)}
 html[data-mode="dark"] .ib-dot.on{border-color:var(--ok);background:var(--en-ok-bg);color:var(--en-ok-ink)}
 html[data-mode="dark"] .ib-dot.on .ib-n{color:var(--en-ok-ink)}
-html[data-mode="dark"] .w-head span.w-coin,
-html[data-mode="dark"] .is-head span.w-coin,
-html[data-mode="dark"] .sp-coin{background:var(--sun-bg);color:var(--sun-ink)}
+html[data-mode="dark"] .w-head span.w-pts,
+html[data-mode="dark"] .is-head span.w-pts,
+html[data-mode="dark"] .sp-pts{background:var(--sun-bg);color:var(--sun-ink)}
 html[data-mode="dark"] .sp-row{background:var(--surface);border-color:var(--line)}
 html[data-mode="dark"] .sp-desc,html[data-mode="dark"] .sp-tip,html[data-mode="dark"] .sp-have,
 html[data-mode="dark"] .sp-foot{color:var(--ink3)}
@@ -1303,7 +1341,7 @@ function uiToast(msg, tone) {
 var DEMO = {
   me: { id: 'demo', name: '演示同学', class_id: '0', class_name: '三年(1)班' },
   progress: {
-    stars: 26, week_stars: 12, coins: 180, pts: 120, eggs: 1,
+    stars: 26, week_stars: 12, pts: 300, eggs: 1,
     pets: ['cat', 'dog'], decos: ['hat-red', 'crown', 'sunglass'],
     bgs: ['meadow'], effects: [],
     equip: { pet: 'cat', decos: ['hat-red'], bg: 'meadow', fx: '' },
@@ -1436,6 +1474,30 @@ function petTitleText() {
   return bits.join(' · ');
 }
 
+/* ---------------- 统一积分 · 顶栏实时显示 ----------------
+   整个应用只有 pts 一种数值：闯关获得、商店消费、老师发放都走它。
+   顶栏（.stick-top，本来就吸顶）右上角常驻一枚 chip；练习页没有顶栏，
+   练习条的 .live 里放同一枚 chip。两者都用 data-pts-val 标记，
+   refreshPts() 只改数字、绝不整页重绘（练习中重绘会丢掉正在打的关卡）。 */
+function ptsChipHtml() {
+  return '<span class="chip b pts-live" title="当前积分 · 闯关获得，全店通用">' +
+    '✨ <b data-pts-val>' + ((S.progress && S.progress.pts) || 0) + '</b> 积分</span>';
+}
+function refreshPts() {
+  var v = (S.progress && S.progress.pts) || 0;
+  var nodes = document.querySelectorAll('[data-pts-val]');
+  for (var i = 0; i < nodes.length; i++) {
+    if (nodes[i].textContent === String(v)) continue;
+    nodes[i].textContent = v;
+    var chip = nodes[i].parentNode;
+    if (chip && chip.classList) {
+      chip.classList.remove('pts-bump');
+      void chip.offsetWidth;           /* 强制回流，让动画能连续触发 */
+      chip.classList.add('pts-bump');
+    }
+  }
+}
+
 /* ---------------- 渲染框架 ---------------- */
 function render() {
   var st = TD.titleFor(S.progress.stars || 0);
@@ -1450,8 +1512,7 @@ function render() {
         '<span class="logo">⌨️ 打字冒险岛<small>班级工作台</small></span>' +
         '<div class="meter">' +
           '<span class="chip">⭐ ' + (S.progress.stars || 0) + ' 星</span>' +
-          '<span class="chip b">🪙 ' + (S.progress.coins || 0) + '</span>' +
-          '<span class="chip b">✨ ' + (S.progress.pts || 0) + '</span>' +
+          ptsChipHtml() +
           '<span class="chip p">' + esc(st.name) + '</span>' +
           (S.progress.eggs ? '<span class="chip b">🥚 ×' + S.progress.eggs + '</span>' : '') +
           /* 头像 title：悬停能看到当前背景/特效名，老师问「你那个光环哪来的」好回答 */
@@ -1500,6 +1561,7 @@ function render() {
     '<span class="credit">打字冒险岛 · 班级工作台 2.0 · 牛老师设计</span>';
   app.classList.add('ui-big');   /* 非练习页：内容按视口高度铺开，减少底部空白 */
   app.innerHTML = html;
+  refreshPts();                  /* 顶栏积分：数值变动立即刷新，不整页重绘 */
   applyTheme();                  /* 顶栏主题钮的图标 / theme-color 跟着当前主题走 */
   var v = $('#view');
   if (!v) return;
@@ -1529,7 +1591,8 @@ function fitViewScroll() {
   var h = window.innerHeight - top - foot - pad - 8;
   v.style.maxHeight = Math.max(220, Math.round(h)) + 'px';
 }
-window.addEventListener('resize', function () { fitViewScroll(); });
+/* 窗口变化会让回显层换行位置改变，浮动输入框 / 光标 / 候选框要跟着重算 */
+window.addEventListener('resize', function () { fitViewScroll(); placeTypingInput(); });
 function tabBtn(id, name) {
   return '<button class="' + (S.view === id ? 'on' : '') + '" data-tab="' + id + '">' + name + '</button>';
 }
@@ -1639,12 +1702,19 @@ function viewMap() {
     var boss = lv === 10;
     var b = (S.progress.best || {})['s' + stg + 'c' + ch + 'l' + lv];
     var stars = b ? b.stars : 0;
+    /* 文章篇章：每张卡直接写这一关配到的文章 —— 自动轮换时一眼
+       就能看到「一关一篇不重样」，固定单篇时则十关同一篇。 */
+    var nm = esc(TL.topicOf(stg, lv) || levelName(stage, boss));
+    if (stg === 6 && TL.articleOf) {
+      var _art = TL.articleOf(ch, lv);
+      if (_art) nm = '《' + esc(_art.title) + '》';
+    }
     nodes += '<button class="lv' + (boss ? ' boss' : '') + (open ? '' : ' lock') + '" data-lv="' +
       stg + ',' + ch + ',' + lv + '">' +
       (boss ? '<span class="boss-tag">BOSS</span>' : '') +
       (!open ? '<span class="lock-tag">🔒</span>' : '') +
       '<div class="no">第 ' + lv + ' 关</div>' +
-      '<div class="nm">' + esc(TL.topicOf(stg, lv) || levelName(stage, boss)) + '</div>' +
+      '<div class="nm">' + nm + '</div>' +
       '<div class="stars">' + (open ? starsHtml(stars).replace(/class="on"/g, 'class="on"').replace(/class="off"/g, 'class="off"') : '') + '</div>' +
       (b ? '<div class="best">最好 ' + (Math.round(b.wpm * 10) / 10) + (stage.lang === 'cn' ? ' 字/分' : ' KPM') + '</div>' : '') +
       '</button>';
@@ -1682,21 +1752,35 @@ function levelName(stage, boss) {
   return '输入挑战';
 }
 function artBar() {
-  var a = (window.TA) ? TA.get(S.art.id) : null;
-  if (!a) return '';
+  /* 2026-11-05 文章关卡改为「一关一整篇、引擎自动配」：
+     默认自动轮换（按卷分难度、按关换文章），从文章库手动固定后
+     才回到「这一篇打到尾」的老玩法，条上随时可以退回自动。 */
+  var pinned = S.art.id && window.TA && TA.get(S.art.id);
   var ch = S.map.chapter;
+  if (pinned) {
+    var a = TA.get(S.art.id);
+    return '<div class="art-bar">' +
+      '<span class="ab-ic">📖</span>' +
+      '<div class="ab-main">' +
+        '<div class="ab-t"><b>' + esc(a.title) + '</b>' +
+          '<span class="ab-type">' + esc(a.typeName) + '</span>' +
+          '<span class="ab-hard">' + starsHtml(a.hard) + '</span></div>' +
+        '<div class="ab-meta">' + esc(a.author || '') + ' · ' + a.count + ' 行 / ' + a.chars + ' 字 · 已固定这一篇</div>' +
+      '</div>' +
+      '<button class="btn line sm" id="artOpen">换一篇</button>' +
+    '</div>';
+  }
+  var tier = TL.artTier ? TL.artTier(ch) : 1;
+  var poolN = (window.TA) ? TA.ARTICLES.filter(function (x) { return x.hard === tier; }).length : 0;
   return '<div class="art-bar">' +
-    '<span class="ab-ic">📖</span>' +
+    '<span class="ab-ic">🎯</span>' +
     '<div class="ab-main">' +
-      '<div class="ab-t"><b>' + esc(a.title) + '</b>' +
-        '<span class="ab-type">' + esc(a.typeName) + '</span>' +
-        '<span class="ab-hard">' + starsHtml(a.hard) + '</span></div>' +
-      /* 2026-11-04 起不再按句切关：每一关都从文章开头整篇连续打，
-         这里只报篇幅，不再写"从第 N 句开始、还剩 M 句" */
-      '<div class="ab-meta">' + esc(a.author || '') + ' · ' + a.count + ' 句 / ' + a.chars + ' 字' +
-        ' · 整篇连续练习' + '</div>' +
+      '<div class="ab-t"><b>自动轮换 · 一关一篇</b>' +
+        '<span class="ab-type">第 ' + ch + ' 卷 · 难度 ' + starsHtml(tier) + '</span></div>' +
+      '<div class="ab-meta">每关自动配一整篇文章：完成一关，下一关就是新文章，难度随卷递进' +
+        (poolN ? '（本档 ' + poolN + ' 篇轮换）' : '') + '</div>' +
     '</div>' +
-    '<button class="btn line sm" id="artOpen">换一篇</button>' +
+    '<button class="btn line sm" id="artOpen">自选文章</button>' +
   '</div>';
 }
 /* ---------------- 文章库抽屉 ----------------
@@ -1728,8 +1812,14 @@ function openArtLib() {
   }
   function gridHtml() {
     var list = S.art.type === 'all' ? TA.ARTICLES : TA.list(S.art.type);
-    if (!list.length) return '<div class="al-empty">这一类还没有文章</div>';
-    return list.map(cardHtml).join('');
+    var auto = '<button class="al-card auto' + (!S.art.id ? ' on' : '') + '" data-pick="__auto__">' +
+      '<div class="ac-top"><span class="ac-type">🎯 推荐</span></div>' +
+      '<b class="ac-title">自动轮换</b>' +
+      '<div class="ac-desc">不用挑：每关自动配一整篇新文章，难度随卷递进，完成一关换一篇</div>' +
+      '<div class="ac-meta">' + TA.ARTICLES.length + ' 篇参与轮换</div>' +
+    '</button>';
+    if (!list.length) return auto + '<div class="al-empty">这一类还没有文章</div>';
+    return auto + list.map(cardHtml).join('');
   }
   mask.innerHTML = '<div class="artlib">' +
     '<div class="al-head">' +
@@ -1739,7 +1829,7 @@ function openArtLib() {
     '</div>' +
     '<div class="al-tabs" id="alTabs">' + tabsHtml() + '</div>' +
     '<div class="al-grid" id="alGrid">' + gridHtml() + '</div>' +
-    '<div class="al-foot">选好文章后回到地图，从第 1 关开始读；读到哪一关，下次还从那里接着读。</div>' +
+    '<div class="al-foot">默认「自动轮换」：关卡自己配文章、完成一关换一篇。想专练某一篇就点它固定，随时回来点「自动轮换」恢复。</div>' +
     '</div>';
   document.body.appendChild(mask);
   function close() { mask.remove(); }
@@ -1756,10 +1846,15 @@ function openArtLib() {
     var b = e.target.closest('[data-pick]');
     if (!b) return;
     var id = b.getAttribute('data-pick');
-    S.art.id = id;
-    saveArtId(id);
-    S.map.stage = 6;
-    S.map.chapter = 1;               /* 换文章 = 从头读，进度按卷号累加，不会串 */
+    if (id === '__auto__') {
+      S.art.id = '';                 /* 退回自动轮换，卷号原地保留，接着当前进度换着读 */
+      saveArtId('');
+    } else {
+      S.art.id = id;
+      saveArtId(id);
+      S.map.stage = 6;
+      S.map.chapter = 1;             /* 固定一篇 = 从头读，进度按卷号累加，不会串 */
+    }
     close();
     render();
   });
@@ -2182,9 +2277,9 @@ function openLevel(st, ch, lv, dr) {
   clearPlayBindings();
   try {
     var grades = (S.config && S.config.grades) || [];
-    /* 第 6 篇章把「正在读的文章」带进引擎：读文章按句序推进（第几关读
-       第几句），内容恒定不参与随机；其余篇章 2026-11-04 起每次进关
-       （重玩 / 重置 / 刷新后再进）都换一套随机内容，防止背顺序。 */
+    /* 第 6 篇章：不传 articleId = 引擎按卷/关自动轮换配文章；
+       学生从文章库固定了某一篇才带进去（S.art.id）。其余篇章每次
+       进关（重玩 / 重置 / 刷新后再进）都换一套随机内容，防止背顺序。 */
     var artId = (st === 6 && S.art.id) ? S.art.id : null;
     var nonce = artId ? 0 : Math.floor(Math.random() * 0x7fffffff);
     var L = TL.genLevel(st, ch, lv, grades, artId, nonce);
@@ -2232,17 +2327,20 @@ window.startLevel = startLevel;
 function textHtml(text, idx, bad, base) {
   var isCn = S.play && S.play.L && S.play.L.mode === 'cn';
   base = base || 0;
-  /* 当前格挂着敲错的字（2026-11-03 牛哥第二次反馈）：
-     课文行**永远显示原文**，不把错字顶进来——顶掉了学生就看不见
-     该打什么了。错字只在输入框回显层（echoHtml）里红色保留；
-     课文行这边只把当前格标红（.e），提示"这个位置打错了"。 */
-  var hasErr = !!(S.play && S.play.errChar);
+  /* 2026-11-05 牛哥定版：原文行永远显示原文、永远不标红。
+     「已输入且打错」的那个字只在回显层（echoHtml 的 .ch.e）里红色保留；
+     原文当前格用 .c 底纹提示位置即可，不然学生会把红色的原文当成错字。 */
   var i, g, cls, s = '';
+  var clsAt = function (n) {
+    if (n < idx) return 'o';
+    if (n === idx) return bad ? 'e' : 'c';
+    return 'd';
+  };
   if (isCn && window.PY && PY.annotate) {
     var arr = PY.annotate(text);
     for (i = 0; i < arr.length; i++) {
       g = base + i;
-      cls = g < idx ? 'o' : (g === idx ? ((bad || (g === idx && hasErr)) ? 'e' : 'c') : 'd');
+      cls = clsAt(g);
       /* 空格也要带状态：中英混排关里空格很多，原来只渲染一个空 span，
          学生根本看不出"这里要按一下空格"，只会以为两个字挨得近。 */
       if (arr[i].c === ' ') { s += '<span class="ch sp ' + cls + '"></span>'; continue; }
@@ -2254,7 +2352,7 @@ function textHtml(text, idx, bad, base) {
   }
   for (i = 0; i < text.length; i++) {
     g = base + i;
-    cls = g < idx ? 'o' : (g === idx ? ((bad || (g === idx && hasErr)) ? 'e' : 'c') : 'd');
+    cls = clsAt(g);
     /* 大写字母加 .up 角标（2026-11-04 牛哥反馈大小写分不清）：⇧ 画在字头顶，
        绝对定位不占布局宽度，回显层逐字对齐不受影响 */
     s += '<span class="' + cls + (/[A-Z]/.test(text[i]) ? ' up' : '') + '">' + esc(text[i]) + '</span>';
@@ -2290,12 +2388,61 @@ function echoHtml(text, idx, base) {
   }
   return s;
 }
+/* 把透明的真输入框、可见光标一起挪到「当前正在打的那个字」的位置。
+   这是输入法候选框定位的关键：浏览器按 input 的 caret 矩形摆候选框，
+   input 浮在第 idx 格的格子里，搜狗/微软拼音的候选框就跟着落在那里，
+   不会再跑到输入台（甚至整页）最左边。每敲一个字都会重算一次。 */
+function placeTypingInput() {
+  var P = S.play;
+  var caret = document.getElementById('tbCaret');
+  if (!P || !P.L || P.L.mode !== 'cn' || P.done) {
+    if (caret) caret.hidden = true;
+    return;
+  }
+  var cn = document.getElementById('cnInput');
+  var field = document.getElementById('tbField');
+  if (!cn || !field) return;
+  var echo = document.getElementById('tbEcho');
+  var mini = document.getElementById('tbMini');
+  var left = 8, top = 4, w = 34, h = 32;
+  if (mini) {
+    /* 整篇文章：输入台里显示本行已上屏的字，光标与候选框跟在它后面 */
+    var st = artLineStarts(P.L);
+    var li = artLineOf(P.L, Math.min(P.idx, Math.max(0, P.L.text.length - 1)));
+    var typed = P.L.text.slice(st[li] || 0, P.idx);
+    mini.textContent = typed.length > 40 ? '…' + typed.slice(-40) : typed;
+    left = 8 + mini.offsetWidth;
+    top = 4; w = 34; h = 26;
+  } else if (echo && echo.children.length) {
+    /* 短课文：回显层与课文逐字同列，直接取第 idx 格的 offset */
+    var cell = echo.children[Math.min(P.idx, echo.children.length - 1)];
+    if (cell) {
+      left = cell.offsetLeft; top = cell.offsetTop;
+      w = Math.max(26, cell.offsetWidth);
+      h = Math.max(26, cell.offsetHeight);
+    }
+  }
+  left = Math.max(0, Math.min(left, Math.max(0, field.clientWidth - w)));
+  cn.style.left = left + 'px';
+  cn.style.top = top + 'px';
+  cn.style.width = w + 'px';
+  cn.style.height = h + 'px';
+  cn.style.textIndent = '0px';       /* 组合输入前后都保持同一落点 */
+  if (caret) {
+    caret.style.left = left + 'px';
+    caret.style.top = top + 'px';
+    caret.style.height = h + 'px';
+    caret.hidden = false;
+  }
+}
 function paintEcho() {
   /* 文章逐行视图没有独立的输入回显层：每行下面的 .art-echo 就是回显 */
-  if (S.play && S.play.L && S.play.L.long && S.play.L.lines) { paintArt(); return; }
-  var box = $('#tbEcho');
-  if (!box || !S.play) return;
-  box.innerHTML = echoHtml(S.play.L.text, S.play.idx);
+  if (S.play && S.play.L && S.play.L.long && S.play.L.lines) paintArt();
+  else {
+    var box = $('#tbEcho');
+    if (box && S.play) box.innerHTML = echoHtml(S.play.L.text, S.play.idx);
+  }
+  placeTypingInput();
 }
 
 /* ---------------- 文章逐行视图（2026-11-05） ----------------
@@ -2392,16 +2539,20 @@ function renderPlay() {
         ? '<div class="typing-bar' + (isLong ? ' slim' : '') + '" id="typeBar">' +
             '<div class="tb-field" id="tbField">' +
               /* 短课文：回显层与课文共用同一套字符网格，第 i 个字落在课文第 i 个字正下方。
-                 整篇文章：回显已经在每一行下面了，这里只留输入框（接收输入法） */
-              (isLong ? '' :
+                 整篇文章：回显已经在每一行下面了，输入台只留「本行已上屏」的小回显，
+                 光标和输入法候选框跟着它走。 */
+              (isLong ? '<span class="tb-mini" id="tbMini" aria-hidden="true"></span>' :
                 '<div class="tb-echo" id="tbEcho" aria-hidden="true">' + echoHtml(L.text, 0) + '</div>') +
               '<input class="tb-input" id="cnInput" autocomplete="off" autocorrect="off" ' +
                 'autocapitalize="off" spellcheck="false" placeholder=" " ' +
                 'aria-label="照着上面的课文打字，所打的字会出现在课文对应的位置">' +
+              /* tb-ph 必须紧跟 input（CSS 用 :not(:placeholder-shown) + .tb-ph 收起提示），
+                 所以光标与拼音浮标排在它后面；它们都是绝对定位，顺序不影响落点。 */
               '<span class="tb-ph" id="cnPh">' +
                 (isLong ? '在这里打字：打的字会填进上面当前那一行' : '照着上面的课文打字，打的字会出现在课文对应的位置') +
               '</span>' +
               '<span class="tb-comp" id="tbComp" hidden></span>' +
+              '<span class="tb-caret" id="tbCaret" aria-hidden="true" hidden></span>' +
             '</div>' +
           '</div>'
         : '') +
@@ -2422,7 +2573,8 @@ function renderPlay() {
           '<div class="sub">' + esc(stage.name) + ' · 目标：准确率 ≥90% 通关，' + L.speedLine +
             (L.mode === 'cn' ? ' 字/分' : ' KPM') + ' 拿两星</div></div>' +
           petHtml +
-          '<div class="live"><span class="chip" id="liveSpeed">0' + (L.mode === 'cn' ? ' 字/分' : ' KPM') +
+          '<div class="live">' + ptsChipHtml() +
+            '<span class="chip" id="liveSpeed">0' + (L.mode === 'cn' ? ' 字/分' : ' KPM') +
             '</span><span class="chip b" id="liveAcc">100%</span></div>' +
         '</div>' +
         '<div class="play-body">' + body + '</div>' +
@@ -2437,6 +2589,8 @@ function renderPlay() {
   requestAnimationFrame(fitKeyboard);
   setTimeout(fitKeyboard, 180);
   paintIme();
+  refreshPts();
+  placeTypingInput();          /* 进关先把输入框 / 光标摆到起始格 */
 }
 
 /* ---------------- 输入法 / 修饰键提示条 ----------------
@@ -2585,9 +2739,9 @@ function buyItem(id) {
   if (!it) return;
   var inv = (S.progress.items || {});
   if ((inv[id] || 0) >= it.max) { uiToast('「' + it.name + '」最多带 ' + it.max + ' 个，先用掉再买', 'warn'); return; }
-  if ((S.progress.coins || 0) < it.price) { uiToast('金币还差 ' + (it.price - (S.progress.coins || 0)) + ' 个', 'warn'); return; }
+  if ((S.progress.pts || 0) < it.price) { uiToast('积分还差 ' + (it.price - (S.progress.pts || 0)) + ' 分', 'warn'); return; }
   if (S.demo) {
-    S.progress.coins -= it.price;
+    S.progress.pts -= it.price;
     S.progress.items = inv;
     inv[id] = (inv[id] || 0) + 1;
     demoSave();
@@ -2606,12 +2760,12 @@ function buyItem(id) {
 function buyDeco(d) {
   if (!d) return;
   if ((S.progress.decos || []).indexOf(d.id) >= 0) { uiToast('这件已经在衣柜里了', 'warn'); return; }
-  if ((S.progress.coins || 0) < (d.price || 0)) {
-    uiToast('金币还差 ' + ((d.price || 0) - (S.progress.coins || 0)) + ' 个', 'warn');
+  if ((S.progress.pts || 0) < (d.price || 0)) {
+    uiToast('积分还差 ' + ((d.price || 0) - (S.progress.pts || 0)) + ' 分', 'warn');
     return;
   }
   if (S.demo) {
-    S.progress.coins -= d.price;
+    S.progress.pts -= d.price;
     (S.progress.decos = S.progress.decos || []).push(d.id);
     demoSave();
     uiToast('「' + d.name + '」买到了，快去穿上', 'ok');
@@ -2639,7 +2793,7 @@ function shopPopHtml() {
   var inv = (S.progress && S.progress.items) || {};
   return '<div class="shop-pop">' +
     '<div class="sp-head"><b>🏪 道具商店</b>' +
-      '<span class="sp-coin">🪙 ' + (S.progress.coins || 0) + '</span></div>' +
+      '<span class="sp-pts">✨ ' + (S.progress.pts || 0) + '</span></div>' +
     '<div class="sp-list">' + TD.ITEMS.map(function (it) {
       var n = inv[it.id] || 0;
       return '<div class="sp-row"><span class="sp-ic">' + it.icon + '</span>' +
@@ -2648,7 +2802,7 @@ function shopPopHtml() {
           '<span class="sp-tip">' + esc(it.tip) + '</span></div>' +
         '<div class="sp-buy">' +
           '<span class="sp-have">已有 ' + n + '/' + it.max + '</span>' +
-          '<button class="btn sm" data-buyitem="' + it.id + '">🪙 ' + it.price + '</button>' +
+          '<button class="btn sm" data-buyitem="' + it.id + '">✨ ' + it.price + '</button>' +
         '</div></div>';
     }).join('') + '</div>' +
     '<div class="sp-foot">道具只帮一关，练熟了就别买啦。</div>' +
@@ -2981,38 +3135,33 @@ function bindPlay() {
       var k = evChar(e);
       if (k != null) flashPressKey(k, null);
     });
-    /* 组合输入期间拼音的落点（2026-11-03 修复）
-       以前是隐藏回显层、让 input 显形显示拼音，可 input 左对齐，整串字会从
-       框左边冒出来，和居中的课文错开一大截。现在 input 始终透明，拼音只做成
-       一个浮标贴在「第 idx 个字」的格子上 —— 输入前后文字位置完全一致。
-       顺带把不可见 input 的 text-indent 挪到同一格，系统输入法的候选框也会
-       跟着跑到正在打的这个字附近，而不是停在框的最左边。 */
+    /* 组合输入期间拼音的落点（2026-11-05 重写）
+       input 始终透明，拼音只做成一个浮标贴在「第 idx 个字」的格子上；
+       真输入框本身由 placeTypingInput() 浮到同一格，浏览器据此摆放
+       搜狗 / 微软拼音的候选框 —— 组合开始、更新、结束全程都不跳位。
+       旧的 text-indent 方案只在组合期生效，结束立刻归零，候选框会
+       「啪」地跳回最左边，这一版彻底去掉。 */
     var tbf = $('#tbField');
     var tbComp = $('#tbComp');
-    var mctx = document.createElement('canvas').getContext('2d');
-    function measureWidth(s) {
-      if (!s) return 0;
-      var cs = window.getComputedStyle(cn);
-      mctx.font = cs.fontWeight + ' ' + cs.fontSize + ' ' + cs.fontFamily;
-      return mctx.measureText(s).width;
-    }
     function placeComp(txt) {
+      placeTypingInput();
       if (!tbComp || !tbf) return;
-      var box = $('#tbEcho');
-      var chars = box ? box.children : null;
-      if (!chars || !chars.length) { tbComp.hidden = true; return; }
-      var at = chars[Math.min(P.idx, chars.length - 1)];
-      if (!at) { tbComp.hidden = true; return; }
+      var box = $('#tbEcho'), mini = $('#tbMini');
+      var left = 8, top = 4;
+      if (box && box.children.length) {
+        var at = box.children[Math.min(P.idx, box.children.length - 1)];
+        if (!at) { tbComp.hidden = true; return; }
+        left = at.offsetLeft; top = at.offsetTop + 3;
+      } else if (mini) {
+        left = 8 + mini.offsetWidth; top = 4;
+      }
       tbComp.hidden = false;
       tbComp.textContent = txt || '　';
-      /* 卡片贴边保护：拼音比一个字宽时别顶出框外 */
-      var left = at.offsetLeft;
+      /* 贴边保护：拼音比一个字宽时别顶出框外 */
       var maxLeft = tbf.clientWidth - tbComp.offsetWidth - 4;
       if (left > maxLeft) left = Math.max(0, maxLeft);
       tbComp.style.left = left + 'px';
-      tbComp.style.top = (at.offsetTop + 3) + 'px';
-      var w = measureWidth(cn.value);
-      cn.style.textIndent = Math.max(0, Math.round(left - w)) + 'px';
+      tbComp.style.top = top + 'px';
     }
     cn.addEventListener('compositionstart', function () {
       P.composing = true;
@@ -3026,7 +3175,7 @@ function bindPlay() {
       P.composing = false;
       if (tbf) tbf.classList.remove('comp');
       if (tbComp) tbComp.hidden = true;
-      cn.style.textIndent = '0px';
+      placeTypingInput();
       setTimeout(onInput, 0);
     });
     cn.addEventListener('input', function (e) {
@@ -3116,7 +3265,7 @@ function startSyncLoop() {
     if (document.hidden) draftFlushNow();
   });
   window.addEventListener('pagehide', function () { draftFlushNow(); });
-  /* 全局同步：教师发放/扣除金币、开关打字练习，学生端 12 秒内跟上。
+  /* 全局同步：教师发放/扣除积分、开关打字练习，学生端 12 秒内跟上。
      练习中绝不整页重绘（会冲掉正在打的关卡），只在地图/牧场页刷余额。 */
   setInterval(function () {
     if (S.demo || S.role !== 'student' || document.hidden) return;
@@ -3125,6 +3274,7 @@ function startSyncLoop() {
       var wasEnabled = !!(S.config && S.config.enabled);
       var old = S.progress || {};
       S.progress = me.progress;
+      refreshPts();                 /* 老师发/扣积分：顶栏数字立刻跟上 */
       if (!S.progress.equip) S.progress.equip = { pet: '', decos: [] };
       S.config = me.config || S.config;
       /* 老师把练习关了：先补发草稿，再弹提示退回地图 */
@@ -3141,8 +3291,7 @@ function startSyncLoop() {
       if (nowEnabled !== wasEnabled) { render(); return; }
       /* 只有余额真的变了才重绘，避免 12 秒一次的无谓跳动 */
       if (S.view === 'ranch' || S.view === 'map') {
-        if ((old.coins || 0) !== (S.progress.coins || 0) ||
-            (old.pts || 0) !== (S.progress.pts || 0) ||
+        if ((old.pts || 0) !== (S.progress.pts || 0) ||
             (old.stars || 0) !== (S.progress.stars || 0) ||
             (old.eggs || 0) !== (S.progress.eggs || 0)) render();
       }
@@ -3162,13 +3311,12 @@ function submitResult(payload, stars, wpm) {
       pr.best[key] = { stars: stars, wpm: wpm };
       pr.stars = (pr.stars || 0) + gained;
       pr.week_stars = (pr.week_stars || 0) + gained;
-      /* 金币公式与 levels.js / typing_store.py 一致：首通按星给，加倍卡 ×2 */
-      var addCoins = TL.coinsFor(stars, payload.level, false);
-      if (payload.double) addCoins *= 2;
-      pr.coins = (pr.coins || 0) + addCoins;
-      /* 积分公式同样与 levels.js / typing_store.py 一致 */
-      var addPts = TL.ptsFor(stars, payload.stage, payload.chapter, false);
+      /* 统一积分公式与 levels.js / typing_store.py 一致：
+         基础积分 + 难度积分，加倍卡只翻基础那一份 */
+      var addPts = TL.ptsFor(stars, payload.stage, payload.chapter,
+                             payload.level, false, !!payload.double);
       pr.pts = (pr.pts || 0) + addPts;
+      refreshPts();
       var pool = ['hat-red', 'crown', 'sunglass', 'glasses', 'scarf', 'bow', 'headset', 'bg-star'];
       var needs = [10, 20, 40, 60, 80, 100, 130, 160];
       var newDecos = [];
@@ -3189,16 +3337,15 @@ function submitResult(payload, stars, wpm) {
             payload))
         });
       }
-      showResult(stars, wpm, payload, { newBest: newBest, gained: gained, coins_gained: addCoins,
+      showResult(stars, wpm, payload, { newBest: newBest, gained: gained,
         pts_gained: addPts, rewards: { egg: !!egg, decos: newDecos } });
     } else {
-      var rep = TL.coinsFor(stars, payload.level, true);
-      if (payload.double) rep *= 2;
-      pr.coins = (pr.coins || 0) + rep;
-      var repPts = TL.ptsFor(stars, payload.stage, payload.chapter, true);
+      var repPts = TL.ptsFor(stars, payload.stage, payload.chapter,
+                             payload.level, true, !!payload.double);
       pr.pts = (pr.pts || 0) + repPts;
       demoSave();
-      showResult(stars, wpm, payload, { newBest: false, gained: 0, coins_gained: rep,
+      refreshPts();
+      showResult(stars, wpm, payload, { newBest: false, gained: 0,
         pts_gained: repPts, rewards: {} });
     }
     return;
@@ -3211,6 +3358,7 @@ function submitResult(payload, stars, wpm) {
       S.progress = r.stu;
       if (S.progress && !S.progress.equip) S.progress.equip = { pet: '', decos: [] };
       S.ranch = ranchFromEquip(S.progress.equip);
+      refreshPts();
       showResult(r.stars, r.wpm, payload, r);
     } else {
       showResult(stars, wpm, payload, { error: (r && r.msg) || '成绩没有保存成功' });
@@ -3231,16 +3379,15 @@ function showResult(stars, wpm, payload, res) {
     var dd = TD.decoById(d);
     if (dd) rewardBits.push('🎀 解锁新装扮：「' + dd.name + '」');
   });
-  if (res.coins_gained === undefined && res.gained) {
-    res.coins_gained = TL.coinsFor(stars, L.level, false);
-  }
   if (res.gained) rewardBits.push('⭐ 星数 + ' + res.gained);
-  if (res.coins_gained) rewardBits.push('🪙 金币 + ' + res.coins_gained + (payload.double ? '（加倍卡 ×2）' : ''));
-  if (res.pts_gained) rewardBits.push('✨ 积分 + ' + res.pts_gained);
+  if (res.pts_gained) rewardBits.push('✨ 积分 + ' + res.pts_gained +
+    (payload.double ? '（加倍卡 · 基础分 ×2）' : ''));
   if (payload.shield && stars > 0 && payload.acc < 90) rewardBits.push('🛡 容错卡生效：这次按通关算，下次试试不用道具');
   var hasNextCh = TL.isBoss(L.level) && stars > 0 && (L.chapter + 1 < 200);
   var mask = document.createElement('div');
   mask.className = 'mask';
+  var nextBtn = (stars > 0 && (nextOpen || nextChOpen))
+    ? '<button class="btn" id="rNext" data-rsel="next">下一关 ›</button>' : '';
   mask.innerHTML =
     '<div class="result">' +
       '<h2>' + (stars > 0 ? (stars === 3 ? '完美通关！' : stars === 2 ? '优秀！' : '通关啦！') : '差一点点') + '</h2>' +
@@ -3253,26 +3400,58 @@ function showResult(stars, wpm, payload, res) {
       '</div>' +
       (res.error ? '<div class="r-reward">⚠️ ' + esc(res.error) + '</div>' :
         (rewardBits.length ? '<div class="r-reward">' + rewardBits.join('<br>') + '</div>' : '')) +
-      '<div class="r-btns">' +
-        (stars > 0 && (nextOpen || nextChOpen)
-          ? '<button class="btn" id="rNext">下一关 ›</button>' : '') +
-        '<button class="btn line" id="rRetry">再打一次</button>' +
-        '<button class="btn ghost" id="rMap">回地图</button>' +
+      '<div class="r-btns">' + nextBtn +
+        '<button class="btn line" id="rRetry" data-rsel="retry">再打一次</button>' +
+        '<button class="btn ghost" id="rMap" data-rsel="map">回地图</button>' +
       '</div>' +
+      '<div class="r-keys"><kbd>↵</kbd> ' + (nextBtn ? '进入下一关' : '确认') +
+        '<span class="rk-sep">·</span><kbd>↑</kbd><kbd>↓</kbd> 切换选择' +
+        '<span class="rk-sep">·</span><kbd>Esc</kbd> 回地图</div>' +
     '</div>';
   document.body.appendChild(mask);
-  mask.addEventListener('click', function (e) { if (e.target === mask) close(); });
-  function close() { clearPlayBindings(); mask.remove(); S.view = 'map'; S.play = null; render(); }
-  var bm = mask.querySelector('#rMap');
-  if (bm) bm.onclick = close;
-  var br = mask.querySelector('#rRetry');
-  if (br) br.onclick = function () { mask.remove(); startLevel(L.stage, L.chapter, L.level); };
-  var bn = mask.querySelector('#rNext');
-  if (bn) bn.onclick = function () {
+
+  /* 键盘操作：默认高亮第一项（通关时就是「下一关」），回车直接进下一关；
+     上下键在三个选项间循环，Esc / 点空白回地图。用捕获阶段监听，
+     避免被练习页残留的按键监听抢走；弹层一移除就解绑。 */
+  var opts = [].slice.call(mask.querySelectorAll('[data-rsel]'));
+  var sel = 0;
+  function paintSel() {
+    opts.forEach(function (b, i) { b.classList.toggle('sel', i === sel); });
+  }
+  function dismiss() {
+    document.removeEventListener('keydown', onKey, true);
     mask.remove();
+  }
+  function goMap() { dismiss(); clearPlayBindings(); S.view = 'map'; S.play = null; render(); }
+  function goRetry() { dismiss(); startLevel(L.stage, L.chapter, L.level); }
+  function goNext() {
+    dismiss();
     if (nextOpen) startLevel(L.stage, L.chapter, L.level + 1);
     else if (nextChOpen) { S.map.stage = L.stage; S.map.chapter = L.chapter + 1; S.view = 'map'; S.play = null; render(); }
+  }
+  var onKey = function (e) {
+    if (!document.body.contains(mask)) {
+      document.removeEventListener('keydown', onKey, true); return;
+    }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (opts.length) {
+        sel = (sel + (e.key === 'ArrowDown' ? 1 : opts.length - 1)) % opts.length;
+        paintSel();
+      }
+    } else if (e.key === 'Enter') {
+      e.preventDefault(); e.stopPropagation();
+      if (opts[sel]) opts[sel].click();
+    } else if (e.key === 'Escape') {
+      e.preventDefault(); e.stopPropagation(); goMap();
+    }
   };
+  document.addEventListener('keydown', onKey, true);
+  mask.addEventListener('click', function (e) { if (e.target === mask) goMap(); });
+  var bm = mask.querySelector('#rMap'); if (bm) bm.onclick = goMap;
+  var br = mask.querySelector('#rRetry'); if (br) br.onclick = goRetry;
+  var bn = mask.querySelector('#rNext'); if (bn) bn.onclick = goNext;
+  paintSel();
 }
 
 /* ---------------- 排行榜 ---------------- */
@@ -3469,7 +3648,7 @@ function viewRanch() {
    为什么要分架：原来十二件挤成一行，帽子眼镜围巾混在一起，
    而且能同时戴三顶帽子。现在按「头饰 / 面饰 / 上衣 / 下衣 / 整套」
    五个部位分开摆，同一部位只能穿一件 —— 换帽子就是摘帽子。
-   没买到的直接显示金币价，点一下就能买，不用先去别处解锁。 */
+   没买到的直接显示积分价，点一下就能买，不用先去别处解锁。 */
 function wardrobe() {
   var pr = S.progress || {};
   var owned = pr.decos || [];
@@ -3484,8 +3663,8 @@ function wardrobe() {
       var on = cur.indexOf(d.id) >= 0;
       if (!has) {
         return '<button class="deco-dot buy" data-decobuy="' + d.id + '" ' +
-          'title="' + esc(d.name + '：' + d.price + ' 金币，或累计 ' + d.need + ' 星解锁') + '">' +
-          TD.decoSvg(d) + '<span class="dd-price">🪙' + d.price + '</span></button>';
+          'title="' + esc(d.name + '：' + d.price + ' 积分，或累计 ' + d.need + ' 星解锁') + '">' +
+          TD.decoSvg(d) + '<span class="dd-price">✨' + d.price + '</span></button>';
       }
       return '<button class="deco-dot' + (on ? ' on' : '') + '" data-deco="' + d.id + '" ' +
         'title="' + esc(d.name + (on ? '（已穿，点击脱下）' : '（点击穿上）')) + '">' +
@@ -3501,8 +3680,8 @@ function wardrobe() {
   }).join('');
   return '<div class="wardrobe">' +
     '<div class="w-head"><b>👗 衣柜</b>' +
-      '<span>五类部位，同类只能穿一件 · 未拥有的可直接用金币买</span>' +
-      '<span class="w-coin">🪙 ' + (pr.coins || 0) + '</span></div>' +
+      '<span>五类部位，同类只能穿一件 · 未拥有的可直接用积分买</span>' +
+      '<span class="w-pts">✨ ' + (pr.pts || 0) + '</span></div>' +
     '<div class="w-body">' + cats + '</div>' +
   '</div>';
 }
@@ -3515,8 +3694,8 @@ function itemShopBox() {
   var inv = pr.items || {};
   return '<div class="item-shop">' +
     '<div class="is-head"><b>🏪 道具商店</b>' +
-      '<span>金币购买 · 只在当前这一关有效</span>' +
-      '<span class="w-coin">🪙 ' + (pr.coins || 0) + '</span></div>' +
+      '<span>积分购买 · 只在当前这一关有效</span>' +
+      '<span class="w-pts">✨ ' + (pr.pts || 0) + '</span></div>' +
     '<div class="is-grid">' + TD.ITEMS.map(function (it) {
       var n = inv[it.id] || 0;
       var full = n >= it.max;
@@ -3526,7 +3705,7 @@ function itemShopBox() {
         '<div class="ic-desc">' + esc(it.desc) + '</div>' +
         '<div class="ic-tip">' + esc(it.tip) + '</div>' +
         '<button class="btn sm' + (full ? ' line' : '') + '" data-buyitem="' + it.id + '"' +
-          (full ? ' disabled' : '') + '>🪙 ' + it.price + (full ? '　已满' : '　购买') + '</button>' +
+          (full ? ' disabled' : '') + '>✨ ' + it.price + (full ? '　已满' : '　购买') + '</button>' +
       '</div>';
     }).join('') + '</div>' +
   '</div>';
@@ -3541,8 +3720,8 @@ function bgShopBox() {
   var cur = S.ranch.bg || '';
   return '<div class="item-shop">' +
     '<div class="is-head"><b>🖼 牧场背景</b>' +
-      '<span>金币购买 · 给伙伴换一片风景</span>' +
-      '<span class="w-coin">🪙 ' + (pr.coins || 0) + '</span></div>' +
+      '<span>积分购买 · 给伙伴换一片风景</span>' +
+      '<span class="w-pts">✨ ' + (pr.pts || 0) + '</span></div>' +
     '<div class="is-grid">' + TD.BACKGROUNDS.map(function (b) {
       var has = owned.indexOf(b.id) >= 0;
       var on = b.id === cur;
@@ -3553,7 +3732,7 @@ function bgShopBox() {
           ? '<button class="btn sm" data-bgsel="' + esc(b.id) + '"' + (on ? ' disabled' : '') + '>' +
               (on ? '使用中' : '换上') + '</button>'
           : '<button class="btn sm" data-bgbuy="' + esc(b.id) + '" title="' +
-              esc(b.name + '：' + b.price + ' 金币') + '">🪙 ' + b.price + '</button>') +
+              esc(b.name + '：' + b.price + ' 积分') + '">✨ ' + b.price + '</button>') +
       '</div>';
     }).join('') + '</div>' +
   '</div>';
@@ -3584,7 +3763,7 @@ function fxShopBox() {
   return '<div class="item-shop">' +
     '<div class="is-head"><b>✨ 出战特效</b>' +
       '<span>积分购买 · 全店最贵的排面，跟着你的伙伴一起亮相</span>' +
-      '<span class="w-coin">✨ ' + (pr.pts || 0) + '</span></div>' +
+      '<span class="w-pts">✨ ' + (pr.pts || 0) + '</span></div>' +
     '<div class="is-grid">' +
       '<div class="is-card' + (noneOn ? ' on' : '') + '">' +
         '<div class="ic-top"><span class="ic-ic">🚫</span><b>无特效</b></div>' +
@@ -3622,7 +3801,7 @@ function buyBg(id) {
   var b = TD.bgById(id);
   if (!b || !b.id) return;
   if (S.demo) {
-    S.progress.coins = Math.max(0, (S.progress.coins || 0) - b.price);
+    S.progress.pts = Math.max(0, (S.progress.pts || 0) - b.price);
     (S.progress.bgs = S.progress.bgs || []).push(id);
     S.ranch.bg = id;
     demoSave(); render();
@@ -3780,7 +3959,7 @@ function bindRanch() {
         render();
         setTimeout(function () { petHatched(pet); }, 60);
       } else {
-        S.progress.coins += 50;
+        S.progress.pts += 50;
         demoSave(); render();
       }
       return;
@@ -3830,6 +4009,10 @@ function saveEquip() {
   });
 }
 
+/* 积分兜底同步：任何路径改了 S.progress.pts（购买 / 孵化 / 教师发放 /
+   结算 / 道具），250ms 内顶栏数字必然跟上，而且只改数字、不重绘页面 ——
+   练习中整页重绘会把正在打的关卡冲掉，这条铁律不能破。 */
+setInterval(refreshPts, 250);
 boot();
 })();
 </script>

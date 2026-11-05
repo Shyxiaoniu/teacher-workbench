@@ -36,7 +36,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ${IMAGE_REPO:-teacher-workbench}:${IMAGE_TAG:-2.0.11}
+    image: ${IMAGE_REPO:-teacher-workbench}:${IMAGE_TAG:-2.0.13}
     container_name: teacher-workbench-init
     user: "0:0"
     entrypoint: ["/bin/sh", "-c"]
@@ -71,7 +71,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ${IMAGE_REPO:-teacher-workbench}:${IMAGE_TAG:-2.0.11}
+    image: ${IMAGE_REPO:-teacher-workbench}:${IMAGE_TAG:-2.0.13}
     container_name: teacher-workbench
     depends_on:
       init:
@@ -96,6 +96,10 @@ services:
       # 信任内网反向代理传来的 X-Forwarded-For（网关容器 → 本容器）。
       # 不开的话所有师生会共用网关那一个 IP：限速互相拖累、日志分不清是谁。
       WB_TRUST_PROXY: "1"
+      # 管理员账号：只在首次启动创建时生效，之后以 accounts.json 为准
+      WB_ADMIN_USERNAME: "${WB_ADMIN_USERNAME:-teacher}"
+      WB_ADMIN_PASSWORD: "${WB_ADMIN_PASSWORD:-t12345678}"
+      WB_ADMIN_RESET: "${WB_ADMIN_RESET:-0}"
     volumes:
       - workbench-data:/app/data
       # 想在 NAS 文件管理器里直接改数据，把上一行换成（Linux 需先 chown -R 10001:10001 ./data）：

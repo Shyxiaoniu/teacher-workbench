@@ -52,6 +52,38 @@ STATIC_ROOT = os.path.dirname(ROOT)
 os.makedirs(DATA, exist_ok=True)
 os.makedirs(DEFAULT_UPLOAD, exist_ok=True)
 
+# ---------------------------------------------------------------------------
+# 工作区路径（2.0.13）：主服务注入 PATH_FN，按当前教师账号返回各自的目录。
+# 没注入时（单独跑本服务）沿用上面的全局常量，行为与改版前一致。
+# ---------------------------------------------------------------------------
+PATH_FN = None
+
+
+def _wp():
+    if PATH_FN:
+        try:
+            p = PATH_FN() or {}
+            d = p.get("data") or DATA
+            return {
+                "data": d,
+                "config": p.get("config") or os.path.join(d, "config.json"),
+                "roster": p.get("roster") or os.path.join(d, "roster.json"),
+                "sub": p.get("sub") or os.path.join(d, "submissions.json"),
+                "index": p.get("index") or os.path.join(d, "uploads_index.json"),
+                "upload": p.get("upload") or os.path.join(d, "uploads"),
+            }
+        except Exception:
+            pass
+    return {
+        "data": DATA,
+        "config": os.path.join(DATA, "config.json"),
+        "roster": os.path.join(DATA, "roster.json"),
+        "sub": os.path.join(DATA, "submissions.json"),
+        "index": os.path.join(DATA, "uploads_index.json"),
+        "upload": os.path.join(DATA, "uploads"),
+    }
+
+
 CONFIG_PATH = os.path.join(DATA, "config.json")
 ROSTER_PATH = os.path.join(DATA, "roster.json")
 SUB_PATH = os.path.join(DATA, "submissions.json")
@@ -185,10 +217,10 @@ def save_json(path, obj):
     shutil.move(tmp, path)
 
 def get_config():
-    cfg = load_json(CONFIG_PATH, None)
+    cfg = load_json(_wp()["config"], None)
     if cfg is None:
         cfg = default_config()
-        save_json(CONFIG_PATH, cfg)
+        save_json(_wp()["config"], cfg)
     # 兼容缺字段
     base = default_config()
     for k, v in base.items():
@@ -236,13 +268,13 @@ def get_roster():
                 return rows
         except Exception:
             pass
-    return load_json(ROSTER_PATH, None) or []
+    return load_json(_wp()["roster"], None) or []
 
 def get_submissions():
-    return load_json(SUB_PATH, [])
+    return load_json(_wp()["sub"], [])
 
 def save_submissions(arr):
-    save_json(SUB_PATH, arr)
+    save_json(_wp()["sub"], arr)
 
 # 默认花名册：故意为空。
 # 以前这里预置了 8 个虚构学生（张明轩 / 李思远 …），首次启动就写进 roster.json：
@@ -393,20 +425,20 @@ def _register_upload(abs_path, sid=""):
     同时记下归属学号：下载时据此判断「是不是你自己的」。
     老索引里是纯字符串（只有路径），读取侧做了兼容。
     """
-    idx = load_json(UPLOAD_INDEX, {})
+    idx = load_json(_wp()["index"], {})
     token = uuid.uuid4().hex
     idx[token] = {"path": os.path.abspath(abs_path), "sid": str(sid or ""),
                   "at": _now_iso()}
-    save_json(UPLOAD_INDEX, idx)
+    save_json(_wp()["index"], idx)
     return token
 
 def save_upload(sid, f):
     cfg = get_config()
-    save_dir = cfg.get("save_dir") or DEFAULT_UPLOAD
+    save_dir = cfg.get("save_dir") or _wp()["upload"]
     try:
         os.makedirs(save_dir, exist_ok=True)
     except Exception as e:
-        save_dir = DEFAULT_UPLOAD
+        save_dir = _wp()["upload"]
         os.makedirs(save_dir, exist_ok=True)
     raw = f.get("data")
     if not raw:
@@ -749,13 +781,13 @@ class Handler(BaseHTTPRequestHandler):
                         ok = os.access(cfg["save_dir"], os.W_OK)
                         if not ok:
                             cfg["save_dir"] = ""
-                            save_json(CONFIG_PATH, cfg)
+                            save_json(_wp()["config"], cfg)
                             return self._send_json({"ok": False, "msg": "保存目录不可写，已回退默认目录"}, 400)
                     except Exception:
                         cfg["save_dir"] = ""
-                        save_json(CONFIG_PATH, cfg)
+                        save_json(_wp()["config"], cfg)
                         return self._send_json({"ok": False, "msg": "保存目录无效，已回退默认目录"}, 400)
-                save_json(CONFIG_PATH, cfg)
+                save_json(_wp()["config"], cfg)
             return self._send_json({"ok": True, "config": cfg})
         if path == "/api/roster":
             if self._need_teacher():
@@ -769,7 +801,7 @@ class Handler(BaseHTTPRequestHandler):
                 students = data.get("students") or []
                 if not cls:
                     return self._send_json({"ok": False, "msg": "缺少 cls"}, 400)
-                cur = load_json(ROSTER_PATH, [])
+                cur = load_json(_wp()["roster"], [])
                 # 移除该班级旧名单，再合并新名单（多班级共存）
                 cur = [r for r in cur if str(r.get("cls", "")) != cls]
                 for s in students:
@@ -779,7 +811,7 @@ class Handler(BaseHTTPRequestHandler):
                     cur.append({"cls": cls,
                                 "sid": sid,
                                 "name": str(s.get("name", "")).strip()})
-                save_json(ROSTER_PATH, cur)
+                save_json(_wp()["roster"], cur)
                 return self._send_json({"ok": True, "count": len(cur)})
             # 兼容旧的整表替换：{roster:[...]}
             arr = data.get("roster") if isinstance(data, dict) else None
@@ -794,7 +826,7 @@ class Handler(BaseHTTPRequestHandler):
                 clean.append({"cls": str(s.get("cls", "")).strip(),
                               "sid": sid,
                               "name": str(s.get("name", "")).strip()})
-            save_json(ROSTER_PATH, clean)
+            save_json(_wp()["roster"], clean)
             return self._send_json({"ok": True, "count": len(clean)})
         if path == "/api/submit":
             data = self._read_json()
@@ -836,7 +868,7 @@ class Handler(BaseHTTPRequestHandler):
                         cfg.setdefault("custom_layout", {})[task] = lay
                 else:
                     cfg["custom_html"] = data["html"]
-                save_json(CONFIG_PATH, cfg)
+                save_json(_wp()["config"], cfg)
                 return self._send_json({"ok": True, "task": task})
             return self._send_json({"ok": False, "msg": "缺少 html 字段"}, 400)
 
@@ -1414,7 +1446,7 @@ class Handler(BaseHTTPRequestHandler):
         role, _k = self._role()
         if not role:
             return self._send_text("请先登录", code=401)
-        idx = load_json(UPLOAD_INDEX, {})
+        idx = load_json(_wp()["index"], {})
         rec = idx.get(token)
         if isinstance(rec, dict):
             full = rec.get("path") or ""
@@ -1449,8 +1481,8 @@ def main():
             bind = a.split("=", 1)[1]
     # 预热默认数据
     get_config()
-    if not os.path.isfile(ROSTER_PATH):
-        save_json(ROSTER_PATH, DEFAULT_ROSTER)
+    if not os.path.isfile(_wp()["roster"]):
+        save_json(_wp()["roster"], DEFAULT_ROSTER)
     httpd = ThreadingHTTPServer((bind, port), Handler)
     print(f"[学生提交系统] 已启动：http://127.0.0.1:{port}/")
     print(f"[学生提交系统] 工作台：http://127.0.0.1:{port}/index.html")

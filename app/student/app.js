@@ -265,8 +265,11 @@
   function loadNow() {
     return api('/api/v2/student/now').then(function (j) {
       if (j && j.ok) {
+        var oldCk = S.now && S.now.checkin
+          ? (S.now.checkin.enabled + '|' + S.now.checkin.manual_time) : '';
+        var newCk = j.checkin ? (j.checkin.enabled + '|' + j.checkin.manual_time) : '';
         var changed = !S.now || S.now.period !== j.period || S.now.label !== j.label ||
-          S.now.lesson !== j.lesson;
+          S.now.lesson !== j.lesson || oldCk !== newCk;
         S.now = j;
         if (changed && S.view === 'today' && !S.loading) render();
       }
@@ -366,7 +369,14 @@
     } else {
       ckTxt = ck ? esc(attLabel(ck.status)) : '还没签到，点右边按钮';
     }
-    var ckHtml = '<div class="card ckin' + (ckDone ? ' on' : '') + '">' +
+    /* 教师端签到配置（2026-11-05）：关掉后整张卡不显示；
+       设了手动时间就在卡上写清楚，免得学生按课表时间白等。 */
+    var ckCfg = (S.now && S.now.checkin) || null;
+    var ckOff = !!(ckCfg && ckCfg.enabled === false);
+    var ckManual = ckCfg && ckCfg.manual_time;
+    if (ckManual && !ckDone) ckTxt += '（老师设定 ' + esc(ckManual) + ' 签到）';
+    var ckHtml = ckOff ? '' :
+      '<div class="card ckin' + (ckDone ? ' on' : '') + '">' +
       '<div class="ck-l"><b>' + esc(pLabel) + '签到</b>' +
       '<span>' + ckTxt + '</span></div>' +
       (ckDone

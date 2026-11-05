@@ -1353,6 +1353,13 @@ body.seat-rsz-dragging .seat:hover { transform:none; box-shadow:none; }
 }
 .ck-board .ck-row1 { display:flex; align-items:center; gap:9px; flex-wrap:wrap; }
 .ck-board .ck-ttl { font-size:13px; font-weight:700; color:var(--brand-primary); }
+/* 签到模式标签（座位表 / 考勤页状态条）：自动按课表 / 手动时间 / 已关闭 */
+.ck-board .ck-mode { font-size:11px; font-weight:700; padding:3px 9px; border-radius:999px;
+  background:var(--brand-soft); color:var(--brand-primary); white-space:nowrap; }
+.ck-board .ck-mode.off { background:var(--border); color:var(--text-secondary); }
+.ck-board .ck-cfg-btn { font-size:11.5px; padding:3px 9px; border-radius:8px;
+  border:1px solid var(--border); color:var(--text-secondary); background:transparent; cursor:pointer; }
+.ck-board .ck-cfg-btn:hover { color:var(--brand-primary); border-color:var(--brand-primary); }
 .ck-board .ck-date { font-size:11.5px; color:var(--text-secondary); }
 .ck-board .ck-grow { flex:1 1 auto; }
 .ck-board .ck-row2 { display:flex; align-items:center; gap:7px; flex-wrap:wrap; margin-top:8px; }
@@ -2929,6 +2936,39 @@ body.seat-rsz-dragging .seat:hover { transform:none; box-shadow:none; }
   box-shadow:0 2px 6px color-mix(in srgb, var(--brand-primary) 30%, transparent);
 }
 .su-av.lg { width:38px; height:38px; border-radius:12px; font-size:17px; }
+/* ---------- 更新提醒（2026-11-05） ----------
+   启动检测到新版本：左下角头像挂数字角标 + 侧栏左下弹出小窗。
+   角标由 body.has-update 驱动，SPA 重绘侧栏时自动跟着出现，不用重新挂 DOM。 */
+.side-user .su-av { position:relative; }
+body.has-update .side-user .su-av::after{
+  content:'1'; position:absolute; right:-6px; top:-6px; min-width:17px; height:17px; padding:0 3px;
+  border-radius:999px; background:var(--status-error); color:#fff; font-size:10px; font-weight:800;
+  display:grid; place-items:center; line-height:1; z-index:3;
+  box-shadow:0 0 0 2px var(--bg-surface); }
+.upd-mini{ position:fixed; left:14px; bottom:74px; z-index:120;
+  width:min(320px,calc(100vw - 28px)); background:var(--bg-surface);
+  border:1.5px solid var(--brand-primary); border-radius:14px; padding:12px 14px 11px;
+  box-shadow:0 12px 34px rgba(0,0,0,.2); font-size:13px; line-height:1.55;
+  color:var(--text-primary); animation:updMiniIn .28s ease both; }
+@keyframes updMiniIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.upd-mini .um-head{ display:flex; align-items:center; gap:8px; font-weight:700; font-size:13.5px; }
+.upd-mini .um-date{ font-size:11.5px; color:var(--text-secondary); font-weight:400; }
+.upd-mini .um-x{ margin-left:auto; border:none; background:transparent; color:var(--text-secondary);
+  font-size:17px; line-height:1; cursor:pointer; padding:2px 4px; }
+.upd-mini .um-x:hover{ color:var(--status-error); }
+.upd-mini .um-btns{ display:flex; gap:8px; margin-top:10px; }
+.upd-mini .um-btns button{ font-size:12.5px; padding:6px 12px; border-radius:9px; cursor:pointer; }
+.upd-mini .um-go{ background:var(--brand-primary); color:#fff; border:1px solid var(--brand-primary); }
+.upd-mini .um-later{ background:transparent; color:var(--text-secondary); border:1px solid var(--border); }
+/* 更新说明：逐条短句 + 序号徽标，长句截断，不糊成一大段 */
+.upd-notes{ counter-reset:updN; list-style:none; display:flex; flex-direction:column; gap:5px;
+  margin:8px 0 0; padding:0; }
+.upd-notes li{ counter-increment:updN; display:flex; align-items:flex-start; gap:8px;
+  font-size:12.5px; line-height:1.55; color:var(--text-primary); }
+.upd-notes li::before{ content:counter(updN); flex:none; width:18px; height:18px; border-radius:6px;
+  background:var(--brand-soft); color:var(--brand-primary); font-size:10.5px; font-weight:800;
+  display:grid; place-items:center; margin-top:1px; }
+.upd-more{ margin-top:6px; font-size:11.5px; color:var(--text-secondary); }
 /* ---------- 教师头像（2026-11-01 补全） ---------- */
 /* 静态 emoji：铺满一点 */
 .su-av.uav-emoji { font-size:16px; }
@@ -7813,7 +7853,7 @@ const HQ_TEXT = {
   backup: ''
     + '<b>一键导出</b>：点一次、设一个备份密码，就把<b>服务端 + 本机</b>的全部数据打包成一个 '
     + '<b>.cwbackup</b> 加密文件 —— 班级、学生、考勤、作业、成绩、课堂活动发放、座位、教师账号、'
-    + '学生登录密码、打字练习成绩与金币装扮、学生作品附件，加上浏览器里的界面设置与待办。<br>'
+    + '学生登录密码、打字练习成绩与积分装扮、学生作品附件，加上浏览器里的界面设置与待办。<br>'
     + '<b>一键恢复</b>：新设备装好工作台并登录后，选择这个文件、输入同一个备份密码，两边的数据'
     + '一起还原，导完自动刷新即可继续上课，不用重新建班、不用重发学生密码（端口等本机属性不搬运）。<br>'
     + '<b>出错会直接说明原因</b>：文件不完整 / 密码不对 / 备份数据量明显少于本机 / 服务端未启动 / '
@@ -10618,6 +10658,11 @@ async function goToApp(returnTo) {
      历史数据里 custom_templates[task] 很可能还是默认模板 —— 扫一遍就正过来了。
      放到启动 3 秒后，别跟首屏渲染抢网络。 */
   setTimeout(() => { try { cwHealSheets(); } catch (e) {} }, 3000);
+  /* 启动 2.5 秒后查一次在线更新：有新版本就左下小窗 + 头像角标提醒，
+     不和首屏渲染抢网络；离线 / 未登录都静默跳过。 */
+  setTimeout(() => { try { updBootstrapHint(); } catch (e) {} }, 2500);
+  /* 座位表状态条要显示签到模式（自动 / 手动 / 已关闭），启动先拉一次 */
+  setTimeout(() => { try { checkinCfgLoad(); } catch (e) {} }, 1200);
 
   // 首次登录写入种子配置
   // 种子和配置加载都不能阻断进应用：失败就降级，不让用户卡在加载中
@@ -11487,6 +11532,7 @@ function renderContent(opts = {}) {
      模板里只能放占位，渲染完再补一次。 */
   if (state.route === 'settings') setTimeout(() => { try { acctPaintSec(); } catch (e) {} }, 20);
   if (state.route === 'settings') setTimeout(() => { try { updLoad(); } catch (e) {} }, 30);
+  if (state.route === 'settings') setTimeout(() => { try { checkinCfgLoad(); } catch (e) {} }, 40);
 
   /* 首页：学生入口卡要问服务端要局域网地址（地址是运行期才知道的，
      模板里只能放占位，渲染完补一次）。 */
@@ -19845,19 +19891,33 @@ async function setLesson(dow, pid, courseId, wp, clsId) {
   const wpn = wp || 'all';
   /* 冲突提示（2026-11-01 走查反馈）：同一时段同一位老师/同一间教室
      被排进两个班会互相打架（如王老师第2节同时在七1班和七2班）。
-     保存前扫一遍，发现冲突先弹确认框，老师可以改也可以强行保存。 */
+     保存前扫一遍，发现冲突先弹确认框，老师可以改也可以强行保存。
+     2026-11-05 追加跨账号同班冲突：别的教师账号教同一个班、同时段
+     也排了课，一样会真实撞车 —— 由服务端跨工作区比对。 */
   const confs = lessonConflicts(dow, pid, courseId, wpn, cls);
+  let xconfs = [];
+  try {
+    const clRow = (dbT('classes') || []).find(c => Number(c.id) === Number(cls));
+    const q = new URLSearchParams({
+      dow: Number(dow), pid: Number(pid),
+      class_name: (clRow && clRow.name) || '', wp: wpn
+    });
+    const resp = await fetch('/api/v2/teacher/tt-clash?' + q, { credentials: 'same-origin' });
+    const j = await resp.json();
+    if (j && j.ok) xconfs = (j.clashes || []).map(ttXclashText);
+  } catch (e) { /* 离线时只报本账号内的冲突 */ }
+  const allConfs = confs.concat(xconfs);
   /* 弹确认框的同时，把课表上正在排的这格脉冲高亮，
      让"冲突提示"和"冲突位置"在视觉上对上号（2026-11-01 牛哥要求）。 */
-  if (confs.length) {
+  if (allConfs.length) {
     document.querySelectorAll(
       `td.tt-cell[data-dow="${Number(dow)}"][data-pid="${Number(pid)}"]`)
       .forEach(td => td.classList.add('tt-conflict-flash'));
   }
   let ok = false;
   try {
-    ok = confs.length ? await uiConfirm(
-      '这个时段已有安排冲突：\n\n· ' + confs.join('\n· ') +
+    ok = allConfs.length ? await uiConfirm(
+      '这个时段已有安排冲突：\n\n· ' + allConfs.join('\n· ') +
       '\n\n确定仍然这样安排吗？', { title: '排课冲突', danger: false, okText: '仍然保存' })
       : true;
   } finally {
@@ -19877,6 +19937,7 @@ async function setLesson(dow, pid, courseId, wp, clsId) {
   if (i>=0) arr[i] = Object.assign(arr[i], rec);
   else arr.push(rec);
   dbSet('lessons', arr);   // 写盘 + 触发同步入队（之前裸 push 不上云，手机端拉不到）
+  TT_XCLASH.cells = null; TT_XCLASH.sig = '';   // 跨账号冲突表失效，重进页面重拉
   toast(confs.length ? `已保存。⚠ 课表上已用红框标出 ${confs.length} 处冲突` : '已安排课程');
   renderContent();
 }
@@ -19918,6 +19979,37 @@ function lessonConflicts(dow, pid, courseId, wp, cls) {
 }
 window.lessonConflicts = lessonConflicts;
 
+/* ---------- 跨账号同班冲突（2026-11-05） ----------
+   多教师账号可能教同一个班（各自账号里建了同名班级）：同一天同一节
+   都给这个班排了课，就是真实撞车。本机课表只看得到自己账号的数据，
+   所以由服务端跨工作区比对，前端缓存渲染（数据没变不重画）。 */
+const TT_XCLASH = { cells: null, sig: '', fetching: false };
+function ttXclashText(x) {
+  const wp = x.week_pattern === 'odd' ? '（单周）'
+           : x.week_pattern === 'even' ? '（双周）' : '';
+  return '「' + (x.teacher || '其他老师') + '」老师的账号在这个班的同一时段已排「'
+    + (x.course || '?') + '」' + wp;
+}
+async function ttXclashLoad() {
+  if (TT_XCLASH.fetching) return;
+  TT_XCLASH.fetching = true;
+  try {
+    const r = await fetch('/api/v2/teacher/tt-clash?all=1', { credentials: 'same-origin' });
+    const j = await r.json();
+    if (j && j.ok) {
+      const cells = j.cells || {};
+      const sig = JSON.stringify(cells);
+      if (sig !== TT_XCLASH.sig) {
+        TT_XCLASH.cells = cells;
+        TT_XCLASH.sig = sig;
+        if (state.route === 'timetable') renderContent();
+      }
+    }
+  } catch (e) { /* 离线 / 单账号无其它教师：没有跨账号冲突可言 */ }
+  finally { TT_XCLASH.fetching = false; }
+}
+window.ttXclashLoad = ttXclashLoad;
+
 /** 课程卡右上角 ✕：先问一句再删（课表一屏几十个格子，误点一下就没了太危险）。
     确认后走 delLesson —— 按「星期 + 节次 + 班级」精确删，
     同一格如果是「全部班级」视图里的别的班，不受影响。 */
@@ -19950,6 +20042,7 @@ function delLesson(dow, pid, clsId) {
       && Number(l.period_id) === Number(pid)
       && Number(l.class_id) === Number(cls)));
   dbSet('lessons', rest);
+  TT_XCLASH.cells = null; TT_XCLASH.sig = '';   // 跨账号冲突表失效，重进页面重拉
   closeCellDialog();
   /* 删掉最后一节后给个明确出口：学生端/大屏都靠课表，空着要提醒老师补 */
   const left = rest.filter(l => Number(l.class_id) === Number(cls)).length;
@@ -21563,6 +21656,9 @@ function attBoardHtml(cls, date) {
   return `<div class="ck-board">
     <div class="ck-row1">
       <span class="ck-ttl">课堂签到</span>
+      ${window.checkinCfgTagHtml ? window.checkinCfgTagHtml(window.CHECKIN_CFG) : ''}
+      <button class="ck-cfg-btn" type="button" onclick="goCheckinCfg()"
+        title="去系统设置里开关签到 / 设手动时间">签到设置</button>
       ${sel}
       <span class="ck-date">${esc(date)} · ${esc(periodLabel(seq))}</span>
       <span class="ck-grow"></span>
@@ -31513,13 +31609,19 @@ const DEMO_RENDER = {
       : Number((classList()[0] || {}).id) || 0;
 
     /* 冲突预扫描（2026-11-01）：把每个（天·节·班）格子的老师/教室撞车先算好，
-       渲染时直接查表。保存完冲突课再回来，格子会立刻挂上红色 ⚠ 标记。 */
+       渲染时直接查表。保存完冲突课再回来，格子会立刻挂上红色 ⚠ 标记。
+       2026-11-05 并入跨账号同班冲突：别的教师账号在同一个班、同一时段
+       排的课也记进来（进页面拉一次，数据变了才重画）。 */
+    ttXclashLoad();
     const confMap = {};
     lessons.forEach(l => {
+      const key = Number(l.day_of_week) + '-' + Number(l.period_id) + '-' + Number(l.class_id);
       const why = lessonConflicts(l.day_of_week, l.period_id,
         l.course_id, l.week_pattern || 'all', l.class_id);
-      if (why && why.length)
-        confMap[Number(l.day_of_week) + '-' + Number(l.period_id) + '-' + Number(l.class_id)] = why;
+      const xc = ((TT_XCLASH.cells || {})[key] || []).map(ttXclashText);
+      const all = why.concat(xc);
+      if (all.length)
+        confMap[key] = all;
     });
 
     /* 节次时间重叠预扫描（2026-11-04）：作息里两节时间压在一起时，
@@ -32115,6 +32217,15 @@ const DEMO_RENDER = {
       </div>
     </div>
 
+    <div class="card" id="ckCfgCard">
+      <div style="font-size:14px;font-weight:500;margin-bottom:4px">课堂签到</div>
+      <div class="term-hint" style="margin-bottom:10px">
+        默认开启：学生登录即按课表当节课时间自动签到；关闭后学生端不再签到，后台也不再自动记缺勤。
+        需要固定时间签到时，填一个手动时间即可。
+      </div>
+      <div id="ckCfgBody"><span class="dim">加载中…</span></div>
+    </div>
+
     <div class="card" id="updCard">
       <div style="font-size:14px;font-weight:500;margin-bottom:4px">软件更新</div>
       <div class="term-hint" style="margin-bottom:10px">
@@ -32129,6 +32240,10 @@ const DEMO_RENDER = {
         <span class="set-k">当前账号</span>
         <b id="acctUser" style="font-size:14px">teacher</b>
         <span class="set-hint" id="acctQaState">密保：读取中…</span>
+      </div>
+      <div class="term-hint" style="margin-top:8px">
+        教师账号的注册、改名与删除由管理员在管理控制台统一处理；这里只改自己的密码与密保问题。
+        每位教师的班级、资料与文件各自独立，互不重叠。
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
         <button class="btn btn-primary btn-sm" type="button" style="width:auto"
@@ -33187,6 +33302,152 @@ function _updFmtTime(ts) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
+/* ============================================================
+   课堂签到配置（2026-11-05）
+   教师端系统设置：开关（默认开启）+ 手动签到时间（空 = 按课表当节）。
+   座位表 / 考勤页的状态条直接读 CHECKIN_CFG 显示当前模式。
+   ============================================================ */
+let CHECKIN_CFG = null;
+
+function checkinCfgTagHtml(c) {
+  const on = !c || c.enabled !== false;
+  if (!on) return '<span class="ck-mode off" title="老师已关闭课堂签到">签到已关闭</span>';
+  const t = c && c.manual_time;
+  return `<span class="ck-mode" title="${t ? '按老师设定的时间自动签到' : '按课表当节课时间自动签到'}">` +
+    (t ? '手动 ' + esc(t) : '自动 · 课表当节') + '</span>';
+}
+window.checkinCfgTagHtml = checkinCfgTagHtml;
+
+function checkinCfgHtml(c) {
+  const on = !c || c.enabled !== false;
+  const t = (c && c.manual_time) || '';
+  return `<div class="hwp-row" style="align-items:center;gap:10px;flex-wrap:wrap">
+      <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;cursor:pointer">
+        <input type="checkbox" id="ckCfgOn" ${on ? 'checked' : ''}> 启用课堂签到</label>
+      <span class="dim">${!on ? '已关闭：学生端不显示签到，也不记缺勤'
+        : (t ? '按手动时间自动签到' : '按课表当节课时间自动签到')}</span>
+    </div>
+    <label class="hwp-row" style="margin-top:10px;align-items:center;gap:10px">
+      <span class="set-k" style="width:auto;flex:none">签到时间</span>
+      <input id="ckCfgTime" class="fl-inp" type="time" style="width:132px;flex:none"
+        value="${esc(t)}" ${on ? '' : 'disabled'}>
+      <span class="dim">留空 = 按课表当节课时间自动签到</span>
+    </label>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+      <button class="btn btn-primary btn-sm" type="button" style="width:auto"
+        onclick="checkinCfgSave()">保存签到设置</button>
+      <button class="btn btn-ghost btn-sm" type="button" style="width:auto"
+        onclick="checkinCfgReset()">恢复按课表</button>
+    </div>
+    <div class="term-hint" style="margin-top:10px">
+      手动设置后，签到时间窗与迟到判定都以这个时间为准：提前 15 分钟可签，过 45 分钟请老师在考勤页补登。
+    </div>`;
+}
+
+async function checkinCfgLoad() {
+  try {
+    const r = await fetch('/api/v2/checkin/config', { credentials: 'same-origin' });
+    const j = await r.json();
+    if (j && j.ok) { CHECKIN_CFG = j; window.CHECKIN_CFG = j; }
+  } catch (e) { /* 离线时沿用上一次读到的值 */ }
+  const b = document.getElementById('ckCfgBody');
+  if (b) b.innerHTML = checkinCfgHtml(CHECKIN_CFG);
+  const on = document.getElementById('ckCfgOn');
+  if (on) on.onchange = function () {
+    const t = document.getElementById('ckCfgTime');
+    if (t) t.disabled = !on.checked;
+  };
+}
+window.checkinCfgLoad = checkinCfgLoad;
+
+async function checkinCfgPost(body) {
+  try {
+    const r = await fetch('/api/v2/teacher/checkin-config', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const j = await r.json();
+    if (!j || !j.ok) { toast((j && j.msg) || '保存失败'); return; }
+    CHECKIN_CFG = j; window.CHECKIN_CFG = j;
+    toast('签到设置已保存');
+    checkinCfgLoad();
+    if (state.route === 'seats') renderContent({ keepScroll: true });
+  } catch (e) { toast('保存失败：' + String(e.message || e)); }
+}
+function checkinCfgSave() {
+  const on = !!(document.getElementById('ckCfgOn') || {}).checked;
+  const t = (document.getElementById('ckCfgTime') || {}).value || '';
+  checkinCfgPost({ enabled: on, manual_time: t });
+}
+window.checkinCfgSave = checkinCfgSave;
+function checkinCfgReset() {
+  const i = document.getElementById('ckCfgTime');
+  if (i) i.value = '';
+  checkinCfgPost({ manual_time: '' });
+}
+window.checkinCfgReset = checkinCfgReset;
+function goCheckinCfg() {
+  location.hash = '#settings';
+  setTimeout(() => {
+    const el = document.getElementById('ckCfgCard');
+    if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, 260);
+}
+window.goCheckinCfg = goCheckinCfg;
+
+/** 更新说明：逐条短句排版。每条最多 46 字（长句截断），
+    前面挂一枚序号徽标，小窗里可限制条数并提示「去设置看全部」。 */
+function updNotesHtml(notes, limit) {
+  const list = (notes || []).map(n => String(n == null ? '' : n).trim()).filter(Boolean);
+  if (!list.length) return '';
+  const shown = limit ? list.slice(0, limit) : list;
+  const cut = s => s.length > 46 ? s.slice(0, 46) + '…' : s;
+  return `<div style="margin-top:8px"><div style="font-size:13px;font-weight:600">更新说明</div>` +
+    `<ol class="upd-notes">${shown.map(n => `<li><span>${esc(cut(n))}</span></li>`).join('')}</ol>` +
+    (limit && list.length > limit
+      ? `<div class="upd-more">还有 ${list.length - limit} 条，去「系统设置 → 软件更新」看全部</div>` : '') +
+    `</div>`;
+}
+
+/** 启动提醒：进工作台后拉一次更新状态。有新版本就在左下角弹小窗，
+    并给头像加数字角标；关掉小窗本次会话不再弹，角标保留到更新完成。 */
+async function updBootstrapHint() {
+  try {
+    const r = await fetch('/api/v2/update/status', { credentials: 'same-origin' });
+    if (!r.ok) return;
+    const s = await r.json();
+    if (!s || !s.ok || !s.has_update) { document.body.classList.remove('has-update'); return; }
+    document.body.classList.add('has-update');
+    let closed = '';
+    try { closed = sessionStorage.getItem('wb-upd-mini-closed') || ''; } catch (e) {}
+    if (closed === s.latest) return;
+    const old = document.getElementById('updMini');
+    if (old) old.remove();
+    const box = document.createElement('div');
+    box.className = 'upd-mini';
+    box.id = 'updMini';
+    box.innerHTML =
+      `<div class="um-head">🚀 新版本 v${esc(s.latest || '')}` +
+        (s.date ? `<span class="um-date">${esc(s.date)}</span>` : '') +
+        `<button class="um-x" type="button" title="本次不再提醒" aria-label="关闭">✕</button></div>` +
+      updNotesHtml(s.notes, 3) +
+      `<div class="um-btns"><button class="um-go" type="button">查看更新</button>` +
+        `<button class="um-later" type="button">稍后再说</button></div>`;
+    const close = () => {
+      try { sessionStorage.setItem('wb-upd-mini-closed', String(s.latest || '')); } catch (e) {}
+      box.remove();
+    };
+    box.querySelector('.um-x').onclick = close;
+    box.querySelector('.um-later').onclick = close;
+    box.querySelector('.um-go').onclick = () => {
+      close();
+      location.hash = '#settings';
+      setTimeout(() => { try { updLoad(); } catch (e) {} }, 120);
+    };
+    document.body.appendChild(box);
+  } catch (e) { /* 离线是常态，静默跳过 */ }
+}
+window.updBootstrapHint = updBootstrapHint;
+
 async function updLoad() {
   const b = document.getElementById('updBody');
   if (!b) return;
@@ -33194,6 +33455,8 @@ async function updLoad() {
     const r = await fetch('/api/v2/update/status', { credentials: 'same-origin' });
     if (r.status === 401) { location.href = '/teacher/login'; return; }
     UPD_ST = await r.json();
+    /* 头像角标跟着最新状态走：装完 / 已重启就不再提示 */
+    document.body.classList.toggle('has-update', !!UPD_ST.has_update);
     updRender();
   } catch (e) {
     b.innerHTML = '<span style="color:var(--status-error)">读取更新状态失败：' +
@@ -33238,9 +33501,7 @@ function updRender() {
         <button class="btn btn-primary btn-sm" type="button" style="width:auto"
           onclick="updApply()">下载并安装</button>
       </div>
-      ${(s.notes && s.notes.length) ? `<div style="margin-top:8px;font-size:13px;line-height:1.7">
-        <div style="font-weight:600;margin-bottom:2px">更新说明</div>
-        ${s.notes.map(n => `<div>· ${esc(String(n))}</div>`).join('')}</div>` : ''}
+      ${updNotesHtml(s.notes)}
     </div>`;
   }
   /* 装好了，等重启 */
@@ -33267,20 +33528,19 @@ function updRender() {
   if (s.installed && s.installed.to_version) {
     h += `<div class="term-hint" style="margin-top:8px">上次更新：v${esc(s.installed.from_version)} → v${esc(s.installed.to_version)}（${_updFmtTime(s.installed.ts)}）</div>`;
   }
-  /* 更新源设置（折叠）。仓库已公开（2026-11-04），不再需要访问令牌。 */
+  /* 更新源固定在官方 Gitee 仓库（2026-11-05）：自定义地址是更新失败的
+     头号原因，仓库又已公开、无需令牌，所以这块只留自动检查的开关与间隔。 */
   const c = s.config || {};
   h += `<details style="margin-top:12px">
-    <summary style="cursor:pointer;font-size:12.5px;color:var(--text-secondary);list-style:none">▸ 更新源设置</summary>
+    <summary style="cursor:pointer;font-size:12.5px;color:var(--text-secondary);list-style:none">▸ 自动检查设置</summary>
     <div style="margin-top:8px;display:flex;flex-direction:column;gap:8px">
       <label class="hwp-row" style="margin:0"><span class="set-k" style="width:auto;flex:none">检查开关</span>
         <input type="checkbox" id="updAuto" ${c.auto ? 'checked' : ''}>
-        <span class="dim">每 ${esc(c.interval_hours || 24)} 小时自动检查一次</span></label>
+        <span class="dim">启动时检查一次，之后每 ${esc(c.interval_hours || 24)} 小时查一次</span></label>
       <label class="hwp-row" style="margin:0"><span class="set-k" style="width:auto;flex:none">间隔(时)</span>
         <input id="updInterval" class="fl-inp" type="number" min="1" max="720"
           style="width:90px;flex:none" value="${esc(c.interval_hours || 24)}"></label>
-      <label class="hwp-row" style="margin:0;align-items:flex-start"><span class="set-k" style="width:auto;flex:none;padding-top:6px">源地址</span>
-        <input id="updUrl" class="fl-inp" style="flex:1;min-width:0" value="${esc(c.url || '')}"
-          placeholder="${esc(c.default_url || '')}（留空用默认）"></label>
+      <div class="term-hint" style="margin-top:2px">更新源固定为官方 Gitee 仓库，无需配置也不会被改错。</div>
       <div><button class="btn btn-sm" type="button" style="width:auto" onclick="updSaveCfg()">保存设置</button></div>
     </div>
   </details>`;
@@ -33289,14 +33549,13 @@ function updRender() {
 
 async function updCheck() {
   toast('正在检查更新…');
-  /* 先把页面上可见的设置（源地址/开关/间隔）存下去再检查，
-     避免「填了源地址没点保存，检查还用旧配置」的困惑（2026-11-04） */
+  /* 先把页面上可见的设置（开关 / 间隔）存下去再检查；
+     更新源已固定，不需要也不允许前端传。 */
   try {
     const g = id => { const el = document.getElementById(id); return el ? el.value : null; };
     const cfg = {
       auto: !!(document.getElementById('updAuto') || {}).checked,
       interval_hours: parseInt(g('updInterval') || '24', 10) || 24,
-      url: (g('updUrl') || '').trim(),
     };
     await fetch('/api/v2/update/config', {
       method: 'POST', credentials: 'same-origin',
@@ -33415,7 +33674,6 @@ async function updSaveCfg() {
     auto: !!(document.getElementById('updAuto') || {}).checked,
     interval_hours: parseInt(g('updInterval') || '24', 10) || 24,
   };
-  body.url = (g('updUrl') || '').trim();
   try {
     const r = await fetch('/api/v2/update/config', {
       method: 'POST', credentials: 'same-origin',
@@ -34891,6 +35149,64 @@ async function cwNewFolder() {
 }
 window.cwNewFolder = cwNewFolder;
 
+/* ---------------- 资料共享给其他教师（2.0.13） ----------------
+   以「文件复制」完成：服务端把源文件原样写进目标教师账号的课件目录，
+   保留课程 / 子文件夹相对路径，重名自动加 _共享N 后缀。
+   不写数据库、不推送给学生、不改动自己账号里的任何文件。 */
+window.__cwShareTargets = [];
+window.__cwShareTgl = function (id, on) {
+  const set = new Set(window.__cwShareTargets || []);
+  if (on) set.add(id); else set.delete(id);
+  window.__cwShareTargets = Array.from(set);
+};
+async function cwShareDialog(btn) {
+  const host = btn ? btn.closest('[data-id]') : null;
+  const ids = host ? [host.getAttribute('data-id')]
+                   : Array.from(cwState.sel || []).map(String);
+  if (!ids.length) { toast('先选要共享的资料'); return; }
+  let peers = [];
+  try {
+    const resp = await fetch('/api/v2/teacher/peers', { credentials: 'same-origin' });
+    const j = await resp.json();
+    peers = j.peers || [];
+  } catch (e) { toast('读取教师列表失败'); return; }
+  if (!peers.length) {
+    await uiDialog({ title: '还没有其他老师', okText: '知道了',
+      html: '目前只有你一个教师账号。请让管理员在管理控制台先注册其他教师账号，再来共享资料。' });
+    return;
+  }
+  window.__cwShareTargets = [];
+  const names = ids.map(id => {
+    const f = (cwState.files || []).find(x => String(x.id) === String(id));
+    return f ? f.name : id;
+  });
+  const html = '<div style="margin-bottom:10px">将 <b>' + esc(names.slice(0, 3).join('、'))
+    + (names.length > 3 ? ' 等 ' + names.length + ' 份' : '') + '</b> 复制给勾选的老师。'
+    + '<div style="color:var(--text-secondary);font-size:12.5px;margin-top:4px">'
+    + '文件直接复制到对方账号的资料目录，保持原来的课程 / 子文件夹结构；重名自动加后缀，不影响你自己的文件。</div></div>'
+    + peers.map(p => '<label style="display:flex;align-items:center;gap:9px;padding:7px 2px;border-top:1px solid var(--border);cursor:pointer">'
+      + '<input type="checkbox" value="' + esc(p.id) + '" onchange="__cwShareTgl(\'' + esc(p.id) + '\',this.checked)">'
+      + '<b>' + esc(p.name || p.username) + '</b>'
+      + '<span style="color:var(--text-secondary);font-size:12px">' + esc(p.username) + '</span></label>').join('');
+  const go = await uiDialog({ title: '共享资料给其他老师', html,
+                              okText: '复制共享', cancelText: '取消' });
+  if (!go) return;
+  const targets = window.__cwShareTargets || [];
+  if (!targets.length) { toast('请勾选要共享的老师'); return; }
+  try {
+    const resp = await fetch('/api/v2/teacher/share-material', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ files: ids, targets: targets })
+    });
+    const j = await resp.json();
+    if (!j.ok) { toast(j.msg || '共享失败'); return; }
+    toast('已复制 ' + j.copied + ' 份文件到目标老师资料库'
+      + ((j.skipped || []).length ? '（跳过 ' + j.skipped.length + ' 项）' : ''));
+  } catch (e) { toast('共享失败：' + (e.message || e)); }
+}
+window.cwShareDialog = cwShareDialog;
+
 /* 删除课程内的空子文件夹（服务端只删空目录，非空会拒绝） */
 async function cwRmdirFolder(sub) {
   if (!(await uiConfirm('删除文件夹「' + sub + '」？\n\n只有空文件夹能删除；里面还有文件的话会被拒绝。',
@@ -35130,6 +35446,7 @@ function cwFileCard(f, idx) {
     +     '<button title="重命名" onclick="event.stopPropagation();cwRenameLocal(this)">✎</button>'
     +     '<button title="下载" onclick="event.stopPropagation();cwDownloadLocal(this)">⬇</button>'
     +     '<button title="换到别的课程/文件夹" onclick="event.stopPropagation();cwMoveLocal(this)">➡</button>'
+    +     '<button title="共享给其他老师（文件复制到对方资料库）" onclick="event.stopPropagation();cwShareDialog(this)">🤝</button>'
     +     '<button class="cw-del" title="删除" onclick="event.stopPropagation();cwDeleteLocal(this)">🗑</button>'
     +   '</div></div></div>';
 }
@@ -35153,6 +35470,7 @@ function cwListRow(f, idx) {
     '<button title="重命名" onclick="event.stopPropagation();cwRenameLocal(this)">✎</button>',
     '<button title="下载" onclick="event.stopPropagation();cwDownloadLocal(this)">⬇</button>',
     f.archived ? '' : '<button title="移到别的文件夹" onclick="event.stopPropagation();cwMoveLocal(this)">➡</button>',
+    f.archived ? '' : '<button title="共享给其他老师（文件复制到对方资料库）" onclick="event.stopPropagation();cwShareDialog(this)">🤝</button>',
     '<button class="cw-del" title="删除" onclick="event.stopPropagation();cwDeleteLocal(this)">🗑</button>'
   ].join('');
   return '<div class="cw-lrow' + selCls + '" data-id="' + esc(f.id) + '" data-kind="' + esc(kind) + '" onclick="cwPreviewLocal(this)">'
@@ -35181,6 +35499,7 @@ function cwCmpRow(f, idx) {
     + '<span class="ops">'
     +   (f.archived ? '' : '<button title="推送" onclick="event.stopPropagation();cwPushDialog(this)">⬇</button>')
     +   cwSheetBtn(f)
+    +   (f.archived ? '' : '<button title="共享给其他老师" onclick="event.stopPropagation();cwShareDialog(this)">🤝</button>')
     +   '<button class="cw-del" title="删除" onclick="event.stopPropagation();cwDeleteLocal(this)">🗑</button>'
     + '</span></div>';
 }

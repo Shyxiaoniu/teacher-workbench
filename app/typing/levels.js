@@ -126,6 +126,41 @@ window.TL = (function () {
     return '';
   }
 
+  /* ---------------- 文章自动轮换（2026-11-05 牛哥定版） ----------------
+     第 6 篇章的每一关 = 一整篇文章。以前让学生自己挑一篇从头打到尾，
+     一篇打几十遍；现在关卡自动配文章：
+       · 难度递进：第 1~2 卷配 ★1 短文，第 3~4 卷 ★2，第 5 卷起 ★3；
+       · 长度递进：池子按字数升序，卷内关卡顺着池子往下走，越打越长；
+       · 轮换不重样：第几卷第几关 → 池子里的固定一篇（确定性，同一关
+         任何时候进去都是同一篇，成绩/断点续打才对得上），相邻关卡、
+         相邻卷自动错开；打满一池再从头循环。
+     同档不足 8 篇时向相邻档借（★1 借 ★2 最短的、★3 借 ★2 最长的），
+     保证一卷 10 关还有得换，不会 3 篇打一学期。 */
+  function artTier(chapter) {
+    return chapter <= 2 ? 1 : (chapter <= 4 ? 2 : 3);
+  }
+  function artPool(tier) {
+    if (!(window.TA && window.TA.ARTICLES && window.TA.ARTICLES.length)) return [];
+    var all = window.TA.ARTICLES.slice().sort(function (a, b) { return a.chars - b.chars; });
+    var same = all.filter(function (a) { return a.hard === tier; });
+    if (same.length >= 8) return same;
+    var borrow = all.filter(function (a) {
+      /* ★1 借 ★2 最短的；★3 借 ★2 最长的；★2 缺了两侧都借 */
+      if (tier === 1) return a.hard === 2;
+      if (tier === 3) return a.hard === 2;
+      return a.hard === 1 || a.hard === 3;
+    });
+    /* 借也按长度方向借：池子整体保持「从短到长」的递进手感 */
+    if (tier === 3) borrow.reverse();
+    return same.concat(borrow).slice(0, Math.max(same.length, 12));
+  }
+  function articleOf(chapter, level) {
+    var pool = artPool(artTier(chapter));
+    if (!pool.length) return null;
+    var gi = (chapter - 1) * 10 + (Math.min(level, 10) - 1);
+    return pool[gi % pool.length];
+  }
+
   /* ---------------- 关卡生成 ----------------
      返回：
        type='keys' → items:[{k, hint}]，逐键作答
@@ -225,11 +260,14 @@ window.TL = (function () {
       var s8n = Math.min(1 + Math.floor((chapter - 1) / 4) + (boss ? 1 : 0), 2);
       L.text = sample(rng, s8pool, s8n).join('');
     } else {
-      /* 第 6 篇章：文章阅读 —— 2026-11-04 牛哥定版：取消「读一句」，
-         整篇文章连续练习（一关就是全文，越往后的卷速度线越高）。
-         L.long 让练习页收起键盘与指法图：长文要的是屏幕空间和手指记忆，
-         一直盯着键盘反而打不快。 */
-      var art = (window.TA && window.TA.get) ? window.TA.get(articleId) : null;
+      /* 第 6 篇章：文章 —— 2026-11-05 二次定版：一关一整篇文章，
+         且文章由引擎按「卷号 → 难度档、关号 → 轮换序」自动配：
+         完成一关进下一关，自动换一篇新文章，学生不用也不会
+         反复打同一篇。手动从文章库固定的文章（articleId）仍然优先。 */
+      var art = null;
+      if (window.TA && window.TA.get) {
+        art = articleId ? window.TA.get(articleId) : articleOf(chapter, level);
+      }
       if (art && art.lines.length) {
         var lines = art.lines;
         L.text = lines.join('');
@@ -239,7 +277,8 @@ window.TL = (function () {
         L.articleCount = lines.length;
         L.readAt = 0;
         L.long = true;
-        L.topic = '全文 · ' + lines.length + ' 句 / ' + L.text.length + ' 字';
+        L.articleAuto = !articleId;      /* 这篇是引擎自动配的（地图/结算提示用） */
+        L.topic = '《' + art.title + '》 · ' + lines.length + ' 行 / ' + L.text.length + ' 字';
       } else {
         var sent = cnSentPool(grades);
         L.text = pick(rng, sent);
@@ -268,39 +307,47 @@ window.TL = (function () {
     return 1;
   }
 
-  /* 每关金币（2026-11-05 二次收紧）
-     —— 为什么要再改：全店商品涨价后（装扮 150 起、星光舞台 1000），
-        老的「首通 12~20」让金币来得太容易，商店一天就被买空。
-        现在：
-            · 1 星不再发金币 —— 想赚钱必须打出 2 星以上（提高获取难度）；
-            · 首通 2 星 5 / 3 星 8，BOSS 首通再 +5；
-            · 重复打：每天每关只结算一次，2 金币（BOSS 3）。
-     这份公式在 app/core/typing_store.py 里有一份同样的实现，两边必须同步改。 */
-  function coinsFor(stars, level, repeat) {
+  /* 统一积分（2026-11-05：金币与积分两套数值 1:1 合并）
+     每关积分 = 基础积分 + 难度积分，等于改版前「金币 + 积分」之和，
+     学生总价值与攒分速度都不变。两份公式在 app/core/typing_store.py
+     里各有一份同样的实现，两边必须同步改。 */
+  function basePtsFor(stars, level, repeat) {
     if (!stars) return 0;
     if (repeat) return isBoss(level) ? 3 : 2;
     if (stars < 2) return 0;
     return (stars >= 3 ? 8 : 5) + (isBoss(level) ? 5 : 0);
   }
 
-  /* 每关积分（2026-11-05 新货币）
-     —— 积分只用来买「特效」（全店最贵的奢侈品），靠打出好成绩攒：
-        · 前面基础篇章（键位 1）一星 0 分 —— 基础关练会了就该往前走；
+  /* 难度积分：越难的篇章越值钱
+        · 基础键位（stage 1）每星 0 分 —— 练会了就该往前走；
         · 字母 2 / 单词 3 / 大小写 4 / 小键盘 7 每星 1 分；
-        · 中文 5 / 文章 6 / 混排 8 每星 2 分（越难越值钱）；
-        · 卷数每推进一卷 +1 分（难度补偿）；
-        · 重复打：每天每关只结算一次，2 星及以上给 1 分。
-     typing_store.py 的 pts_for 与此完全一致，两边必须同步改。 */
+        · 中文 5 / 文章 6 / 混排 8 每星 2 分；
+        · 卷数每推进一卷 +1 分；重复练每天每关只给 1 分（需 2 星）。 */
   var PTS_STAGE = { 1: 0, 2: 1, 3: 1, 4: 1, 5: 2, 6: 2, 7: 1, 8: 2 };
-  function ptsFor(stars, stage, chapter, repeat) {
+  function bonusPtsFor(stars, stage, chapter, repeat) {
     if (!stars) return 0;
     if (repeat) return stars >= 2 ? 1 : 0;
-    return stars * (PTS_STAGE[stage] || 1) + Math.max(0, (chapter || 1) - 1);
+    /* 注意：基础键位篇（stage 1）系数就是 0，不能用 `PTS_STAGE[stage] || 1`
+       —— 那样 0 会被当成「没配置」兜底成 1，前端每星多发 1 分，
+       跟服务端 table.get(stage, 1) 对不上账。 */
+    var rate = Object.prototype.hasOwnProperty.call(PTS_STAGE, stage)
+      ? PTS_STAGE[stage] : 1;
+    return stars * rate + Math.max(0, (chapter || 1) - 1);
+  }
+
+  /** 每关统一积分。double（加倍卡）只翻基础积分那一份。 */
+  function ptsFor(stars, stage, chapter, level, repeat, doubleCard) {
+    var base = basePtsFor(stars, level, repeat);
+    var bonus = bonusPtsFor(stars, stage, chapter, repeat);
+    if (base === 0 && bonus === 0) return 0;
+    return base + bonus + (doubleCard ? base : 0);
   }
 
   return {
     genLevel: genLevel, starsFor: starsFor, speedLine: speedLine,
     difficulty: difficulty, levelFactor: levelFactor, topicOf: topicOf,
-    levelKey: levelKey, isBoss: isBoss, coinsFor: coinsFor, ptsFor: ptsFor
+    levelKey: levelKey, isBoss: isBoss,
+    articleOf: articleOf, artTier: artTier,
+    basePtsFor: basePtsFor, bonusPtsFor: bonusPtsFor, ptsFor: ptsFor
   };
 })();

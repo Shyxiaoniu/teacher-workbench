@@ -60,6 +60,42 @@ TOKENS_PATH = os.path.join(ENH_DIR, "tokens.json")
 # 由主服务注入：() -> [{cls, sid, name}]（与学生表同源）
 ROSTER_PROVIDER = None
 
+# ---------------------------------------------------------------------------
+# 工作区路径（2.0.13）：主服务注入 PATH_FN，按当前教师账号返回各自的目录。
+# ---------------------------------------------------------------------------
+PATH_FN = None
+
+
+def _ep():
+    if PATH_FN:
+        try:
+            p = PATH_FN() or {}
+            d = p.get("enh") or ENH_DIR
+            return {
+                "data": p.get("data") or d,
+                "enh": d,
+                "roster": p.get("roster") or os.path.join(DATA, "roster.json"),
+                "tasks": os.path.join(d, "tasks.json"),
+                "index": os.path.join(d, "subs.index.json"),
+                "tokens": os.path.join(d, "tokens.json"),
+                "uploads": os.path.join(d, "uploads"),
+                "subs_files": os.path.join(d, "subs_files"),
+                "materials": os.path.join(d, "materials"),
+            }
+        except Exception:
+            pass
+    return {
+        "data": ENH_DIR, "enh": ENH_DIR,
+        "roster": os.path.join(DATA, "roster.json"),
+        "tasks": os.path.join(ENH_DIR, "tasks.json"),
+        "index": os.path.join(ENH_DIR, "subs.index.json"),
+        "tokens": os.path.join(ENH_DIR, "tokens.json"),
+        "uploads": os.path.join(ENH_DIR, "uploads"),
+        "subs_files": os.path.join(ENH_DIR, "subs_files"),
+        "materials": os.path.join(ENH_DIR, "materials"),
+    }
+
+
 _LOCK = threading.Lock()
 TOKEN_TTL = 60 * 60 * 12  # 身份 token 12 小时有效（覆盖一节课 + 课后补交）
 
@@ -190,7 +226,7 @@ def roster_all():
                 return rows
         except Exception:
             pass
-    return _load(ROSTER_PATH, [])
+    return _load(_ep()["roster"], [])
 
 
 def roster_lookup(cls, sid):
@@ -362,13 +398,13 @@ PRESETS = {
 # 任务配置
 # ---------------------------------------------------------------------------
 def task_get(key):
-    tasks = _load(TASKS_PATH, {})
+    tasks = _load(_ep()["tasks"], {})
     return tasks.get(key)
 
 
 def ensure_task(key, api="", class_names=None):
     """取任务；不存在则用合理默认值创建（沿用历史 task_id 风格作为 key）。"""
-    tasks = _load(TASKS_PATH, {})
+    tasks = _load(_ep()["tasks"], {})
     t = tasks.get(key)
     if not t:
         t = {
@@ -387,7 +423,7 @@ def ensure_task(key, api="", class_names=None):
             "updated_at": _now(),
         }
         tasks[key] = t
-        _save(TASKS_PATH, tasks)
+        _save(_ep()["tasks"], tasks)
     # 老数据兼容：补齐后来新增的字段
     changed = False
     for k, v in (("policy", default_policy()), ("deadline", ""), ("status", "open")):
@@ -396,7 +432,7 @@ def ensure_task(key, api="", class_names=None):
             changed = True
     if changed:
         tasks[key] = t
-        _save(TASKS_PATH, tasks)
+        _save(_ep()["tasks"], tasks)
     return t
 
 
@@ -438,7 +474,7 @@ def task_save(data):
     key = data.get("task_key") or data.get("key") or data.get("task")
     if not key:
         return {"ok": False, "msg": "缺少 task_key"}
-    tasks = _load(TASKS_PATH, {})
+    tasks = _load(_ep()["tasks"], {})
     t = tasks.get(key) or ensure_task(key)
     for k in ("title", "api", "class_names", "class_ids", "status", "deadline", "pin"):
         if k in data:
@@ -456,7 +492,7 @@ def task_save(data):
         t["materials"] = data["materials"]
     t["updated_at"] = _now()
     tasks[key] = t
-    _save(TASKS_PATH, tasks)
+    _save(_ep()["tasks"], tasks)
     return {"ok": True, "task": task_public(t)}
 
 
@@ -479,13 +515,13 @@ def portal_url(task, host=""):
 # 身份 token
 # ---------------------------------------------------------------------------
 def issue_token(task_key, cls, sid, name):
-    tokens = _load(TOKENS_PATH, {})
+    tokens = _load(_ep()["tokens"], {})
     tok = uuid.uuid4().hex
     tokens[tok] = {
         "task_key": task_key, "cls": cls, "sid": sid, "name": name,
         "exp": time.time() + TOKEN_TTL,
     }
-    _save(TOKENS_PATH, tokens)
+    _save(_ep()["tokens"], tokens)
     return tok
 
 
@@ -493,7 +529,7 @@ def check_token(token, cls="", sid=""):
     """校验 token：过期 / 不匹配班级或学号（若传入）则失败。返回记录或 None。"""
     if not token:
         return None
-    tokens = _load(TOKENS_PATH, {})
+    tokens = _load(_ep()["tokens"], {})
     rec = tokens.get(token)
     if not rec:
         return None
@@ -545,7 +581,7 @@ def save_upload(task_key, sid, token, name, stream, length, auth=None):
     if length > MAX_FILE_TOTAL * 2:
         return {"ok": False, "code": "E_TOOBIG", "msg": "文件太大（上限 300MB）"}
     uid = uuid.uuid4().hex
-    up_dir = _ensure_dir(os.path.join(ENH_DIR, "uploads"))
+    up_dir = _ensure_dir(os.path.join(_ep()["enh"], "uploads"))
     dest = os.path.join(up_dir, _up_name(uid, name))
     try:
         n = 0
@@ -569,7 +605,7 @@ def _claim_uploads(upload_ids):
     只认纯字符串会让前端传对象时一个都认不出来，直接报「上传文件已过期」。
     """
     out = []
-    updir = os.path.join(ENH_DIR, "uploads")
+    updir = os.path.join(_ep()["enh"], "uploads")
     if not os.path.isdir(updir):
         return out
     try:
@@ -698,7 +734,7 @@ def run_check(task, sid, name, cls, fields, files):
 
     # --- 重复提交（提醒级）---
     if chk_pol.get("warn_confirm", True) and sub_pol.get("allow_resubmit", True):
-        idx = _load(INDEX_PATH, {})
+        idx = _load(_ep()["index"], {})
         rec = idx.get(task.get("task_key"), {}).get(sid)
         if rec and rec.get("versions"):
             items.append({"lv": "warn", "code": "DUP",
@@ -793,7 +829,7 @@ def commit_submission(task_key, sid, token, fields, uploads, tpl_version, auth=N
         # 核对不通过：把临时文件还回 uploads（保留原始名），让学生可重试，不重复选
         for (oname, p, sz, _uid) in claimed:
             try:
-                os.rename(p, os.path.join(ENH_DIR, "uploads", _up_name(_uid, oname)))
+                os.rename(p, os.path.join(_ep()["enh"], "uploads", _up_name(_uid, oname)))
             except Exception:
                 try:
                     os.remove(p)
@@ -805,19 +841,19 @@ def commit_submission(task_key, sid, token, fields, uploads, tpl_version, auth=N
 
     # 老师关掉「允许重新提交」时，已有版本就拒绝再交
     if not pol["submit"].get("allow_resubmit", True):
-        idx0 = _load(INDEX_PATH, {})
+        idx0 = _load(_ep()["index"], {})
         old = idx0.get(task_key, {}).get(sid)
         if old and old.get("versions"):
             return {"ok": False, "code": "E_NO_RESUBMIT",
                     "msg": "老师关闭了重新提交，你已经交过了（第 %d 版）" % old["latest"]}
 
     # 归档文件到 subs_files/<task>/<sid>/v<ver>/<upload_id>（物理名用 upload_id，避免同名覆盖）
-    idx = _load(INDEX_PATH, {})
+    idx = _load(_ep()["index"], {})
     tnode = idx.setdefault(task_key, {})
     snode = tnode.setdefault(sid, {"latest": 0, "versions": []})
     version = snode["latest"] + 1
     is_late = closed
-    ver_dir = _ensure_dir(os.path.join(ENH_DIR, "subs_files", _safe(task_key),
+    ver_dir = _ensure_dir(os.path.join(_ep()["enh"], "subs_files", _safe(task_key),
                                        _safe(sid), "v%d" % version))
     saved_files = []
     for (oname, p, sz, _uid) in claimed:
@@ -839,8 +875,8 @@ def commit_submission(task_key, sid, token, fields, uploads, tpl_version, auth=N
         "class_matched": class_matched,
     }
     with _LOCK:
-        _ensure_dir(ENH_DIR)
-        _append_jsonl(os.path.join(ENH_DIR, "subs.log.jsonl"), rec)
+        _ensure_dir(_ep()["enh"])
+        _append_jsonl(os.path.join(_ep()["enh"], "subs.log.jsonl"), rec)
         snode["latest"] = version
         snode["versions"].append({
             "v": version, "ts": rec["ts"], "level": chk["level"],
@@ -848,7 +884,7 @@ def commit_submission(task_key, sid, token, fields, uploads, tpl_version, auth=N
             "class_match": rec["class_match"], "class_matched": rec["class_matched"],
             "cls": rec.get("cls", ""),
         })
-        _save(INDEX_PATH, idx)
+        _save(_ep()["index"], idx)
 
     return {"ok": True, "version": version, "late": is_late, "check": chk,
             "files": [f["name"] for f in saved_files],
@@ -859,7 +895,7 @@ def commit_submission(task_key, sid, token, fields, uploads, tpl_version, auth=N
 # 历史 / 我的任务
 # ---------------------------------------------------------------------------
 def my_record(task_key, sid):
-    idx = _load(INDEX_PATH, {})
+    idx = _load(_ep()["index"], {})
     snode = idx.get(task_key, {}).get(sid)
     if not snode:
         return {"submitted": False, "latest": 0, "versions": []}
@@ -870,7 +906,7 @@ def my_tasks(cls, sid):
     """门户首页：列出该学生所属班级里、启用增强的任务。"""
     sid = str(sid or "").strip()
     classes = classes_of(sid) if not cls else [cls]
-    tasks = _load(TASKS_PATH, {})
+    tasks = _load(_ep()["tasks"], {})
     out = []
     for key, t in tasks.items():
         tcls = t.get("class_names") or []
@@ -914,7 +950,7 @@ def resolve_file(task_key, sid, name, token, auth=None):
         ident = check_token(token, "", sid)
         if not ident or str(ident.get("sid", "")) != str(sid):
             return None
-    base = os.path.normpath(os.path.join(ENH_DIR, "subs_files", _safe(task_key), _safe(sid)))
+    base = os.path.normpath(os.path.join(_ep()["enh"], "subs_files", _safe(task_key), _safe(sid)))
     rel = str(name or "").replace("\\", "/")
     if not rel or rel.startswith("/") or ".." in rel.split("/"):
         return None
@@ -991,7 +1027,7 @@ def material_list(task_key, token, sid, admin=False):
 # ---------------------------------------------------------------------------
 def export_csv(task_key, cls):
     task = ensure_task(task_key)
-    idx = _load(INDEX_PATH, {})
+    idx = _load(_ep()["index"], {})
     roster = [r for r in roster_all() if (not cls) or str(r.get("cls", "")) == str(cls)]
     snode = idx.get(task_key, {})
     rows = []
@@ -1037,7 +1073,7 @@ def form_save(data):
     key = data.get("task") or data.get("task_key")
     if not key:
         return {"ok": False, "msg": "缺少任务"}
-    tasks = _load(TASKS_PATH, {})
+    tasks = _load(_ep()["tasks"], {})
     t = tasks.get(key) or ensure_task(key)
     tpl = t.get("template") or default_template()
 
@@ -1083,7 +1119,7 @@ def form_save(data):
 
     t["updated_at"] = _now()
     tasks[key] = t
-    _save(TASKS_PATH, tasks)
+    _save(_ep()["tasks"], tasks)
     return {"ok": True, "template": new_tpl,
             "class_match": normalize_class_match(t.get("policy"))}
 
@@ -1100,7 +1136,7 @@ def material_add(data):
     key = data.get("task") or data.get("task_key")
     if not key:
         return {"ok": False, "msg": "缺少任务"}
-    tasks = _load(TASKS_PATH, {})
+    tasks = _load(_ep()["tasks"], {})
     t = tasks.get(key) or ensure_task(key)
     mode = data.get("mode") or "ref"
     note = str(data.get("note") or "")[:40]
@@ -1129,7 +1165,7 @@ def material_add(data):
              "note": note, "visible": True, "hidden": False,
              "mode": mode, "path": full, "copy_path": ""}
         if mode == "copy":
-            dst_dir = _ensure_dir(os.path.join(ENH_DIR, "materials", m["id"]))
+            dst_dir = _ensure_dir(os.path.join(_ep()["enh"], "materials", m["id"]))
             dst = os.path.join(dst_dir, _safe(name))
             try:
                 shutil.copy2(full, dst)
@@ -1143,7 +1179,7 @@ def material_add(data):
     t["materials"] = mats
     t["updated_at"] = _now()
     tasks[key] = t
-    _save(TASKS_PATH, tasks)
+    _save(_ep()["tasks"], tasks)
     return {"ok": True, "added": added, "skipped": skipped}
 
 
@@ -1173,7 +1209,7 @@ def material_update(data):
     action = data.get("action")
     if not key or not mid:
         return {"ok": False, "msg": "缺少参数"}
-    tasks = _load(TASKS_PATH, {})
+    tasks = _load(_ep()["tasks"], {})
     t = tasks.get(key) or ensure_task(key)
     mats = list(t.get("materials") or [])
 
@@ -1187,7 +1223,7 @@ def material_update(data):
         t["materials"] = mats
         t["updated_at"] = _now()
         tasks[key] = t
-        _save(TASKS_PATH, tasks)
+        _save(_ep()["tasks"], tasks)
         return {"ok": True, "items": material_list(key, "", "", admin=True)}
 
     hit = None
@@ -1207,7 +1243,7 @@ def material_update(data):
         src = hit.get("copy_path") if hit.get("mode") == "copy" else hit.get("path")
         if not src or not os.path.isfile(src):
             return {"ok": False, "msg": "原文件已经不在了，没法转副本"}
-        dst_dir = _ensure_dir(os.path.join(ENH_DIR, "materials", hit["id"]))
+        dst_dir = _ensure_dir(os.path.join(_ep()["enh"], "materials", hit["id"]))
         dst = os.path.join(dst_dir, _safe(hit.get("name") or "file"))
         try:
             shutil.copy2(src, dst)
@@ -1220,7 +1256,7 @@ def material_update(data):
     t["materials"] = mats
     t["updated_at"] = _now()
     tasks[key] = t
-    _save(TASKS_PATH, tasks)
+    _save(_ep()["tasks"], tasks)
     return {"ok": True, "items": material_list(key, "", "", admin=True)}
 
 
@@ -1248,13 +1284,13 @@ def withdraw(task_key, sid, token):
     pol = normalize_policy((task_get(task_key) or {}).get("policy"))
     if not pol["submit"].get("allow_withdraw", True):
         return {"ok": False, "code": "E_NO_WITHDRAW", "msg": "老师关闭了撤回功能"}
-    idx = _load(INDEX_PATH, {})
+    idx = _load(_ep()["index"], {})
     snode = idx.get(task_key, {}).get(sid)
     if not snode or not snode.get("versions"):
         return {"ok": False, "code": "E_NOTHING", "msg": "你还没有交过东西"}
     with _LOCK:
         snode["withdrawn"] = True
-        _save(INDEX_PATH, idx)
+        _save(_ep()["index"], idx)
     return {"ok": True, "msg": "已撤回"}
 
 

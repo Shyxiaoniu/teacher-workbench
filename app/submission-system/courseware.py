@@ -61,26 +61,51 @@ _BAD_PREFIX = ("/system", "/library", "/usr", "/bin", "/sbin", "/etc", "/private
 
 
 # ---------------------------------------------------------------------------
-# 配置
+# 配置 / 工作区路径（2.0.13 多教师账号隔离）
 # ---------------------------------------------------------------------------
+# 主服务会注入 PATH_FN：() -> {"data","cfg","root"}，按当前请求的教师账号
+# 返回各自独立的目录。没注入时（单独跑旧提交服务）沿用上面的全局常量，
+# 行为与改版前完全一致。
+PATH_FN = None
+
+
+def _paths():
+    if PATH_FN:
+        try:
+            p = PATH_FN() or {}
+            return {
+                "data": p.get("data") or DATA,
+                "cfg": p.get("cfg") or CFG_PATH,
+                "root": os.path.normpath(p.get("root") or DEFAULT_ROOT),
+            }
+        except Exception:
+            pass
+    return {"data": DATA, "cfg": CFG_PATH, "root": DEFAULT_ROOT}
+
+
 def _now():
     return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
 def load_cfg():
+    p = _paths()
     try:
-        with open(CFG_PATH, "r", encoding="utf-8") as f:
+        with open(p["cfg"], "r", encoding="utf-8") as f:
             cfg = json.load(f) or {}
     except Exception:
         cfg = {}
     root = str(cfg.get("root") or "").strip()
-    # 容器部署：以环境变量为准。旧配置里可能留着 Windows/macOS 的绝对路径
-    # （导入的备份、从桌面版迁移过来的数据），照搬会让课件页整片 404。
-    env_root = os.environ.get("WB_COURSEWARE_DIR")
-    if env_root:
-        root = os.path.normpath(env_root)
+    if PATH_FN:
+        # 多账号：根由工作区决定。配置里若残留别的账号/旧机器的绝对路径，
+        # 一律纠正 —— 否则 A 老师的课件页会读到 B 老师的目录去。
+        root = p["root"]
+    else:
+        # 容器部署：以环境变量为准（单独跑旧提交服务时的老行为）。
+        env_root = os.environ.get("WB_COURSEWARE_DIR")
+        if env_root:
+            root = os.path.normpath(env_root)
     if not root:
-        root = DEFAULT_ROOT
+        root = p["root"]
         # 注意：只补字段，不能整个重建 cfg —— 否则 mounts（本地资料夹）、allow_lan
         # 这些同文件里的设置会在「根目录字段丢失」时被一起抹掉。
         cfg["version"] = cfg.get("version") or 1
@@ -90,28 +115,27 @@ def load_cfg():
         save_cfg(cfg)
         ensure_root(root)
     elif os.path.normpath(str(cfg.get("root") or "")) != os.path.normpath(root):
-        # 环境变量纠正了根目录（容器里挂载点变了 / 旧机器路径）：落盘一次，
-        # 后续所有读写都用新路径，课件与推送记录不会对不上。
         cfg["root"] = root
-        cfg["auto"] = os.path.normpath(root) == os.path.normpath(DEFAULT_ROOT)
+        cfg["auto"] = os.path.normpath(root) == os.path.normpath(p["root"])
         cfg["updated_at"] = _now()
         save_cfg(cfg)
         ensure_root(root)
     cfg.setdefault("version", 1)
-    cfg.setdefault("auto", os.path.normpath(root) == os.path.normpath(DEFAULT_ROOT))
+    cfg.setdefault("auto", os.path.normpath(root) == os.path.normpath(p["root"]))
     return cfg
 
 
 def save_cfg(cfg):
-    os.makedirs(DATA, exist_ok=True)
-    tmp = CFG_PATH + ".tmp"
+    p = _paths()
+    os.makedirs(p["data"], exist_ok=True)
+    tmp = p["cfg"] + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(cfg, f, ensure_ascii=False, indent=2)
-    shutil.move(tmp, CFG_PATH)
+    shutil.move(tmp, p["cfg"])
 
 
 def root_dir():
-    return os.path.normpath(load_cfg().get("root") or DEFAULT_ROOT)
+    return os.path.normpath(load_cfg().get("root") or _paths()["root"])
 
 
 def ensure_root(path=None):
@@ -953,7 +977,7 @@ def remote_preview_html(base, url, dark=False):
     kind = kind_of(name)
     if kind not in ("office", "text", "legacy"):
         return None, name, kind
-    cache = os.path.join(DATA, "_rwcache")
+    cache = os.path.join(_paths()["data"], "_rwcache")
     os.makedirs(cache, exist_ok=True)
     ext = ext_of(name) or "bin"
     safe = re.sub(r"[^A-Za-z0-9_.-]", "_", name)[-40:]
@@ -1292,7 +1316,12 @@ def set_root(new_root, move):
     cfg = load_cfg()
     cfg["version"] = cfg.get("version") or 1
     cfg["root"] = p
-    cfg["auto"] = os.path.normpath(p) == os.path.normpath(DEFAULT_ROOT)
+    # 多教师账号模式：资料根目录由工作区按账号固定，不允许手动指到别的
+    # 账号目录去（否则就谈不上「各账号资料互不重叠」）。这个分支主要留给
+    # 单独跑旧提交服务的场景；注入 PATH_FN 时 set_root 会直接给出说明。
+    if PATH_FN:
+        return False, cfg, "多教师账号模式下，资料位置由系统按账号自动管理，无需也不能手动切换。"
+    cfg["auto"] = os.path.normpath(p) == os.path.normpath(_paths()["root"])
     cfg["updated_at"] = _now()
     save_cfg(cfg)
     return True, cfg, ("已切换到 %s" % p) + ("，并迁移了 %d 项" % moved if moved else "") + ("（目录是新建的）" if created else "")

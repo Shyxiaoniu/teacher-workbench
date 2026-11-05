@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>打字练习管理 · 班级工作台</title>
-<!-- 与学生端共用：排行榜小像里的背景与特效（2026-11-05） -->
+<!-- 与学生端共用：排行榜小像里的背景与特效 -->
 <link rel="stylesheet" href="/typing/pet-ui.css?v=20261105">
 <style>
 :root{
@@ -74,18 +74,17 @@ select{font-family:inherit;font-size:14px;padding:8px 12px;border:1.5px solid va
 .toast.show{opacity:.95}
 .off-box{text-align:center;padding:70px 30px;color:var(--ink2)}
 .off-box .big{font-size:46px;margin-bottom:10px}
-/* 教师练习视图（2026-11-04）：在管理面板内嵌游戏页，不再新开标签页跳出去 */
+/* 教师练习视图：在管理面板内嵌游戏页，不再新开标签页跳出去 */
 .play-view{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;z-index:50}
 .play-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 16px;background:#fff;
   border-bottom:1px solid var(--line);box-shadow:0 2px 8px rgba(60,30,10,.05)}
 .play-bar b{font-size:14px}
 .play-view iframe{flex:1;width:100%;border:0}
-/* ---------- 金币管理（2026-11-05 晚重做） ----------
+/* ---------- 积分管理 ----------
    对齐德育页的规范：表单控件统一 36px 高 / 9px 圆角 / 1px 描边，
-   备注改成「标签 + 输入框」两段式，快捷标签沿用德育项目按钮的样式
-   （.mor-items .mor-btn 那一套：白底细边 → 选中品牌色 + 淡底 + 1.5px 光圈）。 */
+   备注改成「标签 + 输入框」两段式，快捷标签沿用德育项目按钮的样式。 */
 :root{--bad:#E24B4A;--brand-soft:#FFF1E8}
-.coin-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:10px;
+.pts-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:10px;
   align-items:end;margin-top:12px}
 .fld{display:flex;flex-direction:column;gap:5px;min-width:0}
 .fld>span{font-size:11.5px;color:var(--ink3);font-weight:600;letter-spacing:.2px}
@@ -97,7 +96,7 @@ select{height:36px;border-radius:9px;border:1px solid var(--line);font-size:13.5
 input[type=text]:focus,input[type=number]:focus,select:focus{outline:none;
   border-color:var(--brand);box-shadow:0 0 0 3px rgba(244,99,46,.14)}
 input::placeholder{color:var(--ink3)}
-.coin-form .btn{height:36px;padding:0 22px;border-radius:9px;font-size:14px}
+.pts-form .btn{height:36px;padding:0 22px;border-radius:9px;font-size:14px}
 .note-row{display:flex;align-items:center;gap:8px;margin-top:12px}
 .tag-lbl{font-size:11.5px;color:var(--ink3);font-weight:600;flex:none;letter-spacing:.2px}
 .note-row input{flex:1;min-width:0}
@@ -108,14 +107,13 @@ input::placeholder{color:var(--ink3)}
 .tag:hover{border-color:var(--brand);color:var(--brand);transform:translateY(-1px)}
 .tag.on{border-color:var(--brand);background:var(--brand-soft);color:var(--brand);font-weight:600;
   box-shadow:0 0 0 1.5px rgba(244,99,46,.35)}
-.coin-sec{display:flex;align-items:baseline;gap:8px;margin-top:16px}
-.coin-sec .sec-unit{font-size:11.5px;color:var(--ink3)}
-.coin-bal{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px;max-height:118px;overflow:auto}
-.coin-chip{font-size:12.5px;background:#fff;border:1px solid var(--line);border-radius:999px;
+.pts-sec{display:flex;align-items:baseline;gap:8px;margin-top:16px}
+.pts-sec .sec-unit{font-size:11.5px;color:var(--ink3)}
+.pts-bal{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px;max-height:118px;overflow:auto}
+.pts-chip{font-size:12.5px;background:#fff;border:1px solid var(--line);border-radius:999px;
   padding:3px 10px;color:var(--ink2)}
-.coin-chip b{color:var(--brand);font-variant-numeric:tabular-nums}
-.coin-chip i{font-style:normal;color:var(--purple);font-variant-numeric:tabular-nums}
-.coin-log{margin-top:7px;max-height:190px;overflow:auto}
+.pts-chip b{color:var(--brand);font-variant-numeric:tabular-nums}
+.pts-log{margin-top:7px;max-height:190px;overflow:auto}
 .cl-row{display:flex;align-items:center;gap:8px;padding:6px 4px;font-size:12.5px;
   border-bottom:1px dashed var(--line)}
 .cl-row:last-child{border-bottom:none}
@@ -142,7 +140,7 @@ input::placeholder{color:var(--ink3)}
 var $ = function (s) { return document.querySelector(s); };
 var app = $('#app');
 var S = { demo: false, enabled: false, grades: [], classes: [], lbClass: '', scope: 'week', rows: [], lbName: '',
-  coinCls: '', coinStu: '', coinData: null };
+  ptsCls: '', ptsStu: '', ptsData: null };
 
 function esc(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -178,15 +176,16 @@ function boot() {
       S.enabled = !!r.enabled; S.grades = r.grades || [];
       S.classes = r.classes || [];
       if (S.classes.length && !S.lbClass) S.lbClass = S.classes[0].id;
-      if (S.classes.length && !S.coinCls) S.coinCls = S.classes[0].id;
+      if (S.classes.length && !S.ptsCls) S.ptsCls = S.classes[0].id;
     } else {
       S.demo = true;
       S.enabled = true; S.grades = [3]; S.classes = DEMO_CLASSES;
       S.lbClass = DEMO_CLASSES[0].id;
+      S.ptsCls = DEMO_CLASSES[0].id;
     }
     render();
     loadLb();
-    loadCoins();
+    loadPoints();
   }).catch(function () { S.demo = true; render(); });
 }
 
@@ -243,34 +242,34 @@ function body() {
       '</div>' +
     '</div>' +
     '<div class="card" style="margin-top:14px">' +
-      '<h2>🪙 金币管理</h2>' +
-      '<div class="hint">给学生个人或全班发放 / 扣除打字冒险岛金币：奖励课堂表现好、练习认真的同学，' +
-        '或把乱刷的扣回来。学生端约 12 秒内同步到新余额；每一笔操作都记录在案，随数据导入导出不丢。</div>' +
-      '<div class="coin-form">' +
-        '<label class="fld"><span>班级</span><select id="coinCls">' + clsOpts + '</select></label>' +
-        '<label class="fld"><span>对象</span><select id="coinStu"><option value="">全班所有人</option></select></label>' +
+      '<h2>✨ 积分管理</h2>' +
+      '<div class="hint">打字冒险岛已统一为「积分」一种数值：闯关获得、商店消费都走积分，' +
+        '原来的金币已按 1:1 折算进来，学生总价值不变。这里可给个人或全班发放 / 扣除积分，' +
+        '学生端约 12 秒内同步；每一笔操作都记录在案，随数据导入导出不丢。</div>' +
+      '<div class="pts-form">' +
+        '<label class="fld"><span>班级</span><select id="ptsCls">' + clsOpts + '</select></label>' +
+        '<label class="fld"><span>对象</span><select id="ptsStu"><option value="">全班所有人</option></select></label>' +
         '<label class="fld"><span>数量</span>' +
-          '<input id="coinAmt" type="number" min="1" max="10000" value="10" title="金币数量"></label>' +
-        '<label class="fld"><span>方式</span><select id="coinMode">' +
+          '<input id="ptsAmt" type="number" min="1" max="10000" value="10" title="积分数量"></label>' +
+        '<label class="fld"><span>方式</span><select id="ptsMode">' +
           '<option value="add">发放（+）</option><option value="sub">扣除（−）</option></select></label>' +
-        '<button class="btn" id="coinDo">执行</button>' +
+        '<button class="btn" id="ptsDo">执行</button>' +
       '</div>' +
-      /* 备注：先把德育页那套「标签」搬过来 —— 常用理由点一下就填好，
-         不用每次敲字，也不会出现「课堂表现好」「表现好」两种写法各记一条。 */
+      /* 备注：常用理由点一下就填好，避免同一种理由出现多种写法 */
       '<div class="note-row">' +
         '<span class="tag-lbl">备注</span>' +
-        '<input id="coinNote" type="text" maxlength="40" placeholder="点下面的常用标签，或自己写一句（选填）">' +
+        '<input id="ptsNote" type="text" maxlength="40" placeholder="点下面的常用标签，或自己写一句（选填）">' +
       '</div>' +
-      '<div class="tags" id="coinTagBox">' +
+      '<div class="tags" id="ptsTagBox">' +
         ['课堂表现出色', '练习认真', '进步明显', '帮助同学', '遵守纪律', '乱刷扣回'].map(function (t) {
           return '<button class="tag" type="button" data-note="' + t + '">' + t + '</button>';
         }).join('') +
       '</div>' +
-      '<div class="coin-sec"><span class="tag-lbl">当前班级余额</span>' +
-        '<span class="sec-unit">🪙 金币 / ✨ 积分</span></div>' +
-      '<div id="coinBal" class="coin-bal"></div>' +
-      '<div class="coin-sec"><span class="tag-lbl">最近操作记录</span></div>' +
-      '<div id="coinLogBox" class="coin-log"></div>' +
+      '<div class="pts-sec"><span class="tag-lbl">当前班级余额</span>' +
+        '<span class="sec-unit">✨ 积分</span></div>' +
+      '<div id="ptsBal" class="pts-bal"></div>' +
+      '<div class="pts-sec"><span class="tag-lbl">最近操作记录</span></div>' +
+      '<div id="ptsLogBox" class="pts-log"></div>' +
     '</div>' +
     '<div class="card" style="margin-top:14px">' +
       '<h2>班级排行榜</h2>' +
@@ -332,18 +331,17 @@ function bind() {
   };
   var cs = $('#clsSel');
   if (cs) cs.onchange = function () { S.lbClass = cs.value; loadLb(); };
-  /* 金币管理（2026-11-05）：发/扣 + 记录展示 */
-  var ccls = $('#coinCls');
-  if (ccls) ccls.onchange = function () { S.coinCls = ccls.value; S.coinStu = ''; paintCoinBoxes(); };
-  var cstus = $('#coinStu');
-  if (cstus) cstus.onchange = function () { S.coinStu = cstus.value; };
-  /* 备注快捷标签：点一下填进输入框并高亮，再点取消；手动改字就自动取消高亮 */
-  document.querySelectorAll('#coinTagBox [data-note]').forEach(function (b) {
+  /* 积分管理：发/扣 + 记录展示 */
+  var pcls = $('#ptsCls');
+  if (pcls) pcls.onchange = function () { S.ptsCls = pcls.value; S.ptsStu = ''; paintPointBoxes(); };
+  var pstus = $('#ptsStu');
+  if (pstus) pstus.onchange = function () { S.ptsStu = pstus.value; };
+  document.querySelectorAll('#ptsTagBox [data-note]').forEach(function (b) {
     b.onclick = function () {
-      var box = $('#coinNote');
+      var box = $('#ptsNote');
       var val = b.getAttribute('data-note') || '';
       var on = !b.classList.contains('on');
-      document.querySelectorAll('#coinTagBox [data-note]').forEach(function (x) {
+      document.querySelectorAll('#ptsTagBox [data-note]').forEach(function (x) {
         x.classList.remove('on');
       });
       if (on) {
@@ -354,35 +352,35 @@ function bind() {
       }
     };
   });
-  var cn = $('#coinNote');
-  if (cn) cn.oninput = function () {
-    document.querySelectorAll('#coinTagBox [data-note]').forEach(function (x) {
-      x.classList.toggle('on', x.getAttribute('data-note') === cn.value.trim());
+  var pn = $('#ptsNote');
+  if (pn) pn.oninput = function () {
+    document.querySelectorAll('#ptsTagBox [data-note]').forEach(function (x) {
+      x.classList.toggle('on', x.getAttribute('data-note') === pn.value.trim());
     });
   };
-  var cdo = $('#coinDo');
-  if (cdo) cdo.onclick = function () {
-    if (S.demo) { toast('演示模式：金币管理需要登录教师账号'); return; }
-    var amtEl = $('#coinAmt');
+  var pdo = $('#ptsDo');
+  if (pdo) pdo.onclick = function () {
+    if (S.demo) { toast('演示模式：积分管理需要登录教师账号'); return; }
+    var amtEl = $('#ptsAmt');
     var amt = parseInt((amtEl && amtEl.value) || '0', 10);
-    if (!amt || amt < 1) { toast('请输入大于 0 的金币数'); return; }
-    var mode = ($('#coinMode') && $('#coinMode').value) || 'add';
+    if (!amt || amt < 1) { toast('请输入大于 0 的积分数'); return; }
+    var mode = ($('#ptsMode') && $('#ptsMode').value) || 'add';
     var delta = mode === 'sub' ? -amt : amt;
-    var sid = ($('#coinStu') && $('#coinStu').value) || '';
-    var note = ($('#coinNote') && $('#coinNote').value) || '';
-    var sSel = $('#coinStu');
+    var sid = ($('#ptsStu') && $('#ptsStu').value) || '';
+    var note = ($('#ptsNote') && $('#ptsNote').value) || '';
+    var sSel = $('#ptsStu');
     var who = (sid && sSel && sSel.options[sSel.selectedIndex])
       ? sSel.options[sSel.selectedIndex].textContent : '全班所有人';
-    if (!confirm('确定给「' + who + '」' + (delta > 0 ? '发放 ' + delta : '扣除 ' + amt) + ' 金币吗？')) return;
-    api('/api/v2/typing/admin-coins', {
+    if (!confirm('确定给「' + who + '」' + (delta > 0 ? '发放 ' + delta : '扣除 ' + amt) + ' 积分吗？')) return;
+    api('/api/v2/typing/admin-points', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ class_id: S.coinCls, student_id: sid, delta: delta, note: note })
+      body: JSON.stringify({ class_id: S.ptsCls, student_id: sid, delta: delta, note: note })
     }).then(function (r) {
       if (r && r.ok) {
         toast('已' + (delta > 0 ? '发放' : '扣除') + ' ' + r.count + ' 名学生');
-        if ($('#coinNote')) $('#coinNote').value = '';
-        document.querySelectorAll('#coinTagBox [data-note]').forEach(function (x) { x.classList.remove('on'); });
-        loadCoins();
+        if ($('#ptsNote')) $('#ptsNote').value = '';
+        document.querySelectorAll('#ptsTagBox [data-note]').forEach(function (x) { x.classList.remove('on'); });
+        loadPoints();
       } else toast((r && r.msg) || '操作失败');
     });
   };
@@ -394,9 +392,7 @@ function bind() {
   });
 }
 
-/* 教师练习（2026-11-04）：不再 window.open 跳出新标签页——
-   直接在管理面板上盖一层全屏视图，iframe 内嵌打字页（同一教师会话，
-   页顶「计入班级排行榜」开关照常可用），点「返回管理」收起。 */
+/* 教师练习：面板上盖一层全屏视图，iframe 内嵌打字页 */
 function enterPlay() {
   if ($('#playView')) return;
   var v = document.createElement('div');
@@ -425,7 +421,6 @@ function loadLb() {
     box.innerHTML = rows.map(function (r, i) {
       var rankCls = i === 0 ? 'r1' : i === 1 ? 'r2' : i === 2 ? 'r3' : '';
       var medal = i < 3 ? ['🥇', '🥈', '🥉'][i] : (i + 1);
-      /* 宠物 + 背景 + 特效一起画：与牧场、学生端榜单同一套渲染（2026-11-05） */
       var tile = TD.petTile({ pet: r.pet, decos: r.decos, bg: r.bg, fx: r.fx, cls: 'lb-pet' });
       return '<div class="lb-row' + (r.me ? ' me' : '') + '">' +
         '<span class="lb-rank ' + rankCls + '">' + medal + '</span>' +
@@ -452,35 +447,35 @@ function loadLb() {
     });
 }
 
-/* ---------------- 金币管理（2026-11-05） ----------------
-   /api/v2/typing/coin-admin 一次拉回：各班学生余额 + 最近 100 条操作记录。
-   发放/扣除走 /api/v2/typing/admin-coins，服务端逐人落账并写 coin_log。 */
+/* ---------------- 积分管理 ----------------
+   /api/v2/typing/points-admin 一次拉回：各班学生余额 + 最近 100 条操作记录。
+   发放/扣除走 /api/v2/typing/admin-points，服务端逐人落账并写 pts_log。 */
 function clsStudents(cid) {
-  var d = S.coinData || {};
+  var d = S.ptsData || {};
   for (var i = 0; i < (d.classes || []).length; i++)
     if (d.classes[i].id === cid) return d.classes[i].students || [];
   return [];
 }
-function paintCoinBoxes() {
-  var stu = $('#coinStu'), bal = $('#coinBal'), lg = $('#coinLogBox');
-  var d = S.coinData || { classes: [], log: [] };
+function paintPointBoxes() {
+  var stu = $('#ptsStu'), bal = $('#ptsBal'), lg = $('#ptsLogBox');
+  var d = S.ptsData || { classes: [], log: [] };
   if (stu) {
     var opts = '<option value="">全班所有人</option>';
-    clsStudents(S.coinCls).forEach(function (s) {
+    clsStudents(S.ptsCls).forEach(function (s) {
       opts += '<option value="' + esc(s.id) + '">' +
-        esc((s.student_no ? s.student_no + ' ' : '') + s.name) + '（🪙' + s.coins + '）</option>';
+        esc((s.student_no ? s.student_no + ' ' : '') + s.name) + '（✨' + (s.pts || 0) + '）</option>';
     });
     stu.innerHTML = opts;
-    stu.value = S.coinStu || '';
+    stu.value = S.ptsStu || '';
   }
   if (bal) {
-    var list = clsStudents(S.coinCls);
+    var list = clsStudents(S.ptsCls);
     bal.innerHTML = S.demo
       ? '<span class="cl-empty">演示模式：登录后这里显示各班余额</span>'
       : (list.length
         ? list.map(function (s) {
-            return '<span class="coin-chip">' + esc(s.name) +
-              ' <b>🪙 ' + (s.coins || 0) + '</b> <i>✨ ' + (s.pts || 0) + '</i></span>';
+            return '<span class="pts-chip">' + esc(s.name) +
+              ' <b>✨ ' + (s.pts || 0) + '</b></span>';
           }).join('')
         : '<span class="cl-empty">这个班还没有学生</span>');
   }
@@ -491,7 +486,6 @@ function paintCoinBoxes() {
           var ts = (t.getMonth() + 1) + '/' + t.getDate() + ' ' +
             String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0');
           var up = (e.delta || 0) > 0;
-          /* 行结构与德育流水一致：时间 / 操作人 / 对象 / 分值 / 备注标签 */
           return '<div class="cl-row">' +
             '<span class="cl-time">' + ts + '</span>' +
             '<span class="cl-who">' + esc(e.by || '老师') + '</span>' +
@@ -501,15 +495,15 @@ function paintCoinBoxes() {
             (e.note ? '<span class="cl-note" title="' + esc(e.note) + '">' + esc(e.note) + '</span>' : '') +
             '</div>';
         }).join('')
-      : '<span class="cl-empty">还没有金币操作记录</span>';
+      : '<span class="cl-empty">还没有积分操作记录</span>';
   }
 }
-function loadCoins() {
-  if (S.demo) { paintCoinBoxes(); return; }
-  api('/api/v2/typing/coin-admin').then(function (r) {
-    if (r && r.ok) S.coinData = { classes: r.classes || [], log: r.log || [] };
-    paintCoinBoxes();
-  }).catch(function () { paintCoinBoxes(); });
+function loadPoints() {
+  if (S.demo) { paintPointBoxes(); return; }
+  api('/api/v2/typing/points-admin').then(function (r) {
+    if (r && r.ok) S.ptsData = { classes: r.classes || [], log: r.log || [] };
+    paintPointBoxes();
+  }).catch(function () { paintPointBoxes(); });
 }
 
 boot();

@@ -42,6 +42,7 @@ sys.path.insert(0, os.path.join(ROOT, "core"))
 sys.path.insert(0, os.path.join(ROOT, "submission-system"))
 
 import auth as A                       # noqa: E402
+import accounts as ACC                 # noqa: E402  管理员 / 多教师账号 + 工作区隔离
 import pages as P                      # noqa: E402
 import projection as PJ                # noqa: E402
 import ports as PORTX                  # noqa: E402
@@ -72,19 +73,50 @@ _spec.loader.exec_module(LEG)
 LEG.STATIC_ROOT = ROOT
 
 PORT = PORTX.DEFAULT_PORT
-STORE = Store(DB_PATH)
-# 课堂活动（自研）：活动/提交/附件落自己的表，附件落
-# <数据目录>/activity/<活动号>/，附件 URL 用 /static/uploads/…，
-# 前端大屏、课件库归档、自定义页面都按这个前缀取。
-ACT = ActivityStore(DB_PATH, os.path.join(DATA_DIR, "activity"))
 CFG = A.load_config(CONFIG_PATH)
+
+# ---- 账号与工作区（2.0.13）------------------------------------------------
+# 原单账号升级时映射成 id="default" 的教师账号，工作区就是原 DATA_DIR，
+# workbench.db / courseware / submissions 的路径一字不改，老数据零迁移。
+WS = ACC.Workspace(DATA_DIR)
+ACCOUNTS = ACC.AccountStore(DATA_DIR, legacy_teacher=CFG.get("teacher") or {})
 SESS = A.Sessions()
-# 打字冒险岛：独立成绩存储 + 配置缺省（教师开放开关 / 年级词库范围）
-TYPING = TypingStore(os.path.join(DATA_DIR, "typing.json"))
+
+def _store_for(a):
+    WS.ensure(a)
+    return Store(WS.paths_for(a)["db"])
+
+def _act_for(a):
+    WS.ensure(a)
+    p = WS.paths_for(a)
+    return ActivityStore(p["db"], p["activity"])
+
+def _typing_for(a):
+    WS.ensure(a)
+    return TypingStore(WS.paths_for(a)["typing"])
+
+# 三个模块级单例改成「按当前请求账号懒加载的代理」：业务代码里几百处
+# STORE.xxx / ACT.xxx / TYPING.xxx 一行都不用改，数据自动按账号隔离。
+# 课堂活动附件落 <工作区>/activity/<活动号>/，URL 仍是 /static/uploads/…。
+STORE = ACC.WorkspaceProxy(_store_for)
+ACT = ACC.WorkspaceProxy(_act_for)
+TYPING = ACC.WorkspaceProxy(_typing_for)
+
+# 旧提交系统 / 课件库 / 增强模块原本各有一套模块级全局路径常量，
+# 注入路径函数后它们也跟着当前账号走（模块内改为 PATH_FN() 取值）。
+LEG.PATH_FN = WS.legacy_paths
+LEG.CW.PATH_FN = WS.courseware_paths
+LEG.ENH.PATH_FN = WS.enhance_paths
 if not isinstance(CFG.get("typing"), dict):
     CFG["typing"] = {}
 CFG["typing"].setdefault("enabled", False)
 CFG["typing"].setdefault("grades", [])
+# 课堂签到（2026-11-05）：教师端可整体关闭（默认开启）；
+# 默认按课表当节课时间自动签到，填了 manual_time（HH:MM）就改按这个时间执行。
+if not isinstance(CFG.get("checkin"), dict):
+    CFG["checkin"] = {}
+CFG["checkin"].setdefault("enabled", True)
+CFG["checkin"].setdefault("manual_time", "")
 # 课堂活动配置（提交有效时长等；后端只有自研一种，不再有开关）
 if not isinstance(CFG.get("activity"), dict):
     CFG["activity"] = {}
@@ -98,7 +130,7 @@ CFG["update"].setdefault("interval_hours", 24) # 检查间隔（小时）
 PET_IDS = ["cat", "dog", "rabbit", "penguin", "panda", "dino", "unicorn", "dragon"]
 COND = threading.Condition()
 STARTED = time.time()
-VERSION = "2.0.11"
+VERSION = "2.0.13"
 ONLINE_WINDOW = 300      # 5 分钟内活跃算在线
 # 可内联直出的附件类型（其余一律按下载处理，防止同源执行脚本）
 _INLINE_EXTS = {"png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "pdf",
@@ -329,28 +361,42 @@ def _tip_page(title, msg):
             + "</p><a href=\"/s/\">返回学生端</a></div></body></html>")
 
 
-def security_of():
-    """教师密保：{question, answer_hash}。老配置里没有这个键，按“未设置”处理。"""
-    sec = (CFG.get("teacher") or {}).get("security")
+def security_of(account=None):
+    """教师密保：{question, answer_hash}。
+
+    2.0.13 多教师账号：可传账号 id 或用户名（忘记密码时按用户名定位），
+    不传就用当前请求绑定的教师账号。账号权威在 accounts.json，
+    CFG["teacher"]["security"] 只保留作旧备份的兼容镜像。
+    """
+    t = None
+    if account:
+        t = ACCOUNTS.teacher(str(account)) or ACCOUNTS.teacher_by_username(str(account))
+    if t is None:
+        t = ACCOUNTS.current_teacher()
+    sec = (t or {}).get("security")
+    if not isinstance(sec, dict):
+        sec = (CFG.get("teacher") or {}).get("security") or {}
     if not isinstance(sec, dict):
         sec = {}
     return {"question": str(sec.get("question") or ""),
             "answer_hash": str(sec.get("answer_hash") or "")}
 
 
-def has_qa():
-    s = security_of()
+def has_qa(account=None):
+    s = security_of(account)
     return bool(s["question"] and s["answer_hash"])
 
 
-def new_ticket():
+def new_ticket(account=None):
     import secrets as _s
     tok = _s.token_urlsafe(24)
     with QA_LOCK:
         now = time.time()
         for k in [k for k, v in QA_TICKETS.items() if v["exp"] < now]:
             QA_TICKETS.pop(k, None)
-        QA_TICKETS[tok] = {"exp": now + 600}
+        # 票据绑定账号：多教师下密保改密必须改到「答对问题那个人」的账号上
+        QA_TICKETS[tok] = {"exp": now + 600,
+                           "account": str(account or ACC.DEFAULT_TEACHER_ID)}
     return tok
 
 
@@ -358,8 +404,8 @@ def take_ticket(tok):
     with QA_LOCK:
         v = QA_TICKETS.pop(str(tok or ""), None)
     if not v or v["exp"] < time.time():
-        return False
-    return True
+        return None
+    return v.get("account") or ACC.DEFAULT_TEACHER_ID
 
 
 # ---------------------------------------------------------------------------
@@ -644,9 +690,21 @@ class Handler(LEG.Handler):
     def _session(self):
         return SESS.get(A.parse_cookie(self.headers.get("Cookie")))
 
+    def _bind_account(self):
+        """每个请求开头绑定工作区账号：教师/学生会话带 account，
+        匿名请求（登录页、图标、闸门）一律用 default，保证老数据可见。
+        LEG 的静态/提交/课件接口走 super().do_*，同线程上下文已绑定。"""
+        s = self._session()
+        ACC.set_account((s or {}).get("account") or ACC.DEFAULT_TEACHER_ID)
+        return s
+
     def _is_teacher(self):
         s = self._session()
         return bool(s and s["role"] == "teacher")
+
+    def _is_admin(self):
+        s = self._session()
+        return bool(s and s["role"] == "admin")
 
     def _same_origin(self):
         """跨站提交防护：有 Origin 就必须同源（服务端不知道自己的域名，
@@ -854,6 +912,7 @@ class Handler(LEG.Handler):
 
     def do_GET(self):
         self._sec_sent = False
+        self._bind_account()
         u = urllib.parse.urlparse(self.path)
         path = urllib.parse.unquote(u.path)
         qs = urllib.parse.parse_qs(u.query)
@@ -880,9 +939,12 @@ class Handler(LEG.Handler):
             if path in ("/core/cipher.js", "/login-import.js"):
                 return self._login_asset(path)
             if path == "/teacher/forgot":
-                if not CFG["teacher"].get("password_hash"):
-                    return self._redirect("/teacher/login")
                 return self._html(P.forgot_page())
+            # 管理员控制台：只管教师账号，不承载任何业务设置
+            if path in ("/admin", "/admin/"):
+                if not self._is_admin():
+                    return self._redirect("/teacher/login")
+                return self._html(P.admin_page())
             if path == "/teacher/console":
                 if not self._is_teacher():
                     return self._redirect("/teacher/login")
@@ -958,8 +1020,6 @@ class Handler(LEG.Handler):
         return self._redirect("/s/" if mobile else "/teacher/")
 
     def _teacher_page(self):
-        if not CFG["teacher"].get("password_hash"):
-            return self._redirect("/teacher/login")
         if not self._is_teacher():
             return self._redirect("/teacher/login")
         full = os.path.join(ROOT, "index.html")
@@ -978,8 +1038,8 @@ class Handler(LEG.Handler):
         self.wfile.write(body)
 
     def _teacher_login_page(self):
-        if not CFG["teacher"].get("password_hash"):
-            return self._html(P.login_page_setup())
+        # 2.0.13：登录页默认就是管理员登录界面，教师账号由管理员统一注册，
+        # 不再有「首次设置 / 注册」这一步（login_page_setup 已停用）。
         return self._html(P.login_page())
 
     def _login_asset(self, path):
@@ -1669,6 +1729,7 @@ class Handler(LEG.Handler):
 
     def do_POST(self):
         self._sec_sent = False
+        self._bind_account()
         u = urllib.parse.urlparse(self.path)
         path = urllib.parse.unquote(u.path)
         qs = urllib.parse.parse_qs(u.query)
@@ -1713,7 +1774,8 @@ class Handler(LEG.Handler):
             st = STORE.stats()
             return self._json({"ok": True, "empty": STORE.is_empty(),
                                "rev": STORE.rev(), "total": st["total"],
-                               "has_password": bool(CFG["teacher"].get("password_hash")),
+                               # 管理员账号随服务初始化即存在，恒为 true
+                               "has_password": True,
                                "has_qa": has_qa(), "config_rev": CFG_VER[0],
                                "port": _port(), "version": VERSION,
                                "activity_tasks": len(ACT.tasks())})
@@ -1726,7 +1788,11 @@ class Handler(LEG.Handler):
             # 打字冒险岛开关：学生端靠它决定要不要显示"打字"入口
             out["typing"] = {"enabled": bool((CFG.get("typing") or {}).get("enabled"))}
             if s["role"] == "teacher":
-                out["username"] = CFG["teacher"].get("username", "teacher")
+                t = ACCOUNTS.current_teacher()
+                out["username"] = (t or {}).get("username") or "teacher"
+                out["account"] = s.get("account") or ACC.DEFAULT_TEACHER_ID
+            if s["role"] == "admin":
+                out["username"] = ACCOUNTS.admin().get("username") or "teacher"
             if s["role"] == "student":
                 r = student_row(s.get("student_id"))
                 out["student"] = PJ.student_context(r)
@@ -1823,6 +1889,9 @@ class Handler(LEG.Handler):
             if not self._is_teacher():
                 return self._json({"ok": False, "msg": "未登录"}, 401)
             return self._json(self._now_payload())
+        if path == "/api/v2/checkin/config":
+            # 签到配置：教师设置页 / 学生端今日页都要读（不含任何敏感信息）
+            return self._json(dict({"ok": True}, **self._checkin_cfg()))
         if path == "/api/v2/teacher/seat-config":
             # 教师端读回某班已同步的座位表配置（换设备 / 清缓存后本地丢了能补回来）
             if not self._is_teacher():
@@ -1833,6 +1902,109 @@ class Handler(LEG.Handler):
             return self._json({"ok": True, "class_id": cid, "cfg": self._seat_cfg_of(cid)})
         if path == "/api/v2/student/guide-ctx":
             return self._guide_ctx(qs)
+        if path == "/api/v2/admin/teachers":
+            # 管理员控制台：只列教师账号，绝不返回口令哈希 / 密保答案
+            if not self._is_admin():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            return self._json({"ok": True,
+                               "teachers": ACCOUNTS.public_teachers(),
+                               "admin_username": ACCOUNTS.admin().get("username"),
+                               "version": VERSION})
+        if path == "/api/v2/teacher/peers":
+            # 资料共享：可选的目标教师（不含自己）
+            if not self._is_teacher():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            return self._json({"ok": True, "me": ACC.current_account(),
+                               "peers": ACCOUNTS.peers(ACC.current_account())})
+        if path == "/api/v2/teacher/tt-clash":
+            # 跨账号同班冲突检测（2026-11-05）：多教师账号可能教同一个班
+            #（各自工作区里建了同名班级），同一时段同一班会真实撞车。
+            # 按班级名跨工作区比对：
+            #   单格模式 ?dow=&pid=&class_name=&wp=  —— 保存排课前确认用；
+            #   全表模式 ?all=1                      —— 课表渲染角标用。
+            if not self._is_teacher():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            me = ACC.current_account()
+
+            def _wp_clash(a, b):
+                a = str(a or "all")
+                b = str(b or "all")
+                return not ((a == "odd" and b == "even")
+                            or (a == "even" and b == "odd"))
+
+            def _fmt(t, l, courses):
+                oc = next((x for x in courses
+                           if not x.get("deleted")
+                           and str(x.get("id")) == str(l.get("course_id"))), None)
+                w = str(l.get("week_pattern") or "all")
+                return {"teacher": t.get("name") or t.get("username") or t["id"],
+                        "course": (oc or {}).get("name") or "（课程已删）",
+                        "week_pattern": w}
+
+            # 其它账号：班级名 → [(dow, pid, week_pattern, lesson, courses)]
+            other = {}
+            for t in ACCOUNTS.teachers():
+                if t["id"] == me:
+                    continue
+                try:
+                    st = STORE.for_account(t["id"])
+                    courses = [c for c in st.table_rows("courses")
+                               if not c.get("deleted")]
+                    classes = {}
+                    for c in st.table_rows("classes"):
+                        if c.get("deleted"):
+                            continue
+                        classes[str(c.get("id"))] = \
+                            str(c.get("name") or "").strip()
+                    for l in st.table_rows("lessons"):
+                        if l.get("deleted"):
+                            continue
+                        cn = classes.get(str(l.get("class_id")))
+                        if not cn:
+                            continue
+                        other.setdefault(cn, []).append(
+                            (int(l.get("day_of_week") or 0),
+                             int(l.get("period_id") or 0), l, courses, t))
+                except Exception:
+                    continue        # 某个账号的工作区坏了不影响别人
+
+            if (qs.get("all") or [""])[0]:
+                # 全表：我每节课的位置，看别处同名班有没有同时段安排
+                my_classes = {str(c.get("id")): str(c.get("name") or "").strip()
+                              for c in STORE.table_rows("classes")
+                              if not c.get("deleted")}
+                cells = {}
+                for l in STORE.table_rows("lessons"):
+                    if l.get("deleted"):
+                        continue
+                    cn = my_classes.get(str(l.get("class_id")))
+                    if not cn:
+                        continue
+                    d = int(l.get("day_of_week") or 0)
+                    p = int(l.get("period_id") or 0)
+                    wp = str(l.get("week_pattern") or "all")
+                    my_courses = [c for c in STORE.table_rows("courses")
+                                  if not c.get("deleted")]
+                    for (d2, p2, l2, courses2, t) in other.get(cn, []):
+                        if d2 == d and p2 == p and _wp_clash(wp, l2.get("week_pattern")):
+                            cells.setdefault("%d-%d-%s" % (d, p, l.get("class_id")), []) \
+                                .append(_fmt(t, l2, courses2))
+                return self._json({"ok": True, "cells": cells})
+
+            # 单格
+            try:
+                dow = int((qs.get("dow") or [""])[0])
+                pid = int((qs.get("pid") or [""])[0])
+            except Exception:
+                return self._json({"ok": False, "msg": "参数不合法"}, 400)
+            cname = str((qs.get("class_name") or [""])[0]).strip()
+            wp = str((qs.get("wp") or ["all"])[0]) or "all"
+            out = []
+            if cname and 1 <= dow <= 7 and pid > 0:
+                for (d2, p2, l2, courses2, t) in other.get(cname, []):
+                    if d2 == dow and p2 == pid and _wp_clash(wp, l2.get("week_pattern")):
+                        out.append(_fmt(t, l2, courses2))
+            return self._json({"ok": True, "clashes": out})
         if path == "/api/v2/teacher/entry":
             # 首页「学生入口」卡：给出学生机该打开的局域网地址。
             # 只给教师：地址本身不算秘密，但班级码是（防爬名单），
@@ -1985,8 +2157,8 @@ class Handler(LEG.Handler):
             return self._json({"ok": True, "classes": classes,
                                "enabled": bool(t.get("enabled")),
                                "grades": t.get("grades") or []})
-        if path == "/api/v2/typing/coin-admin":
-            # 教师端金币管理数据（2026-11-05）：各班学生余额 + 最近操作记录
+        if path == "/api/v2/typing/points-admin":
+            # 教师端积分管理数据：各班学生余额 + 最近操作记录
             if not self._is_teacher():
                 return self._json({"ok": False, "msg": "未登录"}, 401)
             classes = []
@@ -1997,9 +2169,9 @@ class Handler(LEG.Handler):
                         for st in STORE.table_rows("students")
                         if not st.get("deleted") and str(st.get("class_id")) == str(c.get("id"))]
                 classes.append({"id": str(c.get("id")), "name": c.get("name", ""),
-                                "students": TYPING.students_coins(uids)})
+                                "students": TYPING.students_points(uids)})
             return self._json({"ok": True, "classes": classes,
-                               "log": TYPING.coin_log(100)})
+                               "log": TYPING.points_log(100)})
         return self._json({"ok": False, "msg": "未知接口"}, 404)
 
     def _sync_pull(self, qs):
@@ -2379,9 +2551,11 @@ class Handler(LEG.Handler):
         if not self._is_teacher():
             return self._json({"ok": False, "msg": "未登录"}, 401)
         sec = security_of()
+        t = ACCOUNTS.current_teacher() or {}
         return self._json({
             "ok": True,
-            "username": CFG["teacher"].get("username", "teacher"),
+            "username": t.get("username") or "teacher",
+            "account": ACC.current_account(),
             "has_qa": bool(sec["question"] and sec["answer_hash"]),
             "question": sec["question"],
             "qa_hint": ("密保问题：" + sec["question"]) if sec["question"] else "",
@@ -2472,7 +2646,7 @@ class Handler(LEG.Handler):
             "leaves": leaves[:20],
             "modules": PJ.module_flags(CFG),
             "visibility": CFG.get("visibility", {}),
-            "teacher_username": CFG["teacher"].get("username", "teacher"),
+            "teacher_username": (ACCOUNTS.current_teacher() or {}).get("username") or "teacher",
             "teacher_has_qa": has_qa(),
             "teacher_question": security_of()["question"],
             "config_rev": CFG_VER[0],
@@ -2503,10 +2677,14 @@ class Handler(LEG.Handler):
         if full:
             data["mode"] = "full"
             data["config"] = json.loads(json.dumps(CFG))     # 含 teacher（口令是哈希，不是明文）
+            # 2.0.13：备份标记所属教师账号，并带上教师账号表（只有哈希）。
+            # 恢复时按当前账号工作区写回，不会串到别的教师账号。
+            data["account"] = ACC.current_account()
+            data["accounts"] = ACCOUNTS.snapshot()
             data["creds"] = STORE.export_creds()
             data["sub"] = _sub_snapshot()                    # 提交系统：题目/花名册/提交记录
             # 2026-11-03（换机测试 F3/F4）：打字练习成绩与提交附件都不在 29 表里，
-            # 以前不打包 —— 换机后「打字进度金币装扮全归零」「提交记录在、作品文件没了」。
+            # 以前不打包 —— 换机后「打字进度积分装扮全归零」「提交记录在、作品文件没了」。
             data["typing"] = _typing_snapshot()
             # 课堂活动（2026-11-03 方案 B）：活动/提交/附件已并入工作台自己的库，
             # 备份口径随之合一——活动数据也在本库里，导出导入一并处理。
@@ -2790,14 +2968,40 @@ class Handler(LEG.Handler):
             r = UPD.rollback()
             STORE.audit("teacher", "update-rollback", r.get("msg", ""))
             return self._json(r, 200 if r.get("ok") else 400)
+        if path == "/api/v2/teacher/checkin-config":
+            # 教师端「课堂签到」设置：整体开关 + 手动签到时间（空 = 按课表当节）
+            if not self._is_teacher():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            c = CFG["checkin"]
+            if "enabled" in body:
+                c["enabled"] = bool(body.get("enabled"))
+            if "manual_time" in body:
+                t = str(body.get("manual_time") or "").strip()
+                if t:
+                    try:
+                        a = t.split(":")
+                        if len(a) != 2:
+                            raise ValueError()
+                        h, m = int(a[0]), int(a[1])
+                        if not (0 <= h <= 23 and 0 <= m <= 59):
+                            raise ValueError()
+                        t = "%02d:%02d" % (h, m)
+                    except Exception:
+                        return self._json({"ok": False, "msg": "签到时间要是 HH:MM 格式"}, 400)
+                c["manual_time"] = t
+            A.save_config(CONFIG_PATH, CFG)
+            CFG_VER[0] += 1
+            notify()                       # 学生端 SSE 立即感知开关变化
+            STORE.audit("teacher", "checkin-config",
+                        "enabled=%s time=%s" % (c.get("enabled"), c.get("manual_time") or "课表"))
+            return self._json(dict({"ok": True}, **self._checkin_cfg()))
         if path == "/api/v2/update/config":
             if not self._is_teacher():
                 return self._json({"ok": False, "msg": "未登录"}, 401)
             u = CFG["update"]
-            if "url" in body:
-                u["url"] = str(body.get("url") or "").strip()
-            # 访问令牌已随仓库公开下线（2026-11-04）：请求里带 token 也忽略，
-            # 并清掉老配置里遗留的值，避免设置页出现「已配置令牌」的错觉
+            # 更新源固定为官方 Gitee 仓库（2026-11-05）：设置页已删掉源地址，
+            # 旧前端/旧配置里带来的 url 一律清空并忽略，防止填错地址导致更新失败。
+            u["url"] = ""
             u.pop("token", None)
             if "auto" in body:
                 u["auto"] = bool(body.get("auto"))
@@ -2826,53 +3030,34 @@ class Handler(LEG.Handler):
                                    "msg": "自动重启没成功（%s）。请手动重启：Windows 计划任务/直接关掉重开启动脚本；"
                                           "Docker 用 docker compose restart workbench。" % e}, 500)
         if path == "/api/v2/auth/setup":
-            if CFG["teacher"].get("password_hash"):
-                return self._json({"ok": False, "msg": "账号已设置"}, 400)
-            # 首次设置账号只允许「刚启动的这段时间 + 内网来源」。
-            # 否则部署完到你打开浏览器之间，任何人先访问一次就能把管理员账号设成他的
-            # —— 之后你只能清库重来，中间所有数据都归他。
-            ok_setup, why_setup = self._setup_allowed()
-            if not ok_setup:
-                return self._json({"ok": False, "msg": why_setup}, 403)
-            user = str(body.get("username") or "").strip() or "teacher"
-            pwd = str(body.get("password") or "")
-            if len(user) < 2:
-                return self._json({"ok": False, "msg": "账号至少 2 个字符"}, 400)
-            bad = A.weak_password(pwd)
-            if bad:
-                return self._json({"ok": False, "msg": bad}, 400)
-            CFG["teacher"]["username"] = user
-            CFG["teacher"]["password_hash"] = A.hash_password(pwd)
-            q = str(body.get("question") or "").strip()
-            a = str(body.get("answer") or "")
-            if q:
-                CFG["teacher"]["security"] = {"question": q[:60],
-                                              "answer_hash": A.hash_answer(a)}
-            cfg_save()
-            notify_cfg()
-            tok = SESS.create("teacher", CFG["teacher"].get("session_hours", 12))
-            STORE.audit("teacher", "setup", "首次设置教师账号（密保：%s）" % ("已设" if q else "未设"))
-            return self._set_session_headers(
-                tok, extra={"username": user, "has_qa": bool(q)},
-                hours=CFG["teacher"].get("session_hours", 12))
+            # 2.0.13：取消教师端账号注册。教师账号一律由管理员在
+            # /admin/ 控制台创建；管理员账号在部署时用环境变量配置。
+            # 路径保留只是为了让旧页面/旧书签得到明确说明，不再写任何账号。
+            return self._json({"ok": False,
+                               "msg": "账号注册已关闭：教师账号由管理员统一创建，请联系管理员。"}, 403)
         if path == "/api/v2/auth/teacher":
             ip = A.client_ip(self)
             if not A.rate_ok("t:" + ip, 20, 60):
                 return self._json({"ok": False, "msg": "尝试太频繁，请 1 分钟后再试"}, 429)
+            # role: admin（默认登录页） / teacher（切换后的教师登录）
+            role = str(body.get("role") or "teacher").strip()
+            if role not in ("admin", "teacher"):
+                role = "teacher"
             user = str(body.get("username") or "").strip()
             pwd = str(body.get("password") or "")
-            want_user = str(CFG["teacher"].get("username") or "teacher")
-            if user and user != want_user:
-                STORE.audit("?", "login-fail", "%s user=%s" % (ip, user))
+            ok_login, acc_id, acc = ACCOUNTS.verify(role, user, pwd)
+            if not ok_login:
+                STORE.audit("?", "login-fail", "%s role=%s user=%s" % (ip, role, user))
                 return self._json({"ok": False, "msg": "账号或密码不正确"}, 401)
-            if not A.verify_password(pwd, CFG["teacher"].get("password_hash")):
-                STORE.audit("?", "login-fail", ip)
-                return self._json({"ok": False, "msg": "账号或密码不正确"}, 401)
-            tok = SESS.create("teacher", CFG["teacher"].get("session_hours", 12))
-            STORE.audit("teacher", "login", ip)
+            hours = CFG["teacher"].get("session_hours", 12)
+            tok = SESS.create(role, hours, account=acc_id)
+            ACC.set_account(acc_id)
+            STORE.audit(role, "login", ip)
             return self._set_session_headers(
-                tok, extra={"username": want_user},
-                hours=CFG["teacher"].get("session_hours", 12))
+                tok, extra={"username": str((acc or {}).get("username") or user),
+                            "role": role, "account": acc_id,
+                            "landing": "/admin/" if role == "admin" else "/teacher/"},
+                hours=hours)
         if path == "/api/v2/auth/student":
             ip = A.client_ip(self)
             # 机房/代理上网时同一个出口 IP 后面可能是整班 45 人，
@@ -2884,25 +3069,41 @@ class Handler(LEG.Handler):
             no = str(body.get("no") or "").strip()
             code = str(body.get("code") or "").strip().upper()
             pwd = str(body.get("password") or "")
+            # 2.0.13 多教师账号：学生属于某位教师的班级，先在各账号的工作区里
+            # 找到这名学生，再把会话绑到该账号 —— 之后的名单、口令、资料、
+            # 签到、作品都只会落到同一个工作区，不会串到别的教师账号。
             hit = None
-            if cls_id not in (None, "") or sid not in (None, ""):
-                for r in STORE.table_rows("students"):
-                    if cls_id not in (None, "") and str(r.get("class_id")) != str(cls_id):
-                        continue
-                    if sid not in (None, "") and str(r.get("id")) == str(sid):
-                        hit = r
+            found_acc = None
+            code_bad = False
+            for tid in ACCOUNTS.teacher_ids():
+                ACC.set_account(tid)
+                rows = STORE.table_rows("students")
+                matched = None
+                if cls_id not in (None, "") or sid not in (None, ""):
+                    for r in rows:
+                        if cls_id not in (None, "") and str(r.get("class_id")) != str(cls_id):
+                            continue
+                        if sid not in (None, "") and str(r.get("id")) == str(sid):
+                            matched = r
+                            break
+                        if sid in (None, "") and no and str(r.get("student_no") or "").strip() == no:
+                            matched = r
+                            break
+                else:
+                    # 兼容旧入口：班级码 + 学号
+                    if code != str(CFG.get("class_code", "")).upper():
+                        code_bad = True
                         break
-                    if sid in (None, "") and no and str(r.get("student_no") or "").strip() == no:
-                        hit = r
-                        break
-            else:
-                # 兼容旧入口：班级码 + 学号
-                if code != str(CFG.get("class_code", "")).upper():
-                    return self._json({"ok": False, "msg": "班级码不正确，问一下老师"}, 401)
-                for r in STORE.table_rows("students"):
-                    if str(r.get("student_no") or "").strip() == no:
-                        hit = r
-                        break
+                    for r in rows:
+                        if str(r.get("student_no") or "").strip() == no:
+                            matched = r
+                            break
+                if matched is not None:
+                    hit, found_acc = matched, tid
+                    break
+            ACC.set_account(found_acc or ACC.DEFAULT_TEACHER_ID)
+            if code_bad:
+                return self._json({"ok": False, "msg": "班级码不正确，问一下老师"}, 401)
             if not hit:
                 return self._json({"ok": False, "msg": "没找到这个学生，问一下老师"}, 401)
             # 单学号的尝试次数才是防爆破的关键（换 IP 也绕不过）
@@ -2913,7 +3114,7 @@ class Handler(LEG.Handler):
                 STORE.audit("?", "student-login-fail", "%s %s" % (ip, hit.get("student_no")))
                 return self._json({"ok": False, "msg": why}, 401)
             tok = SESS.create("student", CFG["student"].get("session_hours", 8),
-                              student_id=hit.get("id"))
+                              student_id=hit.get("id"), account=found_acc)
             STORE.audit("student:%s" % hit.get("name"), "login", ip)
             # v2 考勤：登录成功即自动签到（迟到 / 出勤由服务端按课表时间判定）。
             # 失败不影响登录本身——签到还可以在学生端手动补。
@@ -2933,34 +3134,38 @@ class Handler(LEG.Handler):
             SESS.drop(tok)
             return self._set_session_headers("", expire=True)
 
-        # ---------------- 密保问题：忘记密码时自助改密 ----------------
+        # ---------------- 密保问题：忘记密码时自助改密（按账号定位） ----------------
         if path == "/api/v2/auth/qa/question":
             ip = A.client_ip(self)
             if not A.rate_ok("qa:" + ip, 20, 60):
                 return self._json({"ok": False, "msg": "请求太频繁，请 1 分钟后再试"}, 429)
             user = str(body.get("username") or "").strip()
-            want_user = str(CFG["teacher"].get("username") or "teacher")
-            if user and user != want_user:
+            t = (ACCOUNTS.teacher_by_username(user) if user
+                 else ACCOUNTS.teacher(ACC.DEFAULT_TEACHER_ID))
+            if not t:
                 return self._json({"ok": False, "msg": "账号不存在"}, 401)
-            sec = security_of()
+            sec = security_of(t["id"])
             ok_qa = bool(sec["question"] and sec["answer_hash"])
             return self._json({
-                "ok": True, "has_qa": ok_qa, "username": want_user,
+                "ok": True, "has_qa": ok_qa, "username": t["username"],
+                "account": t["id"],
                 "question": sec["question"] if ok_qa else "",
-                "msg": "" if ok_qa else "这个账号还没设置密保问题，只能请管理员在服务器上重置",
+                "msg": "" if ok_qa else "这个账号还没设置密保问题，请管理员重置密码",
             })
         if path == "/api/v2/auth/qa/verify":
             ip = A.client_ip(self)
-            # 密保答案是可以被猜的短字符串，比密码更需要限速
             if not A.rate_ok("qav:" + ip, 8, 60):
                 return self._json({"ok": False, "msg": "尝试太频繁，请 1 分钟后再试"}, 429)
-            if not has_qa():
+            user = str(body.get("username") or "").strip()
+            t = (ACCOUNTS.teacher_by_username(user) if user
+                 else ACCOUNTS.teacher(ACC.DEFAULT_TEACHER_ID))
+            if not t or not has_qa(t["id"]):
                 return self._json({"ok": False, "msg": "没有设置密保问题"}, 400)
             ans = str(body.get("answer") or "")
-            if not A.verify_answer(ans, security_of()["answer_hash"]):
+            if not A.verify_answer(ans, security_of(t["id"])["answer_hash"]):
                 STORE.audit("?", "qa-fail", ip)
                 return self._json({"ok": False, "msg": "密保答案不正确"}, 401)
-            tok = new_ticket()
+            tok = new_ticket(t["id"])
             STORE.audit("teacher", "qa-verify", ip)
             return self._json({"ok": True, "ticket": tok, "expires_in": 600})
         if path == "/api/v2/auth/qa/reset":
@@ -2968,32 +3173,32 @@ class Handler(LEG.Handler):
             if not A.rate_ok("qar:" + ip, 10, 60):
                 return self._json({"ok": False, "msg": "请求太频繁，请 1 分钟后再试"}, 429)
             pwd = str(body.get("password") or "")
-            # 先校验新密码格式，再核销票据：老师把两次密码打得不一样、
-            # 或者只输了 3 位，不该让这张一次性票据白白作废（还得重新答密保）。
             bad = A.weak_password(pwd)
             if bad:
                 return self._json({"ok": False, "msg": bad}, 400)
-            if not take_ticket(body.get("ticket")):
+            acc = take_ticket(body.get("ticket"))
+            if not acc:
                 return self._json({"ok": False,
                                    "msg": "验证已过期，请重新回答密保问题"}, 400)
-            CFG["teacher"]["password_hash"] = A.hash_password(pwd)
-            cfg_save()
-            # 旧密码可能是别人知道的：密保改密后把所有教师会话踢下线，
-            # 下面再给当前这台机器发一个新会话，老师不用重新登录。
+            ACCOUNTS.set_password(acc, pwd)
+            ACC.set_account(acc)
+            # 旧密码可能已泄露：把所有教师会话踢下线，再给本机发新会话
             SESS.drop_role("teacher")
             notify_cfg()
             STORE.audit("teacher", "reset-password-qa", ip)
-            tok = SESS.create("teacher", CFG["teacher"].get("session_hours", 12))
+            hours = CFG["teacher"].get("session_hours", 12)
+            tok = SESS.create("teacher", hours, account=acc)
+            t = ACCOUNTS.teacher(acc) or {}
             return self._set_session_headers(
-                tok, extra={"username": CFG["teacher"].get("username", "teacher"),
-                            "via": "qa"},
-                hours=CFG["teacher"].get("session_hours", 12))
+                tok, extra={"username": t.get("username") or "teacher", "via": "qa"},
+                hours=hours)
         if path == "/api/v2/teacher/security":
             if not self._is_teacher():
                 return self._json({"ok": False, "msg": "未登录"}, 401)
-            if CFG["teacher"].get("password_hash"):
+            t = ACCOUNTS.current_teacher() or {}
+            if t.get("password_hash"):
                 if not A.verify_password(str(body.get("password") or ""),
-                                         CFG["teacher"].get("password_hash")):
+                                         t.get("password_hash")):
                     return self._json({"ok": False, "msg": "当前密码不正确"}, 401)
             q = str(body.get("question") or "").strip()
             a = str(body.get("answer") or "")
@@ -3001,11 +3206,8 @@ class Handler(LEG.Handler):
                 return self._json({"ok": False, "msg": "密保问题至少 4 个字"}, 400)
             if q and not a.strip():
                 return self._json({"ok": False, "msg": "请填写密保答案"}, 400)
-            CFG["teacher"]["security"] = {
-                "question": q[:60],
-                "answer_hash": A.hash_answer(a) if q else "",
-            }
-            cfg_save()
+            ACCOUNTS.set_security(ACC.current_account(), q[:60],
+                                  A.hash_answer(a) if q else "")
             notify_cfg()
             STORE.audit("teacher", "security-update",
                         (q[:30] if q else "清除密保问题"))
@@ -3018,15 +3220,15 @@ class Handler(LEG.Handler):
                 return self._json({"ok": False, "msg": "尝试太频繁，请 1 分钟后再试"}, 429)
             old = str(body.get("old") or "")
             new = str(body.get("new") or "")
-            if not A.verify_password(old, CFG["teacher"].get("password_hash")):
+            t = ACCOUNTS.current_teacher() or {}
+            if not A.verify_password(old, t.get("password_hash")):
                 return self._json({"ok": False, "msg": "当前密码不正确"}, 401)
             bad = A.weak_password(new)
             if bad:
                 return self._json({"ok": False, "msg": bad}, 400)
             if new == old:
                 return self._json({"ok": False, "msg": "新密码和原密码一样"}, 400)
-            CFG["teacher"]["password_hash"] = A.hash_password(new)
-            cfg_save()
+            ACCOUNTS.set_password(ACC.current_account(), new)
             cur = A.parse_cookie(self.headers.get("Cookie"))
             SESS.drop_role("teacher", except_token=cur)
             notify_cfg()
@@ -3108,7 +3310,7 @@ class Handler(LEG.Handler):
                                            str(body.get("pet") or ""),
                                            body.get("decos") or [], **kw))
         if path == "/api/v2/typing/buy":
-            # 金币/积分商店：kind = deco（装扮）/ item（道具）/ bg（背景）/ effect（特效）
+            # 积分商店：kind = deco（装扮）/ item（道具）/ bg（背景）/ effect（特效）
             s = self._session()
             if not s or s["role"] != "student":
                 return self._json({"ok": False, "msg": "未登录"}, 401)
@@ -3141,16 +3343,16 @@ class Handler(LEG.Handler):
             if not r:
                 return self._json({"ok": False, "msg": "学生档案不存在"}, 404)
             return self._json(TYPING.save_draft(str(r.get("id")), body))
-        if path == "/api/v2/typing/admin-coins":
-            # 教师对学生/全班发放或扣除金币（2026-11-05）：
+        if path == "/api/v2/typing/admin-points":
+            # 教师对学生/全班发放或扣除积分：
             # 全局实时生效（学生端 12 秒内轮询到新余额），
-            # 操作记录进 typing.json 的 coin_log，随快照导入导出。
+            # 操作记录进 typing.json 的 pts_log，随快照导入导出。
             if not self._is_teacher():
                 return self._json({"ok": False, "msg": "未登录"}, 401)
             try:
                 delta = int(body.get("delta"))
             except Exception:
-                return self._json({"ok": False, "msg": "金币数不合法"})
+                return self._json({"ok": False, "msg": "积分数不合法"})
             class_id = str(body.get("class_id") or "")
             sid = str(body.get("student_id") or "")
             note = str(body.get("note") or "")[:80]
@@ -3166,9 +3368,9 @@ class Handler(LEG.Handler):
             if sid and not targets:
                 return self._json({"ok": False, "msg": "这个学生不在所选班级里"})
             by = str((CFG.get("teacher") or {}).get("username") or "老师")
-            res = TYPING.adjust_coins(targets, delta, note, by)
+            res = TYPING.adjust_points(targets, delta, note, by)
             if res.get("ok"):
-                STORE.audit("teacher", "typing-coins",
+                STORE.audit("teacher", "typing-points",
                             "class=%s %s%s %s%d (%s)" % (
                                 class_id, ("uid=" + sid) if sid else "全班",
                                 (targets[0][1] if sid else "%d人" % res.get("count", 0)),
@@ -3286,27 +3488,131 @@ class Handler(LEG.Handler):
             STORE.clear_creds([row.get("id")])
             STORE.audit("teacher", "reset-password", "%s（回落班级初始密码）" % who)
             return self._json({"ok": True, "mode": "uniform", "name": who})
+        # ---------------- 管理员：只管教师账号 ----------------
+        if path == "/api/v2/admin/teacher/add":
+            if not self._is_admin():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            r = ACCOUNTS.add_teacher(body.get("username"), body.get("password"),
+                                     body.get("name"))
+            if r.get("ok"):
+                # 新账号的工作区立刻建好，第一次登录就能看到自己的空资料库
+                WS.ensure(r["teacher"]["id"])
+                STORE.audit("admin", "teacher-add", r["teacher"]["username"])
+                notify_cfg()
+            return self._json(r)
+        if path == "/api/v2/admin/teacher/update":
+            if not self._is_admin():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            r = ACCOUNTS.update_teacher(body.get("id"),
+                                        username=body.get("username"),
+                                        password=body.get("password"),
+                                        name=body.get("name"))
+            if r.get("ok"):
+                STORE.audit("admin", "teacher-update", str(body.get("id") or ""))
+                notify_cfg()
+            return self._json(r)
+        if path == "/api/v2/admin/teacher/delete":
+            if not self._is_admin():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            r = ACCOUNTS.delete_teacher(body.get("id"))
+            if r.get("ok"):
+                STORE.audit("admin", "teacher-delete", str(body.get("id") or ""))
+                notify_cfg()
+            return self._json(r)
+        if path == "/api/v2/admin/password":
+            if not self._is_admin():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            old = str(body.get("old") or "")
+            new = str(body.get("new") or "")
+            adm = ACCOUNTS.admin()
+            if not A.verify_password(old, adm.get("password_hash")):
+                return self._json({"ok": False, "msg": "当前密码不正确"}, 401)
+            bad = A.weak_password(new)
+            if bad:
+                return self._json({"ok": False, "msg": bad}, 400)
+            ACCOUNTS.set_admin_password(new)
+            cur = A.parse_cookie(self.headers.get("Cookie"))
+            SESS.drop_role("admin", except_token=cur)
+            STORE.audit("admin", "change-password", "")
+            return self._json({"ok": True})
+
+        # ---------------- 资料共享：文件复制到目标教师账号的课件目录 ----------------
+        if path == "/api/v2/teacher/share-material":
+            if not self._is_teacher():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            files = body.get("files")
+            if not isinstance(files, list):
+                files = [body.get("file")] if body.get("file") else []
+            targets = body.get("targets") or []
+            if not isinstance(targets, list):
+                targets = [targets]
+            if not files or not targets:
+                return self._json({"ok": False, "msg": "请先选资料和要共享的老师"}, 400)
+            valid_ids = set(ACCOUNTS.teacher_ids()) - {ACC.current_account()}
+            targets = [str(x) for x in targets if str(x) in valid_ids]
+            if not targets:
+                return self._json({"ok": False, "msg": "没有可用的目标教师账号"}, 400)
+            copied, skipped = [], []
+            for rel in files:
+                rel = str(rel or "").replace("\\", "/").strip("/")
+                if not rel or ".." in rel.split("/"):
+                    skipped.append(str(rel) + "（路径不合法）")
+                    continue
+                src = LEG.CW.abs_of(rel, must_exist=True)
+                if not src or not os.path.isfile(src):
+                    skipped.append(rel + "（源文件不存在）")
+                    continue
+                for tid in targets:
+                    p = WS.ensure(tid)
+                    dst = os.path.normpath(os.path.join(
+                        p["courseware"], *rel.split("/")))
+                    # 目标必须仍在该账号的课件根内
+                    try:
+                        if os.path.commonpath([os.path.normpath(p["courseware"]), dst]) \
+                                != os.path.normpath(p["courseware"]):
+                            skipped.append(rel + "（目标路径越界）")
+                            continue
+                    except ValueError:
+                        skipped.append(rel + "（目标路径越界）")
+                        continue
+                    os.makedirs(os.path.dirname(dst), exist_ok=True)
+                    stem, ext = os.path.splitext(dst)
+                    n = 1
+                    while os.path.exists(dst):
+                        dst = "%s_共享%d%s" % (stem, n, ext)
+                        n += 1
+                    shutil.copy2(src, dst)
+                    copied.append({"target": tid, "file": rel,
+                                   "to": os.path.relpath(dst, p["courseware"])
+                                         .replace(os.sep, "/")})
+            STORE.audit("teacher", "share-material",
+                        "%d 份 → %s" % (len(copied), ",".join(targets)))
+            return self._json({"ok": True, "copied": len(copied),
+                               "skipped": skipped, "items": copied})
+
         if path == "/api/v2/teacher/account":
             if not self._is_teacher():
                 return self._json({"ok": False, "msg": "未登录"}, 401)
             user = str(body.get("username") or "").strip()
+            if user:
+                # 2.0.13：账号名（注册 / 改名 / 删除）统一归管理员
+                return self._json({"ok": False,
+                                   "msg": "账号名由管理员统一管理，请到管理员控制台修改"}, 403)
             old = str(body.get("old") or "")
             new = str(body.get("new") or "")
-            if user:
-                if len(user) < 2:
-                    return self._json({"ok": False, "msg": "账号至少 2 个字符"}, 400)
-                CFG["teacher"]["username"] = user
-            if new:
-                if not A.verify_password(old, CFG["teacher"].get("password_hash")):
-                    return self._json({"ok": False, "msg": "原密码不正确"}, 401)
-                bad = A.weak_password(new)
-                if bad:
-                    return self._json({"ok": False, "msg": bad}, 400)
-                CFG["teacher"]["password_hash"] = A.hash_password(new)
-            cfg_save()
+            if not new:
+                return self._json({"ok": False, "msg": "没有要修改的内容"}, 400)
+            t = ACCOUNTS.current_teacher() or {}
+            if not A.verify_password(old, t.get("password_hash")):
+                return self._json({"ok": False, "msg": "原密码不正确"}, 401)
+            bad = A.weak_password(new)
+            if bad:
+                return self._json({"ok": False, "msg": bad}, 400)
+            ACCOUNTS.set_password(ACC.current_account(), new)
             notify_cfg()
-            STORE.audit("teacher", "account-update", user)
-            return self._json({"ok": True, "username": CFG["teacher"].get("username")})
+            STORE.audit("teacher", "account-update", "change-password")
+            return self._json({"ok": True,
+                               "username": t.get("username") or "teacher"})
         if path == "/api/v2/teacher/modules":
             return self._teacher_toggle("modules", body)
         if path == "/api/v2/teacher/activity":
@@ -3408,6 +3714,24 @@ class Handler(LEG.Handler):
     # ---------------------------------------------------------------
     # 课堂签到：学生端「一键签到」→ 写考勤 → 教师端座位表实时看到
     # ---------------------------------------------------------------
+    def _checkin_cfg(self):
+        """签到配置对外统一口径（两端显示 / 设置页都读这一份）。"""
+        t = _manual_checkin_min()
+        return {"enabled": self._checkin_enabled(),
+                "manual_time": str((CFG.get("checkin") or {}).get("manual_time") or "")
+                               if t is not None else "",
+                "mode": "manual" if t is not None else "schedule"}
+
+    def _checkin_enabled(self):
+        return bool((CFG.get("checkin") or {}).get("enabled", True))
+
+    def _checkin_base_min(self, prow):
+        """签到 / 迟到判定的时间基准：手动时间优先，否则课表本节开始时间。"""
+        manual = _manual_checkin_min()
+        if manual is not None:
+            return manual
+        return _mins_of((prow or {}).get("start_time"))
+
     def _current_period(self):
         """按作息表判断“现在第几节”。
 
@@ -3521,6 +3845,16 @@ class Handler(LEG.Handler):
         """
         if not r:
             return True, ""
+        # 老师手动设了签到时间：窗口就以它为准，不再看课表节次的上下课。
+        manual = _manual_checkin_min()
+        if manual is not None:
+            cur_m = time.localtime().tm_hour * 60 + time.localtime().tm_min
+            tstr = self._checkin_cfg()["manual_time"] or ("%d:%02d" % (manual // 60, manual % 60))
+            if cur_m < manual - 15:
+                return False, "还没到签到时间（老师设定 %s，提前 15 分钟才能签）" % tstr
+            if cur_m > manual + 45:
+                return False, "签到时间已过（老师设定 %s），如需补签请让老师在考勤页登记" % tstr
+            return True, ""
         def mins(v):
             try:
                 a = str(v or "").split(":")
@@ -3587,7 +3921,8 @@ class Handler(LEG.Handler):
                 period = 0
             label = str(p.get("label") or ("第 %s 节" % (p.get("seq") or p.get("id") or "?")))
         out = {"ok": True, "date": today_str(), "time": time.strftime("%H:%M"),
-               "period": period, "label": label}
+               "period": period, "label": label,
+               "checkin": self._checkin_cfg()}
         if cid is not None and period:
             out["lesson"] = self._class_lesson_at(cid, time.localtime().tm_wday, period)
         return out
@@ -3596,6 +3931,8 @@ class Handler(LEG.Handler):
         s = self._session()
         if not s or s["role"] != "student":
             return self._json({"ok": False, "msg": "未登录"}, 401)
+        if not self._checkin_enabled():
+            return self._json({"ok": False, "msg": "老师已关闭课堂签到，本节课不用签到"}, 403)
         sid = s.get("student_id")
         st = student_row(sid)
         if not st:
@@ -3707,6 +4044,8 @@ class Handler(LEG.Handler):
         · 已被自动记缺勤的学生到堂 → 改判迟到，reason 留痕「缺勤后到堂」
         · 首次签到时间留住：反复签到不会把迟到「刷」成准时
         """
+        if not self._checkin_enabled():
+            return False, "老师已关闭课堂签到"
         rid = "ck%s-%s-%s" % (sid, d, period)
         old = STORE.get_row("attendance", rid) or {}
         first = str(old.get("checked_at") or "")
@@ -3739,7 +4078,7 @@ class Handler(LEG.Handler):
                 return int(a[0]) * 60 + int(a[1] or 0)
             except Exception:
                 return -1
-        start_min = _mins((p or {}).get("start_time"))
+        start_min = self._checkin_base_min(p)
         late = start_min >= 0 and now_min - start_min > 5
 
         if old_status in ("sick", "personal"):
@@ -3772,6 +4111,8 @@ class Handler(LEG.Handler):
 
     def _auto_checkin(self, sid):
         """学生登录成功即自动签到（按当前节次，窗口外静默跳过）。"""
+        if not self._checkin_enabled():
+            return False, "签到功能已关闭"
         st = student_row(sid)
         if not st:
             return False, "学生档案不存在"
@@ -3850,21 +4191,20 @@ class Handler(LEG.Handler):
         ip = A.client_ip(self)
         if not A.rate_ok("imp:" + ip, 12, 300):
             return self._json({"ok": False, "msg": "操作太频繁，请 5 分钟后再试"}, 429)
-        if CFG["teacher"].get("password_hash"):
-            user = str(body.get("teacher_username") or "").strip()
-            pwd = str(body.get("teacher_password") or "")
-            want_user = str(CFG["teacher"].get("username") or "teacher")
-            if (user and user != want_user) or \
-                    not A.verify_password(pwd, CFG["teacher"].get("password_hash")):
-                STORE.audit("?", "preauth-import-fail", ip)
-                return self._json({"ok": False,
-                                   "msg": "教师账号或密码不正确 —— 已有账号的服务器"
-                                          "导入数据前要先验证教师密码（防止学生误导入）"}, 401)
-            return self._do_import(body, actor="teacher")
-        ok_setup, why_setup = self._setup_allowed()
-        if not ok_setup:
-            return self._json({"ok": False, "msg": why_setup}, 403)
-        return self._do_import(body, actor="restore")
+        # 2.0.13：管理员/教师账号随服务初始化即存在，一律要求验证凭据。
+        # 管理员或任一教师账号的密码都能通过（防止机房学生一键覆盖全班数据）。
+        user = str(body.get("teacher_username") or "").strip()
+        pwd = str(body.get("teacher_password") or "")
+        ok_admin, _, _ = ACCOUNTS.verify("admin", user, pwd)
+        ok_teacher, tid, _ = ACCOUNTS.verify("teacher", user, pwd)
+        if not (ok_admin or ok_teacher):
+            STORE.audit("?", "preauth-import-fail", ip)
+            return self._json({"ok": False,
+                               "msg": "管理员或教师账号密码不正确 —— 导入数据前"
+                                      "要先验证密码（防止学生误导入）"}, 401)
+        if ok_teacher:
+            ACC.set_account(tid)
+        return self._do_import(body, actor="admin" if ok_admin else "teacher")
 
     def _do_import(self, body, actor="teacher"):
         """导入的真正实现：校验 → 写库 → 汇总范围，被登录态和登录页两条入口共用。"""
@@ -3900,11 +4240,20 @@ class Handler(LEG.Handler):
         cfg_in = body.get("config")
         if isinstance(cfg_in, dict):
             for k, v in cfg_in.items():
-                if k in ("port", "port_migrated", "bind"):
+                # 账号（管理员 / 教师）权威在 accounts.json，不让旧备份的
+                # config.teacher 段把账号表覆盖掉；其余部署设置照旧恢复。
+                if k in ("port", "port_migrated", "bind", "teacher"):
                     continue
                 CFG[k] = v
             cfg_save()
             notify_cfg()
+
+        # 全量备份里的教师账号表：仅「覆盖」策略才恢复，且保留本机管理员凭据
+        if str(body.get("mode") or "") == "replace":
+            try:
+                ACCOUNTS.restore(body.get("accounts"))
+            except Exception:
+                pass
 
         creds = body.get("creds")
         if "creds" in body and isinstance(creds, list):
@@ -4250,7 +4599,25 @@ def _mins_of(v):
         return -1
 
 
+def _manual_checkin_min():
+    """老师手动设置的签到时间 → 当天分钟数；没填 / 格式不对返回 None。"""
+    t = str((CFG.get("checkin") or {}).get("manual_time") or "").strip()
+    try:
+        a = t.split(":")
+        if len(a) != 2:
+            return None
+        h, m = int(a[0]), int(a[1])
+        if 0 <= h <= 23 and 0 <= m <= 59:
+            return h * 60 + m
+    except Exception:
+        pass
+    return None
+
+
 def absent_sweep_once():
+    # 老师把签到关了：连自动记缺勤一起停，否则关了功能还在后台刷旷课
+    if not bool((CFG.get("checkin") or {}).get("enabled", True)):
+        return 0
     rows = [r for r in STORE.table_rows("periods") if not r.get("deleted")]
     if not rows:
         return 0
@@ -4265,10 +4632,16 @@ def absent_sweep_once():
             break
     if not curp:
         return 0                          # 课间 / 放学后不判定
-    s = _mins_of(curp.get("start_time"))
-    e = _mins_of(curp.get("end_time"))
-    if not (s + 15 <= cur <= e + 30):
-        return 0                          # 15 分钟线之前 / 下课 30 分钟后不扫
+    manual = _manual_checkin_min()
+    if manual is not None:
+        # 手动签到时间：到点 15 分钟后开始扫，45 分钟后停止
+        if not (manual + 15 <= cur <= manual + 45):
+            return 0
+    else:
+        s = _mins_of(curp.get("start_time"))
+        e = _mins_of(curp.get("end_time"))
+        if not (s + 15 <= cur <= e + 30):
+            return 0                      # 15 分钟线之前 / 下课 30 分钟后不扫
     try:
         period = int(float(curp.get("seq") or curp.get("id") or 1))
     except Exception:

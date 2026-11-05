@@ -29,8 +29,9 @@ CHECK_TIMEOUT = 10       # manifest 检查超时（秒）
 DL_TIMEOUT = 30          # 下载读块超时（秒）
 CHUNK = 256 * 1024
 
-# 默认更新源：仓库根目录的 version.json（manifest）。
-# 私有仓库需要在设置里填访问令牌（Gitee/GitHub 的私人令牌即可）。
+# 唯一更新源：官方 Gitee 仓库根目录的 version.json（manifest）。
+# 2026-11-05 起不再提供自定义源入口 —— 填错地址是老师最常见的更新失败原因，
+# 仓库已公开、也不需要访问令牌，固定这一处最省心。
 DEFAULT_MANIFEST_URL = "https://gitee.com/shyxiaoniu/teacher-workbench/raw/main/version.json"
 
 
@@ -61,7 +62,9 @@ def _net_msg(e, what):
         if code in (401, 403):
             return "%s失败：更新源拒绝访问（HTTP %d），检查更新源地址是否正确。" % (what, code)
         if code == 404:
-            return "%s失败：更新源上没找到文件（HTTP 404），检查更新源地址是否正确。" % what
+            return ("%s失败：更新源上没找到文件（HTTP 404）。若是在下载安装包，"
+                    "请确认 version.json 的 zip 对应的发行包已推送到仓库 dist/ 目录；"
+                    "若是在检查更新，再核对更新源地址。" % what)
         if code == 429:
             return "%s失败：更新源限流（HTTP 429），稍等几分钟再试。" % what
         return "%s失败：更新源返回 HTTP %d。" % (what, code)
@@ -166,7 +169,8 @@ class Updater:
         shutil.rmtree(os.path.join(self.dir, "stage"), ignore_errors=True)
 
     def _manifest_url(self, uc):
-        return str(uc.get("url") or "").strip() or DEFAULT_MANIFEST_URL
+        # 固定走官方 Gitee 仓库；老配置里若残留自定义 url 也一律忽略
+        return DEFAULT_MANIFEST_URL
 
     # ---------------- 检查更新 ----------------
     def check(self, uc):
@@ -196,6 +200,18 @@ class Updater:
                     raise UpdateError("更新源返回的内容不是有效的 version.json（缺 version 字段）。")
                 self.state["last_check"] = time.time()
                 self.state["manifest"] = m
+                # 附加信息：把「检测到的版本」与「安装时要用哪个包」记在一起，
+                # 便于排查 404。只记录，不参与 has_update / phase 的判定 ——
+                # 检测行为保持原样。
+                try:
+                    self.state["pkg"] = {
+                        "zip": str(m.get("zip") or ""),
+                        "urls": self._zip_urls(m, url),
+                        "sha256": str(m.get("sha256") or ""),
+                    }
+                except UpdateError as pe:
+                    self.state["pkg"] = {"zip": "", "urls": [],
+                                         "sha256": "", "error": str(pe)}
                 if is_newer(m.get("version"), self.version):
                     self.state["phase"] = "available"
                     self.state["msg"] = "发现新版本 v%s" % m.get("version")
@@ -218,14 +234,44 @@ class Updater:
     def _set_prog(self, phase, pct, msg):
         self.state["progress"] = {"phase": phase, "pct": pct, "msg": msg}
 
-    def _zip_url(self, manifest, manifest_url):
-        z = str(manifest.get("zip") or "").strip()
+    def _zip_urls(self, manifest, manifest_url):
+        """把 manifest 的 zip 字段解析成「可以尝试的下载地址列表」。
+
+        2026-11-05 修复「检测得到更新、点下载却报 404」：
+          · 发行包按仓库约定放在 dist/ 下，但 make_release 早先只把
+            纯文件名写进 version.json；_zip_url 又直接拼到 manifest
+            所在目录（仓库根），于是去下载
+            <仓库根>/班级工作台2.0.x.zip —— 这个文件根本不存在。
+            check() 只拉 version.json、从不碰安装包，所以检测永远成功、
+            安装永远 404，两边结论不一致。
+          · 现在兼容三种写法并给出候选：完整 URL / 仓库相对路径（含子目录）
+            / 老格式纯文件名（先试 dist/，再试仓库根）。
+        """
+        z = str(manifest.get("zip") or "").strip().replace("\\", "/")
         if not z:
             raise UpdateError("version.json 里没有 zip 字段，不知道去哪下载安装包。")
         if re.match(r"^https?://", z, re.I):
-            return z
+            return [z]
         base = manifest_url.rsplit("/", 1)[0]
-        return base + "/" + urllib.parse.quote(z)
+        quoted = urllib.parse.quote(z.lstrip("/"), safe="/")
+        urls = []
+        if "/" in z.lstrip("/"):
+            # 新格式：相对仓库根的路径，例如 dist/班级工作台2.0.13-261105.zip
+            urls.append(base + "/" + quoted)
+        else:
+            # 老格式纯文件名：包在 dist/ 下；也保留仓库根兜底
+            urls.append(base + "/dist/" + quoted)
+            urls.append(base + "/" + quoted)
+        # 去重，保持顺序
+        out = []
+        for u in urls:
+            if u not in out:
+                out.append(u)
+        return out
+
+    def _zip_url(self, manifest, manifest_url):
+        """保留旧调用方的单值语义（pending.json / 状态里只用主候选）。"""
+        return self._zip_urls(manifest, manifest_url)[0]
 
     def apply(self, uc):
         """下载并安装（后台线程跑，进度走 self.state['progress']）。"""
@@ -249,15 +295,38 @@ class Updater:
             # ---- 1. 下载 ----
             with self.lock:
                 self.state["phase"] = "downloading"
-            zip_url = self._zip_url(m, manifest_url)
+            zip_urls = self._zip_urls(m, manifest_url)
+            zip_url = zip_urls[0]
             dl = os.path.join(self.dir, "download.zip")
             self._set_prog("download", 0, "连接更新源…")
-            try:
-                r = _fetch(zip_url, DL_TIMEOUT, "下载安装包")
-            except UpdateError:
-                raise
-            except Exception as e:
-                raise UpdateError(_net_msg(e, "下载安装包"))
+            # 老 manifest 只写纯文件名时，先试 dist/ 再试仓库根；
+            # 全 404 要给出「包和 manifest 对不上」的明确结论，而不是
+            # 笼统一句「检查更新源地址」（地址其实是对的，缺的是包）。
+            r = None
+            tried = []
+            for cand in zip_urls:
+                try:
+                    r = _fetch(cand, DL_TIMEOUT, "下载安装包")
+                    zip_url = cand
+                    break
+                except urllib.error.HTTPError as e:
+                    tried.append(cand)
+                    if e.code == 404 and cand != zip_urls[-1]:
+                        try:
+                            e.close()
+                        except Exception:
+                            pass
+                        continue
+                    raise UpdateError(_net_msg(e, "下载安装包"))
+                except UpdateError:
+                    raise
+                except Exception as e:
+                    raise UpdateError(_net_msg(e, "下载安装包"))
+            if r is None:
+                raise UpdateError(
+                    "安装包不在更新源上（试过 %d 个地址）。请确认 version.json 的 "
+                    "version、zip、sha256 与仓库 dist/ 下实际发行的包一致：%s"
+                    % (len(tried), "、".join(tried[-2:])))
             total = int(r.headers.get("Content-Length") or 0)
             done = 0
             h = hashlib.sha256()
@@ -441,6 +510,7 @@ class Updater:
                 "latest": m.get("version") or "",
                 "date": m.get("date") or "",
                 "notes": m.get("notes") or [],
+                "pkg": dict(self.state.get("pkg") or {}),
                 "has_update": bool(m.get("version") and is_newer(m.get("version"), self.version)
                                    and self.state["phase"] in ("idle", "available", "failed")),
                 "progress": dict(self.state.get("progress") or {}),

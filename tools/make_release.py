@@ -292,7 +292,9 @@ def write_manifest(version, zip_path, zip_name):
         "version": version,
         "date": time.strftime("%Y-%m-%d"),
         "notes": old.get("notes") or [],
-        "zip": zip_name,
+        # 相对仓库根的路径：发行包实际放在 dist/ 下。以前只写纯文件名，
+        # 更新器会拼到仓库根去下载 → 检测得到更新、安装却 404。
+        "zip": "dist/" + zip_name,
         "sha256": h.hexdigest(),
     }
     with open(mpath, "w", encoding="utf-8") as f:

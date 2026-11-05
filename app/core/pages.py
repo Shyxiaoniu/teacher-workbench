@@ -80,48 +80,73 @@ def _page(title, body, extra_head=""):
 
 
 LOGIN_BODY = """
-<div class="card" style="max-width:420px;margin:8vh auto 0">
+<div class="card" style="max-width:440px;margin:7vh auto 0">
   <div class="brand">__LOGO__<div><div style="font-weight:750;font-size:15px">班级工作台</div>
-  <div style="font-size:12px;color:#849690">教师端 · 服务端部署</div></div></div>
-  <h1>教师登录</h1>
-  <p class="sub">用你设置的管理员账号进入工作台。</p>
+  <div style="font-size:12px;color:#849690">服务端部署 · 多教师账号</div></div></div>
+  <div style="display:flex;gap:8px;margin:4px 0 14px">
+    <button type="button" id="tabAdmin" style="flex:1;padding:9px 10px;border-radius:10px;border:1.5px solid #0F6E56;background:#0F6E56;color:#fff;font-weight:700;font-size:13.5px;cursor:pointer">管理员登录</button>
+    <button type="button" id="tabTeacher" style="flex:1;padding:9px 10px;border-radius:10px;border:1.5px solid #D9E5DF;background:#fff;color:#5F6E68;font-weight:700;font-size:13.5px;cursor:pointer">教师登录</button>
+  </div>
+  <h1 id="lgTitle">管理员登录</h1>
+  <p class="sub" id="lgSub">默认账号 <b>teacher</b>、默认密码 <b>t12345678</b>；部署时可用环境变量修改。管理员只负责教师账号的注册与管理。</p>
   <form id="f">
     <label>账号</label>
     <input id="user" type="text" autocomplete="username" placeholder="账号" value="teacher" autofocus>
     <label>密码</label>
     <input id="pwd" type="password" autocomplete="current-password" placeholder="密码">
     <div class="err" id="err">__MSG__</div>
-    <button style="width:100%;margin-top:6px" id="btn">进入工作台</button>
+    <button style="width:100%;margin-top:6px" id="btn">进入管理控制台</button>
   </form>
-  <div style="margin-top:14px;font-size:13px;text-align:center">
+  <div id="forgotWrap" style="margin-top:14px;font-size:13px;text-align:center">
     <a href="/teacher/forgot" style="color:#0F6E56;text-decoration:none">忘记密码？用密保问题重设 →</a>
   </div>
   <div style="margin-top:8px;font-size:13px;text-align:center">
     <a href="javascript:void 0" id="impLink" style="color:#5F6E68;text-decoration:none">📥 数据导入（换设备 / 重装后一键恢复全部数据）</a>
   </div>
   <div class="tip" style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap">
-    <span>学生入口 <code>/s/</code> · 登录相关说明点</span>
+    <span>学生入口 <code>/s/</code> · 教师账号由管理员统一创建</span>
     <button id="helpBtn" type="button" class="qbtn" aria-label="查看登录页说明">？</button>
   </div>
 </div>
 <script>
 document.getElementById('impLink').onclick=function(){LoginIO.open();};
 document.getElementById('helpBtn').onclick=function(){LoginIO.help('login');};
+var lgRole='admin';
+function lgSet(r){
+  lgRole=r;
+  var a=document.getElementById('tabAdmin'), t=document.getElementById('tabTeacher');
+  var on='1.5px solid #0F6E56', off='1.5px solid #D9E5DF';
+  a.style.background=r==='admin'?'#0F6E56':'#fff'; a.style.color=r==='admin'?'#fff':'#5F6E68'; a.style.border=r==='admin'?on:off;
+  t.style.background=r==='teacher'?'#0F6E56':'#fff'; t.style.color=r==='teacher'?'#fff':'#5F6E68'; t.style.border=r==='teacher'?on:off;
+  document.getElementById('lgTitle').textContent=r==='admin'?'管理员登录':'教师登录';
+  document.getElementById('lgSub').innerHTML=r==='admin'
+    ? '默认账号 <b>teacher</b>、默认密码 <b>t12345678</b>；部署时可用环境变量修改。管理员只负责教师账号的注册与管理。'
+    : '教师账号由管理员在管理控制台创建；每位教师的数据、资料与文件彼此独立。';
+  document.getElementById('btn').textContent=r==='admin'?'进入管理控制台':'进入教师工作台';
+  document.getElementById('forgotWrap').style.display=r==='teacher'?'':'none';
+  document.getElementById('err').textContent='';
+}
+document.getElementById('tabAdmin').onclick=function(){lgSet('admin');};
+document.getElementById('tabTeacher').onclick=function(){lgSet('teacher');};
 </script>
 <script>
 document.getElementById('f').onsubmit = async function(e){
   e.preventDefault();
   var err=document.getElementById('err'), btn=document.getElementById('btn');
+  var label=btn.textContent;
   err.textContent=''; btn.disabled=true; btn.textContent='验证中…';
   var r=await fetch('/api/v2/auth/teacher',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({username:document.getElementById('user').value.trim(),
-                         password:document.getElementById('pwd').value})});
+                         password:document.getElementById('pwd').value, role:lgRole})});
   var j=await r.json().catch(function(){return {};});
-  if(j.ok){location.href='/teacher/';return;}
-  err.textContent=j.msg||'账号或密码不正确'; btn.disabled=false; btn.textContent='进入工作台';
+  if(j.ok){location.href=j.landing||(lgRole==='admin'?'/admin/':'/teacher/');return;}
+  err.textContent=j.msg||'账号或密码不正确'; btn.disabled=false; btn.textContent=label;
 };
 </script>"""
 
+# 2.0.13 起账号注册已取消：下面的 SETUP_BODY 是历史模板，仅作备份兼容保留，
+# 没有任何路由或函数再渲染它（login_page_setup 也改为直接返回登录页）。
+# 教师账号一律由管理员在 /admin/ 控制台创建。
 SETUP_BODY = """
 <div class="card" style="max-width:480px;margin:5vh auto 0">
   <div class="brand">__LOGO__<div><div style="font-weight:750;font-size:15px">班级工作台</div>
@@ -232,12 +257,135 @@ LOGIN_SCRIPTS = ('<script src="/core/cipher.js"></script>'
 
 def login_page(msg=""):
     body = LOGIN_BODY.replace("__LOGO__", LOGO).replace("__MSG__", msg)
-    return _page("教师登录 · 班级工作台", body, LOGIN_SCRIPTS)
+    return _page("登录 · 班级工作台", body, LOGIN_SCRIPTS)
 
 
 def login_page_setup(msg=""):
-    body = SETUP_BODY.replace("__LOGO__", LOGO).replace("__MSG__", msg)
-    return _page("创建账号 · 班级工作台", body, LOGIN_SCRIPTS)
+    # 2.0.13：账号注册已取消（教师账号由管理员统一创建）。
+    # 保留函数只是为了让旧调用 / 旧书签落到登录页，不再出现创建账号表单。
+    return login_page(msg)
+
+
+# ---------------------------------------------------------------------------
+# 管理员控制台（2.0.13）：只管教师账号，不承接任何业务设置
+# ---------------------------------------------------------------------------
+ADMIN_BODY = """
+<div class="card" style="max-width:760px;margin:5vh auto 0">
+  <div class="brand">__LOGO__<div><div style="font-weight:750;font-size:15px">班级工作台 · 管理员</div>
+  <div style="font-size:12px;color:#849690">教师账号管理</div></div></div>
+  <h1>教师账号</h1>
+  <p class="sub">管理员只负责教师账号的注册与管理。班级、学生、资料、课程与各项设置仍由教师端配置；
+  每位教师的数据、资料与文件各自独立，互不重叠。</p>
+
+  <div style="border:1px solid #E4EDE8;border-radius:12px;padding:14px;margin:16px 0">
+    <b style="font-size:14px">新增教师账号</b>
+    <form id="addForm" style="margin-top:10px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <input id="nu" placeholder="登录账号" style="flex:1;min-width:130px" autocomplete="off">
+        <input id="nn" placeholder="显示姓名（选填）" style="flex:1;min-width:130px" autocomplete="off">
+        <input id="np" type="password" placeholder="初始密码（至少 8 位）" style="flex:1;min-width:160px" autocomplete="new-password">
+        <button type="submit" id="addBtn">创建账号</button>
+      </div>
+      <div class="err" id="addErr"></div>
+    </form>
+  </div>
+
+  <div id="list" style="margin-top:12px"><span style="color:#849690">加载中…</span></div>
+
+  <div style="border-top:1px solid #E4EDE8;margin-top:20px;padding-top:14px">
+    <b style="font-size:14px">修改管理员密码</b>
+    <form id="pwdForm" style="margin-top:10px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <input id="oldP" type="password" placeholder="当前密码" style="flex:1;min-width:130px">
+        <input id="newP" type="password" placeholder="新密码（至少 8 位）" style="flex:1;min-width:160px">
+        <button type="submit">保存</button>
+      </div>
+      <div class="err" id="pwdErr"></div>
+    </form>
+  </div>
+
+  <div style="margin-top:18px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;font-size:13px">
+    <a href="javascript:void 0" id="logout" style="color:#0F6E56;text-decoration:none">退出登录</a>
+    <span style="color:#849690">账号信息保存在服务端 accounts.json；删除账号不会自动清空其数据目录。</span>
+  </div>
+</div>
+<script>
+function A(u,b){return fetch(u,{method:'POST',credentials:'same-origin',
+  headers:{'Content-Type':'application/json'},body:JSON.stringify(b||{})})
+  .then(function(r){return r.json().catch(function(){return {};});});}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function toast(el,msg){el.textContent=msg;if(msg)setTimeout(function(){el.textContent='';},4000);}
+
+async function load(){
+  var r=await fetch('/api/v2/admin/teachers',{credentials:'same-origin'});
+  if(r.status===401){location.href='/teacher/login';return;}
+  var j=await r.json().catch(function(){return {};});
+  var box=document.getElementById('list');
+  var rows=(j.teachers||[]);
+  box.innerHTML='<table style="width:100%;border-collapse:collapse;font-size:13px">'+
+    '<thead><tr style="text-align:left;color:#5F6E68"><th style="padding:7px 4px">账号</th>'+
+    '<th style="padding:7px 4px">姓名</th><th style="padding:7px 4px">状态</th>'+
+    '<th style="padding:7px 4px">操作</th></tr></thead><tbody>'+
+    rows.map(function(t){
+      return '<tr style="border-top:1px solid #EEF3F0"><td style="padding:8px 4px"><b>'+esc(t.username)+'</b>'+
+        '<div style="font-size:11px;color:#849690">'+esc(t.id)+'</div></td>'+
+        '<td style="padding:8px 4px">'+esc(t.name||'—')+'</td>'+
+        '<td style="padding:8px 4px">'+(t.has_password?'已设密码':'<span style="color:#B4692E">未设密码</span>')+
+        (t.builtin?' · 默认账号':'')+'</td>'+
+        '<td style="padding:8px 4px;white-space:nowrap">'+
+        '<button type="button" data-act="name" data-id="'+esc(t.id)+'" data-u="'+esc(t.username)+'">改名</button> '+
+        '<button type="button" data-act="pwd" data-id="'+esc(t.id)+'">重置密码</button> '+
+        (t.builtin?'':'<button type="button" data-act="del" data-id="'+esc(t.id)+'">删除</button>')+
+        '</td></tr>';
+    }).join('')+'</tbody></table>';
+  box.querySelectorAll('button[data-act]').forEach(function(b){
+    b.onclick=async function(){
+      var id=b.getAttribute('data-id'), act=b.getAttribute('data-act');
+      if(act==='name'){
+        var u=prompt('新的登录账号名：',b.getAttribute('data-u')||'');
+        if(!u)return; var r=await A('/api/v2/admin/teacher/update',{id:id,username:u});
+        toast(document.getElementById('addErr'),r.ok?'已改名':(r.msg||'失败')); load();
+      }else if(act==='pwd'){
+        var p=prompt('新的初始密码（至少 8 位）：','');
+        if(!p)return; var r=await A('/api/v2/admin/teacher/update',{id:id,password:p});
+        toast(document.getElementById('addErr'),r.ok?'密码已重置':(r.msg||'失败'));
+      }else{
+        if(!confirm('确定删除这个教师账号吗？其数据目录会保留，不会自动清空。'))return;
+        var r=await A('/api/v2/admin/teacher/delete',{id:id});
+        toast(document.getElementById('addErr'),r.ok?'已删除':(r.msg||'失败')); load();
+      }
+    };
+  });
+}
+document.getElementById('addForm').onsubmit=async function(e){
+  e.preventDefault();
+  var err=document.getElementById('addErr'); err.textContent='';
+  var r=await A('/api/v2/admin/teacher/add',{
+    username:document.getElementById('nu').value.trim(),
+    name:document.getElementById('nn').value.trim(),
+    password:document.getElementById('np').value});
+  if(r.ok){document.getElementById('nu').value='';document.getElementById('nn').value='';
+    document.getElementById('np').value='';toast(err,'已创建教师账号');load();}
+  else toast(err,r.msg||'创建失败');
+};
+document.getElementById('pwdForm').onsubmit=async function(e){
+  e.preventDefault();var err=document.getElementById('pwdErr');
+  var r=await A('/api/v2/admin/password',{
+    old:document.getElementById('oldP').value,new:document.getElementById('newP').value});
+  if(r.ok){document.getElementById('oldP').value='';document.getElementById('newP').value='';toast(err,'已修改');}
+  else toast(err,r.msg||'修改失败');
+};
+document.getElementById('logout').onclick=async function(){
+  await A('/api/v2/auth/logout',{}); location.href='/teacher/login';
+};
+load();
+</script>"""
+
+
+def admin_page():
+    return _page("管理员控制台 · 班级工作台",
+                 ADMIN_BODY.replace("__LOGO__", LOGO))
 
 
 FORGOT_BODY = """
@@ -433,9 +581,10 @@ CONSOLE_HTML = r"""<!DOCTYPE html>
   <div class="card sec">
     <h2><span class="dot"></span>教师账号</h2>
     <div class="inp-row">
-      <input id="tUser" placeholder="账号">
-      <button id="saveUser">改账号</button>
+      <input id="tUser" placeholder="账号" disabled>
+      <button id="saveUser" disabled title="账号名由管理员在管理控制台统一修改">管理员管理</button>
     </div>
+    <div class="tip" style="margin:0 0 8px">教师账号的注册、改名与删除由管理员负责；这里只能改自己的密码与密保。</div>
     <div class="inp-row">
       <input id="tOld" type="password" placeholder="当前密码">
       <input id="tNew" type="password" placeholder="新密码（至少 4 位）">
