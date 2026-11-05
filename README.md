@@ -3,7 +3,7 @@
 > 给班主任和任课老师用的一套**班级工作台**：教师端与学生端共用一个网页入口，
 > 数据全部存在自己的服务器上，不依赖任何第三方云服务。
 
-当前版本：**2.0.14**（版本号唯一代码源：`app/server.py` 的 `VERSION`）
+当前版本：**2.0.15**（版本号唯一代码源：`app/server.py` 的 `VERSION`）
 
 ```
 http://<服务器局域网 IP>:8080/        ← Docker 部署的入口；直接运行时是 :20020
@@ -378,9 +378,9 @@ docker compose up -d --build
 
 | # | 文件 | 位置 |
 |---|---|---|
-| 1 | `app/server.py` | `VERSION = "2.0.14"` —— **唯一代码源** |
-| 2 | `.env.example` | `IMAGE_TAG=2.0.14` |
-| 3 | `docker-compose.yml` | `image: …:${IMAGE_TAG:-2.0.14}`（init 与 workbench **两处**） |
+| 1 | `app/server.py` | `VERSION = "2.0.15"` —— **唯一代码源** |
+| 2 | `.env.example` | `IMAGE_TAG=2.0.15` |
+| 3 | `docker-compose.yml` | `image: …:${IMAGE_TAG:-2.0.15}`（init 与 workbench **两处**） |
 | 4 | `README.md` | 文首「当前版本」 |
 | 5 | `version.json` | 由 `tools/make_release.py` 自动同步 |
 
@@ -408,6 +408,22 @@ python tools/make_release.py --out D:\dist   # 指定输出目录（默认 dist/
 > 「创建发行版」并上传 zip 才会有内容。在线更新走的是 `version.json`（manifest）+
 > raw 直链，不依赖 Releases 功能；想把 zip 同时挂到 Releases 也可以，把
 > `version.json` 的 `zip` 字段改成完整 URL 即可。
+
+### 设置锚点 / 好句编辑 / 更新重启（2.0.15）
+
+- **账号菜单的设置项能真正跳到对应位置**：左下角账号 → 菜单里的「主题与外观 / 字号 /
+  问候语 / 头像与昵称 / 数据导入导出」都会记一个 `wb-settings-anchor`，进设置页后滚到
+  对应小节。原来按 `.card` 的文本找关键字，但「外观与字号 / 问候与好句 / 本地资料 /
+  数据与备份」四个小节同属一张大卡片 —— 不管点哪个都只停在这张卡的开头（永远显示
+  外观与字号）。现在每个小节标题挂 `data-set`，按标记定位，并按 sticky 顶栏高度留偏移。
+- **每日一句的铅笔图标可点了**：`.gs-edit` 原来 `pointer-events:none`，点击落到整卡上，
+  而整卡只做 `location.hash='#settings'` —— 已经在设置页时 hash 不变，等于什么都没发生。
+  现在铅笔自己 `stopPropagation` 并直接 `openGreetSetting()` 弹浮窗，键盘 Enter/空格同样可用。
+- **自动更新重启后服务一定起得来**：Windows 的 `os.execv` 是「先起新进程、再退旧进程」，
+  不是 Unix 的原地换映像。新进程启动时 `PORTX.pick_port` 探测端口，旧进程还在监听 →
+  判定「已有一个本工作台实例在运行」→ 新进程直接退出；旧进程随后也退 → 服务全没。
+  现在重启前先 `server_close()` 释放监听端口，并给新进程带 `WB_RESTARTING=1` 标记：
+  万一端口仍被占，也只等它释放（最多 8 秒），不当作重复启动。
 
 ### 签到闸门与管理员弹窗（2.0.14）
 

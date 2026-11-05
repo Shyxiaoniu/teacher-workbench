@@ -130,7 +130,7 @@ CFG["update"].setdefault("interval_hours", 24) # 检查间隔（小时）
 PET_IDS = ["cat", "dog", "rabbit", "penguin", "panda", "dino", "unicorn", "dragon"]
 COND = threading.Condition()
 STARTED = time.time()
-VERSION = "2.0.14"
+VERSION = "2.0.15"
 ONLINE_WINDOW = 300      # 5 分钟内活跃算在线
 # 可内联直出的附件类型（其余一律按下载处理，防止同源执行脚本）
 _INLINE_EXTS = {"png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "pdf",
@@ -3031,6 +3031,21 @@ class Handler(LEG.Handler):
                 return self._json({"ok": False, "msg": "未登录"}, 401)
             STORE.audit("teacher", "update-restart", "version=%s" % VERSION)
             try:
+                # ⚠️ Windows 上 os.execv 不是 Unix 那种「原地换映像」，而是
+                # 「先 CreateProcess 起新进程 → 再退出旧进程」，两个进程会有
+                # 一段并存窗口。新进程启动时 main() 会走 PORTX.pick_port 探测
+                # 端口：此刻旧进程还在监听 → is_mine() 返回 True → 判定
+                # 「已有一个本工作台实例在运行，不重复启动」→ 新进程直接
+                # return 退出；随后旧进程也退了 → 服务彻底没了。这就是
+                # 「自动更新并重启后起不来」的根因（2026-11-05 牛哥反馈）。
+                # 处理：① 先主动关掉监听 socket，让端口立刻空出来；
+                #       ② 给新进程打一个重启标记，端口若因 TIME_WAIT 短暂
+                #          占用也不当作「重复启动」，见 main() 里的 restarting。
+                try:
+                    self.server.server_close()
+                except Exception:
+                    pass
+                os.environ["WB_RESTARTING"] = "1"
                 sys.stdout.flush()
                 sys.stderr.flush()
                 os.execv(sys.executable, [sys.executable] + list(sys.argv))
@@ -4713,6 +4728,11 @@ def main():
     ap.add_argument("--no-dialog", action="store_true", help="端口被占时不弹窗")
     args = ap.parse_args()
     global PORT
+    # 自动更新重启标记（2026-11-05）：/api/v2/update/restart 用 os.execv 换进程，
+    # Windows 上会有一段「新旧进程并存」的窗口，端口还被旧进程占着。
+    # 这个标记让本进程知道「端口是我自己的，等它空出来即可，别判成重复启动」。
+    # pop 掉：只对这一次启动有效，避免影响后续手动启动。
+    restarting = os.environ.pop("WB_RESTARTING", "") == "1"
     # 一次性迁移：老配置里写死 8080（旧默认值）→ 换成不常用的 20020。
     # 只在“用户没显式指定 --port”时做，且只做一次（port_migrated 标记）。
     if not args.port:
@@ -4738,6 +4758,16 @@ def main():
 
     port, state = PORTX.pick_port(want, cfg_path=CONFIG_PATH, is_mine=mine,
                                   no_dialog=args.no_dialog)
+    if restarting and state == "mine":
+        # 重启出来的新进程：端口上那个「本工作台实例」是还没退干净的旧自己，
+        # 不是重复启动。等它把 socket 放掉（最多 8 秒）再接着用这个端口。
+        # 8 秒还占着 = 旧进程根本没退成功，服务其实还在跑 —— 保持 mine，
+        # 下面按「已有实例在运行」退出，绝不抢端口造出两个实例抢流量。
+        t0 = time.time()
+        while time.time() - t0 < 8 and not PORTX.is_free(want):
+            time.sleep(0.15)
+        if PORTX.is_free(want):
+            port, state = want, "free"
     if state == "mine":
         print("[workbench] 端口 %d 上已有一个本工作台实例在运行，不重复启动。" % port)
         print("            要重启请先关掉那个窗口。")

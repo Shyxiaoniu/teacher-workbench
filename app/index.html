@@ -328,18 +328,29 @@ body {
   padding-top:5px; border-top:1px dashed var(--border);
   line-height:1.45;
 }
-/* 设置入口：默认隐身、悬停/聚焦才浮现的角标；脱离文字流，让好句独占整行 */
+/* 设置入口：默认隐身、悬停/聚焦才浮现的角标；脱离文字流，让好句独占整行。
+   ⚠️ 必须 pointer-events:auto —— 之前是 none（让点击落到整卡上），
+   可整卡只做 location.hash='#settings'：已经在设置页时 hash 不变，
+   点铅笔等于什么都没发生（2026-11-05 牛哥反馈「编辑图标点击无响应」）。 */
 .gs-edit {
   position:absolute; top:7px; right:7px; z-index:1;
   display:inline-flex; align-items:center; justify-content:center;
   width:22px; height:22px;
   border-radius:7px; background:var(--bg-surface);
   color:var(--text-secondary);
-  pointer-events:none;                 /* 点击落到整张卡片上 */
+  pointer-events:auto;
+  cursor:pointer;
   opacity:0;
   transition:opacity var(--dur-fast) var(--ease-out),
              background var(--dur-fast) var(--ease-out),
              color var(--dur-fast) var(--ease-out);
+}
+.gs-edit:hover {
+  background:var(--brand-soft); color:var(--brand-primary);
+}
+.gs-edit:focus-visible {
+  outline:none; opacity:1;
+  box-shadow:0 0 0 3px color-mix(in srgb, var(--brand-primary) 22%, transparent);
 }
 .greet-side:hover .gs-edit,
 .greet-side:focus-visible .gs-edit { opacity:1; }
@@ -8568,22 +8579,42 @@ function closeUserPop() {
 window.toggleUserPop = toggleUserPop;
 window.closeUserPop = closeUserPop;
 
-/** 设置页内的锚点跳转：按卡片标题关键字定位 */
+/** 设置页内的锚点跳转：优先按小节 data-set 定位，回落到卡片关键字。
+ *
+ *  2026-11-05 牛哥反馈「点账号菜单里的设置项，应该跳到设置里对应的内容」：
+ *  原来按 .card 的 textContent 找关键字，可「外观与字号 / 问候与好句 /
+ *  本地资料 / 数据与备份」四个小节挤在同一张卡片里 —— 不管点哪个都只滚到
+ *  这张卡的开头（永远是「外观与字号」），看起来就是没跳到。
+ *  现在每个小节标题挂 data-set，直接定位到那一个标题。
+ *  另外顶栏是 sticky 的，块首对齐会被它压住，这里按 topbar 实际高度留偏移。
+ */
 function settingsScrollTo(sec) {
+  var box = $('#content');
   var map = {
     theme: '外观主题', font: '外观与字号', greet: '问候与好句',
     nick: '本地资料', data: '数据与备份'
   };
-  var kw = map[sec];
-  var box = $('#content');
-  if (!kw) { if (box) box.scrollTop = 0; window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
-  var cards = $$('#content .card');
   var hit = null;
-  for (var i = 0; i < cards.length; i++) {
-    if ((cards[i].textContent || '').indexOf(kw) >= 0) { hit = cards[i]; break; }
+  if (sec && sec !== 'all') {
+    try { hit = document.querySelector('#content [data-set="' + sec + '"]'); }
+    catch (e) { hit = null; }
+    if (!hit && map[sec]) {
+      /* 老布局兜底：没有 data-set 标记时仍按卡片关键字找 */
+      var cards = $$('#content .card');
+      for (var i = 0; i < cards.length; i++) {
+        if ((cards[i].textContent || '').indexOf(map[sec]) >= 0) { hit = cards[i]; break; }
+      }
+    }
   }
-  if (hit) hit.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  else if (box) box.scrollTop = 0;
+  if (!hit) {
+    if (box) box.scrollTop = 0;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    return;
+  }
+  var tb = document.querySelector('.topbar');
+  var off = (tb ? tb.getBoundingClientRect().height : 0) + 10;
+  var r = hit.getBoundingClientRect();
+  window.scrollTo({ top: Math.max(0, window.scrollY + r.top - off), behavior: 'smooth' });
 }
 
 function userPopGo(sec) {
@@ -8591,7 +8622,9 @@ function userPopGo(sec) {
   try { LS.set('wb-settings-anchor', sec || 'all'); } catch (e) {}
   if (state.route === 'settings') {
     renderPage();
-    setTimeout(function () { try { settingsScrollTo(sec); } catch (e) {} }, 60);
+    /* 重绘后分两拍滚：一拍紧跟重绘，一拍兜住首次布局未完成的情况 */
+    setTimeout(function () { try { settingsScrollTo(sec); } catch (e) {} }, 90);
+    setTimeout(function () { try { settingsScrollTo(sec); } catch (e) {} }, 320);
   } else {
     location.hash = 'settings';
   }
@@ -10748,7 +10781,7 @@ async function goToApp(returnTo) {
            「班级」下拉（page-toolbar），顶栏也不再放全局搜索 —— 找人在
            学生页 / 座位页各自的页内搜索框里做。侧栏只留导航。 -->
 
-      <!-- 好句：完整展示不截断，文字独占整行；整卡可点开设置，铅笔悬停才浮现 -->
+      <!-- 好句：完整展示不截断，文字独占整行；整卡可点去设置，铅笔直接开编辑浮窗 -->
       <div class="greet-side" id="greetBar" role="button" tabindex="0"
         aria-label="问候与好句设置" title="点击去设置里改字体 / 好句"
         onclick="if(!(window.getSelection && String(window.getSelection())))location.hash='#settings'"
@@ -10756,7 +10789,13 @@ async function goToApp(returnTo) {
         >
         <div class="gs-row">
           <span class="gs-main" id="greetQuote" title="${esc(currentQuote().text)}">${esc(currentQuote().text)}</span>
-          <span class="gs-edit" aria-hidden="true">${icon('pen',14)}</span>
+          <!-- 铅笔角标：必须自己吃掉点击（pointer-events 见 .gs-edit），
+               否则事件冒泡到整卡只做 location.hash='#settings' ——
+               已经在设置页时 hash 不变、什么都不发生，看起来就是「点了没反应」。 -->
+          <span class="gs-edit" role="button" tabindex="0" title="编辑问候语与好句"
+            onclick="event.stopPropagation();openGreetSetting()"
+            onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();openGreetSetting();}"
+            >${icon('pen',14)}</span>
         </div>
       </div>
 
@@ -32064,7 +32103,7 @@ const DEMO_RENDER = {
     </div>
 
     <div class="card" style="margin-bottom:14px">
-      <div style="font-size:14px;font-weight:500;margin-bottom:10px">外观主题</div>
+      <div data-set="theme" style="font-size:14px;font-weight:500;margin-bottom:10px">外观主题</div>
       <div style="font-size:12px;color:var(--text-secondary);margin-bottom:6px">色调</div>
       <div style="display:grid;gap:9px;grid-template-columns:repeat(auto-fill,minmax(128px,1fr))">
         ${THEMES.map(t2 => `
@@ -32116,7 +32155,7 @@ const DEMO_RENDER = {
     </div>
 
     <div class="card" style="margin-bottom:14px">
-      <div style="font-size:14px;font-weight:600;margin-bottom:10px">外观与字号</div>
+      <div data-set="font" style="font-size:14px;font-weight:600;margin-bottom:10px">外观与字号</div>
       <div class="set-line">
         <span class="set-k">字号</span>
         <div class="view-seg">
@@ -32136,7 +32175,7 @@ const DEMO_RENDER = {
         <span class="set-hint">紧凑模式下表格行更扁，一屏看更多人</span>
       </div>
       <div style="height:1px;background:var(--border);margin:14px 0 12px"></div>
-      <div style="font-size:14px;font-weight:600;margin-bottom:10px">问候与好句</div>
+      <div data-set="greet" style="font-size:14px;font-weight:600;margin-bottom:10px">问候与好句</div>
       <div class="set-line">
         <span class="set-k">字体</span>
         <div class="font-picker">
@@ -32179,7 +32218,7 @@ const DEMO_RENDER = {
           onclick="saveGreetSetting()">保存</button>
       </div>
       <div style="height:1px;background:var(--border);margin:14px 0 12px"></div>
-      <div style="font-size:14px;font-weight:500;margin-bottom:10px">本地资料</div>
+      <div data-set="nick" style="font-size:14px;font-weight:500;margin-bottom:10px">本地资料</div>
       <div class="hwp-row">
         <label class="hwp-lbl" for="nkInput">称呼昵称</label>
         <input id="nkInput" class="fl-inp" style="flex:1;min-width:0" type="text" maxlength="20"
@@ -32200,7 +32239,7 @@ const DEMO_RENDER = {
 
       <div style="height:1px;background:var(--border);margin:14px 0 12px"></div>
 
-      <div style="font-size:14px;font-weight:500;margin-bottom:10px">数据与备份（换设备 / 重装用）${hq('backup', '备份包含什么 · 怎么恢复 · 有哪些限制')}</div>
+      <div data-set="data" style="font-size:14px;font-weight:500;margin-bottom:10px">数据与备份（换设备 / 重装用）${hq('backup', '备份包含什么 · 怎么恢复 · 有哪些限制')}</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-primary" style="width:auto;padding:8px 16px;font-size:13px"
           onclick="exportFullData()">一键导出全量备份</button>
