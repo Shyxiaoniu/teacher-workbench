@@ -49,6 +49,8 @@ import ports as PORTX                  # noqa: E402
 from store import Store, TABLES, ImportRefused   # noqa: E402
 from activity import ActivityStore, parse_multipart   # noqa: E402  课堂活动（自研）
 from typing_store import TypingStore   # noqa: E402
+from quiz_store import QuizStore       # noqa: E402  测验/检测（试卷含答案，独立存储）
+from quiz_api import QuizAPI, EPOCH, last_event, bump as quiz_bump   # noqa: E402
 from updater import Updater            # noqa: E402  在线更新（检查/下载/安装/回滚）
 import ooxml_preview as OOX            # noqa: E402  课件在线预览（纯 Python 解析 OOXML）
 
@@ -95,13 +97,26 @@ def _typing_for(a):
     WS.ensure(a)
     return TypingStore(WS.paths_for(a)["typing"])
 
+def _quiz_for(a):
+    p = WS.ensure(a)
+    return QuizStore(p["quiz"])
 
-# 三个模块级单例改成「按当前请求账号懒加载的代理」：业务代码里几百处
+
+# 模块级单例改成「按当前请求账号懒加载的代理」：业务代码里几百处
 # STORE.xxx / ACT.xxx / TYPING.xxx 一行都不用改，数据自动按账号隔离。
 # 课堂活动附件落 <工作区>/activity/<活动号>/，URL 仍是 /static/uploads/…。
 STORE = ACC.WorkspaceProxy(_store_for)
 ACT = ACC.WorkspaceProxy(_act_for)
 TYPING = ACC.WorkspaceProxy(_typing_for)
+# 测验/检测：独立 quiz.json，不含在学生端同步投影里（防泄答案）
+QUIZ = ACC.WorkspaceProxy(_quiz_for)
+
+
+def _quiz_api(handler):
+    """按当前请求账号构造接口层；路径也随账号走，多教师互不串卷。"""
+    p = WS.ensure(ACC.current_account())
+    return QuizAPI(handler, QUIZ, STORE, ACT, p["quiz_files"],
+                   student_row, handler._class_name, notify)
 
 # 旧提交系统 / 课件库 / 增强模块原本各有一套模块级全局路径常量，
 # 注入路径函数后它们也跟着当前账号走（模块内改为 PATH_FN() 取值）。
@@ -183,7 +198,7 @@ CFG["update"].setdefault("interval_hours", 24) # 检查间隔（小时）
 PET_IDS = ["cat", "dog", "rabbit", "penguin", "panda", "dino", "unicorn", "dragon"]
 COND = threading.Condition()
 STARTED = time.time()
-VERSION = "2.0.37"
+VERSION = "2.0.38"
 ONLINE_WINDOW = 300      # 5 分钟内活跃算在线
 # 可内联直出的附件类型（其余一律按下载处理，防止同源执行脚本）
 _INLINE_EXTS = {"png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "pdf",
@@ -916,6 +931,13 @@ class Handler(LEG.Handler):
                 "姓名": str(fields.get("姓名") or fields.get("name") or ""),
                 "班级": str(fields.get("班级") or fields.get("cls") or "")}
         _arc = _archive_after_submit(task_key, _who, res)
+        # 2.0.38：学习单按钮提交也走同一条实时通道，带上所属窗口 →
+        # 大屏只刷新那一个窗口，不再等 5 秒轮询整块重绘。
+        _win = " ".join(str(fields.get("按钮") or "").split())
+        if _win and _win != "测试提交":
+            quiz_bump({"kind": "submit", "window": _win, "from": "sheet",
+                       "task": task_key, "student_no": _who.get("学号")})
+            notify()
         _out = {"message": "提交成功", "id": res["id"], "kind": _kind or "legacy",
                 "attachment": res.get("attachment")}
         if _arc and _arc.get("ok"):
@@ -2029,6 +2051,11 @@ class Handler(LEG.Handler):
             return self._json_cors({"ok": False, "msg": "任务不存在"}, 404)
         # 提交成功立刻就归档：文件直接进「资料」的课程/班级/学号+姓名 文件夹
         arc = _archive_after_submit(task, who, res)
+        _win = " ".join(str(fields.get("按钮") or "").split())
+        if _win and _win != "测试提交":
+            quiz_bump({"kind": "submit", "window": _win, "from": "sheet",
+                       "task": task, "student_no": who.get("学号")})
+            notify()
         out = {"ok": True, "message": "提交成功", "id": res["id"],
                "kind": kind or "legacy",
                "attachment": res.get("attachment")}
@@ -2108,6 +2135,10 @@ class Handler(LEG.Handler):
     # /api/v2 GET
     # ------------------------------------------------------------------
     def _v2_get(self, path, qs):
+        # 测验/检测（2.0.38）：试卷含答案，走独立鉴权接口，不进同步投影
+        if path.startswith("/api/v2/quiz/"):
+            r = _quiz_api(self).get(path, qs)
+            return r if r is not None else self._json({"ok": False, "msg": "未知接口"}, 404)
         if path == "/api/v2/ping":
             return self._json({"ok": True, "service": "workbench", "version": VERSION,
                                "rev": STORE.rev(), "uptime": int(time.time() - STARTED)})
@@ -2593,6 +2624,10 @@ class Handler(LEG.Handler):
             since = int(float((qs.get("since") or ["0"])[0] or 0))
         except Exception:
             since = 0
+        sess = self._session() or {}
+        # 2.0.38：测验提交不写 STORE.rev（试卷不参与同步），必须走独立事件。
+        # 只推给教师会话——事件里带窗口 / 班级 / 学号，学生端不该收到别班名单。
+        quiz_epoch = EPOCH[0]
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream; charset=utf-8")
         self.send_header("Cache-Control", "no-cache, no-transform")
@@ -2618,7 +2653,16 @@ class Handler(LEG.Handler):
                     cfg_rev = CFG_VER[0]
                     self.wfile.write(("event: cfg\ndata: %d\n\n" % cfg_rev).encode())
                     self.wfile.flush()
-                elif time.time() - last_ping > 20:
+                if EPOCH[0] != quiz_epoch:
+                    quiz_epoch = EPOCH[0]
+                    # 教师拿完整事件（窗口 / 班级 / 学号）用于只刷新对应窗口；
+                    # 学生只拿一个版本号，用来让列表缓存失效 ——
+                    # 绝不把别班名单或试卷答案推给学生端。
+                    ev = last_event() if sess.get("role") == "teacher" else {"epoch": EPOCH[0]}
+                    payload = json.dumps(ev, ensure_ascii=False)
+                    self.wfile.write(("event: quiz\ndata: %s\n\n" % payload).encode())
+                    self.wfile.flush()
+                if time.time() - last_ping > 20:
                     self.wfile.write(b": ping\n\n")
                     self.wfile.flush()
                     last_ping = time.time()
@@ -3072,6 +3116,9 @@ class Handler(LEG.Handler):
             # 课堂活动（2026-11-03 方案 B）：活动/提交/附件已并入工作台自己的库，
             # 备份口径随之合一——活动数据也在本库里，导出导入一并处理。
             data["activity"] = _act_snapshot()
+            # 测验/检测（2.0.38）：quiz.json 不在 29 表里，换设备必须单独搬，
+            # 否则试卷、发布设置和成绩全丢。图片附件仍走资料包迁移。
+            data["quiz"] = _quiz_snapshot()
             # 附件（学生作品）2.0.23 起默认不进全量备份：
             #   · 它们动辄几十上百 MB，是备份又大又慢的主因（导出要序列化 + 加密，
             #     导入要解密，纯 JS 只有 0.5MB/s）；
@@ -3262,6 +3309,10 @@ class Handler(LEG.Handler):
         body = self._read_json()
         if body is None:
             return          # 请求体过大，_read_json 已经回过 413 了
+        # 测验/检测（2.0.38）：试卷 CRUD / 发布 / 学生提交 / 人工批阅
+        if path.startswith("/api/v2/quiz/"):
+            r = _quiz_api(self).post(path, body)
+            return r if r is not None else self._json({"ok": False, "msg": "未知接口"}, 404)
         # 数据大屏：清空本活动全部提交 / 删除单条提交（需求 5，2026-11-02）
         # 参数走查询串（前端 fetch 只带 URL），body 为空时用 body 兜底。
         # 必须教师登录：学生页与教师页同源，只靠同源校验拦不住学生乱调。
@@ -4698,6 +4749,10 @@ class Handler(LEG.Handler):
             if n:
                 counts["typing_students"] = n
 
+        # 测验/检测（独立 quiz.json，2.0.38）
+        if isinstance(body.get("quiz"), dict) and body["quiz"]:
+            counts["quiz"] = _quiz_restore(body.get("quiz"))
+
         # 课堂活动：与 29 表同源但不同表，单独恢复（含附件 base64）
         if isinstance(body.get("activity"), dict) and body["activity"]:
             ar = _act_restore(body.get("activity"))
@@ -4812,6 +4867,22 @@ def _typing_snapshot():
     except Exception:
         pass
     return {}
+
+
+def _quiz_snapshot():
+    """测验/检测快照（试卷 / 发布 / 提交）。读失败不阻塞导出。"""
+    try:
+        return QUIZ.snapshot()
+    except Exception:
+        return {}
+
+
+def _quiz_restore(data):
+    """恢复测验数据，返回恢复的对象总数（0 表示没恢复）。"""
+    try:
+        return QUIZ.restore(data)
+    except Exception:
+        return 0
 
 
 def _typing_restore(data):

@@ -7195,6 +7195,7 @@ const ICON_C = {
   seats:     ['#E6F1FB','#185FA5','#185FA5','#FFFFFF'],
   calendar:  ['#FAECE7','#993C1D','#993C1D','#FFFFFF'],
   check:     ['#E4F7E9','#1D7A4C','#1D7A4C','#FFFFFF'],
+  quiz:      ['#FDEBF3','#B03A62','#B03A62','#FFFFFF'],
   pen:       ['#FFF4E0','#8A5A00','#8A5A00','#FFFFFF'],
   chart:     ['#EEEDFE','#534AB7','#534AB7','#FFFFFF'],
   puzzle:    ['#FDEBF3','#B03A62','#B03A62','#FFFFFF'],
@@ -7410,7 +7411,8 @@ const DARK_BASE  = { forest:'#0B1210', mist:'#0F0D17', sky:'#090F17', deep:'#0A0
    旧链接 / 旧书签由 renderPage 里的 ROUTE_REDIRECT 统一 302。 */
 const NAV_GROUPS = [
   { name:'常用', items:['home','seats','timetable'] },   // 考勤并入座位表（v2）
-  { name:'教学', items:['guide','courseware','homework','scores'] },
+  /* 2.0.38：测验/检测归入「教学」，与大屏（收件）、成绩（汇总）形成一条链 */
+  { name:'教学', items:['guide','courseware','homework','scores','quiz'] },
   { name:'班务', items:['classes','students'] },
   /* 打字（2026-11-05 牛哥要求）：从「教学」挪到「其他」——
      它更像练手小工具，和课堂发放/作业/成绩不是一类。
@@ -7429,6 +7431,7 @@ const NAV = [
   { id:'courseware', name:'资料', icon:'book' },
   { id:'homework', name:'作业', icon:'pen' },
   { id:'scores', name:'成绩', icon:'chart' },
+  { id:'quiz',   name:'测验', icon:'check' },
   { id:'typing', name:'打字', icon:'keyboard' },
   { id:'classes', name:'班级', icon:'cap' },
   { id:'students', name:'学生', icon:'user' },
@@ -11973,6 +11976,9 @@ function renderContent(opts = {}) {
   if (state.route === 'settings') setTimeout(() => { try { acctPaintSec(); } catch (e) {} }, 20);
   if (state.route === 'settings') setTimeout(() => { try { updLoad(); } catch (e) {} }, 30);
   if (state.route === 'settings') setTimeout(() => { try { checkinCfgLoad(); } catch (e) {} }, 40);
+  /* 2.0.38：成绩页顶上加一条「从测验导入」入口（不改原成绩页模板，
+     避免动到那张几千行的成绩表渲染）。 */
+  if (state.route === 'scores') setTimeout(() => { try { quizEnsureCss(); quizInjectScoresEntry(); } catch (e) {} }, 0);
 
   /* 首页：学生入口卡要问服务端要局域网地址（地址是运行期才知道的，
      模板里只能放占位，渲染完补一次）。 */
@@ -17663,34 +17669,63 @@ function actTaskWindowsHtml(allMatched, layout) {
      各显示一次，看着就是「一个问卷题目的提交出现两条」。 */
   const norm = v => String(v || '').trim().replace(/\s+/g, ' ');
   const btns = [];
-  const addB = v => { const n = norm(v); if (n && btns.indexOf(n) < 0) btns.push(n); };
+  const addB = v => { const n = norm(v); if (n && n !== '整页提交' && btns.indexOf(n) < 0) btns.push(n); };
   (Array.isArray(lay.buttons) ? lay.buttons : []).forEach(addB);
   const rows = allMatched || [];
   // 数据里出现、但 layout 里没登记的按钮（老页面 / 老师临时改过网页）补在后面，绝不让数据漏掉
   rows.forEach(s => addB(actTaskOf(s)));
+  /* 2.0.38：测验发布的窗口也进同一张看板。/api/v2/quiz/board 已经把
+     「学习单按钮提交」和「测验提交」按同一口径（同窗口 + 同学号留最新）合并，
+     所以这里补窗口名不会把一份提交算进两个窗口。 */
+  const boardWins = (typeof QT !== 'undefined' && QT.board && QT.board.windows) ? QT.board.windows : null;
+  if (boardWins) Object.keys(boardWins).forEach(addB);
+  /* board 是全局窗口（含所有班），而大屏一次只看一个班：
+     actWinRowsFor() 按当前班名单过滤，保证窗口人数与顶部 KPI、
+     测验页按班统计完全同源（局部刷新走同一函数，不会刷新完又变口径）。 */
   const taskBtns = btns.filter(b => b && b !== '整页提交');
-  // 只有「一份学习单里确实有多个提交按钮」才开窗口区：
-  // 整页提交 / 只有一个按钮时，窗口和下面的学生名单完全重复，没有意义。
-  if (taskBtns.length < 2) return '';
-  const cards = taskBtns.map(b => {
+  /* 只有「确实有多个窗口」才开窗口区：整页提交 / 单按钮时和名单完全重复。
+     2.0.38 起：只要另有测验窗口（boardWins 里带「测验：…」），即使学习单
+     只有一个按钮也照常开，因为老师要在一个地方看全部实时收件。 */
+  const hasQuizWin = taskBtns.some(b => b.indexOf('测验：') === 0);
+  if (taskBtns.length < 2 && !hasQuizWin) return '';
+  const bound = (typeof actBoundWindow === 'function') ? actBoundWindow() : '';
+  const cards = taskBtns.map((b, bi) => {
     const one = actDedupByPerson(rows.filter(s => norm(actTaskOf(s)) === b));  // 同窗口内一人一条
-    const list = one.length
-      ? one.map((s, i) =>
-        '<div class="act-win-row"><i style="font-style:normal;font-weight:700;color:var(--brand-primary)">' + (i + 1) + '</i>'
-        + '<b style="font-weight:600">' + esc(actRosterName(s) || '—') + '</b>'
-        + '<span class="no">' + esc(actRosterNo(s)) + '</span>'
-        + '<span class="ts">' + esc((actRosterTs(s) || '').slice(5) || '—') + '</span></div>').join('')
-      : '<div class="act-win-empty">这个任务还没有人提交</div>';
-    return '<div class="act-win"><div class="act-win-hd"><b>' + esc(b) + '</b>'
-      + '<span class="n">已交 <em>' + one.length + '</em> 人</span></div>'
-      + '<div class="act-win-list">' + list + '</div>'
+    const bRows = actWinRowsFor(b, boardWins);
+    const n = bRows ? bRows.length : one.length;
+    const list = bRows
+      ? ((typeof actWinRowsHtml === 'function') ? actWinRowsHtml(bRows) : '')
+      : (one.length
+        ? one.map((s, i) =>
+          '<div class="act-win-row"><i style="font-style:normal;font-weight:700;color:var(--brand-primary)">' + (i + 1) + '</i>'
+          + '<b style="font-weight:600">' + esc(actRosterName(s) || '—') + '</b>'
+          + '<span class="no">' + esc(actRosterNo(s)) + '</span>'
+          + '<span class="ts">' + esc((actRosterTs(s) || '').slice(5) || '—') + '</span></div>').join('')
+        : '<div class="act-win-empty">这个任务还没有人提交</div>');
+    /* 窗口名是老师手填的，可能带单引号 —— 直接塞进 onclick 会截断 JS 字符串。
+       先 encodeURIComponent 再补一次 %27，取用时 decodeURIComponent 还原。 */
+    const enc = qzJs(b);
+    return '<div class="act-win' + (bound && bound === b ? ' is-bound' : '') + '" data-act-win="' + esc(b) + '">'
+      + '<div class="act-win-hd"><b>' + esc(b) + '</b>'
+      + '<span class="n">已交 <em data-win-n>' + n + '</em> 人</span>'
+      + '<button type="button" class="qz-mini" onclick="actSetBoundWindow(decodeURIComponent(\'' + enc + '\'))" title="把这个窗口设为当前大屏并绑定其统计数据">设为大屏</button>'
+      + '</div>'
+      + '<div class="act-win-list" data-win-list data-qz-keep="win-' + bi + '">' + list + '</div>'
       + '</div>';
   }).join('');
-  return '<div class="act-sec"><h3>任务收集窗口（每个提交按钮一个）</h3>'
-    + '<div class="act-note">这份学习单里有 <b>' + taskBtns.length + '</b> 个提交按钮，下面按按钮分成 '
-    + taskBtns.length + ' 个窗口。同一名学生在同一个窗口里只出现一次；交了几个任务，就在几个窗口里各有一条。'
+  const auto = (typeof QT !== 'undefined') ? QT.autoFollow : true;
+  return '<div class="act-sec" id="actWinSec"><h3>任务收集窗口（每个提交按钮 / 每次测验一个）</h3>'
+    + '<div class="act-bind-bar" id="actBindBar">'
+    + '<b>🖥 当前大屏统计窗口：</b><span data-bind-name>' + esc(bound || '自动（跟随最近提交）') + '</span>'
+    + '<label class="chk" style="display:inline-flex;align-items:center;gap:5px;font-size:12.5px">'
+    + '<input type="checkbox" data-bind-auto' + (auto ? ' checked' : '') + ' onchange="actToggleAutoFollow(this)"> 新提交自动绑定到对应窗口</label>'
+    + '<span class="act-muted" data-bind-total>' + (boardWins ? Object.keys(boardWins).length + ' 个窗口 · ' + ((QT.board||{}).total||0) + ' 人' : '正在同步…') + '</span>'
+    + '<button type="button" class="qz-mini" onclick="actSetBoundWindow(\'\')">清除绑定</button>'
     + '</div>'
-    + '<div class="act-wins">' + cards + '</div></div>';
+    + '<div class="act-note">共 <b>' + taskBtns.length + '</b> 个窗口，按提交按钮 / 测验固定分组：'
+    + '同一名学生在同一个窗口里只出现一次。新提交到达时<b>只刷新它所在的那个窗口</b>，'
+    + '不整块重绘、不回顶部、也不会串到别的窗口。这里只看「谁交了」，答案与分数在测验页看。</div>'
+    + '<div class="act-wins" data-qz-keep="wins">' + cards + '</div></div>';
 }
 window.actTaskWindowsHtml = actTaskWindowsHtml;
 
@@ -17725,6 +17760,9 @@ async function actInit() {
   renderActClassInfo();
   await actLoadTaskList();
   actRenderFileCfg();
+  /* 2.0.38：把测验窗口和学习单按钮窗口合成一张看板，再画大屏 */
+  try { await quizBoardLoad(true); } catch (e) {}
+  quizWatch();
 }
 
 async function actPing() {
@@ -17942,6 +17980,20 @@ async function actRenderDash() {
   const _keepSearch = !!(_ae && _ae.id === 'actRosterSearch');
   const _keepPos = _keepSearch ? _ae.selectionStart : null;
   const box = document.getElementById('actPaneDash'); if (!box) return;
+  /* 2.0.38 滚动保持：整站是页面级滚动（.content 是 overflow:clip），
+     所以既要记 window.scrollY，也要记各窗口 / 名单容器的 scrollTop。
+     数据刷新后按 data-qz-keep 重新定位还原，绝不自动回到顶部。 */
+  const _pageY = window.scrollY;
+  const _keeps = [];
+  try { Array.from(box.querySelectorAll('[data-qz-keep]')).forEach(el =>
+    _keeps.push([el.getAttribute('data-qz-keep'), el.scrollTop])); } catch (e) {}
+  const _restoreScroll = () => {
+    try { window.scrollTo(0, _pageY); } catch (e) {}
+    _keeps.forEach(([k, v]) => {
+      const el = box.querySelector('[data-qz-keep="' + k + '"]');
+      if (el) el.scrollTop = v;
+    });
+  };
   if (!actActiveId) { box.removeAttribute('data-act-shell-task'); box.innerHTML = '<div class="act-muted">请先在上方选择一门课程，再查看数据大屏。</div>'; actLastCount = -1; actStartPoll(); return; }
   const cls = actCurClass();
   if (cls == null) { actCurClsName = ''; box.removeAttribute('data-act-shell-task'); box.innerHTML = '<div class="act-muted">请先在上方选择班级，再查看数据大屏。</div>'; actLastCount = -1; actStartPoll(); return; }
@@ -17986,6 +18038,8 @@ async function actRenderDash() {
   cwPaintRecent(people);     // 大屏里的「最近作品」小条（一人一张，不重复）
   if (cwWorksVisible()) cwPaintWorks(people);   // 作品页签开着就一起刷新
   cwArchiveTick();           // 匹配了课程就增量归档（节流，不打扰课堂）
+  /* 内容高度可能刚变过，等浏览器量完布局再还原滚动（两拍兜住图表重绘） */
+  requestAnimationFrame(() => { _restoreScroll(); requestAnimationFrame(_restoreScroll); });
   actStartPoll();
 }
 
@@ -31247,6 +31301,10 @@ window.saveProgressCell = saveProgressCell;
 window.clearProgressCell = clearProgressCell;
 
 const DEMO_RENDER = {
+  /* 测验/检测（2.0.38）：数据全部走服务端鉴权接口，不进本机 29 表同步（防泄答案）。
+     renderContent 会重建这块 DOM，所以载入放在下一拍，且重绘必须保留滚动。 */
+  quiz() { return quizPageHtml(); },
+
   // ---- 课程进度（班级 × 课次 表格）----
   progress() {
     const cols = ensureProgressCols();
@@ -37208,6 +37266,675 @@ window.addEventListener('error', e => {
   }
   console.error('[uncaught]', e.message);
 });
+/* ============================================================================
+   测验 / 检测（2.0.38）
+   ----------------------------------------------------------------------------
+   入口归属与数据口径（三处只认这一份 quiz.json 的 submissions）：
+     · 大屏（上课页）= 实时收件看板：谁交了、交到哪个窗口，不显示答案/分数；
+     · 测验页（这里）  = 唯一的分析入口：逐题正确率、分数、按班提交与成绩；
+     · 成绩页          = 把某次测验某班成绩换算成百分制导入成一场考试做汇总分析。
+   同一次发布同一名学生只算最后一次提交；刷新一律保留滚动位置。
+   ========================================================================== */
+const QT = { papers:[], publishes:[], classes:[], now:null, board:null, policy:null,
+             tab:'papers', curPub:'', curClass:'', stats:null, editor:null,
+             bound:false, es:null, autoFollow:true, busy:false };
+
+const QZ_TYPES = [['single','单选题'],['multiple','多选题'],['blank','填空题'],
+                  ['judge','判断题'],['match','连线题'],['essay','简答题'],['image','图片上传']];
+const QZ_TYPE_NAME = Object.fromEntries ? Object.fromEntries(QZ_TYPES)
+  : QZ_TYPES.reduce((m,x)=>(m[x[0]]=x[1],m),{});
+
+function quizEnsureCss(){
+  if (document.getElementById('qzCss')) return;
+  const s = document.createElement('style'); s.id = 'qzCss';
+  s.textContent = `
+.qz-wrap{padding:2px 0 40px}
+.qz-hd{background:var(--card,#fff);border:1px solid var(--line,#e4e8e6);border-radius:14px;padding:14px 16px;margin-bottom:12px}
+.qz-hd h3{margin:0 0 6px;font-size:16px;font-weight:700}
+.qz-hd p{margin:3px 0;font-size:12.5px;line-height:1.7;color:var(--ink3,#6b7772)}
+.qz-hd b{color:var(--brand-primary,#0F6E56)}
+.qz-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px}
+.qz-tab{border:1px solid var(--line,#e4e8e6);background:var(--card,#fff);border-radius:9px;padding:8px 15px;font-size:13px;cursor:pointer}
+.qz-tab.on{background:var(--brand-primary,#0F6E56);color:#fff;border-color:transparent}
+.qz-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.qz-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(268px,1fr));gap:11px}
+.qz-card{background:var(--card,#fff);border:1px solid var(--line,#e4e8e6);border-radius:13px;padding:13px 14px}
+.qz-card h4{margin:0 0 6px;font-size:14px;font-weight:700}
+.qz-meta{font-size:12px;color:var(--ink3,#6b7772);line-height:1.75}
+.qz-acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.qz-tag{display:inline-block;font-size:11px;padding:2px 7px;border-radius:6px;background:#eef4f1;color:#0F6E56;margin:2px 4px 2px 0}
+.qz-tag.off{background:#f2f2f2;color:#777}
+.qz-tag.warn{background:#fff3e0;color:#8a5a00}
+.qz-tbl{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:8px}
+.qz-tbl th,.qz-tbl td{border-bottom:1px solid var(--line,#e9ecea);padding:8px 9px;text-align:left}
+.qz-tbl th{font-weight:600;color:var(--ink3,#6b7772);background:rgba(127,127,127,.05)}
+.qz-scroll{overflow-x:auto}
+.qz-empty{padding:26px 14px;text-align:center;color:var(--ink3,#6b7772);font-size:13px}
+.qz-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0}
+.qz-row label{font-size:12.5px;min-width:92px;color:var(--ink3,#6b7772)}
+.qz-inp,.qz-sel,.qz-ta{width:100%;box-sizing:border-box;border:1px solid var(--line,#dfe5e2);border-radius:8px;padding:7px 9px;font-size:13px;background:var(--card,#fff);color:inherit}
+.qz-ta{min-height:62px;resize:vertical}
+.qz-q{border:1px solid var(--line,#e4e8e6);border-radius:11px;padding:11px 12px;margin-bottom:9px;background:rgba(127,127,127,.025)}
+.qz-q-hd{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+.qz-q-hd .idx{font-weight:700;color:var(--brand-primary,#0F6E56);font-size:13px}
+.qz-opt{display:flex;gap:6px;align-items:center;margin:5px 0}
+.qz-opt .k{width:24px;font-size:12px;font-weight:700;color:var(--ink3,#6b7772)}
+.qz-mini{border:1px solid var(--line,#dfe5e2);background:var(--card,#fff);border-radius:7px;padding:4px 9px;font-size:12px;cursor:pointer}
+.qz-mini.danger{color:#B3261E;border-color:#f0c9c5}
+.qz-note{font-size:11.5px;color:var(--ink3,#6b7772);line-height:1.7}
+.qz-score-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:#eef7f3;border:1px solid #cfe8dd;border-radius:11px;padding:9px 12px;margin-bottom:12px;font-size:12.5px}
+.act-win.is-bound{border-color:var(--brand-primary,#0F6E56);box-shadow:0 0 0 2px rgba(15,110,86,.13)}
+.act-win-hd .qz-mini{font-size:11px;padding:2px 7px}
+.act-bind-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:rgba(15,110,86,.07);border:1px solid rgba(15,110,86,.22);border-radius:10px;padding:8px 11px;margin-bottom:10px;font-size:12.5px}
+@media(max-width:760px){.qz-row label{min-width:100%}.qz-grid{grid-template-columns:1fr}}
+`;
+  document.head.appendChild(s);
+}
+
+async function quizApi(path, body){
+  const opt = body === undefined ? { cache:'no-store' }
+    : { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) };
+  const r = await fetch(path, opt);
+  const j = await r.json().catch(()=>({}));
+  if (!r.ok || j.ok === false) throw new Error(j.msg || ('HTTP ' + r.status));
+  return j;
+}
+function quizPageHtml(){
+  quizEnsureCss();
+  setTimeout(()=>{ try { quizInit(); quizWatch(); } catch(e){} }, 0);
+  return '<div class="qz-wrap" id="qzRoot"><div class="qz-empty">正在载入测验数据…</div></div>';
+}
+async function quizInit(silent){
+  quizEnsureCss();
+  try {
+    const j = await quizApi('/api/v2/quiz/teacher/overview');
+    QT.papers = j.papers || []; QT.publishes = j.publishes || [];
+    QT.classes = j.classes || []; QT.now = j.now || null;
+    QT.board = j.board || null; QT.policy = j.policy || null;
+    if (!QT.curPub || !QT.publishes.some(p=>String(p.id)===String(QT.curPub)))
+      QT.curPub = QT.publishes.length ? String(QT.publishes[0].id) : '';
+  } catch(e){ if (!silent) toast('测验数据载入失败：' + e.message); }
+  if (state.route === 'quiz') quizRender(!silent);
+  if (state.route === 'guide') quizBoardPaint();
+}
+function quizKeepScroll(fn){
+  const root = document.getElementById('qzRoot');
+  if (!root) { fn(); return; }
+  const y = window.scrollY;
+  const keeps = Array.from(root.querySelectorAll('[data-qz-keep]'))
+    .map(el => [el.getAttribute('data-qz-keep'), el.scrollTop]);
+  fn();
+  requestAnimationFrame(()=>{ try { window.scrollTo(0, y); } catch(e){}
+    keeps.forEach(([k,v])=>{ const el = root.querySelector('[data-qz-keep="'+k+'"]');
+      if (el) el.scrollTop = v; }); });
+}
+function quizRender(keep, skipStats){
+  const root = document.getElementById('qzRoot'); if (!root) return;
+  const draw = () => {
+    const p = QT.policy || {};
+    root.innerHTML =
+      '<div class="qz-hd"><h3>测验 / 检测</h3>'
+      + '<p><b>大屏</b>：' + esc(p.screen||'实时收件看板') + '</p>'
+      + '<p><b>本页</b>：' + esc(p.quiz||'逐题与成绩分析') + '</p>'
+      + '<p><b>成绩页</b>：' + esc(p.scores||'导入汇总分析') + '</p>'
+      + '<p>统一口径：' + esc(p.rule||'同一发布同一学生只算最后一次提交')
+      + '　·　服务端时间 ' + esc((QT.now||{}).date||'') + ' ' + esc((QT.now||{}).time||'') + '</p></div>'
+      + '<div class="qz-tabs">'
+      + [['papers','📝 试卷库'],['publish','📤 发布与检测'],['data','📊 提交与成绩']].map(([k,n])=>
+          '<button type="button" class="qz-tab'+(QT.tab===k?' on':'')+'" onclick="quizTab(\''+k+'\')">'+n+'</button>').join('')
+      + '</div><div id="qzBody">' + quizBodyHtml() + '</div>';
+  };
+  if (keep === false) draw(); else quizKeepScroll(draw);
+  /* skipStats：统计接口返回后只重绘数据段，绝不再发起一轮统计请求，
+     否则 quizRender → quizStatsLoad → quizRender 会无限递归。 */
+  if (QT.tab === 'data' && !skipStats) quizStatsLoad(true);
+}
+function quizTab(t){ QT.tab = t; quizRender(false); }
+window.quizTab = quizTab;
+function quizBodyHtml(){
+  if (QT.tab === 'papers') return quizPapersHtml();
+  if (QT.tab === 'publish') return quizPublishListHtml();
+  return quizDataHtml();
+}
+function quizPapersHtml(){
+  const cards = QT.papers.map(p =>
+    '<div class="qz-card"><h4>' + esc(p.title) + '</h4>'
+    + '<div class="qz-meta">' + (p.course ? '课程：' + esc(p.course) + '<br>' : '')
+    + (p.questions||[]).length + ' 题 · 满分 ' + (p.total||0) + ' 分<br>更新于 ' + esc((p.updated_at||'').slice(5,16)) + '</div>'
+    + '<div class="qz-acts">'
+    + '<button type="button" class="qz-mini" onclick="quizEditorOpen(\''+esc(p.id)+'\')">✎ 编辑</button>'
+    + '<button type="button" class="qz-mini" onclick="quizPublishOpen(\'\',\''+esc(p.id)+'\')">📤 发布</button>'
+    + '<button type="button" class="qz-mini danger" onclick="quizPaperDelete(\''+esc(p.id)+'\')">删除</button>'
+    + '</div></div>').join('');
+  return '<div class="qz-bar"><button type="button" class="btn btn-primary" style="width:auto" onclick="quizEditorOpen(\'\')">＋ 新建试卷</button>'
+    + '<span class="qz-note">题型：单选 / 多选 / 填空 / 判断 / 连线 / 简答 / 图片上传。简答与图片需人工批阅，其余由服务端自动判分。</span></div>'
+    + (QT.papers.length ? '<div class="qz-grid">' + cards + '</div>'
+      : '<div class="qz-empty">还没有试卷，点「＋ 新建试卷」开始配置。</div>');
+}
+function qzJs(s){ return encodeURIComponent(String(s||'')).replace(/'/g, '%27'); }
+function quizPublishListHtml(){
+  const cards = QT.publishes.map(p => {
+    const stateTxt = {open:'进行中',before:'未开始',expired:'已截止',closed:'已关闭',draft:'草稿'}[p.state] || p.state;
+    return '<div class="qz-card"><h4>' + esc(p.title) + '</h4>'
+      + '<div class="qz-meta">试卷：' + esc(p.paper_title||'') + '<br>班级：' + esc((p.class_names||[]).join('、')||'未选') + '<br>'
+      + '开放 ' + esc(p.open_at||'不限') + ' ~ ' + esc(p.close_at||'不限') + '<br>'
+      + '已交 <b>' + (p.submitted||0) + '</b> / ' + (p.roster||0) + ' 人</div>'
+      + '<div style="margin-top:7px">'
+      + '<span class="qz-tag '+(p.state==='open'?'':'off')+'">'+esc(stateTxt)+'</span>'
+      + '<span class="qz-tag '+(p.allow_multiple?'':'off')+'">'+(p.allow_multiple?'可多次提交（上限 '+p.max_attempts+' 次）':'仅一次')+'</span>'
+      + '<span class="qz-tag '+(p.show_answer?'':'off')+'">提交后'+(p.show_answer?'显示':'不显示')+'答案</span>'
+      + '<span class="qz-tag '+(p.show_score?'':'off')+'">提交后'+(p.show_score?'显示':'不显示')+'分数</span>'
+      + '<span class="qz-tag warn">大屏窗口：'+esc(p.window||'')+'</span></div>'
+      + '<div class="qz-acts">'
+      + '<button type="button" class="qz-mini" onclick="quizOpenData(\''+esc(p.id)+'\')">📊 查看提交与成绩</button>'
+      + '<button type="button" class="qz-mini" onclick="quizPublishOpen(\''+esc(p.id)+'\')">✎ 配置</button>'
+      + '<button type="button" class="qz-mini" onclick="quizGoScreen(decodeURIComponent(\''+qzJs(p.window||'')+'\'))">🖥 去大屏窗口</button>'
+      + '<button type="button" class="qz-mini danger" onclick="quizPublishDelete(\''+esc(p.id)+'\')">删除</button>'
+      + '</div></div>';
+  }).join('');
+  return '<div class="qz-bar"><button type="button" class="btn btn-primary" style="width:auto" onclick="quizPublishOpen(\'\')">＋ 发布测验</button>'
+    + '<span class="qz-note">发布后学生端按登录班级自动匹配试卷；时间、次数、显示答案 / 分数都在服务端判定。</span></div>'
+    + (QT.publishes.length ? '<div class="qz-grid">' + cards + '</div>'
+      : '<div class="qz-empty">还没有发布记录。先建试卷，再点「＋ 发布测验」。</div>');
+}
+function quizOpenData(pid){ QT.curPub = String(pid); QT.tab='data'; quizRender(false); }
+window.quizOpenData = quizOpenData;
+function quizGoScreen(w){
+  try { actSetBoundWindow(w); } catch(e){}
+  location.hash = '#guide'; renderPage();
+  toast('已把「'+w+'」设为当前大屏窗口');
+}
+window.quizGoScreen = quizGoScreen;
+
+/* ---------------- 试卷编辑器 ---------------- */
+function quizEditorOpen(id){
+  const p = id ? QT.papers.find(x=>String(x.id)===String(id)) : null;
+  QT.editor = p ? JSON.parse(JSON.stringify(p)) : {
+    id:'', title:'', course:'', desc:'', questions:[quizNewQ('single')]
+  };
+  quizEditorShell();
+}
+window.quizEditorOpen = quizEditorOpen;
+function quizNewQ(type){
+  const q = { id:'q'+Date.now().toString(36)+Math.floor(Math.random()*999).toString(36),
+              type:type||'single', title:'', score:5, options:[], pairs:[], answer:'', accept:[], hint:'' };
+  if (type==='single'||type==='multiple') q.options = [{key:'A',text:''},{key:'B',text:''},{key:'C',text:''},{key:'D',text:''}];
+  if (type==='judge') q.answer = '对';
+  if (type==='match') q.pairsText = '左项一=右项一\n左项二=右项二';
+  return q;
+}
+function quizEditorShell(){
+  quizEnsureCss();
+  const body = '<div class="qz-row"><label>试卷名称</label><input class="qz-inp" data-pf="title" value="'+esc(QT.editor.title)+'" placeholder="如：七年级信息科技第一单元检测"></div>'
+    + '<div class="qz-row"><label>所属课程</label><input class="qz-inp" data-pf="course" value="'+esc(QT.editor.course)+'" placeholder="可留空"></div>'
+    + '<div class="qz-row"><label>说明</label><input class="qz-inp" data-pf="desc" value="'+esc(QT.editor.desc)+'" placeholder="给学生看的一句话说明"></div>'
+    + '<div id="qzEditorBody"></div>'
+    + '<div class="qz-bar" style="margin-top:10px"><button type="button" class="qz-mini" onclick="quizAddQ()">＋ 添加题目</button>'
+    + '<span class="qz-note">共 <b id="qzQCount">0</b> 题 · 满分 <b id="qzQTotal">0</b> 分</span></div>';
+  const foot = '<button type="button" class="btn btn-primary" style="width:auto" onclick="quizEditorSave()">保存试卷</button>'
+    + '<button type="button" class="btn btn-ghost" style="width:auto" onclick="closeFloat()">取消</button>';
+  showFloat(QT.editor.id ? '编辑试卷' : '新建试卷', body, { footer: foot });
+  const layer = document.getElementById('floatLayer'); if (layer) layer.classList.add('wide');
+  quizEditorBind(); quizEditorFill();
+}
+function quizEditorBind(){
+  if (QT.bound) return; QT.bound = true;
+  document.addEventListener('input', e=>{
+    const el = e.target; if (!el || !el.getAttribute) return;
+    const pf = el.getAttribute('data-pf');
+    if (pf && QT.editor) { QT.editor[pf] = el.value; return; }
+    const qf = el.getAttribute('data-qf');
+    if (qf && QT.editor) { const [i,k] = qf.split('|'); const q = QT.editor.questions[Number(i)];
+      if (q) q[k] = el.value; if (k==='score') quizEditorSum(); return; }
+    const of = el.getAttribute('data-of');
+    if (of && QT.editor) { const [i,j,k] = of.split('|'); const q = QT.editor.questions[Number(i)];
+      if (q && q.options[Number(j)]) q.options[Number(j)][k] = el.value; }
+  });
+  document.addEventListener('change', e=>{
+    const el = e.target; if (!el || !el.getAttribute) return;
+    const tp = el.getAttribute('data-type');
+    if (tp && QT.editor) { const q = QT.editor.questions[Number(tp)]; if (!q) return;
+      const n = quizNewQ(el.value); n.id = q.id; n.title = q.title; n.score = q.score;
+      QT.editor.questions[Number(tp)] = n; quizEditorFill(); }
+  });
+}
+function quizEditorSum(){
+  const n = (QT.editor.questions||[]).length;
+  const t = (QT.editor.questions||[]).reduce((a,q)=>a+(Number(q.score)||0),0);
+  const a = document.getElementById('qzQCount'), b = document.getElementById('qzQTotal');
+  if (a) a.textContent = n; if (b) b.textContent = t;
+}
+function quizEditorFill(){
+  const box = document.getElementById('qzEditorBody'); if (!box || !QT.editor) return;
+  box.innerHTML = QT.editor.questions.map((q,i)=>{
+    let cfg = '';
+    if (q.type==='single' || q.type==='multiple'){
+      cfg = '<div class="qz-note">选项（答案填字母；多选填 A,C）</div>'
+        + (q.options||[]).map((o,j)=>'<div class="qz-opt"><span class="k">'+esc(o.key||String.fromCharCode(65+j))+'</span>'
+          + '<input class="qz-inp" data-of="'+i+'|'+j+'|text" value="'+esc(o.text)+'" placeholder="选项内容">'
+          + '<button type="button" class="qz-mini danger" onclick="quizDelOpt('+i+','+j+')">✕</button></div>').join('')
+        + '<button type="button" class="qz-mini" onclick="quizAddOpt('+i+')">＋ 加选项</button>';
+    } else if (q.type==='blank'){
+      cfg = '<div class="qz-note">标准答案；其它可接受的写法用逗号分隔写在「备选答案」</div>';
+    } else if (q.type==='judge'){
+      cfg = '<div class="qz-note">正确答案由下拉选择，学生端只会看到「对 / 错」两个选项</div>';
+    } else if (q.type==='match'){
+      cfg = '<div class="qz-note">每行一条配对，格式 <b>左项=右项</b>；学生端按左项下拉选右项</div>'
+        + '<textarea class="qz-ta" data-qf="'+i+'|pairsText" placeholder="北京=中国\n东京=日本">'+esc(q.pairsText||'')+'</textarea>';
+    } else if (q.type==='essay'){
+      cfg = '<div class="qz-note">简答题不自动判分，需在测验页人工批阅；这里填参考要点</div>';
+    } else if (q.type==='image'){
+      cfg = '<div class="qz-note">学生上传图片作答，服务端落盘，需人工批阅（单张 ≤2MB）</div>';
+    }
+    let ans = '';
+    if (q.type==='judge'){
+      ans = '<div class="qz-row"><label>正确答案</label><select class="qz-sel" data-qf="'+i+'|answer">'
+        + '<option value="对"'+(q.answer==='对'?' selected':'')+'>对</option>'
+        + '<option value="错"'+(q.answer==='错'?' selected':'')+'>错</option></select></div>';
+    } else if (q.type==='match' || q.type==='image'){
+      ans = '';
+    } else if (q.type==='essay'){
+      ans = '<div class="qz-row"><label>参考要点</label><input class="qz-inp" data-qf="'+i+'|answer" value="'+esc(q.answer||'')+'"></div>';
+    } else {
+      ans = '<div class="qz-row"><label>正确答案</label><input class="qz-inp" data-qf="'+i+'|answer" value="'+esc(q.answer||'')+'"></div>';
+      if (q.type==='blank') ans += '<div class="qz-row"><label>备选答案</label><input class="qz-inp" data-qf="'+i+'|acceptText" value="'+esc((q.accept||[]).join(','))+'" placeholder="用逗号分隔"></div>';
+    }
+    return '<div class="qz-q"><div class="qz-q-hd"><span class="idx">第 '+(i+1)+' 题</span>'
+      + '<select class="qz-sel" style="width:auto" data-type="'+i+'">'
+      + QZ_TYPES.map(([k,n])=>'<option value="'+k+'"'+(q.type===k?' selected':'')+'>'+n+'</option>').join('') + '</select>'
+      + '<label style="font-size:12px;min-width:auto">分值</label><input class="qz-inp" style="width:70px" type="number" min="0" step="1" data-qf="'+i+'|score" value="'+esc(q.score)+'">'
+      + '<button type="button" class="qz-mini danger" onclick="quizDelQ('+i+')">删除本题</button></div>'
+      + '<input class="qz-inp" data-qf="'+i+'|title" value="'+esc(q.title||'')+'" placeholder="题干">'
+      + '<div style="margin-top:7px">'+cfg+'</div>' + ans + '</div>';
+  }).join('');
+  quizEditorSum();
+}
+function quizAddQ(){ QT.editor.questions.push(quizNewQ('single')); quizEditorFill(); }
+function quizDelQ(i){ QT.editor.questions.splice(i,1); quizEditorFill(); }
+function quizAddOpt(i){ const q=QT.editor.questions[i]; if(!q) return;
+  q.options.push({key:String.fromCharCode(65+q.options.length),text:''}); quizEditorFill(); }
+function quizDelOpt(i,j){ const q=QT.editor.questions[i]; if(!q) return; q.options.splice(j,1);
+  q.options.forEach((o,k)=>o.key=String.fromCharCode(65+k)); quizEditorFill(); }
+window.quizAddQ=quizAddQ; window.quizDelQ=quizDelQ;
+window.quizAddOpt=quizAddOpt; window.quizDelOpt=quizDelOpt;
+async function quizEditorSave(){
+  const p = JSON.parse(JSON.stringify(QT.editor));
+  if (!String(p.title||'').trim()) { toast('给试卷起个名字'); return; }
+  p.questions = (p.questions||[]).map(q=>{
+    if (q.type==='blank') q.accept = String(q.acceptText||'').split(/[,，]/).map(s=>s.trim()).filter(Boolean);
+    delete q.acceptText;
+    if (q.type==='match'){
+      const pairs = String(q.pairsText||'').split('\n').map(line=>{
+        const k = line.indexOf('='); if (k<0) return null;
+        return {l:line.slice(0,k).trim(), r:line.slice(k+1).trim()};
+      }).filter(x=>x&&x.l&&x.r);
+      q.pairs = pairs;
+      q.answer = pairs.map(x=>[x.l,x.r]);
+      delete q.pairsText;
+    }
+    if (q.type==='image' || q.type==='essay') q.answer = q.answer || '';
+    return q;
+  });
+  if (!p.questions.length) { toast('至少要有一道题'); return; }
+  try { await quizApi('/api/v2/quiz/teacher/paper/save', {paper:p});
+    closeFloat(); toast('试卷已保存'); await quizInit(true); quizRender(false);
+  } catch(e){ toast('保存失败：'+e.message); }
+}
+window.quizEditorSave = quizEditorSave;
+async function quizPaperDelete(id){
+  const p = QT.papers.find(x=>String(x.id)===String(id)); if(!p) return;
+  if (!(await uiConfirm('删除试卷「'+p.title+'」？\n已发布的测验与历史成绩会保留。',{title:'删除试卷',okText:'删除'}))) return;
+  try { await quizApi('/api/v2/quiz/teacher/paper/delete',{id:id}); toast('已删除'); await quizInit(true); quizRender(false); }
+  catch(e){ toast('删除失败：'+e.message); }
+}
+window.quizPaperDelete = quizPaperDelete;
+
+/* ---------------- 发布配置 ---------------- */
+function quizPublishOpen(id, paperId){
+  const p = id ? QT.publishes.find(x=>String(x.id)===String(id)) : null;
+  const d = p || { id:'', paper_id:paperId||(QT.papers[0]||{}).id||'', title:'', course:'',
+    class_ids:[], open_at:'', close_at:'', max_attempts:1, allow_multiple:false,
+    show_answer:false, show_score:false, status:'published', window:'' };
+  const dt = v => String(v||'').replace(' ','T').slice(0,16);
+  const body = '<div class="qz-row"><label>测验名称</label><input id="qzPubTitle" class="qz-inp" value="'+esc(d.title)+'" placeholder="留空则用试卷名"></div>'
+    + '<div class="qz-row"><label>试卷</label><select id="qzPubPaper" class="qz-sel">'
+    + QT.papers.map(x=>'<option value="'+esc(x.id)+'"'+(String(d.paper_id)===String(x.id)?' selected':'')+'>'+esc(x.title)+'（'+x.questions.length+' 题 / '+x.total+' 分）</option>').join('')+'</select></div>'
+    + '<div class="qz-row"><label>下发班级</label><div class="chk-grid" style="width:100%">'
+    + (QT.classes.length ? QT.classes.map(c=>'<label class="chk" style="display:inline-flex;align-items:center;gap:5px;margin:3px 12px 3px 0;font-size:12.5px">'
+        + '<input type="checkbox" class="qz-pub-cls" value="'+esc(c.id)+'"'+((d.class_ids||[]).some(v=>String(v)===String(c.id))?' checked':'')+'> '
+        + esc(c.name)+'（'+c.n+' 人）</label>').join('') : '<span class="qz-note">还没有班级，请先到「班级」页创建。</span>')+'</div></div>'
+    + '<div class="qz-row"><label>开放时间</label><input id="qzPubOpen" class="qz-inp" style="width:auto" type="datetime-local" value="'+esc(dt(d.open_at))+'"></div>'
+    + '<div class="qz-row"><label>截止时间</label><input id="qzPubClose" class="qz-inp" style="width:auto" type="datetime-local" value="'+esc(dt(d.close_at))+'"></div>'
+    + '<div class="qz-note">留空表示不限；时间一律以服务端时钟为准（当前 '+esc((QT.now||{}).date||'')+' '+esc((QT.now||{}).time||'')+'）。</div>'
+    + '<div class="qz-row"><label>提交次数上限</label><input id="qzPubMax" class="qz-inp" style="width:90px" type="number" min="1" max="20" value="'+esc(d.max_attempts||1)+'"></div>'
+    + '<div class="qz-row"><label>允许多次提交</label><label class="chk" style="font-size:12.5px"><input type="checkbox" id="qzPubMulti"'+(d.allow_multiple?' checked':'')+'> 开启后按上面的次数上限控制</label></div>'
+    + '<div class="qz-row"><label>提交后显示答案</label><label class="chk" style="font-size:12.5px"><input type="checkbox" id="qzPubAns"'+(d.show_answer?' checked':'')+'> 由服务端裁剪，关闭时答案根本不会发给学生</label></div>'
+    + '<div class="qz-row"><label>提交后显示分数</label><label class="chk" style="font-size:12.5px"><input type="checkbox" id="qzPubScore"'+(d.show_score?' checked':'')+'> 只显示客观题得分；简答 / 图片待批阅</label></div>'
+    + '<div class="qz-row"><label>大屏窗口</label><input id="qzPubWin" class="qz-inp" value="'+esc(d.window||'')+'" placeholder="留空自动生成「测验：测验名」"></div>'
+    + '<div class="qz-note">一次发布固定绑定一个窗口：学生提交时只刷新大屏里这一个窗口，不会串到别的任务窗口，也不会整页跳回顶部。</div>'
+    + '<div class="qz-row"><label>状态</label><select id="qzPubStatus" class="qz-sel" style="width:auto">'
+    + '<option value="published"'+(d.status!=='draft'&&d.status!=='closed'?' selected':'')+'>发布（学生可见）</option>'
+    + '<option value="draft"'+(d.status==='draft'?' selected':'')+'>草稿（学生不可见）</option>'
+    + '<option value="closed"'+(d.status==='closed'?' selected':'')+'>关闭（停止提交）</option></select></div>';
+  const foot = '<button type="button" class="btn btn-primary" style="width:auto" onclick="quizPublishSave(\''+esc(d.id||'')+'\')">保存并推送</button>'
+    + '<button type="button" class="btn btn-ghost" style="width:auto" onclick="closeFloat()">取消</button>';
+  showFloat(id?'配置测验':'发布测验', body, {footer:foot});
+  const layer = document.getElementById('floatLayer'); if (layer) layer.classList.add('wide');
+}
+window.quizPublishOpen = quizPublishOpen;
+async function quizPublishSave(id){
+  const v = x => (document.getElementById(x)||{}).value || '';
+  const ck = x => !!(document.getElementById(x)||{}).checked;
+  const classes = Array.from(document.querySelectorAll('.qz-pub-cls:checked')).map(c=>c.value);
+  const paperId = v('qzPubPaper');
+  const paper = QT.papers.find(x=>String(x.id)===String(paperId));
+  const title = v('qzPubTitle').trim() || (paper?paper.title:'未命名测验');
+  const payload = { id:id||'', paper_id:paperId, title:title, course:(paper||{}).course||'',
+    class_ids:classes, open_at:v('qzPubOpen').replace('T',' '), close_at:v('qzPubClose').replace('T',' '),
+    max_attempts:Number(v('qzPubMax'))||1, allow_multiple:ck('qzPubMulti'),
+    show_answer:ck('qzPubAns'), show_score:ck('qzPubScore'),
+    window:v('qzPubWin').trim(), status:v('qzPubStatus') };
+  try { await quizApi('/api/v2/quiz/teacher/publish/save',{publish:payload});
+    closeFloat(); toast('已推送到所选班级的学生端'); await quizInit(true); quizRender(false);
+  } catch(e){ toast('发布失败：'+e.message); }
+}
+window.quizPublishSave = quizPublishSave;
+async function quizPublishDelete(id){
+  const p = QT.publishes.find(x=>String(x.id)===String(id)); if(!p) return;
+  if (!(await uiConfirm('删除测验「'+p.title+'」？\n该次发布的所有提交与成绩会一并删除，不可恢复。',{title:'删除测验',okText:'删除'}))) return;
+  try { await quizApi('/api/v2/quiz/teacher/publish/delete',{id:id}); toast('已删除'); await quizInit(true); quizRender(false); }
+  catch(e){ toast('删除失败：'+e.message); }
+}
+window.quizPublishDelete = quizPublishDelete;
+
+/* ---------------- 提交与成绩数据 ---------------- */
+function quizDataHtml(){
+  const opts = QT.publishes.map(p=>'<option value="'+esc(p.id)+'"'+(String(QT.curPub)===String(p.id)?' selected':'')+'>'+esc(p.title)+'</option>').join('');
+  const s = QT.stats;
+  let inner = '<div class="qz-empty">正在读取统计数据…</div>';
+  if (s) {
+    const rows = s.classes||[];
+    const qs = s.paper.questions||[];
+    inner = '<div class="qz-scroll"><table class="qz-tbl"><thead><tr>'
+      + '<th>班级</th><th>应考</th><th>已交</th><th>提交率</th><th>平均分</th><th>最高</th><th>最低</th><th>及格率</th><th>待人工批阅</th></tr></thead><tbody>'
+      + rows.map(b=>'<tr><td><b>'+esc(b.class_name||('班 '+b.class_id))+'</b></td><td>'+b.roster+'</td><td>'+b.submitted+'</td>'
+        + '<td>'+b.rate+'%</td><td>'+b.avg+' / '+b.full+'</td><td>'+b.max+'</td><td>'+b.min+'</td><td>'+b.pass+'%</td>'
+        + '<td>'+b.needs_grade+'</td></tr>').join('')
+      + (rows.length?'':'<tr><td colspan="9" style="text-align:center;color:var(--ink3)">这次测验还没有提交数据</td></tr>')
+      + '</tbody></table></div>'
+      + '<div class="qz-note" style="margin-top:8px">口径：每人只算最后一次提交；分数为客观题得分（满分 '+s.full+'），简答 / 图片题需人工批阅后计入。'
+      + '大屏只显示「谁交了」，不显示这里的分数与逐题正确率。</div>'
+      + '<h4 style="margin:16px 0 6px;font-size:14px">逐题作答情况</h4>'
+      + (qs.length ? '<div class="qz-scroll"><table class="qz-tbl"><thead><tr><th>题目</th><th>题型</th><th>答对 / 作答</th><th>正确率</th></tr></thead><tbody>'
+          + qs.map((q,i)=>{ const t=(s.question_stats||{})[q.id]||{};
+            return '<tr><td>'+(i+1)+'. '+esc(q.title||'—')+'</td><td>'+esc(QZ_TYPE_NAME[q.type]||q.type)+'</td>'
+              + '<td>'+(t.right||0)+' / '+(t.answered||0)+'</td><td>'+(t.rate||0)+'%</td></tr>'; }).join('')
+          + '</tbody></table></div>' : '<div class="qz-empty">这份试卷没有题目</div>')
+      + '<div class="qz-bar" style="margin-top:14px">'
+      + '<button type="button" class="qz-mini" onclick="quizExportCsv()">⬇ 导出成绩 CSV</button>'
+      + '<button type="button" class="qz-mini" onclick="quizImportDialog()">📈 导入成绩页分析</button>'
+      + (s.needs_grade ? '<button type="button" class="qz-mini" onclick="quizGradeDialog()">✍ 人工批阅（'+s.needs_grade+' 份待批）</button>' : '')
+      + '<span class="qz-note">导入会把分数换算成百分制，写进成绩页的一场新考试。</span></div>';
+  }
+  return '<div class="qz-bar"><label class="qz-note">选择测验</label>'
+    + '<select id="qzPubSel" class="qz-sel" style="width:auto;min-width:210px" onchange="quizSelectPub(this.value)" '+(opts?'':'disabled')+'>'
+    + (opts||'<option value="">暂无测验</option>') + '</select>'
+    + '<button type="button" class="qz-mini" onclick="quizStatsLoad()">🔄 刷新</button>'
+    + '<span class="qz-note">共 '+(s?s.submitted:0)+' 人提交 · 平均 '+(s?s.avg:0)+' 分 · 满分 '+(s?s.full:0)+'</span></div>'
+    + '<div id="qzStatsBody" data-qz-keep="stats">'+inner+'</div>';
+}
+function quizSelectPub(v){ QT.curPub = v; quizStatsLoad(); }
+window.quizSelectPub = quizSelectPub;
+async function quizStatsLoad(quiet){
+  if (!QT.curPub) { QT.stats = null; if (state.route==='quiz') quizRender(true, true); return; }
+  try { const j = await quizApi('/api/v2/quiz/teacher/stats?pub='+encodeURIComponent(QT.curPub));
+    QT.stats = j.stats; QT.classes = j.classes||QT.classes;
+    if (state.route==='quiz' && QT.tab==='data') {
+      const box = document.getElementById('qzStatsBody');
+      if (box) { const y = box.scrollTop; quizRender(true, true);
+        const nb = document.getElementById('qzStatsBody'); if (nb) nb.scrollTop = y; }
+      else quizRender(true, true);
+    }
+  } catch(e){ if (!quiet) toast('统计读取失败：'+e.message); }
+}
+window.quizStatsLoad = quizStatsLoad;
+function quizExportCsv(){
+  const s = QT.stats; if (!s || !(s.rows||[]).length) { toast('还没有提交数据'); return; }
+  const head = ['学号','姓名','班级','第几次','提交时间','得分','满分'];
+  const lines = [head.join(',')].concat((s.rows||[]).map(r =>
+    [r.student_no,r.name,r.class_name,r.attempt,r.submitted_at,r.score,r.full]
+      .map(v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"').join(',')));
+  const blob = new Blob(['\ufeff'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = '测验成绩-'+(s.publish?s.publish.title:'')+'.csv'; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
+}
+window.quizExportCsv = quizExportCsv;
+
+/* 人工批阅：只对简答 / 图片题给分，服务端按题目分值封顶后重算总分 */
+function quizGradeDialog(){
+  const s = QT.stats;
+  if (!s) { toast('先选一次测验'); return; }
+  const rows = (s.rows||[]).filter(r=>r.needs_grade);
+  if (!rows.length) { toast('这次测验没有待批阅的答卷'); return; }
+  const paper = QT.papers.find(p=>String(p.id)===String((s.publish||{}).paper_id)) || {questions:[]};
+  const subjective = (paper.questions||[]).filter(q=>q.type==='essay'||q.type==='image');
+  if (!subjective.length) { toast('这份试卷没有简答 / 图片题'); return; }
+  const body = '<div class="qz-note">给 0 ~ 题目分值的整数分，保存后计入总分；未批的题继续标「待批阅」。</div>'
+    + rows.map(r=>'<div class="qz-q"><div class="qz-q-hd"><b>'+esc(r.name||'—')+'</b>'
+      + '<span class="qz-note">'+esc(r.student_no||'')+' · '+esc(r.class_name||'')+'</span></div>'
+      + subjective.map(q=>{
+        const a = (r.answers||{})[q.id] || {};
+        let extra = '';
+        if (q.type==='essay') extra = '<div class="qz-note">作答：'+esc(String(a||''))+'</div>';
+        else if (a.url) extra = '<img src="'+esc(a.url)+'" alt="学生上传" style="max-width:100%;max-height:180px;border-radius:8px;margin-top:6px">';
+        return '<div class="qz-row"><label>'+esc(q.title||'')+'（'+esc(q.score)+' 分）</label>'
+          +'<input class="qz-inp" style="width:96px" type="number" min="0" max="'+esc(q.score)+'" step="1" value="0"'
+          +' data-gsub="'+esc(r.id)+'" data-gq="'+esc(q.id)+'"></div>' + extra;
+      }).join('')
+      + '</div>').join('');
+  const foot = '<button type="button" class="btn btn-primary" style="width:auto" onclick="quizGradeSave()">保存批阅</button>'
+    + '<button type="button" class="btn btn-ghost" style="width:auto" onclick="closeFloat()">取消</button>';
+  showFloat('人工批阅 · '+(s.publish?s.publish.title:''), body, {footer:foot});
+  const layer = document.getElementById('floatLayer'); if (layer) layer.classList.add('wide');
+}
+window.quizGradeDialog = quizGradeDialog;
+async function quizGradeSave(){
+  const bySub = {};
+  document.querySelectorAll('[data-gsub]').forEach(el=>{
+    const sid = el.getAttribute('data-gsub'), q = el.getAttribute('data-gq');
+    (bySub[sid] = bySub[sid] || {})[q] = Number(el.value)||0;
+  });
+  try {
+    for (const sid of Object.keys(bySub))
+      await quizApi('/api/v2/quiz/teacher/grade', {sub:sid, marks:bySub[sid]});
+    closeFloat(); toast('批阅已保存，总分已更新');
+    quizStatsLoad();
+  } catch(e){ toast('批阅失败：'+e.message); }
+}
+window.quizGradeSave = quizGradeSave;
+
+/* ---------------- 成绩页：选择测验 / 班级 → 导入分析 ---------------- */
+function quizInjectScoresEntry(){
+  const c = document.getElementById('content'); if (!c) return;
+  if (c.querySelector('[data-qz-score-entry]')) return;
+  const bar = document.createElement('div');
+  bar.setAttribute('data-qz-score-entry','1');
+  bar.className = 'qz-score-bar';
+  bar.innerHTML = '<b>📥 从测验导入</b><span>选择一次测验与班级，直接导入成绩页做汇总分析</span>'
+    + '<button type="button" class="qz-mini" onclick="quizImportDialog()">选择测验 / 班级…</button>';
+  c.insertBefore(bar, c.firstChild);
+}
+function quizImportDialog(){
+  quizEnsureCss();
+  if (!QT.publishes.length) { quizInit(true).then(()=>quizImportDialog()); return; }
+  const pubs = QT.publishes.map(p=>'<option value="'+esc(p.id)+'"'+(String(QT.curPub)===String(p.id)?' selected':'')+'>'+esc(p.title)+'</option>').join('');
+  const cls = (QT.classes||[]).map(c=>'<option value="'+esc(c.id)+'">'+esc(c.name)+'（'+c.n+' 人）</option>').join('');
+  const body = '<div class="qz-row"><label>测验</label><select id="qzImpPub" class="qz-sel">'+pubs+'</select></div>'
+    + '<div class="qz-row"><label>班级</label><select id="qzImpCls" class="qz-sel">'+(cls||'<option value="">暂无班级</option>')+'</select></div>'
+    + '<div class="qz-note">导入口径：该班每人的最后一次提交 → 客观题得分 ÷ 试卷满分 × 100（百分制）→ 写进一场新考试。'
+    + '简答 / 图片题未批阅时会提示，不把未批的分数当 0 分算。</div>';
+  const foot = '<button type="button" class="btn btn-primary" style="width:auto" onclick="quizImportDo()">导入并查看分析</button>'
+    + '<button type="button" class="btn btn-ghost" style="width:auto" onclick="closeFloat()">取消</button>';
+  showFloat('从测验 / 检测导入成绩', body, {footer:foot});
+}
+window.quizImportDialog = quizImportDialog;
+async function quizImportDo(){
+  const pub = (document.getElementById('qzImpPub')||{}).value || '';
+  const cls = (document.getElementById('qzImpCls')||{}).value || '';
+  if (!pub || !cls) { toast('请选择测验和班级'); return; }
+  try {
+    const j = await quizApi('/api/v2/quiz/teacher/score-rows?pub='+encodeURIComponent(pub)+'&class='+encodeURIComponent(cls));
+    const rows = j.rows||[];
+    if (!rows.length) { toast('这个班还没有提交记录'); return; }
+    const full = Number((j.paper||{}).total)||0;
+    if (!full) { toast('试卷满分为 0，无法换算成绩'); return; }
+    // 科目：优先用本班已有科目，没有就建一个「测验成绩」科目
+    let cid = 0;
+    try { const cs = (typeof coursesForClass==='function' ? coursesForClass(Number(cls)) : []) || [];
+      cid = cs.length ? Number(cs[0].id) : 0; } catch(e){ cid = 0; }
+    if (!cid) {
+      const all = dbT('courses')||[];
+      cid = all.reduce((m,x)=>Math.max(m,Number(x.id)||0),0)+1;
+      all.push({ id:cid, class_id:Number(cls), name:'测验成绩' });
+      dbSet('courses', all);
+    }
+    const name = '测验：'+(j.paper.title||'')+'（'+(j.class_name||'')+'）';
+    const ex = (typeof createExam==='function') ? createExam(name,[cid]) : null;
+    if (!ex) { toast('成绩模块未就绪'); return; }
+    ex.class_id = Number(cls);
+    let n = 0;
+    rows.forEach(r=>{
+      const sid = Number(r.student_id);
+      if (!sid) return;
+      const raw = Number(r.score)||0;
+      const pct = Math.max(0, Math.min(100, Math.round(raw/full*100)));
+      if (typeof setExamScore==='function' && setExamScore(ex.id,sid,cid,pct)) n++;
+    });
+    state.curExam = ex.id; state.scorePick = null; state.scoreCourse = 0;
+    // 切到目标班，成绩表才会显示这批学生（当前班是全局 state.currentClass）
+    try { state.currentClass = Number(cls); } catch(e){}
+    closeFloat();
+    location.hash = '#scores'; renderPage();
+    toast('已导入 '+n+' 条成绩到「'+name+'」（百分制）');
+  } catch(e){ toast('导入失败：'+e.message); }
+}
+window.quizImportDo = quizImportDo;
+
+/* ---------------- 实时通道：提交只刷新对应窗口 ---------------- */
+function quizWatch(){
+  if (QT.es) return;
+  /* 演示 / 登录页没有 #content，别开一条会一直 401 重连的长连接；
+     进应用后 actInit() / quizInit() 会再调一次，那时才真正连上。 */
+  if (!document.getElementById('content')) return;
+  try {
+    QT.autoFollow = LS.get('wb-act-autofollow','1') !== '0';
+    QT.es = new EventSource('/api/v2/events?since=0');
+    QT.es.addEventListener('quiz', e=>{
+      let ev = {}; try { ev = JSON.parse(e.data||'{}'); } catch(x){ return; }
+      const d = ev.data||{};
+      if (d.kind !== 'submit' && d.kind !== 'publish') return;
+      if (d.kind === 'submit' && d.window) {
+        // 「自动在对应提交所在的窗口设置大屏」：只改绑定状态，不滚动页面
+        if (QT.autoFollow && state.route === 'guide') actSetBoundWindow(d.window, true);
+        if (state.route === 'guide') actRefreshWindow(d.window);
+      }
+      if (state.route === 'quiz') {
+        if (QT.tab === 'data') quizStatsLoad(true);
+        else quizInit(true);
+      }
+      quizBoardLoad(true);
+    });
+  } catch(e){}
+}
+function quizBoardLoad(quiet){
+  return quizApi('/api/v2/quiz/board').then(j=>{
+    const before = QT.board ? Object.keys(QT.board.windows||{}).join('|') : '';
+    QT.board = j.board||null;
+    const after = QT.board ? Object.keys(QT.board.windows||{}).join('|') : '';
+    if (state.route !== 'guide') return;
+    quizBoardPaint();
+    /* 窗口集合刚变化（首次载入 / 新测验发布）才整块补一次；
+       数据条数变化走 actRefreshWindow 局部刷新，绝不整页重绘。 */
+    const domN = document.querySelectorAll('#actPaneDash .act-win[data-act-win]').length;
+    const need = Object.keys((QT.board||{}).windows||{}).length;
+    if (before !== after || (need && domN < need)) {
+      try { actRenderDash(); } catch(e){}
+    }
+  }).catch(()=>{});
+}
+function quizBoardPaint(){
+  const el = document.getElementById('actBindBar'); if (!el || !QT.board) return;
+  const n = Object.keys(QT.board.windows||{}).length;
+  const t = el.querySelector('[data-bind-total]');
+  if (t) t.textContent = n + ' 个窗口 · ' + (QT.board.total||0) + ' 人';
+}
+function actBoundKey(){ return 'wb-act-bound-' + (typeof actActiveId!=='undefined' ? actActiveId : ''); }
+function actBoundWindow(){ try { return String(LS.get(actBoundKey(),'')||''); } catch(e){ return ''; } }
+function actSetBoundWindow(w, auto){
+  try { LS.set(actBoundKey(), w||''); } catch(e){}
+  if (!auto) toast('已把「'+(w||'自动')+'」设为当前大屏统计窗口');
+  // 只改标记，绝不重建整块 / 不滚动
+  document.querySelectorAll('#actPaneDash .act-win[data-act-win]').forEach(el=>{
+    el.classList.toggle('is-bound', !!w && el.getAttribute('data-act-win')===w);
+  });
+  const lab = document.querySelector('#actBindBar [data-bind-name]');
+  if (lab) lab.textContent = w || '自动（跟随最近提交）';
+  const chk = document.querySelector('#actBindBar [data-bind-auto]');
+  if (chk) chk.checked = QT.autoFollow;
+}
+window.actSetBoundWindow = actSetBoundWindow;
+function actToggleAutoFollow(el){
+  QT.autoFollow = !!el.checked;
+  try { LS.set('wb-act-autofollow', QT.autoFollow?'1':'0'); } catch(e){}
+  toast(QT.autoFollow ? '已开启：新提交自动绑定到对应窗口' : '已关闭：窗口绑定保持手动选择');
+}
+window.actToggleAutoFollow = actToggleAutoFollow;
+/* 窗口名单按「大屏当前班」过滤：board 是全局数据，直接铺会混进别班学生。
+   整块渲染与 SSE 局部刷新都走这里，口径永远一致。 */
+function actWinRowsFor(b, wins){
+  const raw = wins ? (wins[b] || []) : null;
+  if (!raw) return null;
+  let nos = new Set(), names = new Set();
+  try {
+    const clsStus = (typeof actCurClass === 'function' && typeof actClassStudents === 'function')
+      ? (actClassStudents(actCurClass()) || []) : [];
+    clsStus.forEach(s => {
+      const no = String(s.student_no || '').trim(), nm = String(s.name || '').trim();
+      if (no) nos.add(no);
+      if (nm) names.add(nm);
+    });
+  } catch (e) {}
+  if (!nos.size && !names.size) return raw;
+  return raw.filter(r => nos.has(String(r.no || '').trim())
+                     || names.has(String(r.name || '').trim()));
+}
+function actWinRowsHtml(rows){
+  if (!rows || !rows.length) return '<div class="act-win-empty">这个任务还没有人提交</div>';
+  return rows.map((s,i)=>'<div class="act-win-row"><i style="font-style:normal;font-weight:700;color:var(--brand-primary)">'+(i+1)+'</i>'
+    + '<b style="font-weight:600">'+esc(s.name||'—')+'</b>'
+    + '<span class="no">'+esc(s.no||'')+'</span>'
+    + '<span class="ts">'+esc(String(s.at||'').slice(5,16)||'—')+'</span></div>').join('');
+}
+async function actRefreshWindow(w){
+  if (!w) return;
+  try {
+    const j = await quizApi('/api/v2/quiz/board?task='+encodeURIComponent(typeof actActiveId!=='undefined'?actActiveId:''));
+    QT.board = j.board||QT.board;
+    const key = String(w).trim().replace(/\s+/g,' ');
+    const box = document.querySelector('#actPaneDash .act-win[data-act-win="'+CSS.escape(key)+'"]');
+    const rows = actWinRowsFor(key, (QT.board||{}).windows||{});
+    quizBoardPaint();
+    if (!box) { actRenderDash(); return; }   // 新窗口：整块补一个（仍保留滚动）
+    if (!rows) return;                        // 找不到数据就不动，避免错配
+    const list = box.querySelector('[data-win-list]');
+    const num = box.querySelector('[data-win-n]');
+    if (list) list.innerHTML = actWinRowsHtml(rows);
+    if (num) num.textContent = rows.length;
+  } catch(e){ /* 局部刷新失败不影响原有轮询兜底 */ }
+}
+window.actRefreshWindow = actRefreshWindow;
+setTimeout(()=>{ try { quizWatch(); } catch(e){} }, 1800);
 </script>
 <script src="submit-enh.js"></script>
 <script src="/netsync.js"></script>

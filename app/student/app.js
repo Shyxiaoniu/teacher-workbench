@@ -19,7 +19,9 @@
 
   var S = { me: null, rev: 0, T: {}, flags: {}, vis: {}, view: 'today', es: null,
             now: null,   /* 服务端「现在第几节」（loadNow 定期刷新，2026-11-04） */
-            loading: true, seatmap: null };
+            loading: true, seatmap: null,
+            /* 测验/检测（2.0.38）：不进 sync 快照（试卷含答案），独立接口按会话班级下发 */
+            quiz: { list: null, loading: false } };
   var WD = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 
   /* ---------------- 工具 ---------------- */
@@ -141,6 +143,12 @@
       S.es.addEventListener('cfg', function () {
         refreshTyping();
         pull(S.rev, false).then(render);
+      });
+      /* 老师发布 / 关闭测验、或有新提交：事件里不带任何名单与答案，
+         只是让本页把缓存作废，重新按会话班级拉一次可见测验。 */
+      S.es.addEventListener('quiz', function () {
+        S.quiz.list = null;
+        if (S.view === 'quiz') render();
       });
     } catch (e) {}
     setInterval(function () {
@@ -557,16 +565,19 @@
     /* 2026-11-04 牛哥定版：原「科目」改为「资料」——只列老师下发的资料，
        不再显示课表里的科目（课表那套对学生不再有意义）。 */
     { id: 'courses', name: '资料', ic: '📁' },
+    /* 测验/检测（2.0.38）：按登录会话的班级自动匹配老师下发的试卷 */
+    { id: 'quiz', name: '测验', ic: '📝' },
     /* 座位表（2026-11-03）：与教师端同一张图，讲台固定朝上，自己高亮 */
     { id: 'seat', name: '座位', ic: '🪑' },
     /* 打字冒险岛：老师开放后显示，站内 iframe 内嵌（2026-11-02） */
     { id: 'typing', name: '打字', ic: '⌨️' }
   ];
-  var VIEWS = ['today', 'homework', 'courses', 'seat', 'typing'];
+  var VIEWS = ['today', 'homework', 'courses', 'quiz', 'seat', 'typing'];
   var TITLES = {
     today: ['今日', '签到 · 课堂学习单 · 要交的作业'],
     homework: ['我的作业', '全部作业与提交状态 · 点一条查看详情'],
     courses: ['我的资料', '老师下发的资料 · 点一下直接打开，不用下载'],
+    quiz: ['我的测验', '老师下发给本班的检测 · 点开作答，按设置显示答案与分数'],
     seat: ['我的座位', '座位表 · 讲台固定在上方 · 高亮你自己的位置'],
     typing: ['打字冒险岛', '闯关练打字 · 赢星星 · 孵宠物 · 上排行榜']
   };
@@ -581,6 +592,8 @@
   }
 
   function go(v) {
+    /* 每次进测验页重新拉一次，老师刚发布的卷子不用等刷新页面 */
+    if (v === 'quiz') S.quiz.list = null;
     S.view = v;
     try { location.hash = v; } catch (e) {}
     render();
@@ -623,7 +636,7 @@
        拿到数据后 loadSeatmap 自己再 render 一遍（2026-11-03）。 */
     if (S.view === 'seat' && !S.seatmap) loadSeatmap();
     var map = { today: vToday, homework: vHwAll, courses: vCourses,
-                seat: vSeat, typing: vTyping };
+                quiz: vQuiz, seat: vSeat, typing: vTyping };
     var t = TITLES[S.view] || TITLES.today;
     app.innerHTML =
       '<aside class="sidebar">' + sideHtml() + '</aside>' +
@@ -656,6 +669,10 @@
     // 资料页 / 今日「本课资料」：点开在线预览或一键打开
     document.querySelectorAll('[data-mat]').forEach(function (el) {
       el.onclick = function () { openMatSheet(el.getAttribute('data-mat')); };
+    });
+    // 测验/检测（2.0.38）：点「开始检测」在独立新标签里作答，原页不关
+    document.querySelectorAll('[data-quiz]').forEach(function (el) {
+      el.onclick = function () { quizOpen(el.getAttribute('data-quiz')); };
     });
     // 「我的」里已完成的活动可回看详情
     document.querySelectorAll('[data-rec]').forEach(function (el) {
@@ -993,6 +1010,65 @@
     html += '</div>';
     return html;
   }
+  /* ---------------- 视图：测验 / 检测（2.0.38） ----------------
+     列表在站内、作答在独立页 /s/quiz.html（新标签）。这样学生答题时
+     不会被 SSE / 10 秒轮询触发的 render() 整块重建 DOM 清空答案 ——
+     打字冒险岛 P-026 那个「闪退」就是这么来的。
+     试卷与可见班级全部由服务端按会话判定，前端不传 class_id。 */
+  function vQuiz() {
+    if (!S.quiz.list && !S.quiz.loading) {
+      S.quiz.loading = true;
+      api('/api/v2/quiz/student/list').then(function (j) {
+        S.quiz.loading = false;
+        S.quiz.list = j.ok ? j : { ok: false, publishes: [], msg: j.msg || '读取失败' };
+        if (S.view === 'quiz') render();
+      }).catch(function () {
+        S.quiz.loading = false;
+        S.quiz.list = { ok: false, publishes: [], msg: '连不上老师电脑，请确认在同一 Wi-Fi' };
+        if (S.view === 'quiz') render();
+      });
+    }
+    var d = S.quiz.list;
+    var head = '<div class="card"><div class="note" style="margin:0">'
+      + '这里只显示<b>老师下发给本班</b>的测验，班级按你的登录身份自动匹配。'
+      + '开放与截止时间、还能不能重交，都以老师电脑上的时间为准。'
+      + '</div></div>';
+    if (!d) return head + '<div class="card"><div class="empty">正在读取测验列表…</div></div>';
+    if (!d.ok) return head + '<div class="card"><div class="empty">' + esc(d.msg || '读取失败') + '</div></div>';
+    var pubs = d.publishes || [];
+    if (!pubs.length) return head + '<div class="card"><div class="empty">'
+      + '本班暂时没有测验。老师发布后刷新这里就能看到。'
+      + '<button class="btn" style="width:auto;margin-top:10px" onclick="quizRefreshList()">刷新列表</button></div></div>';
+    var stName = { open: '进行中', before: '未开始', expired: '已截止', closed: '已关闭' };
+    var rows = pubs.map(function (p) {
+      var can = p.open && (p.allow_multiple ? (Number(p.attempts) < Number(p.max_attempts)) : !Number(p.attempts));
+      var why = !p.open ? (stName[p.state] || '暂不可作答')
+        : (!can ? (p.allow_multiple ? '已达提交上限' : '本次测验只能提交一次') : '');
+      var last = p.last ? '<div class="note" style="margin-top:6px">上次提交：'
+        + esc(String(p.last.submitted_at || '').slice(5, 16)) + '（第 ' + p.last.attempt + ' 次）'
+        + (p.last.show_score && p.last.score != null ? ' · 得分 ' + p.last.score + ' / ' + p.last.auto_full : '')
+        + (p.last.needs_grade ? ' · 主观题待老师批阅' : '') + '</div>' : '';
+      return '<div class="card"><h3>' + esc(p.title) + ' <span class="more">' + esc(stName[p.state] || '') + '</span></h3>'
+        + '<div class="note">' + esc(p.paper_title || '') + ' · '
+        + (p.open_at ? '开放 ' + esc(p.open_at) : '不限开放时间')
+        + (p.close_at ? ' · 截止 ' + esc(p.close_at) : '')
+        + ' · 已交 ' + (p.attempts || 0) + ' 次</div>'
+        + last
+        + (can ? '<button class="btn" style="width:auto;margin-top:10px" data-quiz="' + esc(p.id) + '">开始检测 →</button>'
+               : '<div class="note" style="margin-top:10px;color:var(--ink3)">' + esc(why) + '</div>')
+        + '</div>';
+    }).join('');
+    return head + '<div class="cols2">' + rows + '</div>'
+      + '<div class="card"><button class="btn" style="width:auto" onclick="quizRefreshList()">🔄 刷新列表</button></div>';
+  }
+  function quizRefreshList() { S.quiz.list = null; render(); }
+  window.quizRefreshList = quizRefreshList;
+  function quizOpen(id) {
+    if (!id) return;
+    openNewTab('/s/quiz.html?pub=' + encodeURIComponent(id));
+  }
+  window.quizOpen = quizOpen;
+
   /** 资源在线预览：按文件类型选最合适的浏览器内联方式（2026-11-02 重写）
       · 图片 → <img>   · 音频 → <audio>   · 视频 → <video>
       · PDF / 文本 / HTML → <iframe>（/cwpv 闸门原样输出）

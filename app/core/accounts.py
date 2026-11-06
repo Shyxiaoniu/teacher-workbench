@@ -73,6 +73,10 @@ class Workspace(object):
             "db": os.path.join(d, "workbench.db"),
             "typing": os.path.join(d, "typing.json"),
             "activity": os.path.join(d, "activity"),
+            # 测验/检测（2.0.38）：试卷含正确答案，绝不进 29 表同步体系，
+            # 独立 quiz.json + quiz_files/，按账号隔离。
+            "quiz": os.path.join(d, "quiz.json"),
+            "quiz_files": os.path.join(d, "quiz_files"),
             "submissions": os.path.normpath(sub),
             "courseware": os.path.normpath(cw),
         }
