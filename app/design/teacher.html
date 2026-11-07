@@ -314,6 +314,20 @@
   watchTheme();
   bind();
   load();
+  /* 把内容高度告诉外层（同源 iframe）：管理页比一屏长，让外层容器跟着长，
+     整页滚动和其他教师页一致，而不是在 iframe 里再套一层滚动条。 */
+  try {
+    var post = function () {
+      var h = Math.min(3200, Math.max(520, document.documentElement.scrollHeight));
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: 'wb-design-h', h: h }, '*');
+      }
+    };
+    if (window.ResizeObserver) new ResizeObserver(post).observe(document.body);
+    window.addEventListener('load', post);
+    setTimeout(post, 120);
+    setTimeout(post, 700);
+  } catch (e) {}
   // 大屏那边有新提交时，这里也跟着刷新（30 秒一次，够用且不打扰）
   setInterval(function () { if (document.visibilityState === 'visible') load(); }, 30000);
 })();

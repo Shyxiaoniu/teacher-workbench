@@ -111,7 +111,7 @@ html[data-mode="dark"] .ds-intro{border-color:rgba(239,159,39,.25)}
 .ds-body{display:flex;flex:1;min-height:0;gap:0;position:relative}
 
 /* 左：代码区 */
-.ds-code{display:flex;flex-direction:column;width:46%;min-width:300px;min-height:0;
+.ds-code{display:flex;flex-direction:column;width:44%;min-width:300px;min-height:0;
   border-right:1px solid var(--line);background:var(--card)}
 .ds-tabs{display:flex;align-items:center;gap:4px;padding:8px 10px;border-bottom:1px solid var(--line);flex:none}
 .ds-tabs button{
@@ -158,12 +158,16 @@ html[data-mode="dark"] .ds-canvas{border-color:rgba(255,255,255,.08)}
 .ds-empty .big{font-size:44px;line-height:1}
 .ds-empty b{color:var(--ink2);font-size:15px}
 
-/* 知识库抽屉 */
+/* 知识库抽屉：覆盖在预览右侧，不挤占预览宽度。
+   之前用 flex 占位，抽屉一开预览被压到几十像素，右边的网页直接看不见了。 */
 .ds-kb{
-  width:0;overflow:hidden;border-left:1px solid var(--line);background:var(--card);
-  display:flex;flex-direction:column;transition:width .22s cubic-bezier(.22,.61,.36,1);
+  position:absolute;right:0;top:0;bottom:0;width:0;overflow:hidden;z-index:20;
+  border-left:1px solid var(--line);background:var(--card);
+  display:flex;flex-direction:column;
+  transition:width .22s cubic-bezier(.22,.61,.36,1);
 }
-.ds-kb.open{width:340px}
+.ds-kb.open{width:340px;box-shadow:-12px 0 30px rgba(60,30,10,.12)}
+html[data-mode="dark"] .ds-kb.open{box-shadow:-12px 0 30px rgba(0,0,0,.5)}
 .kb-head{display:flex;align-items:center;gap:8px;padding:11px 13px;border-bottom:1px solid var(--line);flex:none}
 .kb-head b{font-size:14px}
 .kb-head .x{margin-left:auto;width:28px;height:28px;border-radius:8px;color:var(--ink3);font-size:18px;line-height:1}
@@ -235,7 +239,7 @@ html[data-mode="dark"] .ds-canvas{border-color:rgba(255,255,255,.08)}
 .ds-receipt .row .btn{flex:1}
 
 /* ---------------- 教师管理页 ---------------- */
-.tc-app{max-width:1020px;margin:0 auto;padding:18px 18px 44px}
+.tc-app{max-width:1020px;margin:0 auto;padding:18px 18px 64px}
 .tc-head{display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap}
 .tc-head h1{margin:0;font-size:19px;letter-spacing:.2px}
 .tc-head small{color:var(--ink3);font-size:12.5px}

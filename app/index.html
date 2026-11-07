@@ -12050,8 +12050,18 @@ function renderContent(opts = {}) {
        和打字页同款「iframe 还在就不重建」——否则同步轮询会把它整页重载，
        老师刚点开的开关 / 输入到一半的课程名都会丢。 */
     if (!c.querySelector('iframe[data-design-admin]')) {
-      c.innerHTML = '<div style="height:calc(100vh - 128px);min-height:520px">' +
+      c.innerHTML = '<div id="designAdminWrap" style="height:calc(100vh - 128px);min-height:520px">' +
         '<iframe data-design-admin src="/design/teacher.html" title="H5 网页设计管理" style="width:100%;height:100%;border:0"></iframe></div>';
+      /* 管理页内容比一屏长：它会把自身高度 post 上来，这里同步容器高度，
+         让老师用页面滚动条看完整页（而不是在 iframe 里滚一层）。 */
+      window.addEventListener('message', function (ev) {
+        if (!ev.data || ev.data.type !== 'wb-design-h') return;
+        var fr = c.querySelector('iframe[data-design-admin]');
+        if (!fr || ev.source !== fr.contentWindow) return;
+        var h = Math.max(520, Math.min(3200, Number(ev.data.h) || 0));
+        var wrap = fr.parentNode;
+        if (wrap) wrap.style.height = h + 'px';
+      });
     }
   } else if (DEMO_RENDER[state.route]) {
     c.innerHTML = DEMO_RENDER[state.route]();
