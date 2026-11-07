@@ -1,10 +1,10 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN" data-mode="light">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>H5 网页设计 · 班级工作台</title>
-<link rel="stylesheet" href="/design/design.css?v=2.0.39">
+<title>网页 · 班级工作台</title>
+<link rel="stylesheet" href="/design/design.css?v=2.0.41f">
 </head>
 <body>
 <div class="ds-app">
@@ -12,21 +12,23 @@
   <!-- 顶部工具条：模板 / 设备 / 知识库 / 保存 / 提交。学生端页头已有标题，
        这里不再重复大标题，只留一行功能与状态。 -->
   <header class="ds-bar">
+    <button class="btn ghost sm ds-back" id="btnBack" hidden title="回到网页设置页">‹ 返回设置</button>
     <div class="ds-brand">
       <span class="dot"></span>
-      <b>H5 网页设计</b>
-      <small>左边写代码 · 右边看效果</small>
+      <b id="brandTitle">网页</b>
+      <small id="brandSub">左边写代码 · 右边看效果</small>
     </div>
     <div class="ds-actions">
       <select id="tplSel" title="换一个起步模板（会覆盖当前代码，先保存草稿再换）">
         <option value="">选择模板…</option>
       </select>
-      <div class="seg" id="devSeg" title="预览宽度">
-        <button type="button" data-w="1000" class="on">桌面</button>
+      <div class="seg" id="devSeg" title="预览宽度（也是导出图片的宽度）">
+        <button type="button" data-w="900" class="on">桌面</button>
         <button type="button" data-w="768">平板</button>
         <button type="button" data-w="390">手机</button>
       </div>
       <button class="btn ghost sm" id="btnKb" title="查标签、查样式、看示例">📖 知识库</button>
+      <button class="btn ghost sm" id="btnImg" title="老师下发的图片，点一下插进网页">🖼 图片</button>
       <button class="btn sm" id="btnSave" title="保存到服务器，换设备也能接着写">保存草稿</button>
       <button class="btn primary sm" id="btnSubmit" title="一键截图并提交给老师">提交作品</button>
     </div>
@@ -39,15 +41,24 @@
     <section class="ds-code">
       <div class="ds-tabs">
         <button type="button" data-tab="html" class="on">HTML</button>
-        <button type="button" data-tab="css">CSS</button>
         <span class="sp"></span>
-        <span class="hint" id="tabHint">只写 body 里的内容</span>
+        <span class="hint" id="tabHint">整个网页的代码，样式就在里面的 &lt;style&gt; 里</span>
+        <!-- 主题设置（2.0.40）：代码区显示方式，切换立即生效、并随草稿保存 -->
+        <button type="button" class="mode-sw" id="btnMode" aria-pressed="true"
+                title="切换代码显示方式：关键词高亮 / 普通文本">
+          <i></i><span id="modeTxt">关键词高亮</span>
+        </button>
       </div>
+      <!-- 一个代码区搞定（2.0.41）：整个网页的代码都在 HTML 页签里，
+           样式直接写 <style> 段，不再另开 CSS 窗口。
+           隐藏的 edCss 只为兼容老草稿与提交字段，学生看不到也不用管。 -->
       <div class="ds-editor">
-        <textarea id="edHtml" spellcheck="false" autocomplete="off"
-          placeholder="在这里写网页内容，例如：&#10;<h1>我的第一个网页</h1>&#10;<p>你好！</p>"></textarea>
-        <textarea id="edCss" spellcheck="false" autocomplete="off" hidden
-          placeholder="在这里写样式，例如：&#10;h1 { color: #b45b33; }"></textarea>
+        <div class="code-pane" data-pane="html">
+          <pre class="code-hl" id="hlHtml" aria-hidden="true"></pre>
+          <textarea id="edHtml" spellcheck="false" autocomplete="off"
+            placeholder="这里写整个网页的代码，样式直接写进 &lt;style&gt;：&#10;<!DOCTYPE html>&#10;<html><head><style>h1{color:#b45b33}</style></head>&#10;<body><h1>我的第一个网页</h1></body></html>"></textarea>
+        </div>
+        <textarea id="edCss" hidden></textarea>
       </div>
       <div class="ds-status">
         <b id="stTitle">未命名网页</b>
@@ -57,11 +68,16 @@
       </div>
     </section>
 
+    <!-- 可拖动分隔条（2.0.40）：默认左右各半，拖动按比例分配；
+         窄屏（≤760px）自动隐藏并改成上下排列。 -->
+    <div class="ds-split" id="split" role="separator" aria-orientation="vertical"
+         aria-label="拖动调整代码区与预览区的宽度" tabindex="0"
+         title="拖动调整宽度，双击恢复各占一半"></div>
+
     <!-- 右：实时预览（srcdoc，脚本不执行，只渲染 HTML/CSS） -->
     <section class="ds-preview">
       <div class="ds-pv-head">
         <b>实时预览</b>
-        <span class="size" id="pvSize"></span>
         <span class="sp"></span>
         <button class="btn ghost sm" id="btnRefresh" title="重新渲染一次（改完代码会自动刷新）">↻ 刷新</button>
       </div>
@@ -71,6 +87,12 @@
             <iframe id="pv" sandbox="allow-same-origin" title="网页预览"></iframe>
           </div>
         </div>
+      </div>
+      <!-- 底栏与左侧状态栏同款：两边内部结构一致，内容区才是真正等高 -->
+      <div class="ds-pv-foot">
+        <span id="pvSize">—</span>
+        <span class="sp"></span>
+        <span>预览画布</span>
       </div>
     </section>
 
@@ -86,13 +108,39 @@
       <div class="kb-cats" id="kbCats"></div>
       <div class="kb-list" id="kbList"></div>
     </aside>
+
+    <!-- 图片素材抽屉（2.0.41）：老师在「资料」里下发的图片，
+         学生点一下直接插进代码，不用自己找图、也不怕外链失效。 -->
+    <aside class="ds-kb ds-imgpanel" id="imgPanel" aria-hidden="true">
+      <div class="kb-head">
+        <b>图片素材</b>
+        <button class="x" id="imgClose" title="收起">×</button>
+      </div>
+      <div class="kb-search">
+        <input id="imgSearch" type="search" placeholder="搜图片名字">
+      </div>
+      <div class="img-viewbar">
+        <div class="img-view" id="imgView" role="group" aria-label="显示方式">
+          <button type="button" data-view="grid" class="on" title="网格：看大图，适合挑图">▦ 网格</button>
+          <button type="button" data-view="list" title="列表：一行一张，看名字和归属">☰ 列表</button>
+        </div>
+      </div>
+      <div class="kb-cats" id="imgCats"></div>
+      <div class="kb-list img-grid" id="imgList"></div>
+      <!-- 从资料中添加文件（2.0.41）：两端同一个入口，学生取老师下发的、教师取课件库里的 -->
+      <div class="img-foot" id="imgFoot">
+        <button type="button" class="btn sm" id="btnImgAdd" style="width:100%;margin-bottom:6px">＋ 从资料中添加文件</button>
+        <span id="imgFootTip">老师下发到「资料」的图片会自动出现在这里</span>
+      </div>
+    </aside>
   </div>
 </div>
 
 <div class="ds-toast" id="toast"></div>
 <div id="busyBox"></div>
 
-<script src="/design/kb.js?v=2.0.39"></script>
-<script src="/design/studio.js?v=2.0.39"></script>
+<script src="/s/ui-dialog.js?v=2.0.41f"></script>
+<script src="/design/kb.js?v=2.0.41f"></script>
+<script src="/design/studio.js?v=2.0.41f"></script>
 </body>
 </html>

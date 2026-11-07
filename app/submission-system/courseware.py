@@ -943,6 +943,70 @@ def _student_folder(no, name, cls_dir=""):
     return (s_no or s_nm)[:60] or "未命名学生"
 
 
+def _student_prefix(stu_dir_name):
+    """归档文件名的统一前缀 = 学生目录名（2.0.40）。
+
+    目录本身已经是「学号-姓名」，文件名再带一遍不是重复劳动：
+    老师把某个文件单独拷到桌面 / 发到群里时，光看文件名也知道是谁交的。
+    「未命名学生」不加前缀（没有身份可加，加了反而像学号）。
+    """
+    s = str(stu_dir_name or "").strip()
+    if not s or s == "未命名学生":
+        return ""
+    return s
+
+
+def _with_student_prefix(name, stu_dir_name):
+    """给归档文件名加「学号-姓名-」前缀（2.0.40 牛哥要求）。
+
+    规则（网页作品与学习单文件完全一致，都走这一个函数）：
+      · 前缀 = 学生目录名，形如 `20250101-阎泽楷`；
+      · 原名已经是这个前缀开头的（`前缀-` / `前缀_` / `前缀 `）→ 原样返回，
+        保证同一份文件反复归档不会变成「前缀-前缀-原名」；
+      · 只加前缀、不动扩展名；重名的 (2)(3) 由 _unique_target 统一加在扩展名前，
+        所以「原名主体」始终保留在前缀后面，信息不丢；
+      · 没有身份（未命名学生）就不加，避免出现「未命名学生-xxx」这种看不懂的名字。
+    """
+    nm = str(name or "").strip() or "file"
+    pre = _student_prefix(stu_dir_name)
+    if not pre:
+        return nm
+    low, p = nm.lower(), pre.lower()
+    if low == p or low.startswith(p + "-") or low.startswith(p + "_") or low.startswith(p + " "):
+        return nm
+    stem, ext = os.path.splitext(nm)
+    # 文件名总长留 120：目录里已经有课程 / 班级 / 学号-姓名三层，太长会顶到
+    # Windows 的 260 路径上限（深层目录 + 长原名最容易踩）。
+    room = 120 - len(pre) - 1 - len(ext)
+    if room > 8 and len(stem) > room:
+        stem = stem[:room]
+    return safe_name(pre + "-" + stem + ext)
+
+
+def _find_same_size(dir_path, name, size):
+    """在 `名字 (2).ext`、`名字 (3).ext` … 里找一份大小相同的（2.0.40）。
+
+    为什么需要：学生反复点「提交」交同一份文件时，第一份会命中「已是最新」，
+    但只要内容改过一次，同名比较就落到 (2)/(3) 分支 —— 以前只比第一份，
+    同一份文件会被反复堆成 (4)、(5)。这里按大小再认一遍：大小一致即视为已归档。
+    只比大小不比内容：浏览器上传时没有哈希，比对内容要整份读两遍，
+    课堂上几十人同时交会拖慢归档；同名 + 同大小已经足够排除「又交了一份新的」。
+    """
+    base, ext = os.path.splitext(name)
+    i = 2
+    while i <= 200:
+        p = os.path.join(dir_path, "%s (%d)%s" % (base, i, ext))
+        if not os.path.exists(p):
+            return None          # 编号是按顺序生成的，断了就不用再往后找
+        try:
+            if os.path.getsize(p) == size:
+                return p
+        except Exception:
+            pass
+        i += 1
+    return None
+
+
 def _unique_target(dir_path, name):
     """同名文件不覆盖：第二个起加 (2)、(3)…；返回 (路径, 是否重名过)。"""
     base, ext = os.path.splitext(name)
@@ -1077,6 +1141,9 @@ def _archive_items_locked(course, activity, base, items, cls=""):
         # 至少老师一眼能看出这是谁交的；同一人多份仍走 (2)、(3) 不覆盖。
         if looks_like_uuid_name(nm) and stu_dir_name != "未命名学生":
             nm = safe_name(stu_dir_name + (os.path.splitext(nm)[1] or ""))
+        # 2.0.40（牛哥要求）：所有归档文件统一加「学号-姓名-」前缀。
+        # 网页设计作品、学习单上传、手动归档都走这一行，规则只有一套。
+        nm = _with_student_prefix(nm, stu_dir_name)
         stu_dir = os.path.join(cls_dir, stu_dir_name)
         if not url:
             skipped.append({"name": nm, "student": stu_dir_name,
@@ -1125,15 +1192,21 @@ def _archive_items_locked(course, activity, base, items, cls=""):
             skipped.append({"name": nm, "student": stu_dir_name, "msg": "建学生文件夹失败：%s" % e})
             continue
         first = os.path.join(stu_dir, nm)
+        same = None
         if os.path.isfile(first):
             try:
                 if os.path.getsize(first) == len(blob):
-                    skipped.append({"name": nm, "student": stu_dir_name,
-                                    "msg": "已是最新", "rel": rel_of(stu_dir)})
-                    mine[idx_key].add(rel_of(first))
-                    continue
+                    same = first
             except Exception:
                 pass
+        # 历史版本也要认（2.0.40）：同一份文件重交时不再堆出 (4)、(5)
+        if same is None:
+            same = _find_same_size(stu_dir, nm, len(blob))
+        if same:
+            skipped.append({"name": nm, "student": stu_dir_name,
+                            "msg": "已是最新", "rel": rel_of(same)})
+            mine[idx_key].add(rel_of(same))
+            continue
         target, renamed = _unique_target(stu_dir, nm)
         try:
             with open(target, "wb") as fh:
@@ -1195,7 +1268,7 @@ def normalize_student_dirs(course, mapping):
             try:
                 stu_dir = os.path.join(cls_dir, stu)
                 os.makedirs(stu_dir, exist_ok=True)
-                target, _renamed = _unique_target(stu_dir, fn)
+                target, _renamed = _unique_target(stu_dir, _with_student_prefix(fn, stu))
                 shutil.move(src, target)
                 moved.append({"name": fn, "class": cls_name, "student": stu,
                               "rel": rel_of(target)})

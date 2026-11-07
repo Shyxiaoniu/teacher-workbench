@@ -331,7 +331,7 @@ CFG["typing"].setdefault("enabled", False)
 CFG["typing"].setdefault("grades", [])
 # H5 网页设计（2.0.39）：教师端「其他 · 网页设计」一键启停的小服务。
 #   enabled      总开关：关掉后学生端入口实时消失、提交接口拒收
-#   allow_add    允许学生在学生端「添加」这个功能页（导航里出现「设计」页签）
+#   allow_add    允许学生在学生端「添加」这个功能页（导航里出现「网页」页签）
 #   allow_submit 允许学生提交作品（关掉只能自己练、不能交）
 #   course       归档课程：作品进「资料」的 <课程>/<班级>/<学号-姓名>/，与学习单归档同一套目录
 #   window       大屏窗口名：提交按这个窗口进「上课」页的实时看板
@@ -363,7 +363,7 @@ CFG["update"].setdefault("interval_hours", 24) # 检查间隔（小时）
 PET_IDS = ["cat", "dog", "rabbit", "penguin", "panda", "dino", "unicorn", "dragon"]
 COND = threading.Condition()
 STARTED = time.time()
-VERSION = "2.0.39"
+VERSION = "2.0.41"
 ONLINE_WINDOW = 300      # 5 分钟内活跃算在线
 # 可内联直出的附件类型（其余一律按下载处理，防止同源执行脚本）
 _INLINE_EXTS = {"png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "pdf",
@@ -1567,7 +1567,21 @@ class Handler(LEG.Handler):
         返回 (full_path, None) 表示放行；返回 (None, response) 表示拦截
         （response 已是可直接返回的 HTTP 响应）。"""
         s = self._session()
-        if not s or s["role"] != "student":
+        if not s:
+            return None, self._redirect("/s/")
+        if s.get("role") == "teacher":
+            # 教师端预览学生作品（2.0.41）：作品 HTML 里的图片是 /cw/<文件id>，
+            # 页面在教师浏览器里加载时会带教师会话 —— 教师本来就能读整个课件库，
+            # 这里直接放行，否则预览页里的图片全变成破图。
+            try:
+                full = LEG.CW.abs_of(fid, must_exist=True)
+            except Exception:
+                full = None
+            if not full or not os.path.isfile(full):
+                return None, self._html(_tip_page("课件文件不存在",
+                                            "老师可能已经移动或删除了这个文件。"), 404)
+            return full, None
+        if s["role"] != "student":
             return None, self._redirect("/s/")
         r = student_row(s.get("student_id"))
         if not r:
@@ -2627,6 +2641,117 @@ class Handler(LEG.Handler):
             return self._export(qs)
         if path == "/api/v2/teacher/export-files":
             return self._export_files()
+        if path == "/api/v2/cw/courses":
+            # 大屏「课程」下拉（2.0.41）：不再只依赖 /api/cw/config。
+            # 那个旧接口一旦 500，前端把异常吞掉就显示「资料里还没有文件夹」，
+            # 老师看着明明有课却选不出来。这里由工作台自己汇总：
+            # 资料库课程 + 网页设计归档课程 + 测验发布里出现的课程，去重。
+            if not self._is_teacher():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            names, seen = [], set()
+
+            def _add(n):
+                n = str(n or "").strip()
+                if n and n != "未分类" and n not in seen:
+                    seen.add(n)
+                    names.append(n)
+
+            try:
+                courses, _err = LEG.CW.list_courses()
+                for c in (courses or []):
+                    if not c.get("loose"):
+                        _add(c.get("name"))
+            except Exception:
+                pass
+            try:
+                _add((CFG.get("design") or {}).get("course"))
+            except Exception:
+                pass
+            try:
+                for p in (QUIZ.publishes() or []):
+                    _add(p.get("course"))
+            except Exception:
+                pass
+            return self._json({"ok": True, "courses": names})
+        if path == "/api/v2/design/assets":
+            # 图片素材（2.0.41）：老师从「资料」下发给本班的图片，学生可直接插进网页。
+            # 只列图片、只列本班、只列没被收回的；地址统一走 /cw/<文件id> 闸门，
+            # 学生用自己的会话就能取到，导出 PNG 时前端也能内联成 dataURL。
+            s = self._session()
+            if not s or s.get("role") not in ("student", "teacher"):
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            cid = ""
+            if s["role"] == "student":
+                stu = student_row(s.get("student_id"))
+                if not stu:
+                    return self._json({"ok": False, "msg": "学生档案不存在"}, 404)
+                cid = str(stu.get("class_id") or "")
+            IMG_EXT = ("png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "avif")
+            if s["role"] == "teacher":
+                # 教师练习（2.0.41）：教师看到的应该是**课件库里全部图片**——
+                # 老师是先挑图、再下发，不能要求他"先下发给班级"才能自己用。
+                rows = []
+                try:
+                    courses, _err = LEG.CW.list_courses()
+                except Exception:
+                    courses = []
+                for c in (courses or []):
+                    cname = str(c.get("name") or "").strip()
+                    if not cname:
+                        continue
+                    try:
+                        files = LEG.CW.list_files(cname) or []
+                    except Exception:
+                        files = []
+                    for f in files:
+                        nm = str(f.get("name") or "")
+                        if _ext_of(nm) not in IMG_EXT:
+                            continue
+                        # 学生交上来的作品截图（归档目录）不放进素材库：
+                        # 那些是作业结果，不是可复用的图片资源，而且常是空白页。
+                        if f.get("archived"):
+                            continue
+                        fid = str(f.get("id") or "")
+                        if not fid:
+                            continue
+                        rows.append({
+                            "id": fid, "title": nm,
+                            "url": "/cw/" + urllib.parse.quote(fid),
+                            "course": cname,
+                            "date": str(f.get("mtime") or ""),
+                        })
+                rows.sort(key=lambda x: (x["course"], x["title"]))
+                return self._json({"ok": True, "assets": rows, "scope": "teacher",
+                                   "courses": sorted({x["course"] for x in rows if x["course"]})})
+            rows, seen = [], set()
+            for m in STORE.table_rows("materials"):
+                if m.get("deleted"):
+                    continue
+                if str(m.get("from") or "") != "courseware":
+                    continue
+                if cid and str(m.get("class_id") or "") != cid:
+                    continue
+                fid = str(m.get("src_id") or "").strip()
+                if not fid:
+                    u = str(m.get("url") or "")
+                    if u.startswith("/cw/"):
+                        fid = urllib.parse.unquote(u[len("/cw/"):].strip("/"))
+                if not fid or fid in seen:
+                    continue
+                title = str(m.get("title") or "").strip() or fid.rsplit("/", 1)[-1]
+                if _ext_of(title) not in IMG_EXT:
+                    continue
+                seen.add(fid)
+                rows.append({
+                    "id": fid,
+                    "title": title,
+                    "url": "/cw/" + urllib.parse.quote(fid),
+                    "course": str(m.get("lesson") or m.get("subject") or "").strip(),
+                    "date": str(m.get("date") or ""),
+                })
+            rows.sort(key=lambda x: (x["course"], x["title"]))
+            return self._json({"ok": True, "assets": rows,
+                               "courses": sorted({x["course"] for x in rows if x["course"]})})
         if path == "/api/v2/design/me":
             # H5 网页设计：学生打开设计器时拿初始状态（权限 / 草稿 / 上次提交）
             s = self._session()
@@ -2636,6 +2761,17 @@ class Handler(LEG.Handler):
                 return self._json(out)
             if s["role"] == "teacher":
                 out["role"] = "teacher"
+                # 教师练习模式（2.0.40）：?practice=1 时把老师自己的草稿给他，
+                # 下次点「进入练习」接着上次的代码和显示设置继续。
+                if str((qs.get("practice") or [""])[0]).lower() in ("1", "true"):
+                    acc = ACC.current_account()
+                    t = ACCOUNTS.current_teacher() or {}
+                    out["practice"] = True
+                    out["me"] = {"id": "t:" + str(acc),
+                                 "name": str(t.get("username") or "老师"),
+                                 "student_no": "", "class_name": ""}
+                    out["draft"] = DESIGN.draft("t:" + str(acc))
+                    out["last"] = None
                 return self._json(out)
             if s["role"] != "student":
                 return self._json({"ok": False, "msg": "只有学生有设计草稿"}, 403)
@@ -4079,17 +4215,24 @@ class Handler(LEG.Handler):
                         json.dumps(design_public_cfg(), ensure_ascii=False))
             return self._json({"ok": True, "cfg": design_public_cfg()})
         if path == "/api/v2/design/draft":
-            # 草稿即使老师关了功能也照收：关的那一刻最需要留住学生正在写的东西
+            # 草稿即使老师关了功能也照收：关的那一刻最需要留住学生正在写的东西。
+            # 教师端练习（2.0.40）也走这里，key 用 "t:<账号>"，与学生 id 分开存。
             s = self._session()
-            if not s or s["role"] != "student":
+            if not s:
                 return self._json({"ok": False, "msg": "未登录"}, 401)
-            r = student_row(s.get("student_id"))
-            if not r:
-                return self._json({"ok": False, "msg": "学生档案不存在"}, 404)
+            if s["role"] == "teacher":
+                uid = "t:" + str(ACC.current_account())
+            elif s["role"] == "student":
+                r = student_row(s.get("student_id"))
+                if not r:
+                    return self._json({"ok": False, "msg": "学生档案不存在"}, 404)
+                uid = str(r.get("id"))
+            else:
+                return self._json({"ok": False, "msg": "这个账号没有设计草稿"}, 403)
             if body.get("clear"):
-                return self._json(DESIGN.clear_draft(str(r.get("id"))))
-            res = DESIGN.save_draft(str(r.get("id")), body.get("html"),
-                                    body.get("css"), body.get("title"))
+                return self._json(DESIGN.clear_draft(uid))
+            res = DESIGN.save_draft(uid, body.get("html"), body.get("css"),
+                                    body.get("title"), body.get("mode"), body.get("width"))
             return self._json(res)
         if path == "/api/v2/design/submit":
             # 一键提交：预览图（PNG）+ 完整源码（HTML）→ 活动库 → 自动归档 → 大屏

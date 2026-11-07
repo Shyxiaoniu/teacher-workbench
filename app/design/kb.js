@@ -26,7 +26,7 @@ window.DESIGN_KB = {
   items: [
     /* ---------------- HTML 结构 ---------------- */
     { cat: 'html', t: '网页的三层结构', lang: 'html',
-      d: 'HTML 管「有什么内容」，CSS 管「长什么样」。这个设计器里，左边 HTML 区只写 body 里的内容，文档骨架和 <style> 由平台自动补全。',
+      d: 'HTML 管「有什么内容」，CSS 管「长什么样」。这个编辑器里，左边 HTML 区只写 body 里的内容，文档骨架和 <style> 由平台自动补全。',
       code: '<header>我的网页</header>\n<main>\n  <h1>你好，网页世界</h1>\n  <p>这是我做的第一个网页。</p>\n</main>\n<footer>桂城一中 · 信息科技</footer>' },
     { cat: 'html', t: '标题 h1 ~ h6', lang: 'html',
       d: 'h1 最大、h6 最小。一页只用一个 h1（页面主标题），其余按层级往下用，别为了字大就用 h1。',

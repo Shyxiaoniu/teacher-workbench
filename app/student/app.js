@@ -20,9 +20,10 @@
   var S = { me: null, rev: 0, T: {}, flags: {}, vis: {}, view: 'today', es: null,
             now: null,   /* 服务端「现在第几节」（loadNow 定期刷新，2026-11-04） */
             loading: true, seatmap: null,
-            /* H5 网页设计（2.0.39）：老师开服务 + 允许添加，学生点一次入口卡
-               才把「设计」页签加进导航（记在 localStorage，换设备重新添加）。 */
+            /* H5 网页（2.0.39；2.0.40 定名「网页」）：老师开服务 + 允许添加，
+               学生点一次入口卡才把「网页」页签加进导航（记在 localStorage）。 */
             designOn: false, designAdd: true, designSubmit: true, designAdded: false,
+            designSeen: false,   /* 进来过没有：只影响卡片文案，不影响入口是否显示 */
             /* 测验/检测（2.0.38）：不进 sync 快照（试卷含答案），独立接口按会话班级下发 */
             quiz: { list: null, loading: false } };
   var WD = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
@@ -159,6 +160,10 @@
     } catch (e) {}
     setInterval(function () {
       if (!S.es || S.es.readyState === 2) {
+        /* 轮询兜底（SSE 断了的情况）：同步接口不返回功能开关，
+           所以顺手把 session 拉一次 —— 否则老师开了「网页」，
+           这位同学要手动刷新才看得见入口（2.0.41）。 */
+        refreshTyping();
         pull(S.rev, false).then(render);
       }
     }, 10000);
@@ -168,19 +173,18 @@
   }
 
   /* 功能开关（2.0.39 起统一入口）：老师改开关后学生端入口实时增减。
-     打字 / H5 网页设计都在这里刷新，别各写一份。 */
+     打字 / H5 网页都在这里刷新，别各写一份。
+     2.0.41：网页页签改成**服务端驱动**——老师一开启，入口自动出现，
+     不再要学生先去「今日」页点一次「添加」。localStorage 里那个键降级成
+     「进来过」的记号，只用来说「去写 / 继续写」，不再决定页签显示与否。
+     判据两个都要满足：enabled（服务开着）且 add（允许学生用）。 */
   function applyDesignFlag(d) {
     d = d || {};
     S.designOn = !!d.enabled;
     S.designAdd = d.add !== false;
     S.designSubmit = d.submit !== false;
-    if (!S.designOn || !S.designAdd) {
-      S.designAdded = false;
-      return;
-    }
-    var v = '0';
-    try { v = localStorage.getItem(DESIGN_ADD_KEY) || '0'; } catch (e) {}
-    S.designAdded = v === '1';
+    S.designAdded = !!(S.designOn && S.designAdd);
+    try { S.designSeen = localStorage.getItem(DESIGN_ADD_KEY) === '1'; } catch (e) { S.designSeen = false; }
   }
   function refreshTyping() {
     api('/api/v2/auth/session').then(function (j) {
@@ -437,17 +441,17 @@
         '<span class="tag hot">去闯关 ›</span></div>'
       : '';
 
-    /* H5 网页设计入口卡（2.0.39）：老师开放 + 允许添加才出现。
-       没添加过的同学点一次 = 添加页签并直接进去；添加过的显示「继续设计」。 */
-    var designHtml = (S.designOn && S.designAdd)
+    /* H5 网页入口卡（2.0.41）：老师开启 + 允许使用就出现，页签同时自动进导航。
+       卡片只是「快捷入口」，不再承担「添加」职责。 */
+    var designHtml = designReady()
       ? '<div class="card" data-design-go style="cursor:pointer;display:flex;align-items:center;gap:14px">' +
         '<div style="font-size:32px;line-height:1">🎨</div>' +
-        '<div style="flex:1"><b style="font-size:15.5px">H5 网页设计</b>' +
+        '<div style="flex:1"><b style="font-size:15.5px">网页</b>' +
         '<div style="font-size:12.5px;color:var(--ink3);margin-top:3px">' +
-        (S.designAdded ? '接着改你的网页 · 做好一键交给老师'
-                       : '左边写代码 · 右边看效果 · 做好一键交给老师') +
+        (S.designSeen ? '接着改你的网页 · 做好一键交给老师'
+                      : '左边写代码 · 右边看效果 · 做好一键交给老师') +
         '</div></div>' +
-        '<span class="tag hot">' + (S.designAdded ? '继续设计 ›' : '添加 ›') + '</span></div>'
+        '<span class="tag hot">' + (S.designSeen ? '继续写 ›' : '去写 ›') + '</span></div>'
       : '';
 
     return '<div class="stat-grid">' +
@@ -606,9 +610,9 @@
     { id: 'seat', name: '座位', ic: '🪑' },
     /* 打字冒险岛：老师开放后显示，站内 iframe 内嵌（2026-11-02） */
     { id: 'typing', name: '打字', ic: '⌨️' },
-    /* H5 网页设计（2.0.39）：老师开放 + 学生自己添加后出现；
+    /* H5 网页（2.0.40 定名，原「设计」）：老师开放 + 学生自己添加后出现；
        点开在本页框架内打开设计器，不跳新标签页。 */
-    { id: 'design', name: '设计', ic: '🎨' }
+    { id: 'design', name: '网页', ic: '🎨' }
   ];
   var VIEWS = ['today', 'homework', 'courses', 'quiz', 'seat', 'typing', 'design'];
   var TITLES = {
@@ -618,7 +622,7 @@
     quiz: ['我的测验', '老师下发给本班的检测 · 点开作答，按设置显示答案与分数'],
     seat: ['我的座位', '座位表 · 讲台固定在上方 · 高亮你自己的位置'],
     typing: ['打字冒险岛', '闯关练打字 · 赢星星 · 孵宠物 · 上排行榜'],
-    design: ['我的网页设计', '左边写 HTML/CSS · 右边实时预览 · 点一次提交就交给老师']
+    design: ['我的网页', '左边写 HTML/CSS · 右边实时预览 · 点一次提交就交给老师']
   };
 
   function pendingCount() { return todoHomeworks().length; }
@@ -635,7 +639,7 @@
     if (v === 'quiz') S.quiz.list = null;
     /* 设计页：没添加过就先引导去今日页点「添加」，别给一块空白 */
     if (v === 'design' && !designReady()) {
-      toast('先在「今日」页点一下「H5 网页设计」卡片，把它添加到导航');
+      toast('先在「今日」页点一下「H5 网页」卡片，把它添加到导航');
       v = 'today';
     }
     S.view = v;
@@ -714,16 +718,18 @@
     // 今日页「打字冒险岛」入口卡 → 站内切到打字页（2026-11-02）
     var tgo = document.querySelector('[data-typing-go]');
     if (tgo) tgo.onclick = function () { go('typing'); };
-    /* H5 网页设计入口卡（2.0.39）：学生点一次 = 添加页签 + 直接进来。
-       「添加」本身记在 localStorage，下次打开导航里就有「设计」。 */
+    /* H5 网页入口卡（2.0.41）：点一下直接进编辑器；页签已由服务端开关
+       自动放进导航，这里不再做「添加」动作。 */
     var dgo = document.querySelector('[data-design-go]');
-    if (dgo) dgo.onclick = function () { addDesign(); };
+    if (dgo) dgo.onclick = function () { openDesign(); };
     /* 课堂活动入口（data-act / data-locked）已随按课表的旧模块下线
        （2026-11-04）：学生端不再有按课节的学习单入口，只留资料打开。 */
     // 资料页 / 今日「本课资料」：点开在线预览或一键打开
     document.querySelectorAll('[data-mat]').forEach(function (el) {
       el.onclick = function () { openMatSheet(el.getAttribute('data-mat')); };
     });
+    /* 「加到网页」按钮已下线（2.0.41）：图片素材统一在「网页」页的图片抽屉里选，
+       同一件事只留一个入口。资料行现在只有「打开 / 预览 / 下载」。 */
     // 测验/检测（2.0.38）：点「开始检测」在独立新标签里作答，原页不关
     document.querySelectorAll('[data-quiz]').forEach(function (el) {
       el.onclick = function () { quizOpen(el.getAttribute('data-quiz')); };
@@ -738,8 +744,9 @@
     });
   }
 
-  /* 设计页可用 = 老师开了服务 + 允许添加 + 学生自己添加过 */
-  function designReady() { return !!(S.designOn && S.designAdd && S.designAdded); }
+  /* 「网页」页签可用 = 老师开了服务 + 允许学生用。
+     2.0.41 起不再看「学生自己添加过没有」—— 老师开启即自动出现。 */
+  function designReady() { return !!(S.designOn && S.designAdd); }
   /** 导航项要不要显示（侧栏与底部 Tab 共用一套判断，别写两遍） */
   function navShown(n) {
     if (n.id === 'typing' && !S.typingOn) return false;
@@ -747,12 +754,41 @@
     if (n.flag && S.flags[n.flag] === false) return false;
     return true;
   }
-  /** 学生点「添加」：记住标记 → 导航出现「设计」→ 直接进去 */
-  function addDesign() {
+  /** 从「今日」入口卡进编辑器：只记一下「来过」（下次文案变「继续写」），
+      页签早就在导航里了，不需要再「添加」。 */
+  function openDesign() {
     try { localStorage.setItem(DESIGN_ADD_KEY, '1'); } catch (e) {}
+    S.designSeen = true;
     S.designAdded = true;
-    toast('已添加「设计」到左侧导航');
     go('design');
+  }
+
+  /* ---------------- 图片素材（2.0.41） ----------------
+     老师在「资料」里下发的图片，学生在这里点「加到网页」，
+     就写进 localStorage 的 wb-design-assets；编辑器（同源 iframe）
+     读同一个键，所以点开「网页」→ 🖼 图片 立刻能看到。 */
+  var WB_ASSET_KEY = 'wb-design-assets';
+  function addDesignAsset(mid) {
+    var m = cwPushed().filter(function (x) { return String(x.id) === String(mid); })[0];
+    if (!m) { toast('这张图片已经失效了，请老师重新下发'); return; }
+    var fid = String(m.src_id || '').trim();
+    if (!fid) {
+      var u = String(m.url || '');
+      if (u.indexOf('/cw/') === 0) {
+        try { fid = decodeURIComponent(u.slice(4).replace(/^\/+|\/+$/g, '')); } catch (e) { fid = u.slice(4); }
+      }
+    }
+    if (!fid) { toast('这张图片没有可用地址，请老师重新下发一次'); return; }
+    var list = [];
+    try { list = JSON.parse(localStorage.getItem(WB_ASSET_KEY) || '[]') || []; } catch (e) { list = []; }
+    if (!Array.isArray(list)) list = [];
+    if (!list.some(function (x) { return String(x.id) === String(fid); })) {
+      list.unshift({ id: fid, title: String(m.title || '图片'),
+                     url: '/cw/' + encodeURI(fid), at: Date.now() });
+      try { localStorage.setItem(WB_ASSET_KEY, JSON.stringify(list.slice(0, 80))); } catch (e) {}
+    }
+    toast('已加到「网页」素材：打开网页页签 → 🖼 图片 就能插进代码', 'ok');
+    render();
   }
 
   function paintNav() {
@@ -799,7 +835,7 @@
       'box-shadow:0 6px 20px rgba(60,30,10,.06)"></iframe>';
   }
 
-  /* ---------------- 视图：H5 网页设计（2.0.39） ----------------
+  /* ---------------- 视图：H5 网页（2.0.39；2.0.40 改名「网页」） ----------------
      设计器本身是独立单页（/design/student.html），放进 iframe 嵌在
      学生端框架里显示，不跳新标签页；?embed=1 去掉页面外边距。
      编辑、预览、提交都在 iframe 内部完成，外层只负责「给一块地方」。 */
@@ -807,22 +843,14 @@
     if (!S.designOn) {
       return '<div class="card" style="text-align:center;padding:44px 20px">' +
         '<div style="font-size:40px">🚧</div>' +
-        '<div style="font-weight:600;margin-top:8px">老师还没开启网页设计</div>' +
+        '<div style="font-weight:600;margin-top:8px">老师还没开启网页</div>' +
         '<div style="font-size:12.5px;color:var(--ink3);margin-top:4px">开启后这里就能写网页、交作品</div></div>';
     }
     if (!S.designAdd) {
-      return '<div class="card">' + emptyBox('老师暂未开放添加',
+      return '<div class="card">' + emptyBox('老师暂未开放',
         '这一页还没对同学开放，等老师在教师端点一下开关') + '</div>';
     }
-    if (!S.designAdded) {
-      return '<div class="card" style="text-align:center;padding:38px 20px">' +
-        '<div style="font-size:40px">🎨</div>' +
-        '<div style="font-weight:600;margin-top:8px">把「网页设计」加到我的页面？</div>' +
-        '<div style="font-size:12.5px;color:var(--ink3);margin:4px 0 16px">' +
-        '添加后左侧导航会多一个「设计」，随时能回来接着写</div>' +
-        '<button class="btn" style="width:auto;padding:0 22px" data-design-go>添加并打开</button></div>';
-    }
-    return '<iframe data-design-embed="1" src="/design/student.html?embed=1" title="H5 网页设计" ' +
+    return '<iframe data-design-embed="1" src="/design/student.html?embed=1" title="网页" ' +
       'style="width:100%;height:calc(100vh - 150px);min-height:520px;' +
       'border:1.5px solid var(--line,#eee);border-radius:16px;background:var(--card,#FFFCF4);' +
       'box-shadow:0 6px 20px rgba(60,30,10,.06)"></iframe>';
@@ -1087,6 +1115,8 @@
     var tag = (web || link) ? '打开' : (ok ? '预览' : (m.url ? '下载' : '已失效'));
     /* 强调色只给「能直接打开」的那一档；本页预览用浅底，层级更清楚 */
     var cls = (web || link) ? ' hot' : (ok ? ' done' : ' mut');
+    /* 2.0.41：这里原来有个「加到网页」按钮，已按牛哥要求撤掉 ——
+       图片素材统一在「网页」功能页的图片抽屉里选，资料页只负责打开/预览。 */
     return '<div class="hw res-row" data-mat="' + esc(m.id) + '"><div class="dot done"></div>' +
       '<div class="m"><b>' + esc(m.title || '资源') + '</b>' +
       '<span>' + txt + '</span></div>' +
@@ -1418,12 +1448,33 @@
     /* 缺省浅色（与教师端一致）；旧版本存过的 '' / 异常值一律归一为 light */
     try { return localStorage.getItem(MODE_KEY) === 'dark' ? 'dark' : 'light'; } catch (e) { return 'light'; }
   }
+  /* 护眼皮肤（2.0.41）：暖陶 warm（默认）/ 竹绿 green / 纸黄 paper / 雾蓝 blue。
+     只换 CSS 变量，布局、组件、交互一律不动。 */
+  var THEME_KEY = 'wb-stheme';
+  var THEMES = [
+    { k: 'warm', n: '暖陶', dot: '#B45B33', tip: '默认暖色，陶土橙主色' },
+    { k: 'green', n: '竹绿', dot: '#4E7D5A', tip: '护眼绿，蓝光最低' },
+    { k: 'paper', n: '纸黄', dot: '#8A6A32', tip: '纸张感，读长文最柔' },
+    { k: 'blue', n: '雾蓝', dot: '#3F6E86', tip: '低饱和蓝，冷静不刺眼' }
+  ];
+  function themeState() {
+    var v = '';
+    try { v = localStorage.getItem(THEME_KEY) || ''; } catch (e) {}
+    return THEMES.some(function (t) { return t.k === v; }) ? v : 'warm';
+  }
   function applyMode() {
     var dark = modeState() === 'dark';
-    document.documentElement.setAttribute('data-mode', dark ? 'dark' : 'light');
-    var dark = modeState() === 'dark';
+    var root = document.documentElement;
+    root.setAttribute('data-mode', dark ? 'dark' : 'light');
+    var th = themeState();
+    if (th === 'warm') root.removeAttribute('data-theme');
+    else root.setAttribute('data-theme', th);
     var meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', dark ? '#191210' : '#B45B33');
+    if (meta) {
+      var bg = dark ? { warm: '#191210', green: '#101713', paper: '#17130D', blue: '#0D1417' }
+                    : { warm: '#F8F2E4', green: '#EDF3EA', paper: '#F4EEDC', blue: '#EDF2F5' };
+      meta.setAttribute('content', bg[th] || bg.warm);
+    }
   }
   function setMode(m) {
     try { localStorage.setItem(MODE_KEY, m); } catch (e) {}
@@ -1432,12 +1483,28 @@
     setTimeout(function () { document.body.classList.remove('theme-switching'); }, 450);
     applyMode();
     paintModeBtns();
+    paintThemeBtns();
     toast(m === 'dark' ? '已切换到夜间模式' : '已切换到浅色模式');
+  }
+  function setTheme(k) {
+    try { localStorage.setItem(THEME_KEY, k); } catch (e) {}
+    document.body.classList.add('theme-switching');
+    setTimeout(function () { document.body.classList.remove('theme-switching'); }, 450);
+    applyMode();
+    paintThemeBtns();
+    var t = THEMES.filter(function (x) { return x.k === k; })[0];
+    toast('已切换主题：' + (t ? t.n : k));
   }
   function paintModeBtns() {
     var cur = modeState();
     document.querySelectorAll('#suPop [data-mode]').forEach(function (b) {
       b.classList.toggle('on', b.getAttribute('data-mode') === cur);
+    });
+  }
+  function paintThemeBtns() {
+    var cur = themeState();
+    document.querySelectorAll('#suPop [data-theme]').forEach(function (b) {
+      b.classList.toggle('on', b.getAttribute('data-theme') === cur);
     });
   }
 
@@ -1482,6 +1549,12 @@
       '<div class="sup-grid">' +
       '<button type="button" class="sup-q" data-mode="light">☀ 浅色</button>' +
       '<button type="button" class="sup-q" data-mode="dark">🌙 夜间</button></div>' +
+      /* 护眼皮肤（2.0.41）：四个色点，浅色/夜间各有一版；点一下即时生效 */
+      '<div class="sup-theme" role="group" aria-label="护眼主题">' +
+      THEMES.map(function (t) {
+        return '<button type="button" class="sup-dot" data-theme="' + t.k + '" title="' + esc(t.tip) + '">'
+          + '<i style="background:' + t.dot + '"></i>' + esc(t.n) + '</button>';
+      }).join('') + '</div>' +
       (S.flags.scores !== false ? '<button type="button" class="sup-item" id="mScore">📊 我的成绩<span class="si-n">' + sc.length + ' 次</span></button>' : '') +
       '<button type="button" class="sup-item" id="mSeat">🪑 座位表<span class="si-n">' +
         (sp ? ('第 ' + sp.r + ' 排 ' + sp.c + ' 列') : '未排座') + '</span></button>' +
@@ -1504,7 +1577,7 @@
         ev.stopPropagation();
         pop.hidden = !pop.hidden;
         btn.setAttribute('aria-expanded', pop.hidden ? 'false' : 'true');
-        if (!pop.hidden) paintModeBtns();
+        if (!pop.hidden) { paintModeBtns(); paintThemeBtns(); }
       };
     });
     /* 点面板与触发点之外的地方收起（只挂一次全局监听） */
@@ -1521,6 +1594,9 @@
     }
     pop.querySelectorAll('[data-mode]').forEach(function (b) {
       b.onclick = function () { setMode(b.getAttribute('data-mode')); };
+    });
+    pop.querySelectorAll('[data-theme]').forEach(function (b) {
+      b.onclick = function () { setTheme(b.getAttribute('data-theme')); };
     });
     var ms = $('#mScore'); if (ms) ms.onclick = function () { pop.hidden = true; openScoreSheet(); };
     var mseat = $('#mSeat');

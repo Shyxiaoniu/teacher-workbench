@@ -56,6 +56,75 @@ html[data-mode="dark"]{
   --warn-soft:rgba(239,159,39,.15); --error-soft:rgba(240,121,111,.16);
   --ink3:#A2917F;
 }
+/* ============================================================
+   护眼主题皮肤（2.0.41）
+   ------------------------------------------------------------
+   默认（不写 data-theme）= 暖陶。另外三套都是「低饱和 + 暖/中性底 +
+   中对比文字」，共同点是：去掉纯白纯黑、主色不超过 60% 饱和、
+   正文对比控制在 7:1 上下（够清楚，又不刺眼）。
+   夜间用 data-mode="dark" 叠加，每套各有一版，不是简单反色 —— 反色会让
+   橙/绿/蓝的色相塌掉，看着发灰。
+   所有组件都用这套变量，所以换肤不用改任何布局与交互。
+   ============================================================ */
+
+/* 竹绿：最经典的护眼绿，蓝光最低，适合连续两节课 */
+html[data-theme="green"]{
+  --brand-primary:#4E7D5A; --brand-hover:#5F9170; --brand-soft:#E3EFE4;
+  --bg-page:#EDF3EA; --bg-surface:#FBFDF8;
+  --border:rgba(78,125,90,.20);
+  --text-primary:#2F3A31; --text-secondary:#6E7E72;
+  --accent:#7A9A5E; --accent-soft:#EAF0E1;
+  --sun:#C6A05A; --sun-soft:#F5EEDC;
+  --warn:#8A6A16; --warn-soft:#F7F1DE;
+  --ink3:#8C9A8F;
+}
+html[data-mode="dark"][data-theme="green"]{
+  --brand-primary:#8DBE9A; --brand-hover:#A6D1B1; --brand-soft:rgba(141,190,154,.16);
+  --bg-page:#101713; --bg-surface:#18211B;
+  --border:rgba(141,190,154,.20);
+  --text-primary:#E4EFE6; --text-secondary:#A9BDAD;
+  --accent:#9DBE86; --accent-soft:rgba(157,190,134,.16);
+  --ink3:#8FA394;
+}
+
+/* 纸黄：模拟纸张反射，字迹最柔，适合长时间读文字 */
+html[data-theme="paper"]{
+  --brand-primary:#8A6A32; --brand-hover:#A07E42; --brand-soft:#F1E7CE;
+  --bg-page:#F4EEDC; --bg-surface:#FDFAF0;
+  --border:rgba(138,106,50,.20);
+  --text-primary:#3A3327; --text-secondary:#7C7261;
+  --accent:#7E8A4F; --accent-soft:#EEF0DC;
+  --sun:#C08A3E; --sun-soft:#F6EAD2;
+  --ink3:#938872;
+}
+html[data-mode="dark"][data-theme="paper"]{
+  --brand-primary:#D6B578; --brand-hover:#E6C994; --brand-soft:rgba(214,181,120,.16);
+  --bg-page:#17130D; --bg-surface:#221C14;
+  --border:rgba(214,181,120,.20);
+  --text-primary:#F0E8D8; --text-secondary:#C3B49B;
+  --accent:#BFBF8C; --accent-soft:rgba(191,191,140,.16);
+  --ink3:#A99B84;
+}
+
+/* 雾蓝：偏冷静，蓝色经过大幅降饱和，不会像「科技蓝」那样刺眼 */
+html[data-theme="blue"]{
+  --brand-primary:#3F6E86; --brand-hover:#4F8299; --brand-soft:#E2EDF1;
+  --bg-page:#EDF2F5; --bg-surface:#FAFCFD;
+  --border:rgba(63,110,134,.20);
+  --text-primary:#28343B; --text-secondary:#66787F;
+  --accent:#5E8C8A; --accent-soft:#E5F0EF;
+  --sun:#C09A5E; --sun-soft:#F5EEDD;
+  --ink3:#8497A0;
+}
+html[data-mode="dark"][data-theme="blue"]{
+  --brand-primary:#8CB4C6; --brand-hover:#A5C8D8; --brand-soft:rgba(140,180,198,.16);
+  --bg-page:#0D1417; --bg-surface:#162025;
+  --border:rgba(140,180,198,.20);
+  --text-primary:#E3EDF1; --text-secondary:#A7BAC2;
+  --accent:#8CB8B6; --accent-soft:rgba(140,184,182,.16);
+  --ink3:#8CA0A8;
+}
+
 /* 主题切换高光（教师端 themeFlash 同款）：短暂铺一层品牌色淡光 */
 @keyframes themeFlash{0%{opacity:.5}100%{opacity:0}}
 body.theme-switching::after{
@@ -227,6 +296,15 @@ body{
   color:#fff;box-shadow:0 2px 6px color-mix(in srgb,var(--brand-primary) 30%,transparent);
   cursor:pointer;transition:transform .15s var(--ease-out)}
 .tag.hot:hover{transform:translateY(-1px) scale(1.04)}
+/* 图片资料上的「加到网页」（2.0.41）：虚线描边、按压态跟 .tag 一致，
+   视觉上比主操作「预览」弱一级，不抢注意力 */
+.tag.addimg{
+  background:transparent;color:var(--brand-primary);font-weight:600;
+  border:1px dashed color-mix(in srgb,var(--brand-primary) 46%,transparent);
+  cursor:pointer;font-family:inherit;
+}
+.tag.addimg:hover{background:var(--brand-soft);border-style:solid}
+.tag.addimg:active{transform:translateY(1px)}
 .hw{display:flex;gap:10px;align-items:flex-start;padding:12px 0;border-bottom:1px solid var(--border)}
 .hw:last-child{border-bottom:0}
 .hw .dot{width:9px;height:9px;border-radius:50%;background:var(--warn);margin-top:8px;flex:none}
@@ -498,6 +576,20 @@ label{display:block;font-size:13px;color:var(--text-secondary);margin:12px 0 6px
 }
 .sup-q:hover{border-color:var(--brand-primary);color:var(--brand-primary);background:var(--brand-soft)}
 .sup-q.on{border-color:var(--brand-primary);color:var(--brand-primary);background:var(--brand-soft);font-weight:600}
+/* 护眼皮肤色卡（2.0.41）：四个等宽按钮，色点 + 名字；
+   选中态用品牌色描边，夜间同样可辨（不靠亮度差，靠边框与底色） */
+.sup-theme{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:8px 0 4px}
+.sup-dot{
+  display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 2px;
+  font-family:inherit;font-size:11px;line-height:1.2;cursor:pointer;
+  border:1px solid var(--border);border-radius:9px;background:var(--bg-page);
+  color:var(--text-secondary);transition:all .16s var(--ease-out);
+}
+.sup-dot i{width:16px;height:16px;border-radius:50%;display:block;
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.08),0 1px 3px rgba(0,0,0,.12)}
+.sup-dot:hover{border-color:var(--brand-primary);color:var(--brand-primary)}
+.sup-dot.on{border-color:var(--brand-primary);background:var(--brand-soft);
+  color:var(--brand-primary);font-weight:600}
 .sup-item{
   display:block;width:100%;text-align:left;font-family:inherit;font-size:12.5px;
   padding:8px 9px;border:0;border-radius:9px;background:transparent;

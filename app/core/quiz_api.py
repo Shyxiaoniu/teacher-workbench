@@ -516,10 +516,38 @@ class QuizAPI(object):
                 return self.err("请先选择一份试卷")
             if not (raw.get("class_ids") or []):
                 return self.err("请至少选择一个班级")
+            # 发放必须填时间（2.0.41）：没时间窗的测验没法自动收口，
+            # 以前靠「手动结束」按钮补救，现在从源头要求填清楚。
+            # 草稿（draft）可以先空着，正式发布才卡。
+            if str(raw.get("status") or "published") != "draft":
+                if not str(raw.get("open_at") or "").strip():
+                    return self.err("请填写开始时间（不填就没法控制什么时候能作答）")
+                if not str(raw.get("close_at") or "").strip():
+                    return self.err("请填写结束时间（到点自动收卷，不用老师盯着）")
+                if str(raw.get("close_at")).strip() <= str(raw.get("open_at")).strip():
+                    return self.err("结束时间要晚于开始时间")
             p = self.q.save_publish(raw)
             bump({"kind": "publish", "pub": p.get("id"), "window": p.get("window")})
             self.notify()
             return self.ok(publish=p)
+
+        if path == "/api/v2/quiz/teacher/publish/close":
+            # 手动结束（2.0.41）：只对「没设开始/结束时间」的测验开放。
+            # 有时间窗的测验由时间自动收口，多一个按钮反而容易误关。
+            pid = str(body.get("id") or "")
+            pub = next((p for p in (self.q.publishes() or [])
+                        if str(p.get("id")) == pid), None)
+            if not pub:
+                return self.err("测验不存在", 404)
+            if str(pub.get("open_at") or "").strip() or str(pub.get("close_at") or "").strip():
+                return self.err("这个测验设了时间，会按时间自动结束，不用手动关", 403)
+            pub = dict(pub)
+            pub["status"] = "closed"
+            p = self.q.save_publish(pub)
+            bump({"kind": "publish", "pub": p.get("id"), "window": p.get("window")})
+            self.notify()
+            return self.ok(publish=p, closed=True,
+                           msg="测验已结束，学生端立刻不能作答")
 
         if path == "/api/v2/quiz/teacher/publish/delete":
             ok = self.q.delete_publish(body.get("id"))

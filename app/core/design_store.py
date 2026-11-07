@@ -16,10 +16,14 @@
 --------
 {
   "drafts": {
-    "<student_id>": {"html": "...", "css": "...", "title": "...", "updated": 1730...}
+    "<student_id>": {"html": "...", "css": "...", "title": "...",
+                     "mode": "hl|plain", "width": 900, "updated": 1730...}
   },
   "updated": 1730...
 }
+
+教师练习草稿也放这里，key 用 "t:<账号>" 前缀与学生 id 区分开：
+学生 id 全是数字，永远不会和带冒号的教师键撞上。
 """
 import json
 import os
@@ -30,7 +34,21 @@ import time
 MAX_HTML = 200 * 1024
 MAX_CSS = 100 * 1024
 
-DEFAULT_DRAFT = {"html": "", "css": "", "title": "", "updated": 0}
+# mode：代码区显示方式（2.0.40）
+#   hl    = 关键词高亮（标签 / 属性 / 选择器分色）
+#   plain = 普通文本（纯 textarea，复制粘贴最省心）
+MODES = ("hl", "plain")
+WIDTHS = (900, 768, 390)
+
+DEFAULT_DRAFT = {"html": "", "css": "", "title": "", "mode": "", "width": 0, "updated": 0}
+
+
+def _safe_width(v):
+    try:
+        n = int(v or 0)
+    except Exception:
+        return 0
+    return n if n in WIDTHS else 0
 
 
 class DesignStore(object):
@@ -67,18 +85,31 @@ class DesignStore(object):
             out.update({k: d.get(k) for k in DEFAULT_DRAFT if k in d})
             return out
 
-    def save_draft(self, uid, html, css, title=""):
+    def save_draft(self, uid, html, css, title="", mode="", width=0):
         uid = str(uid or "")
         if not uid:
-            return {"ok": False, "msg": "缺少学生身份"}
+            return {"ok": False, "msg": "缺少身份"}
         html = str(html or "")
         css = str(css or "")
         if len(html) > MAX_HTML or len(css) > MAX_CSS:
             return {"ok": False, "msg": "设计稿太大了（HTML 200KB / CSS 100KB 以内）"}
+        mode = str(mode or "")
+        if mode not in MODES:
+            mode = ""
+        try:
+            width = int(width or 0)
+        except Exception:
+            width = 0
+        if width not in WIDTHS:
+            width = 0
         with self.lock:
+            old = self.data["drafts"].get(uid) or {}
             self.data["drafts"][uid] = {
                 "html": html, "css": css,
                 "title": str(title or "")[:80],
+                # 显示设置没传就沿用上一次（老页面 / 只存文字时不丢设置）
+                "mode": mode or str(old.get("mode") or ""),
+                "width": width or int(old.get("width") or 0),
                 "updated": int(time.time()),
             }
             self.data["updated"] = int(time.time())
@@ -86,7 +117,9 @@ class DesignStore(object):
                 self._save()
             except Exception as e:
                 return {"ok": False, "msg": "草稿保存失败：%s" % e}
-            return {"ok": True, "updated": self.data["drafts"][uid]["updated"]}
+            d = self.data["drafts"][uid]
+            return {"ok": True, "updated": d["updated"],
+                    "mode": d["mode"], "width": d["width"]}
 
     def clear_draft(self, uid):
         with self.lock:
@@ -120,6 +153,8 @@ class DesignStore(object):
                     "html": str(d.get("html") or "")[:MAX_HTML],
                     "css": str(d.get("css") or "")[:MAX_CSS],
                     "title": str(d.get("title") or "")[:80],
+                    "mode": d.get("mode") if d.get("mode") in MODES else "",
+                    "width": _safe_width(d.get("width")),
                     "updated": int(d.get("updated") or 0),
                 }
             try:

@@ -1,18 +1,42 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN" data-mode="light">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>H5 网页设计 · 教师管理</title>
-<link rel="stylesheet" href="/design/design.css?v=2.0.39">
+<title>网页 · 教师管理</title>
+<link rel="stylesheet" href="/design/design.css?v=2.0.41f">
 </head>
 <body>
 <div class="tc-app">
 
   <div class="tc-head">
-    <h1>H5 网页设计</h1>
+    <h1>网页</h1>
     <span class="tc-pill off" id="pill">读取中…</span>
     <span class="sp"></span>
+    <!-- 说明默认收起：只在需要时点问号看，页面主体保持干净（2.0.40） -->
+    <div class="help-wrap">
+      <button class="help-q" id="btnHelp" title="使用说明" aria-expanded="false"
+              aria-controls="helpPop">?</button>
+      <div class="help-pop" id="helpPop" hidden role="dialog" aria-label="使用说明">
+        <div class="help-hd"><b>这一页怎么用</b>
+          <button class="x" id="helpClose" title="关闭">×</button></div>
+        <div class="help-bd">
+          <ol>
+            <li><b>开启开关</b>：大开关一点就生效，学生端不用刷新。</li>
+            <li><b>填归档课程</b>：作品落到
+              <b>资料/课程/班级/学号-姓名/</b>，文件名带「学号-姓名-」前缀，
+              单独拷出去也认得出是谁的。</li>
+            <li><b>学生做作品</b>：左写 HTML/CSS、右看效果；「保存草稿」换台电脑还能接着写。</li>
+            <li><b>看作品</b>：「上课」页选同一课程，学生作品墙里就是截图。</li>
+          </ol>
+          <p><b>先自己练</b>：点「✏ 进入网页练习」，进度（代码 / 显示方式 / 预览宽度）自动保存，
+            下次接着来；写好了「导出图片」可当课件示例。</p>
+          <p><b>给学生的提醒</b>：预览只运行 HTML/CSS，不执行 JavaScript；外链图片在截图里可能变灰块，
+            建议用 emoji、渐变或纯 CSS 图形。</p>
+          <p><b>快捷键</b>：Ctrl + S 保存草稿，Ctrl + Enter 提交作品。</p>
+        </div>
+      </div>
+    </div>
     <button class="btn sm" id="btnRefresh">↻ 刷新</button>
   </div>
 
@@ -20,9 +44,8 @@
   <div class="tc-hero">
     <div class="icon">🎨</div>
     <div class="txt">
-      <b>学生端「设计」页签</b>
-      <span>开启后学生才能在设计器里写网页、交作品；关掉立刻收回入口与提交权限。<br>
-        学生作品会自动截图并归档到「资料」里，同时进「上课」页大屏。</span>
+      <b>学生端「网页」页签</b>
+      <span>开启后学生才能写网页、交作品；关掉立刻收回入口与提交权限。</span>
     </div>
     <div style="display:flex;align-items:center;gap:12px">
       <button class="sw" id="swMain" aria-label="开启或关闭"></button>
@@ -34,70 +57,47 @@
     <!-- 左：权限与归档 -->
     <div class="card">
       <h2>学生端权限</h2>
-      <p class="hint">两个开关分别管「能不能看到入口」和「能不能交作品」。关掉提交时学生仍可练习、保存草稿。</p>
       <div class="sw-row">
         <div class="t"><b>允许学生添加这个功能页</b>
-          <span>打开后「今日」页出现入口卡，学生点一次就加到左侧导航</span></div>
+          <span>「今日」页出现入口卡，点一次加入导航</span></div>
         <button class="sw on" id="swAdd"></button>
       </div>
       <div class="sw-row">
         <div class="t"><b>允许学生提交作品</b>
-          <span>关掉后「提交作品」按钮会提示未开放，只能保存草稿</span></div>
+          <span>关掉只能练习与保存草稿</span></div>
         <button class="sw on" id="swSubmit"></button>
       </div>
 
       <h2 style="margin-top:18px">归档与大屏</h2>
-      <p class="hint">学生交上来的作品进「资料」的 <b>课程 / 班级 / 学号-姓名</b> 文件夹，
-        与学习单归档共用同一套目录结构。</p>
+      <p class="hint">作品进 <b>资料/课程/班级/学号-姓名/</b>，文件名带学号姓名前缀。</p>
       <div class="fld">
         <span>归档课程（资料里的文件夹）</span>
         <input type="text" id="inpCourse" list="courseList" placeholder="例如：网页设计">
         <datalist id="courseList"></datalist>
-        <span class="sub">填一个不存在的名字也可以，保存时会自动在「资料」里建好文件夹。</span>
       </div>
       <div class="fld">
         <span>大屏窗口名</span>
         <input type="text" id="inpWindow" placeholder="例如：网页设计作品">
-        <span class="sub">学生提交时按这个名字进「上课」页的实时窗口看板。</span>
       </div>
       <div class="fld">
-        <span>任务说明（显示在学生设计器顶部）</span>
+        <span>任务说明（显示在学生编辑器顶部）</span>
         <textarea id="inpIntro" maxlength="500" placeholder="例如：做一个介绍自己的网页，至少包含标题、一段文字和三个卡片。"></textarea>
       </div>
       <div class="foot">
         <button class="btn primary" id="btnSave">保存设置</button>
-        <button class="btn ghost" id="btnPreview">预览学生页</button>
         <span class="msg" id="saveMsg"></span>
       </div>
     </div>
 
-    <!-- 右：使用说明 -->
+    <!-- 右：常用操作（说明收进问号气泡，这里只放真的会点的按钮） -->
     <div class="card">
-      <h2>这一页怎么用</h2>
-      <p class="hint">一节课的完整流程，四步。</p>
-      <div class="tc-note">
-        <ol>
-          <li><b>开启开关</b>：右上角的大开关一点就生效，学生端不用刷新页面。</li>
-          <li><b>填归档课程</b>：建议就叫「网页设计」。学生交的作品会落到
-            <span class="tc-kbd">资料 / 网页设计 / 七年级(3)班 / 20260312-张三 /</span> 下面。</li>
-          <li><b>学生做作品</b>：左边写 HTML/CSS，右边实时预览；中途可以「保存草稿」，
-            换台电脑登录还能接着写。</li>
-          <li><b>看作品</b>：选「上课」页 → 上方课程选「网页设计」→ 学生作品墙里就是截图。
-            也可以在下面的「最近提交」里直接点开看大图。</li>
-        </ol>
+      <h2>常用操作</h2>
+      <p class="hint">练习自动保存；预览只是看，不会写入任何数据。</p>
+      <div class="quick-list">
+        <button class="btn" id="btnPractice" title="进入编辑器练手，进度会自动保存">✏ 进入网页练习</button>
+        <button class="btn ghost" id="btnPreview">👀 预览学生页</button>
       </div>
-      <h2 style="margin-top:18px">给学生的两个提醒</h2>
-      <div class="tc-note">
-        <p style="margin:0 0 6px">· 预览只运行 <b>HTML/CSS</b>，不执行 JavaScript ——
-          这样一句写错的脚本不会把课堂电脑卡住。</p>
-        <p style="margin:0">· 外链图片在截图里可能显示成灰块，作业建议用 <b>emoji</b>、
-          <b>渐变</b> 或纯 CSS 画的图形，交上来一定看得见。</p>
-      </div>
-      <h2 style="margin-top:18px">快捷键</h2>
-      <div class="tc-note">
-        <p style="margin:0"><span class="tc-kbd">Ctrl</span> + <span class="tc-kbd">S</span> 保存草稿　
-          <span class="tc-kbd">Ctrl</span> + <span class="tc-kbd">Enter</span> 提交作品</p>
-      </div>
+      <div class="quick-meta" id="quickMeta"></div>
     </div>
   </div>
 
@@ -213,22 +213,29 @@
     $('#stFiles').textContent = s.files || 0;
     $('#stLast').textContent = s.last_at ? String(s.last_at).slice(5, 16) : '—';
     var hint = $('#statHint');
-    if (!CFG.enabled) hint.textContent = '服务关闭中，学生暂时无法进入设计器。';
+    if (!CFG.enabled) hint.textContent = '服务关闭中，学生暂时无法进入编辑器。';
     else if (!s.people) hint.textContent = '还没有学生提交。开课后这里会自动出现作品缩略图。';
     else hint.textContent = '共 ' + s.people + ' 位学生提交，按学号去重、只算最新一版。';
     var box = $('#works');
     var rows = (STAT && STAT.recent) || [];
     if (!rows.length) {
       box.innerHTML = '<div class="tc-empty" style="grid-column:1/-1">还没有作品</div>';
-      return;
+    } else {
+      box.innerHTML = rows.map(function (r) {
+        return '<div class="tc-work">' +
+          '<div class="th">' + (r.url ? '<img src="' + esc(r.url) + '" alt="' + esc(r.name) + '" loading="lazy">' : '') + '</div>' +
+          '<div class="mt"><b>' + esc(r.name || '—') + '</b>' +
+          '<span>' + esc(r.no || '') + ' · ' + esc(String(r.at || '').slice(5, 16)) + '</span></div>' +
+          '</div>';
+      }).join('');
     }
-    box.innerHTML = rows.map(function (r) {
-      return '<div class="tc-work">' +
-        '<div class="th">' + (r.url ? '<img src="' + esc(r.url) + '" alt="' + esc(r.name) + '" loading="lazy">' : '') + '</div>' +
-        '<div class="mt"><b>' + esc(r.name || '—') + '</b>' +
-        '<span>' + esc(r.no || '') + ' · ' + esc(String(r.at || '').slice(5, 16)) + '</span></div>' +
-        '</div>';
-    }).join('');
+    /* 右栏「常用操作」底部的状态摘要：只放事实，不放介绍 */
+    var qm = $('#quickMeta');
+    if (qm) {
+      qm.innerHTML = '服务：<b>' + (CFG.enabled ? '运行中' : '已关闭') + '</b><br>' +
+        '归档课程：<b>' + esc(CFG.course || '—') + '</b><br>' +
+        '已提交：<b>' + (s.people || 0) + '</b> 人';
+    }
   }
 
   function load() {
@@ -288,7 +295,7 @@
         if (!j.ok) { toast(j.msg || '操作失败', 'err'); return; }
         CFG.enabled = next;
         paintAll();
-        toast(next ? '已开启：学生端立刻能进「设计」页签' : '已关闭：学生端入口已收回', 'ok');
+        toast(next ? '已开启：学生端立刻能进「网页」页签' : '已关闭：学生端入口已收回', 'ok');
         load();
       }).catch(function () { toast('连不上服务器', 'err'); });
     };
@@ -296,6 +303,33 @@
     $('#swSubmit').onclick = function () { this.classList.toggle('on'); };
     $('#btnSave').onclick = function () { save(); };
     $('#btnRefresh').onclick = function () { load(); toast('已刷新'); };
+
+    /* 问号帮助（2.0.40）：默认收起，点开浮在页面上，点空白 / Esc 收起。
+       不改变任何布局，所以展开时正在看的内容不会跳。 */
+    var hp = $('#helpPop');
+    var hq = $('#btnHelp');
+    function helpOpen(v) {
+      hp.hidden = !v;
+      hq.setAttribute('aria-expanded', v ? 'true' : 'false');
+    }
+    hq.onclick = function (e) {
+      e.stopPropagation();
+      helpOpen(hp.hidden);
+    };
+    $('#helpClose').onclick = function () { helpOpen(false); };
+    document.addEventListener('click', function (e) {
+      if (hp.hidden) return;
+      if (hp.contains(e.target) || hq.contains(e.target)) return;
+      helpOpen(false);
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && !hp.hidden) helpOpen(false);
+    });
+    /* 教师练习（2.0.40）：在同一个 iframe 里切到编辑器，不跳新标签。
+       编辑器顶部有「‹ 返回设置」可以回来。 */
+    $('#btnPractice').onclick = function () {
+      location.href = '/design/student.html?mode=teacher&practice=1';
+    };
     $('#btnPreview').onclick = function () {
       window.open('/design/student.html?mode=teacher', '_blank');
     };

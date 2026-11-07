@@ -478,6 +478,42 @@ def _pub(r):
     d.pop("received_at", None)
     return d
 
+
+# 网页预览探针（2.0.41）：插在 </head> 之前（没有 head 就插在 <body …> 之后）。
+# 只做两件事：① 标记这是预览环境；② 把页面里的脚本错误 postMessage 给教师端。
+# 不改任何样式、不拦任何脚本 —— 学生网页该跑什么还跑什么。
+_PREVIEW_PROBE = (
+    '<script>window.__wbPreview=1;(function(){'
+    'function rep(m){try{parent.postMessage({type:"wb-prev-err",msg:String(m||"脚本错误")},"*");}catch(e){}}'
+    'window.addEventListener("error",function(e){'
+    'if(e&&e.target&&e.target!==window&&e.target.tagName){'
+    'var t=e.target.tagName.toLowerCase();'
+    'if(t==="img"||t==="script"||t==="link"||t==="video"||t==="audio"){'
+    'rep("资源加载失败："+(e.target.src||e.target.href||t));return;}}'
+    'if(e&&e.message)rep(e.message);'
+    '},true);'
+    'window.addEventListener("unhandledrejection",function(e){'
+    'rep("Promise 未处理："+((e&&e.reason&&e.reason.message)||e.reason||"未知"));});'
+    '})();</script>'
+).encode("utf-8")
+
+
+def _preview_probe(data):
+    """把探针塞进网页源码；找不到锚点就放最前面（宁可位次不准，也别丢探针）。"""
+    try:
+        low = data.lower()
+        i = low.find(b"</head>")
+        if i < 0:
+            i = low.find(b"<body")
+            if i >= 0:
+                j = low.find(b">", i)
+                i = (j + 1) if j >= 0 else -1
+        if i < 0:
+            return _PREVIEW_PROBE + data
+        return data[:i] + _PREVIEW_PROBE + data[i:]
+    except Exception:
+        return data
+
 # ---------------------------------------------------------------------------
 # HTTP 处理
 # ---------------------------------------------------------------------------
@@ -1177,6 +1213,29 @@ class Handler(BaseHTTPRequestHandler):
             full = CW.abs_of(arg("id"), must_exist=True)
             if not full or not os.path.isfile(full):
                 return self._send_text("文件不存在或已被移动", code=404)
+            ext = (os.path.splitext(full)[1].lstrip(".") or "").lower()
+            if ext in ("html", "htm"):
+                # 网页文件（2.0.41）：原样吐出去，让浏览器真实渲染、真实执行脚本。
+                # 以前走 preview_html → 转义成 <pre> 源码，老师看到的是代码不是效果。
+                # 这里只在 </head> 前塞一段错误探针（不影响任何样式与脚本），
+                # 页面里的脚本报错会 postMessage 给父窗口，教师端弹提示条。
+                try:
+                    with open(full, "rb") as f:
+                        data = f.read(4 * 1024 * 1024)
+                except Exception:
+                    return self._send_text("读取失败", code=500)
+                data = _preview_probe(data)
+                self.send_response(200)
+                self._cors()
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                try:
+                    self.wfile.write(data)
+                except (BrokenPipeError, ConnectionResetError):
+                    pass
+                return
             kind = CW.kind_of(full)
             if kind in ("image", "video", "audio", "pdf"):
                 # 这几种浏览器能直接显示，不必再包一层 HTML

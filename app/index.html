@@ -6604,6 +6604,18 @@ body:has(.mini-bar) .corner-credit { display:none; }
 .cw-push-own .f{color:var(--text-secondary)}
 .cw-sec-t::before{content:'';width:4px;height:14px;background:var(--brand-primary);border-radius:3px}
 .cw-empty{text-align:center;color:var(--text-secondary);font-size:13.5px;padding:26px 0}
+/* 根目录空态里的子文件夹入口（2.0.41）：把「看不见的东西」摆成可点卡片 */
+.cw-subgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));
+  gap:9px;margin:14px auto 4px;max-width:640px}
+.cw-subcard{display:flex;align-items:center;gap:9px;padding:10px 12px;cursor:pointer;
+  border:1px solid var(--border);border-radius:11px;background:var(--bg-surface);
+  font-family:inherit;text-align:left;transition:all .15s var(--ease-out)}
+.cw-subcard:hover{border-color:var(--brand-primary);background:var(--brand-soft);
+  transform:translateY(-1px);box-shadow:var(--shadow)}
+.cw-subcard .ic{font-size:16px;line-height:1}
+.cw-subcard b{font-size:13px;color:var(--text-primary);font-weight:600;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:96px}
+.cw-subcard .n{margin-left:auto;font-size:11.5px;color:var(--text-secondary);white-space:nowrap}
 
 /* ===== 资料 · 资源管理器布局（2026-11-04 改版） =====
    左侧树形目录（课程文件夹）+ 右侧文件列表，替换原「归到课节 + 全页上传区」。 */
@@ -7056,6 +7068,17 @@ body:has(.mini-bar) .corner-credit { display:none; }
 .cwv-body audio{width:min(560px,90vw)}
 .cwv-body iframe{width:100%;height:100%;border:0;border-radius:10px;background:#fff}
 .cwv-doc{width:min(1000px,96vw);height:100%}
+/* 网页预览（2.0.41）：真实渲染、允许脚本，所以给更宽的画布 */
+.cwv-web{width:min(1180px,96vw);height:100%;background:#fff}
+/* 资源缺失 / 脚本报错的提示条：浮在画布下沿，不遮内容主体 */
+.cwv-note{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);z-index:3;
+  display:none;max-width:min(680px,92vw);padding:9px 15px;border-radius:11px;
+  background:rgba(255,249,239,.97);color:#8A5A10;font-size:12.5px;line-height:1.65;
+  box-shadow:0 8px 26px rgba(0,0,0,.4);border:1px solid rgba(180,120,40,.28)}
+.cwv-note.on{display:block}
+.cwv-note b{color:#6E4409}
+.cwv-note .x{float:right;margin-left:10px;cursor:pointer;opacity:.6}
+.cwv-note .x:hover{opacity:1}
 .cwv-fallback{color:#DCE8E2;text-align:center;font-size:14px;line-height:2;max-width:520px}
 .cwv-fallback .big{font-size:46px}
 .cwv-nav{position:absolute;top:50%;transform:translateY(-50%);width:44px;height:64px;border:0;
@@ -7473,7 +7496,9 @@ const NAV = [
   { id:'scores', name:'成绩', icon:'chart' },
   { id:'quiz',   name:'测验', icon:'check' },
   { id:'typing', name:'打字', icon:'keyboard' },
-  { id:'design', name:'设计', icon:'code' },
+  /* 菜单名统一两字：功能入口叫「网页」（2.0.40 牛哥定名，原「设计」），
+     页面内部才用「H5 网页设计」这个完整说法。 */
+  { id:'design', name:'网页', icon:'code' },
   { id:'classes', name:'班级', icon:'cap' },
   { id:'students', name:'学生', icon:'user' },
   { id:'todos',  name:'待办', icon:'pin' },
@@ -9800,12 +9825,43 @@ function handleDbError(err, ctx) {
   toast(err.message || '操作失败');
 }
 
-function handleSignedOut() {
+/* 登录/掉线的统一出口。
+   2.0.41：以前只要数据层回一个 unauthenticated 就直接跳登录页。
+   而「刚点完登录、页面正在加载」的那一瞬间，首屏那批数据请求常常比
+   会话 cookie 生效更早，于是被判成掉线 → 跳 /teacher/login → 会话其实
+   已建立 → 又弹回后台。用户看到的就是「登录时闪一下登录页」。
+   现在两层保护：
+     ① 首屏 3 秒内的 unauthenticated 一律不当真，只静默复核，不跳；
+     ② 复核以 /api/v2/auth/session 为准，网络异常也不跳。 */
+const BOOT_AT = Date.now();
+let _signOutSeq = 0;
+function _sessionAlive() {
+  return fetch('/api/v2/auth/session', { credentials: 'same-origin', cache: 'no-store' })
+    .then(function (r) { return r.json().catch(function () { return {}; }); })
+    .then(function (j) {
+      return !!(j && (j.role === 'teacher' || j.role === 'student' || j.student));
+    });
+}
+async function handleSignedOut() {
   state.session = null;
   state.classes = [];
   state.settings = {};
   const back = state.route !== 'home' ? '#' + state.route : '';
   SS.set('wb-return', back);
+  const seq = ++_signOutSeq;
+  const young = (Date.now() - BOOT_AT) < 3000;
+  try {
+    /* 首屏先等一拍再问：登录跳转那一瞬间 cookie 可能还没落到下一次请求上 */
+    if (young) await new Promise(function (r) { setTimeout(r, 700); });
+    const alive = await _sessionAlive();
+    if (seq !== _signOutSeq) return;      // 期间又有新判定，交给最新的那次
+    if (alive) return;                     // 会话还在：这次 401 是误报
+    if (young) await new Promise(function (r) { setTimeout(r, 600); });
+    if (seq !== _signOutSeq) return;
+    if (await _sessionAlive()) return;     // 再确认一次
+  } catch (e) {
+    return;                                // 连不上服务：不要误踢人
+  }
   renderLogin('登录已过期，请重新登录');
 }
 
@@ -10915,10 +10971,18 @@ async function setPasswordByOtp(opt) {
 }
 window.setPasswordByOtp = setPasswordByOtp;
 
+/* 2.0.41：页面内这套「手机号 + 密码」登录视图已废弃 —— 工作台只用 /teacher/login。
+   这里保留函数名（各处的兜底调用不会报错），但一律直接带去工作台登录页，
+   并且用 replace 而不是 href：退出后按浏览器「后退」也回不到已登录的界面。 */
 function renderLogin(msg) {
   const back = SS.get('wb-return');
   if (back) SS.del('wb-return');
-
+  /* 已经在登录页就不要再跳自己：否则会出现「登录页 → 登录页」的空转闪烁 */
+  if (/^\/teacher\/login/.test(location.pathname)) return;
+  const q = back ? ('?next=' + encodeURIComponent(back)) : '';
+  location.replace('/teacher/login' + q);
+  return;   /* 下面那套旧登录界面不再执行；保留原代码只为兼容历史引用 */
+  /* eslint-disable no-unreachable */
   $('#root').innerHTML = `
   <div class="login-wrap"><div class="login-card">
     <div class="login-quote">${esc(quoteOfDay())}</div>
@@ -11461,7 +11525,15 @@ async function doLogout() {
   state.session = null;
   state.classes = [];
   state.settings = {};
-  renderLogin('已退出登录');
+  /* 2.0.41：退出 = 先真的把服务端会话注销，再统一回 /teacher/login。
+     以前这里只调 renderLogin()，结果停在那套「手机号+密码」的旧界面上，
+     看起来像跳到另一个登录系统。 */
+  try {
+    await fetch('/api/v2/auth/logout', { method: 'POST', credentials: 'same-origin' });
+  } catch (_) {}
+  const back = SS.get('wb-return');
+  if (back) SS.del('wb-return');
+  location.replace('/teacher/login' + (back ? ('?next=' + encodeURIComponent(back)) : ''));
 }
 
 /* ============================================================
@@ -12051,16 +12123,24 @@ function renderContent(opts = {}) {
        老师刚点开的开关 / 输入到一半的课程名都会丢。 */
     if (!c.querySelector('iframe[data-design-admin]')) {
       c.innerHTML = '<div id="designAdminWrap" style="height:calc(100vh - 128px);min-height:520px">' +
-        '<iframe data-design-admin src="/design/teacher.html" title="H5 网页设计管理" style="width:100%;height:100%;border:0"></iframe></div>';
+        '<iframe data-design-admin src="/design/teacher.html" title="网页管理" style="width:100%;height:100%;border:0"></iframe></div>';
       /* 管理页内容比一屏长：它会把自身高度 post 上来，这里同步容器高度，
-         让老师用页面滚动条看完整页（而不是在 iframe 里滚一层）。 */
+         让老师用页面滚动条看完整页（而不是在 iframe 里滚一层）。
+         切到「教师练习」时设计器发 wb-design-fit，把高度收回视口。 */
       window.addEventListener('message', function (ev) {
-        if (!ev.data || ev.data.type !== 'wb-design-h') return;
+        if (!ev.data) return;
+        var typ = ev.data.type;
+        if (typ !== 'wb-design-h' && typ !== 'wb-design-fit') return;
         var fr = c.querySelector('iframe[data-design-admin]');
         if (!fr || ev.source !== fr.contentWindow) return;
-        var h = Math.max(520, Math.min(3200, Number(ev.data.h) || 0));
         var wrap = fr.parentNode;
-        if (wrap) wrap.style.height = h + 'px';
+        if (!wrap) return;
+        if (typ === 'wb-design-fit') {
+          wrap.style.height = 'calc(100vh - 128px)';
+          return;
+        }
+        var h = Math.max(520, Math.min(3200, Number(ev.data.h) || 0));
+        wrap.style.height = h + 'px';
       });
     }
   } else if (DEMO_RENDER[state.route]) {
@@ -16814,13 +16894,23 @@ async function actLoadTaskList() {
   sel.innerHTML = '<option value="">加载中…</option>';
   try {
     const results = await Promise.all([
-      cwConfigCached(true).catch(() => null),
+      /* 课程名优先走工作台自己的接口（2.0.41）：它会把资料库课程、网页设计归档课程、
+         测验里用到的课程合起来去重。旧实现只读 /api/cw/config，那个接口一报错，
+         前端把异常吞掉就显示「资料里还没有文件夹」——老师看着有课却选不出来。 */
+      fetch('/api/v2/cw/courses', { credentials: 'same-origin' })
+        .then(r => (r.ok ? r.json() : null)).catch(() => null),
       fetch(actApiBase() + '/tasks', { mode: 'cors' })
         .then(r => { if (!r.ok) throw new Error('读取课程任务失败（' + r.status + '）'); return r.json(); })
     ]);
-    const cfg = results[0];
-    actCourseNames = ((cfg && cfg.courses) || [])
-      .map(c => String(c.name || '').trim()).filter(Boolean);
+    const cv = results[0];
+    actCourseNames = ((cv && cv.courses) || [])
+      .map(n => String(n || '').trim()).filter(Boolean);
+    if (!actCourseNames.length) {
+      // 新接口没给（老版本服务 / 权限不足）：退回资料库配置，别让下拉彻底空掉
+      const cfg = await cwConfigCached(true).catch(() => null);
+      actCourseNames = ((cfg && cfg.courses) || [])
+        .map(c => String(c.name || '').trim()).filter(Boolean);
+    }
     actTaskList = ((results[1] || {}).tasks) || [];
     if (!actCourseNames.length) {
       sel.innerHTML = '<option value="">（资料里还没有文件夹，请先到「教学 · 资料」新建并上传）</option>';
@@ -35101,6 +35191,21 @@ async function boot() {
   loadTheme();
   applyGreetFont();
   DEMO.on = false;
+  /* 2.0.41 修「登录时闪一眼注册页/设置密码页」：
+     原来 boot() 只看本地锁，不先问服务端 —— 从 /teacher/login 跳进来时
+     本地没设过锁，于是立刻 renderLock(true) 画出「设置本地密码」那张卡片
+     （和登录卡片长得几乎一样，看着就像注册页），等会话拿到才被主界面盖掉。
+     现在先问一次会话：已登录就直接进应用，根本不画锁屏。 */
+  try {
+    const r = await fetch('/api/v2/auth/session',
+                          { credentials: 'same-origin', cache: 'no-store' });
+    const j = await r.json().catch(function () { return {}; });
+    if (j && (j.role === 'teacher' || j.role === 'student' || j.student)) {
+      if (lockActive() && !restoreKeyFromSession()) { renderLock(false); return; }
+      goToApp();
+      return;
+    }
+  } catch (e) { /* 连不上就当未登录，走原来的本地锁流程 */ }
   // 纯本地：先过密码锁，再进应用（避免任何人都能直接浏览数据）
   if (lockActive()) {
     // 同一标签页内刚解锁过（sessionStorage 里还有密钥）→ 直接进应用，不再要密码
@@ -35296,6 +35401,7 @@ function cwOpenViewer(list, i, title) {
 }
 function cwCloseViewer() {
   CWV.on = false;
+  if (CWV.timer) { clearTimeout(CWV.timer); CWV.timer = null; }
   const el = document.getElementById('cwvLayer');
   if (el) el.classList.remove('on');
   const body = document.getElementById('cwvBody');
@@ -35332,6 +35438,17 @@ function cwPaintViewer() {
         + '<button class="cwv-nav r" onclick="cwStep(1)" title="下一个">›</button>');
     }
   }
+  /* 网页预览的加载看门狗（2.0.41）：8 秒还没 load 就给一句人话，
+     而不是让老师对着白屏等。切文件 / 关闭预览都会清掉。 */
+  if (CWV.timer) { clearTimeout(CWV.timer); CWV.timer = null; }
+  if (it.web) {
+    CWV.timer = setTimeout(function () {
+      if (CWV.on && CWV.list[CWV.i] === it && document.getElementById('cwvWeb')) {
+        cwWebNote('这个网页 8 秒还没加载完：文件可能较大，或者页面里的资源连不上。'
+          + '可以先等一会儿，或点右上角「⬇ 下载原件」用浏览器打开。');
+      }
+    }, 8000);
+  }
   if (strip) {
     strip.innerHTML = CWV.list.map((x, k) => {
       const cls = 'cwv-thumb' + (k === CWV.i ? ' on' : '');
@@ -35347,6 +35464,17 @@ function cwPaintViewer() {
 function cwJump(k) { CWV.i = k; cwPaintViewer(); }
 function cwViewerBodyHtml(it) {
   const s = it.src || '';
+  /* 网页（2.0.41）：走 /api/cw/preview 的原样通道 —— 服务端把 HTML 原封不动吐出来，
+     iframe 里就是真实渲染：布局、样式、鼠标悬停、脚本交互全都跑起来，
+     不再是「转义后的源码文本」。
+     sandbox 只放开脚本/表单/弹窗，**不给 allow-same-origin**：
+     学生网页进不了教师端页面，也读不到任何 cookie，但图片等子资源照样按同站请求加载。 */
+  if (it.web) {
+    return '<iframe class="cwv-web" id="cwvWeb" src="' + esc(it.doc) + '" title="' + esc(it.name) + '"'
+      + ' sandbox="allow-scripts allow-forms allow-popups allow-modals allow-downloads"'
+      + ' onload="cwWebLoaded()" onerror="cwWebFailed()"></iframe>'
+      + '<div class="cwv-note" id="cwvNote"></div>';
+  }
   if (it.kind === 'image') return '<img src="' + esc(s) + '" alt="' + esc(it.name) + '">';
   if (it.kind === 'video') return '<video src="' + esc(s) + '" controls autoplay playsinline preload="metadata"></video>';
   if (it.kind === 'audio') return '<audio src="' + esc(s) + '" controls autoplay preload="metadata"></audio>';
@@ -35360,6 +35488,62 @@ function cwViewerBodyHtml(it) {
     + (it.kind === 'legacy' ? '；建议另存为 .docx / .xlsx / .pptx 后再上传，就能在线查看了' : '')
     + '。</div>';
 }
+
+/* ---------------- 网页预览的状态与异常提示（2.0.41） ----------------
+   三种情况给三种话：加载超时 / 直接失败 / 页面里脚本报错。
+   脚本报错由服务端注入的探针 postMessage 上来（sandbox 没给 same-origin，
+   父页面读不到子文档，只能靠这条消息）。 */
+function cwWebNote(msg, tone) {
+  const el = document.getElementById('cwvNote');
+  if (!el) return;
+  const color = tone === 'err' ? '#B23B2E' : '#8A5A10';
+  el.style.color = color;
+  el.innerHTML = '<span class="x" onclick="cwWebNoteClear()" title="收起">✕</span>' + msg
+    + '<div style="margin-top:6px"><a href="javascript:void 0" onclick="cwWebReload()"'
+    + ' style="color:#1D6E56;font-weight:600;text-decoration:none">↻ 重新加载</a>'
+    + '<span style="opacity:.55;margin-left:10px">或点右上角「⬇ 下载原件」用浏览器打开</span></div>';
+  el.classList.add('on');
+}
+function cwWebNoteClear() {
+  const el = document.getElementById('cwvNote');
+  if (el) el.classList.remove('on');
+}
+function cwWebLoaded() {
+  if (CWV.timer) { clearTimeout(CWV.timer); CWV.timer = null; }
+  cwWebNoteClear();
+}
+function cwWebFailed() {
+  if (CWV.timer) { clearTimeout(CWV.timer); CWV.timer = null; }
+  cwWebNote('这个网页没能加载出来：文件可能已被删除或移动，或者服务器读不到。<b>'
+    + '先点「↻ 重新加载」</b>试试；还不行就让交作业的同学重新提交一次。', 'err');
+}
+function cwWebReload() {
+  const fr = document.getElementById('cwvWeb');
+  if (!fr) return;
+  cwWebNoteClear();
+  const base = fr.getAttribute('data-src') || fr.src;
+  fr.setAttribute('data-src', base);
+  fr.src = base + (base.indexOf('?') >= 0 ? '&' : '?') + '_r=' + Date.now();
+  if (CWV.timer) clearTimeout(CWV.timer);
+  CWV.timer = setTimeout(function () {
+    if (document.getElementById('cwvWeb')) {
+      cwWebNote('这个网页 8 秒还没加载完：文件可能太大，或者页面里的资源连不上。'
+        + '可以再等一会儿，或点右上角「⬇ 下载原件」用浏览器打开。');
+    }
+  }, 8000);
+}
+window.cwWebLoaded = cwWebLoaded;
+window.cwWebFailed = cwWebFailed;
+window.cwWebReload = cwWebReload;
+window.cwWebNoteClear = cwWebNoteClear;
+/* 服务端探针把页面里的脚本错误 post 上来 */
+window.addEventListener('message', function (e) {
+  const d = e && e.data;
+  if (!d || d.type !== 'wb-prev-err') return;
+  const msg = String(d.msg || '未知错误').slice(0, 180);
+  cwWebNote('页面里的脚本报错：<b>' + esc(msg) + '</b><br>'
+    + '页面其余部分仍可正常查看；如果是学生代码的问题，提醒他改一下再交。', 'err');
+});
 
 /* -------------------- 本地课件服务 -------------------- */
 /* 服务没起（比如直接双击 index.html）时，给一句能照做的话，而不是空白 */
@@ -35575,11 +35759,28 @@ window.cwPublishCourseDialog = cwPublishCourseDialog;
     班级可多选，一次写多份 materials 记录，学生端照旧在「今日 · 课件库」看到。 */
 async function cwPushDialog(btn) {
   let ids = [];
-  if (btn && btn.dataset && btn.dataset.batch === '1') ids = Array.from(cwState.sel);
+  const isBatch = !!(btn && btn.dataset && btn.dataset.batch === '1');
+  if (isBatch) ids = Array.from(cwState.sel);
   else if (btn) { const host = btn.closest('[data-id]'); if (host) ids = [host.dataset.id]; }
   ids = ids.map(String).filter(Boolean);
+  /* 2.0.41 修复：「下发本课程到班级」≈ 整门课都发。
+     以前这里只读勾选，没勾选就直接 toast「先勾选」然后 return ——
+     老师点了按钮、看提示一闪而过，以为已经发了，学生端什么也没有。
+     现在：没勾选 = 当前目录（课程根 = 整门课，含子文件夹）全部未归档文件。
+     归档目录里的学生作品不在此列（那是学生交上来的，不该再发回给学生）。 */
+  let autoAll = false;
+  if (!ids.length && isBatch && cwState.course) {
+    const sub = cwState.sub || '';
+    ids = (cwState.files || []).filter(f => !f.archived && (sub
+        ? ((f.rel_dir || '') === sub || String(f.rel_dir || '').startsWith(sub + '/'))
+        : true))
+      .map(f => String(f.id));
+    autoAll = ids.length > 0;
+  }
   if (!ids.length) {
-    toast('先勾选要下发的文件（卡片左上角的小方框），或直接点文件上的「⬇ 推送」');
+    toast(cwState.course
+      ? '这门课还没有可下发的文件：先上传，或点文件上的「⬇ 推送」单个发'
+      : '先在左侧选一门课，再点「下发本课程到班级」');
     return;
   }
   const byId = {};
@@ -35595,7 +35796,11 @@ async function cwPushDialog(btn) {
      学生端「资料」按**课程资料名称**分组，所以下发时直接用文件所在的
      课程文件夹名（f.course）——名字来自资料库本身，两端必然一致；
      手输课节名既容易打错，也会跟资料库对不上。 */
-  const html = '<div class="cw-muted" style="margin-bottom:9px">把 <b>' + picked.length + '</b> 个文件下发给学生端：'
+  const html = (autoAll
+      ? '<div class="cw-muted" style="margin:0 0 7px;color:var(--brand-primary);font-weight:600">'
+        + '没有勾选文件 → 已自动选中' + (cwState.sub ? ('「' + esc(cwState.sub) + '」里的') : '这门课的')
+        + '全部 ' + picked.length + ' 个文件。</div>' : '')
+    + '<div class="cw-muted" style="margin-bottom:9px">把 <b>' + picked.length + '</b> 个文件下发给学生端：'
     + '学生登录后在「资料」页和「今日」页直接看到、点一下就能打开；随时可在「推送记录」里撤回。</div>'
     + '<div class="cw-push-sum">' + fileLines
     + (picked.length > 6 ? '<div style="margin-top:4px">…共 ' + picked.length + ' 个文件</div>' : '') + '</div>'
@@ -35929,17 +36134,46 @@ function cwInitSplit() {
 }
 window.cwInitSplit = cwInitSplit;
 
-/* 课件库只对教师账号开放：未登录 / 学生打开时给出明确提示，而不是一个空白页 */
+/* 课件库只对教师账号开放：未登录 / 学生打开时给出明确提示，而不是一个空白页。
+   2.0.41：服务重启后旧课件服务那边偶尔还没认到教师会话，这时一律显示
+   「你不是教师」会把人搞懵（明明右上角就是教师头像）。所以：
+   · 文案改成「没认出教师会话」，并给出可点的重新验证；
+   · 重新验证会先问工作台自己的 /api/v2/auth/session，确认是教师再重试一次 config。 */
 function cwPaintBlocked(cfg) {
   const tree = document.getElementById('cwTree');
   const area = document.getElementById('cwFileArea');
   if (area) area.innerHTML = '';
   if (!tree) return;
   tree.innerHTML = '<div class="cw-warn" style="margin-top:0">'
-    + '🔒 <b>资料只对教师账号开放。</b><br>'
-    + (cfg && cfg.msg ? esc(cfg.msg) : '请先在教师端登录，再回到这里管理资料。')
+    + '🔒 <b>课件服务没认到你的教师会话。</b><br>'
+    + (cfg && cfg.msg ? esc(cfg.msg) : '常见于刚重启服务之后。点下面的按钮重新验证一次即可。')
+    + '<div style="margin-top:8px"><button class="btn btn-sm" type="button"'
+    + ' onclick="cwRetryAuth()">↻ 重新验证并加载</button></div>'
     + '</div>';
 }
+async function cwRetryAuth() {
+  try {
+    const r = await fetch('/api/v2/auth/session', { credentials: 'same-origin' });
+    const j = await r.json().catch(function () { return {}; });
+    if (!j || j.role !== 'teacher') {
+      toast('工作台这边也认为你不是教师，请重新登录');
+      setTimeout(function () { location.href = '/teacher/login'; }, 700);
+      return;
+    }
+    cwCfgCache = { at: 0, data: null };
+    toast('工作台身份正常，正在重新加载资料…');
+    await cwReload();
+    /* 还是 blocked：说明旧课件服务那边确实没认到（重启后常见），
+       再点一次也是白点，直接带去重新登录一次，登录后它会重新握手。 */
+    if (cwState.cfg && cwState.cfg.blocked) {
+      toast('课件服务仍没认到会话，正在带你去重新登录…');
+      setTimeout(function () { location.href = '/teacher/login'; }, 900);
+    }
+  } catch (e) {
+    toast('重试失败：' + ((e && e.message) || e));
+  }
+}
+window.cwRetryAuth = cwRetryAuth;
 async function cwAllowLan(on) {
   if (on && !(await uiConfirm('允许同一 Wi-Fi 下的其他设备访问课件库？\n\n课件是老师资料，打开后同网段的人（包括学生）也能看到。\n建议只在需要时临时打开，用完关掉。', { title: '开放课件库', danger: false, okText: '允许' }))) return;
   try {
@@ -36606,10 +36840,30 @@ function cwPaintFiles(files) {
     ? ((f.rel_dir || '') === sub || String(f.rel_dir || '').startsWith(sub + '/'))
     : ((f.rel_dir || '') === ''));
   if (!shown.length) {
+    /* 2.0.41 修复「点开文件夹内容不可见」：
+       课程根目录本身常常没有文件（文件都在子文件夹 / 归档班级里），
+       以前这里只有一句「子文件夹里的文件请从左侧目录点进去看」，
+       右侧一片空，老师点了课程名以为坏了。现在把子文件夹做成可点卡片，
+       并带上每个文件夹里的文件数，点一下就进去。 */
+    let extra = '';
+    const subs = cwState.subs || [];
+    if (!sub && subs.length) {
+      extra = '<div class="cw-subgrid">' + subs.map(function (s) {
+        const n = (files || []).filter(f => (f.rel_dir || '') === s
+          || String(f.rel_dir || '').startsWith(s + '/')).length;
+        const arg = JSON.stringify(String(s)).replace(/"/g, '&quot;');
+        return '<button type="button" class="cw-subcard" onclick="cwPickSub(' + arg + ')"'
+          + ' title="点一下查看「' + esc(s) + '」里的文件">'
+          + '<span class="ic">📁</span><b>' + esc(s) + '</b>'
+          + '<span class="n">' + n + ' 个文件 ›</span></button>';
+      }).join('') + '</div>';
+    }
     area.innerHTML = sub
       ? '<div class="cw-empty">「' + esc(sub) + '」是空的。点上方「⬆ 上传」或把文件拖进来就存好了。</div>'
-      : '<div class="cw-empty">「' + esc(cwState.course) + '」还没有文件。点上方「⬆ 上传」或把文件拖进来就存好了。'
-        + ((cwState.subs || []).length ? '<br>子文件夹里的文件请从左侧目录点进去看。</div>' : '</div>');
+      : '<div class="cw-empty">「' + esc(cwState.course) + '」根目录还没有文件。'
+        + (subs.length ? '<br>文件放在下面这些子文件夹里，点进去看（也可以直接上传到根目录）：'
+                       : '点上方「⬆ 上传」或把文件拖进来就存好了。')
+        + '</div>' + extra;
     cwToolbarSync();
     return;
   }
@@ -36654,6 +36908,8 @@ function cwPreviewLocal(el) {
 function cwPreviewFilesIn(list, id, title) {
   const items = (list || []).map(f => ({
     name: f.name, kind: f.kind || cwKindOf(f.name), size: f.size_text,
+    /* 网页（html/htm）单独标出来：点开要**真实渲染**，不是看源码（2.0.41） */
+    web: /\.html?$/i.test(String(f.name || '')),
     src: CW_API + 'file?id=' + encodeURIComponent(f.id) + '&dl=0',
     download: CW_API + 'file?id=' + encodeURIComponent(f.id) + '&dl=1',
     doc: CW_API + 'preview?id=' + encodeURIComponent(f.id) + cwDarkQs()
@@ -38480,6 +38736,13 @@ async function quizPublishSave(id){
     show_answer:ck('qzPubAns'), show_score:ck('qzPubScore'),
     show_analysis:ck('qzPubAnalysis'),
     window:v('qzPubWin').trim(), status:v('qzPubStatus') };
+  /* 发放必须填时间（2.0.41）：草稿可以先不填，真正「发布」时必填 ——
+     没时间窗的测验没法自动收卷，以前只能事后手动关。 */
+  if (payload.status !== 'draft') {
+    if (!payload.open_at) { toast('请填写开始时间'); const el=document.getElementById('qzPubOpen'); if (el) el.focus(); return; }
+    if (!payload.close_at) { toast('请填写结束时间'); const el=document.getElementById('qzPubClose'); if (el) el.focus(); return; }
+    if (payload.close_at <= payload.open_at) { toast('结束时间要晚于开始时间'); return; }
+  }
   try { await quizApi('/api/v2/quiz/teacher/publish/save',{publish:payload});
     closeFloat(); toast('已推送到所选班级的学生端'); await quizInit(true); quizRender(false);
   } catch(e){ toast('发布失败：'+e.message); }
@@ -38717,8 +38980,16 @@ function quizWatch(){
   if (!document.getElementById('content')) return;
   try {
     QT.autoFollow = LS.get('wb-act-autofollow','1') !== '0';
-    QT.es = new EventSource('/api/v2/events?since=0');
-    QT.es.addEventListener('quiz', e=>{
+    /* 2.0.41：不再自己开第二条 SSE。
+       以前这里用 since=0 另建一条长连接，浏览器里就同时挂着两条
+       （网络面板里能看到 events?since=29677 和 events?since=0），
+       每条占服务端一个线程 + 一个 socket，而且 since=0 会让服务端
+       认为客户端落后一大截、白白重算一遍变更。
+       现在直接复用 NetSync 那条，只往上挂一个 quiz 监听。 */
+    const es = (window.NetSync && NetSync.es) || null;
+    if (!es) { setTimeout(quizWatch, 800); return; }   // NetSync 还没连上，等它
+    QT.es = es;
+    es.addEventListener('quiz', e=>{
       let ev = {}; try { ev = JSON.parse(e.data||'{}'); } catch(x){ return; }
       const d = ev.data||{};
       if (d.kind !== 'submit' && d.kind !== 'publish') return;
