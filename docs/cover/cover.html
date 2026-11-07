@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:1080px;height:460px;overflow:hidden}
+  body{
+    font-family:"Microsoft YaHei UI","Microsoft YaHei","PingFang SC","Noto Sans SC",sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .stage{position:relative;width:1080px;height:460px;overflow:hidden;background:#08211d}
+
+  /* ---------- 背景：机房插画 ---------- */
+  /* f 版：新插画原尺寸铺放，前景大屏留给真机截图 */
+  .art{position:absolute;inset:0;overflow:hidden}
+  .art img{
+    position:absolute;display:block;
+    filter:saturate(1.04);
+  }
+  /* c/d/e 版：旧插画虚化成氛围 */
+  body:not(.v-f) .art img{
+    width:1460px;right:-140px;top:-160px;
+    filter:blur(10px) brightness(.40) saturate(.72);
+    transform:scale(1.03);
+  }
+
+  /* ---------- 压暗 ---------- */
+  .veil{
+    position:absolute;inset:0;
+    background:
+      linear-gradient(100deg,
+        #061a17 0%, #061a17 27%,
+        rgba(7,26,22,.97) 37%,
+        rgba(8,32,27,.90) 47%,
+        rgba(9,38,32,.72) 58%,
+        rgba(9,40,33,.54) 72%,
+        rgba(9,40,33,.46) 100%);
+  }
+  body.v-f .veil{
+    background:
+      linear-gradient(96deg,
+        rgba(5,24,20,.88) 0%,
+        rgba(6,28,24,.55) 26%,
+        rgba(7,32,27,.24) 42%,
+        rgba(7,32,27,0) 58%);
+  }
+
+  /* ---------- 光感 ---------- */
+  .glow{
+    position:absolute;inset:0;pointer-events:none;
+    background:
+      radial-gradient(430px 300px at 760px 210px, rgba(74,232,196,.13), rgba(74,232,196,0) 72%),
+      radial-gradient(700px 420px at 380px 520px, rgba(0,0,0,.40), rgba(0,0,0,0) 64%);
+  }
+
+  /* ---------- 真机截图卡片（c/d/e 版浮动卡片） ---------- */
+  .shot{
+    display:none;
+    position:absolute;top:42px;left:492px;
+    width:544px;height:348px;
+    border-radius:13px;
+    background:#0b1f1c;
+    overflow:hidden;
+    box-shadow:
+      0 0 0 1px rgba(126,244,214,.20),
+      0 0 0 2px rgba(0,0,0,.30),
+      0 30px 70px -20px rgba(0,0,0,.90),
+      0 0 92px -12px rgba(52,220,186,.20);
+  }
+  body:not(.v-f) .shot{display:block}
+  .shot img{
+    display:block;width:100%;height:100%;object-fit:cover;object-position:top left;
+    filter:brightness(.95) contrast(1.03) saturate(1.03);
+  }
+  .shot::after{
+    content:"";position:absolute;inset:0;pointer-events:none;
+    background:
+      linear-gradient(180deg,rgba(255,255,255,.12),rgba(255,255,255,0) 16%),
+      radial-gradient(120% 100% at 50% 0%,rgba(0,0,0,0),rgba(0,0,0,.10) 100%);
+  }
+
+  /* ---------- f 版：纯插画，前景显示器自带抽象看板 ---------- */
+  body.v-f .art img{
+    width:1536px;left:10px;top:-220px;
+  }
+
+  /* ---------- 文字 ---------- */
+  .content{
+    position:absolute;inset:0;
+    padding:40px 0 38px 56px;
+    display:flex;flex-direction:column;color:#fff;
+  }
+  .badge{
+    align-self:flex-start;display:inline-flex;align-items:center;
+    height:32px;padding:0 18px;
+    border:1.4px solid rgba(255,255,255,.80);border-radius:16px;
+    font-size:14px;font-weight:500;letter-spacing:1.1px;
+    color:rgba(255,255,255,.95);white-space:nowrap;
+  }
+  .title{
+    margin-top:24px;font-size:62px;line-height:1.06;
+    font-weight:800;letter-spacing:1.2px;
+    text-shadow:0 2px 20px rgba(0,0,0,.45);white-space:nowrap;
+  }
+  .title .ver{
+    font-family:"Segoe UI","Bahnschrift Light","DIN Alternate",sans-serif;
+    font-weight:300;font-size:58px;letter-spacing:3px;
+    margin-left:5px;color:rgba(255,255,255,.95);
+  }
+  body.v-f .title{font-size:62px}
+  body.v-f .title .ver{font-size:58px}
+  .sub{
+    margin-top:14px;font-size:36px;line-height:1.2;font-weight:500;
+    letter-spacing:2.6px;color:rgba(255,255,255,.94);
+    text-shadow:0 2px 16px rgba(0,0,0,.45);white-space:nowrap;
+  }
+  .line{
+    margin-top:17px;font-size:20px;line-height:1.2;font-weight:400;
+    letter-spacing:3px;color:rgba(170,238,216,.88);white-space:nowrap;
+    text-shadow:0 1px 10px rgba(0,0,0,.35);
+  }
+  .tags{
+    margin-top:auto;font-size:16px;font-weight:400;letter-spacing:.8px;
+    color:rgba(255,255,255,.80);white-space:nowrap;
+    text-shadow:0 1px 10px rgba(0,0,0,.4);
+  }
+  .tags .sep{display:inline-block;margin:0 12px;color:rgba(255,255,255,.32)}
+</style>
+</head>
+<body>
+  <div class="stage" id="stage">
+    <div class="art"><img id="art" src="" alt=""></div>
+    <div class="veil"></div>
+    <div class="glow"></div>
+
+    <!-- c/d/e 版：浮动卡片 -->
+    <div class="shot"><img id="shot" src="" alt=""></div>
+
+    <div class="content">
+      <div class="badge">开源 · 机房实用帖</div>
+      <div class="title">班级工作台<span class="ver">2.0</span></div>
+      <div class="sub">一个页面，装下一个班</div>
+      <div class="line">教师机装一次 · 全班浏览器直连</div>
+      <div class="tags">
+        6.7 万行代码<span class="sep">|</span>38 个版本<span class="sep">|</span>MIT 开源
+      </div>
+    </div>
+  </div>
+
+<script>
+  /* ================= 模式 =================
+     f（默认）：新机房插画纯景，前景显示器自带抽象看板
+     c/d/e   ：旧暗色插画虚化 + 浮动截图卡片
+  ========================================= */
+  var q = new URLSearchParams(location.search);
+  var v = (q.get('v') || 'f').toLowerCase();
+  document.body.className = 'v-' + v;
+
+  var NEW_ART = '2_35_1_wide_banner_illustratio_2026-11-07T13-18-40.png';
+  var OLD_ART = '2_35_1_wide_banner_illustratio_2026-11-07T12-55-24.png';
+  var SHOT = {
+    c: '../shots/s38/s38-11-教师端-大屏.png',
+    d: '../shots/s38/s38-04-学生端-座位表.png',
+    e: '../shots/s38/s38-02-学生端-今日.png'
+  };
+  var bust = '?v=' + v + '-' + Date.now();
+
+  var art = document.getElementById('art');
+  art.src = (v === 'f' ? NEW_ART : OLD_ART) + bust;
+
+  if (v !== 'f') {
+    document.getElementById('shot').src = SHOT[v] + bust;
+  }
+</script>
+</body>
+</html>

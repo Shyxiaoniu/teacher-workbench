@@ -7,8 +7,10 @@
     python tools/make_release.py --date 261103    # 指定日期（yyMMdd）
     python tools/make_release.py --out D:\\dist    # 指定输出目录
 
-产物：<out>/班级工作台<版本>-<yyMMdd>.zip
-包内第一层是同名目录，结构与本仓库一致（app / docker / docs + 说明文档），
+产物：<out>/班级工作台<版本>-<yyMMdd>.zip（**唯一产物**，不再产源码包；
+      下载页与在线更新认的就是这个文件名，命名规则不要动）
+包内第一层是同名目录，结构与本仓库一致（app / docker / docs / runtime + 说明文档）。
+`runtime/win-x64/python/` 是 Python 3.13.7 嵌入式运行时 —— 用户解压后无需安装 Python；
 只是**不含任何运行期数据**：真实班级、学生、成绩、上传附件、课件库、数据库、日志一律不进包。
 """
 import argparse
@@ -79,6 +81,8 @@ NOTES = """# {name} · 发行说明
 | `README.md` | 完整使用说明（项目唯一说明文档）：功能、架构、部署、建班、课堂流程、备份换机、在线更新、常见问题、许可声明 |
 | `LICENSE` | 本项目的 MIT 许可证（Copyright (c) 2026 Shyxiaoniu） |
 
+{runtime_note}
+
 ## 一点五、许可提醒（转发前请看一眼）
 
 MIT 的义务只有一条：**再分发时保留版权声明与许可全文**。所以把这个包发给同事、传到网盘、
@@ -94,8 +98,7 @@ MIT 的义务只有一条：**再分发时保留版权声明与许可全文**。
 3. 浏览器打开 `http://127.0.0.1:20020/`，按提示设置管理员账号。
 4. 学生用手机访问 `http://<这台电脑的局域网 IP>:20020/s/`。
 
-前置：Python 3.9 或更高（Windows 安装时勾选 **Add Python to PATH**）。
-若拿到的是带 runtime 的版本，无需另装 Python。
+{python_note}
 
 > macOS 提示：包内启动脚本已带可执行权限。若系统仍提示「没有权限」或拒绝打开，
 > 在终端 `cd` 到解压目录执行 `chmod +x 启动工作台.command app/启动教师端.command`；
@@ -168,7 +171,7 @@ def blocked(rel):
     return False
 
 
-def collect():
+def collect(with_runtime=True):
     out = []
     for top in INCLUDE_DIRS:
         base = os.path.join(ROOT, top)
@@ -195,6 +198,25 @@ def collect():
     for fn in INCLUDE_FILES:
         if os.path.isfile(os.path.join(ROOT, fn)):
             out.append(fn)
+    # 免安装包：把 runtime/ 一起打进去（Python 3.13 embeddable，约 20MB）。
+    # 启动脚本会优先用 runtime\win-x64\python\python.exe，用户无需装 Python。
+    if with_runtime:
+        rt = os.path.join(ROOT, "runtime")
+        if not os.path.isdir(rt):
+            raise SystemExit("打包需要 runtime/ 目录（离线包必须内置 Python 运行时）。"
+                             "请先下载 python-3.13.7-embed-amd64.zip 解压到 "
+                             "runtime/win-x64/python/ 再重试。")
+        for dirpath, dirnames, filenames in os.walk(rt):
+            dirnames[:] = [d for d in dirnames if d not in SKIP_DIR_NAMES]
+            for fn in filenames:
+                # 注意：runtime 不能走通用 blocked() —— 它会把 *.zip 当成打包产物排除，
+                # 而 embeddable 的标准库正好是 python313.zip；少了它启动就报
+                # 「Failed to import encodings module」。这里只排编译缓存。
+                if fn.lower().endswith((".pyc", ".pyo")) or fn in SKIP_FILE_NAMES:
+                    continue
+                full = os.path.join(dirpath, fn)
+                rel = os.path.relpath(full, ROOT).replace(os.sep, "/")
+                out.append(rel)
     return sorted(set(out))
 
 
@@ -216,7 +238,7 @@ def _zipinfo(arcname, mode, mtime=None):
     return zi
 
 
-def verify_release(zip_path):
+def verify_release(zip_path, with_runtime=False):
     """构建后自检：解压即用的权限必须正确，不合格就不留产物。
 
     这道闸门是「同类问题不再反复出现」的保证 —— 以后谁改了打包方式又忘了
@@ -224,11 +246,13 @@ def verify_release(zip_path):
     """
     bad = []
     total = 0
+    names = []
     with zipfile.ZipFile(zip_path) as z:
         for i in z.infolist():
             if i.is_dir():
                 continue
             total += 1
+            names.append(i.filename)
             base = i.filename.rsplit("/", 1)[-1]
             want = 0o755 if base.endswith((".command", ".sh")) else 0o644
             got = (i.external_attr >> 16) & 0o777
@@ -240,6 +264,10 @@ def verify_release(zip_path):
                            % (i.filename, oct(got), oct(want)))
             if not (i.flag_bits & 0x800):
                 bad.append("%s：文件名缺 UTF-8 标记（中文会乱码）" % i.filename)
+        # 免安装包的核心承诺：运行时必须在包里，否则用户还是要自己装 Python
+        if with_runtime and not any(
+                n.endswith("runtime/win-x64/python/python.exe") for n in names):
+            bad.append("免安装包缺少 runtime/win-x64/python/python.exe")
     if bad:
         try:
             os.remove(zip_path)
@@ -265,16 +293,23 @@ def main():
         args.out = os.path.join(ROOT, "dist")
 
     version = read_version()
+    # 命名规则保持不变（下载页 / 在线更新认这个格式），不再有源码包这一产物
     name = "班级工作台%s-%s" % (version, args.date)
     os.makedirs(args.out, exist_ok=True)
     zip_path = os.path.join(args.out, name + ".zip")
 
-    files = collect()
+    files = collect(True)
     if not files:
         raise SystemExit("没有可打包的文件")
 
     date_human = time.strftime("%Y-%m-%d")
-    notes = NOTES.format(name=name, version=version, date_human=date_human)
+    python_note = ("**本包已内置 Python 3.13.7 运行时（`runtime/win-x64/python/`），"
+                   "解压后双击启动即可，无需安装任何环境依赖。**")
+    runtime_note = ("> **免安装说明**：包内 `runtime/win-x64/python/` 是 Python 3.13.7 "
+                    "嵌入式运行时（约 20MB）。启动器会优先使用它，所以电脑上没装 Python "
+                    "也能直接运行；只有 Docker 方式才需要额外装 Docker。")
+    notes = NOTES.format(name=name, version=version, date_human=date_human,
+                         python_note=python_note, runtime_note=runtime_note)
 
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
         z.writestr(_zipinfo(name + "/发行说明.md", 0o100644),
@@ -301,7 +336,7 @@ def main():
             with open(full, "rb") as fh:
                 z.writestr(_zipinfo(name + "/" + rel, mode, mt), fh.read())
 
-    verify_release(zip_path)
+    verify_release(zip_path, True)
 
     total = sum(os.path.getsize(os.path.join(ROOT, r.replace("/", os.sep))) for r in files)
     print("版本 %s ｜ 日期 %s" % (version, args.date))

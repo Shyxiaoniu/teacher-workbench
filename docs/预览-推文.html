@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>我用 WorkBuddy 重置了班级工作台 2.0 · 推文预览</title>
+<style>
+:root{
+  --bg:#eceff3;--bg-2:#f6f7f9;--paper:#ffffff;
+  --ink:#20242a;--ink-2:#454c55;--ink-3:#8b939c;--line:#e5e8ed;
+  --brand:#0e7c6b;--brand-2:#0a5f52;--brand-soft:#e8f5f2;--warn:#b45309;
+  --shadow:0 1px 2px rgba(16,24,40,.04),0 12px 32px -12px rgba(16,24,40,.18);
+  --fs:17px;--lh:1.92;
+}
+html[data-theme="dark"]{
+  --bg:#0f1317;--bg-2:#1b2129;--paper:#181d23;
+  --ink:#e6eaef;--ink-2:#b9c2cc;--ink-3:#7c8794;--line:#272e37;
+  --brand:#3ddcbb;--brand-2:#6ff0d4;--brand-soft:#12332d;--warn:#e0a458;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 16px 40px -16px rgba(0,0,0,.7);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg);color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Segoe UI",Roboto,sans-serif;
+  -webkit-font-smoothing:antialiased;transition:background .25s,color .25s;
+}
+.topbar{
+  position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:14px;
+  padding:10px 20px;background:color-mix(in srgb,var(--bg) 82%,transparent);
+  backdrop-filter:blur(14px) saturate(1.4);border-bottom:1px solid var(--line);
+}
+.brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:14px;letter-spacing:.02em;white-space:nowrap}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--brand);box-shadow:0 0 0 4px color-mix(in srgb,var(--brand) 18%,transparent)}
+.meta{font-size:12px;color:var(--ink-3);white-space:nowrap}
+.spacer{flex:1}
+.seg{display:flex;background:var(--bg-2);border:1px solid var(--line);border-radius:9px;padding:2px;gap:2px}
+.seg button{border:0;background:transparent;color:var(--ink-2);font-size:12.5px;padding:5px 11px;border-radius:7px;cursor:pointer;font-family:inherit;transition:.16s;white-space:nowrap}
+.seg button:hover{color:var(--ink)}
+.seg button.on{background:var(--paper);color:var(--brand);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+html[data-theme="dark"] .seg button.on{background:#2a333d;color:var(--brand)}
+.layout{display:flex;gap:36px;max-width:1240px;margin:0 auto;padding:34px 24px 90px;align-items:flex-start}
+.toc{position:sticky;top:78px;width:196px;flex:none;font-size:12.5px;line-height:1.5}
+.toc h4{margin:0 0 10px;font-size:11px;letter-spacing:.14em;color:var(--ink-3);font-weight:600}
+.toc a{display:block;padding:7px 10px;margin-bottom:2px;border-radius:7px;color:var(--ink-2);text-decoration:none;border-left:2px solid transparent;transition:.15s}
+.toc a:hover{background:var(--bg-2);color:var(--ink)}
+.toc a.active{color:var(--brand);border-left-color:var(--brand);background:var(--brand-soft);font-weight:600}
+.stage{flex:1;min-width:0;display:flex;justify-content:center}
+.paper{
+  width:100%;max-width:760px;background:var(--paper);border:1px solid var(--line);
+  border-radius:14px;box-shadow:var(--shadow);padding:44px 52px 56px;
+  transition:max-width .3s cubic-bezier(.4,0,.2,1),background .25s;
+}
+body.phone .paper{max-width:414px;padding:26px 22px 40px;--fs:15.5px;--lh:1.85}
+body.phone .paper h2{font-size:18px}
+body.phone .paper figcaption{font-size:11px}
+.doc-title{font-size:27px;line-height:1.42;font-weight:800;letter-spacing:-.015em;margin:0 0 20px}
+body.phone .doc-title{font-size:21px}
+.paper .lead{
+  margin:0 0 30px;padding:14px 18px;border-radius:0 8px 8px 0;
+  border-left:3px solid var(--brand);background:var(--brand-soft);
+  font-size:15px;line-height:1.85;color:var(--ink-2);
+}
+.paper .lead p{margin:0;font-size:inherit;line-height:inherit;color:inherit}
+.paper h2{font-size:21px;font-weight:800;line-height:1.5;margin:46px 0 18px;padding-left:14px;position:relative;scroll-margin-top:80px}
+.paper h2::before{content:"";position:absolute;left:0;top:.28em;bottom:.28em;width:4px;border-radius:2px;background:linear-gradient(180deg,var(--brand),color-mix(in srgb,var(--brand) 45%,transparent))}
+.paper h2:first-of-type{margin-top:0}
+.paper h3{font-size:17.5px;font-weight:700;line-height:1.6;margin:34px 0 12px;color:var(--ink);letter-spacing:-.003em;scroll-margin-top:80px}
+.paper h3::before{content:"";display:inline-block;width:6px;height:6px;border-radius:1.5px;background:var(--brand);margin-right:9px;vertical-align:2.5px}
+.paper p{margin:0 0 1.15em;font-size:var(--fs);line-height:var(--lh);color:var(--ink-2);letter-spacing:.012em}
+.paper p strong{color:var(--ink);font-weight:700}
+.paper ul,.paper ol{margin:0 0 1.3em;padding:0;font-size:var(--fs);line-height:var(--lh);color:var(--ink-2)}
+.paper ul{list-style:none}
+.paper ul li{position:relative;padding-left:19px;margin-bottom:.5em}
+.paper ul li::before{content:"";position:absolute;left:2px;top:.72em;width:6px;height:6px;border-radius:50%;background:color-mix(in srgb,var(--brand) 55%,transparent)}
+.paper ol{list-style:none;counter-reset:step}
+.paper ol li{position:relative;padding-left:27px;margin-bottom:.62em;counter-increment:step}
+.paper ol li::before{
+  content:counter(step);position:absolute;left:0;top:.34em;width:18px;height:18px;line-height:18px;
+  text-align:center;font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;
+  color:var(--brand);background:var(--brand-soft);border-radius:50%;
+}
+.paper li strong{color:var(--ink);font-weight:700}
+.paper code{
+  font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  font-size:.88em;background:var(--brand-soft);color:var(--brand-2);
+  padding:1px 6px;border-radius:5px;word-break:break-all;
+}
+.paper pre{
+  margin:18px 0 26px;padding:14px 16px;background:var(--bg-2);border:1px solid var(--line);
+  border-radius:9px;overflow-x:auto;font-size:13.5px;line-height:1.75;
+}
+.paper pre code{background:none;padding:0;color:var(--ink-2);font-size:inherit;word-break:normal}
+.paper blockquote{
+  margin:1.5em 0;padding:14px 18px;border-left:3px solid var(--warn);
+  background:color-mix(in srgb,var(--warn) 7%,transparent);border-radius:0 8px 8px 0;
+}
+.paper blockquote p{margin:0;font-size:.94em;color:var(--ink-2)}
+.runin{margin:0 0 1.15em}
+.rule{height:1px;background:var(--line);margin:38px 0;border:0}
+.tw{overflow-x:auto;margin:22px 0 30px;-webkit-overflow-scrolling:touch;border:1px solid var(--line);border-radius:10px}
+.paper table{width:100%;border-collapse:collapse;font-size:15px;line-height:1.6;min-width:420px}
+.paper thead th{background:var(--bg-2);color:var(--ink);font-weight:700;text-align:left;padding:11px 14px;border-bottom:1px solid var(--line);font-size:14px;white-space:nowrap}
+.paper tbody td{padding:11px 14px;border-bottom:1px solid var(--line);color:var(--ink-2);vertical-align:top}
+.paper tbody tr:last-child td{border-bottom:0}
+.paper tbody tr:hover td{background:color-mix(in srgb,var(--brand) 4%,transparent)}
+body.phone .paper table{font-size:13.5px;min-width:360px}
+body.phone .paper thead th,body.phone .paper tbody td{padding:9px 11px}
+figure{margin:26px 0 30px}
+figure img{display:block;width:100%;height:auto;border-radius:10px;border:1px solid var(--line);box-shadow:0 2px 6px rgba(16,24,40,.06);cursor:zoom-in;transition:transform .2s,box-shadow .2s}
+figure img:hover{transform:translateY(-2px);box-shadow:0 10px 26px -10px rgba(16,24,40,.35)}
+figcaption{margin-top:9px;font-size:12px;color:var(--ink-3);text-align:center;letter-spacing:.03em}
+/* 封面：通栏出血到纸张边缘，不加边框阴影，避免像正文插图 */
+.paper .cover{margin:0 -52px 34px}
+body.phone .paper .cover{margin:0 -22px 24px}
+.paper .cover img{border-radius:0;border:0;box-shadow:none}
+.paper .cover img:hover{transform:none;box-shadow:none}
+.lb{position:fixed;inset:0;z-index:90;display:none;background:rgba(10,14,18,.9);align-items:center;justify-content:center;padding:28px;cursor:zoom-out}
+.lb.on{display:flex}
+.lb img{max-width:100%;max-height:92vh;border-radius:8px;box-shadow:0 24px 70px rgba(0,0,0,.6)}
+.lb .hint{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);color:#cfd6de;font-size:12px;letter-spacing:.05em}
+@media(max-width:1080px){.toc{display:none}}
+@media(max-width:640px){
+  .layout{padding:18px 12px 60px}
+  .paper{padding:26px 20px 40px;border-radius:10px;--fs:16px}
+  .doc-title{font-size:22px}.meta{display:none}
+  .topbar{padding:9px 12px;gap:8px}
+}
+@media print{
+  .topbar,.toc,.lb{display:none!important}
+  body{background:#fff}
+  .layout{padding:0;display:block}
+  .paper{border:0;box-shadow:none;max-width:none;padding:0}
+  .tw{overflow:visible}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand"><span class="dot"></span>推文 · 重置班级工作台 2.0</div>
+  <div class="meta" id="stat">—</div>
+  <div class="spacer"></div>
+  <div class="seg" id="segWidth">
+    <button data-w="760" class="on">宽屏</button>
+    <button data-w="414">手机</button>
+  </div>
+  <div class="seg" id="segTheme">
+    <button data-t="light" class="on">亮</button>
+    <button data-t="dark">暗</button>
+  </div>
+</header>
+
+<div class="layout">
+  <nav class="toc"><h4>目录</h4><div id="tocList"></div></nav>
+
+  <main class="stage">
+    <article class="paper">
+      <h1 class="doc-title">我用 WorkBuddy 花费近万积分耗时近一个月，重置了班级工作台 2.0</h1>
+
+      <figure class="cover">
+        <img src="cover/cover-1080x460.png" alt="班级工作台 2.0 封面">
+      </figure>
+
+      <div class="lead">
+        <p>上一篇写的是"一个文件，双击就能用"。<br>这一篇写的是"一个班，连上同一个地址就能用"。</p>
+      </div>
+
+      <p>一个班五十来人，一节课点一遍考勤，点到第三节就烦了。</p>
+
+      <p>这是我上一次做班级工作台的起点。</p>
+
+      <p>10 月 26 日，我发了那篇《我不会写代码，但让 AI 给我写了 2.4 万行，做了个班级工作台自己用》。后台的消息大概分三类。</p>
+
+      <p>一类问：文件在哪下？<br>一类问：能不能几个老师一起用？<br>还有一类问：学生能不能也登进来？</p>
+
+      <p>前两个我能答。第三个答不了。</p>
+
+      <p>因为那个东西是一个 HTML 文件。数据存在浏览器里，一台电脑一个人用，学生进不来。</p>
+
+      <p>所以我把它拆了，重写了一遍。</p>
+
+      <p>这是 2.0。</p>
+
+      <hr class="rule">
+
+      <h2>一、先说清楚：这不是升级，是换了个东西</h2>
+
+      <p>1.0 的定位，是"给老师一个人用的记事本"。</p>
+
+      <p>打开就能记，关掉浏览器就结束，数据在 localStorage 里，AES-256 加密，密码不存明文。这些我当时很得意，现在依然觉得是对的——对"一个人用"这个场景，它是最优解。</p>
+
+      <p>但它有三个天花板，撞上去才知道疼。</p>
+
+      <p><strong>第一，换台电脑就断了。</strong> 导出备份、拷 U 盘、再导入，能用，但麻烦。机房上课想换一台机器，得先折腾五分钟。</p>
+
+      <p><strong>第二，只有我一个人看得到。</strong> 学生不知道自己交没交、第几节签到、座位在哪。信息到我这里就断了。</p>
+
+      <p><strong>第三，所有"发放"都得靠嘴。</strong> 发一份学习单，得挨个说"打开这个网址"；发一份资料，得在群里刷屏；催作业，得拿着名单一个个 @。</p>
+
+      <p>所以 2.0 换了一副骨架：</p>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th></th><th>1.0</th><th>2.0</th></tr></thead>
+          <tbody>
+            <tr><td>形态</td><td>一个 HTML 文件</td><td>服务端 + 教师端 + 学生端</td></tr>
+            <tr><td>数据</td><td>浏览器 localStorage</td><td>服务器 SQLite，29 张表</td></tr>
+            <tr><td>谁能用</td><td>一台电脑、一个人</td><td>局域网内教师电脑 + 机房的学生电脑</td></tr>
+            <tr><td>实时</td><td>无</td><td>SSE 推送，改完学生端就变</td></tr>
+            <tr><td>断网</td><td>能用</td><td>能用（局域网，不需要外网）</td></tr>
+            <tr><td>装法</td><td>双击</td><td>双击，或 Docker 一条命令</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>一句话：<strong>1.0 是记事本，2.0 是一套小系统。但它没有变成那种要培训一下午的系统</strong>——教师端还是一条左侧导航，打开就能干活。</p>
+
+      <h3>顺便回答一个问题：为什么不直接用现成的</h3>
+
+      <p>这一年我被问得最多的一句是：ITtools、LearnSite 这些信息科技教学平台不都能用吗，为什么还要自己写一个？</p>
+
+      <p>能用，我都试过，而且都是好东西——尤其对我们信息科技这一科，它们比自己攒表格强太多。问题不在功能，在定位：<strong>它们是"上好一节课"的平台，我要的是"管好一个班"的工具。</strong></p>
+
+      <p><strong>ITtools</strong> 是一套信息科技教学辅助平台，主打"备—教—学—评"一体化：20 多个教学模块可以按课搭积木，图文页面、课堂测验、作品互评、学生网盘、指法练习都有，最实在的是操作题自动批阅——Word、PS、Python，还有计算思维那类文本通用操作题，交上来就能判。一节操作课上完，学生当堂就知道错在哪，这在以前得我一台一台机子去看。</p>
+
+      <p>我卡在哪：它天生是为"这一节课"设计的，模块都是课堂活动的积木。可我课后要算的那几笔账——这个班按节次的考勤、这次考试按班的成绩、这门课的资料按班归档——还得回到 Excel 里手工再算一遍。它不吃我这套"一个班一条线"的数据。</p>
+
+      <p><strong>LearnSite</strong> 是一款专为中小学信息技术课堂做的开源教学辅助平台，最早是温州周老师一个人写起来的，现在由上海倪老师和各地一线老师一起维护。它比我想要的还完整：学案配递进式活动，作品提交、作品互评、学生作品档案、课堂测验、打字练习、资源下载都在里面，一节课从"发任务"到"收作品"能闭环，2026 年的版本还加了网页课件活动和物联网、AI 体验。</p>
+
+      <p>我卡在哪：主要是部署。它是 .NET + SQL Server 那一套，得装在常年开着的 Windows 服务器上，我校没有这样一台机器，也没有人能长期维护数据库。至于学生端面向机房电脑这件事，跟我的场景倒是完全一致——我的课都在机房上，学生也是坐在同一台机器前操作。</p>
+
+      <p><strong>飞象老师</strong> 课堂互动做得好，抢答、随机点名都顺手。但数据在平台那一侧，讲完一节课，痕迹也就散了，回头想按班看趋势，得另外再整理一遍。</p>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>平台</th><th>定位</th><th>它擅长的（教学场景）</th><th>我卡在哪</th></tr></thead>
+          <tbody>
+            <tr><td>ITtools</td><td>信息科技教学辅助平台</td><td>20+ 教学模块按课搭建，操作题自动批阅当堂反馈</td><td>围绕"一节课的活动"组织，跨课时的班级账要另算</td></tr>
+            <tr><td>LearnSite</td><td>信息技术课堂开源教学平台</td><td>学案+递进式活动、作品提交互评、作品档案、打字练习</td><td>.NET + SQL Server 部署，长期维护顶不住</td></tr>
+            <tr><td>飞象老师</td><td>课堂互动平台</td><td>抢答、随机点名顺手</td><td>数据留在平台上，按班复盘要重做</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>所以我不是要再做一个课堂平台——上面那两个，在"上好一节课"这件事上都做得比我好。我要的是把"一个班的日常"串起来：学生坐下要签到，讲台要把任务放出去，做完了要能当场看见，交上来的文件要能按班按人归好，作业和成绩要能落回同一个班里，下次上课还得翻得出上次的记录。</p>
+
+      <p>这些事，在我这里分散在班级群、Excel、表单和课堂平台之间，一节课就要切几次窗口，还得手工把数据搬来搬去——搬的过程中一定会漏，漏了就没人补。</p>
+
+      <p>所以 2.0 不是"再多一个工具"，是把这几件事绑到一份数据上：班级和学生共用一个名单，座位、考勤、作业、成绩都引用它；讲台和学生桌面看的是同一份数据；交上来的文件按"课程 / 班级 / 学号-姓名"自动归位。</p>
+
+      <hr class="rule">
+
+      <h2>二、一页一页看</h2>
+
+      <p>这一节 12 张图，全部来自一套演示数据——姓名、电话、成绩都是编的。</p>
+
+      <p>图的顺序，就是你打开工作台之后的顺序。每张图下面，就是这一页在干什么。</p>
+
+      <p>学生端一共六个页签，先给一张总表，后面逐页说：</p>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>页签</th><th>一句话说明</th></tr></thead>
+          <tbody>
+            <tr><td>今日</td><td>签到 · 课堂学习单 · 要交的作业</td></tr>
+            <tr><td>作业</td><td>全部作业与提交状态，点一条看详情</td></tr>
+            <tr><td>资料</td><td>老师下发的资料，点一下直接打开，不用下载</td></tr>
+            <tr><td>测验</td><td>老师发给本班的检测，点开作答，按设置显示答案与分数</td></tr>
+            <tr><td>座位</td><td>座位表，讲台固定在上方，高亮自己的位置</td></tr>
+            <tr><td>打字</td><td>闯关练打字、赢星星、孵宠物、上排行榜</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>12 张图里，学生端拍了 4 张——今日、作业、资料、座位。测验和打字在第四节单独讲。</p>
+
+      <h3>① 登录</h3>
+
+      <figure>
+        <img src="shots/app/00-login-teacher.png" alt="教师登录">
+        <figcaption><b>图 1</b>　教师端登录页</figcaption>
+      </figure>
+
+      <p>一个地址，两个身份：老师走 <code>/teacher/</code>，学生走 <code>/s/</code>。</p>
+
+      <p>教师登录要账号密码（<strong>账号不是自己注册的，得由管理员在 <code>/admin</code> 里建</strong>），忘了可以走密保重设，或者在服务器上跑一条命令重置。底下那行小字是给学生的提示——他们不用注册，用老师发的密码就能进。</p>
+
+      <h3>② 首页</h3>
+
+      <figure>
+        <img src="shots/app/01-home.png" alt="首页">
+        <figcaption><b>图 2</b>　教师端首页</figcaption>
+      </figure>
+
+      <p>进门第一屏。</p>
+
+      <p>最上面是"我的班级"：三个班，每个班一张卡，点"座位表"直接跳过去。</p>
+
+      <p>中间四个数：班级 3、学生 120、本周德育加分 +30、扣分 −7。</p>
+
+      <p>下面是今日课程（周二两节信息科技，第 1 节 08:00、第 2 节 08:55）、待办概览（4 项，已完成 0 项）、今日待办（4 项未完成，1 项逾期标红）。</p>
+
+      <p>最底下是学生入口：一条网址加一个二维码，直接投屏出去，学生在机房那台机器上照着输就能进。</p>
+
+      <h3>③ 座位</h3>
+
+      <figure>
+        <img src="shots/app/02-seats.png" alt="座位表与课堂签到">
+        <figcaption><b>图 3</b>　座位表与课堂签到</figcaption>
+      </figure>
+
+      <p>每天打开最多的就是这一页。</p>
+
+      <p>顶部是"课堂签到 · 第 4 节 11:05"，右边可以切班级、点"结算本节"。</p>
+
+      <p>再下面一排标签：全部 40、已签到 28、未签到 4、病假 4、事假 4。点一下只剩那一类人，未签到的 4 个名字直接列在下面。</p>
+
+      <p>座位格上，每个学生有姓名、学号、小组徽标，右上角是本节的考勤状态（到 / 病 / 事 / 未），有的还挂着德育分。</p>
+
+      <p>工具条上那几个按钮：清空当天考勤、排座设置、框选分组、小组面板、清空全部座位、导出。</p>
+
+      <p><strong>框选分组</strong>是我最得意的功能，完整保留了：按住鼠标拖一个框，12 个座位一起选中，起个组名，第 7 组当场生成，座位上的组徽标跟着换色，去分组页已经躺在里面。从框选到分组完成，十秒。</p>
+
+      <p><strong>考勤也不用点。</strong> 1.0 里谁迟到、谁请假、谁没来，我一个个点；五十来人一节课点一遍，点到第三节就烦了——开头那句话就是从这来的。</p>
+
+      <p>2.0 把判定搬到了服务端，规则写死：</p>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>状态</th><th>判定</th></tr></thead>
+          <tbody>
+            <tr><td>出勤</td><td>本节时间窗内登录（开始 5 分钟内）</td></tr>
+            <tr><td>迟到</td><td>超过开始 5 分钟才登录</td></tr>
+            <tr><td>缺勤</td><td>开始 15 分钟仍未登录且未请假，自动记录</td></tr>
+            <tr><td>病假 / 事假</td><td>教师手动登记，优先级最高，不被签到覆盖</td></tr>
+            <tr><td>🔒 强制</td><td>教师任意指定，学生再签到也不改写</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>还有几个当时没想到、后来必须补的细节：</p>
+
+      <ul>
+        <li>签到窗是"上一节下课 +1 分钟 ~ 本节下课"，当天第一节留课前 15 分钟；已经下课了不能补签；</li>
+        <li>课间十分钟按"下一节有排课"归属，学生提前到机房不算迟到；</li>
+        <li>本班这一节没排课，不产生考勤——防止"假全勤"；</li>
+        <li>缺勤之后又到堂签到，自动改判迟到，留痕。</li>
+      </ul>
+
+      <p>图里那排标签（已签到 28 / 未签到 4 / 病假 4 / 事假 4）就是这些规则跑出来的结果。点一个学生，面板里可以直接标病假、事假，或者强制设定本节（🔒 标记，学生再签到也不改写，直到你解除）。下课点"结算本节"，这一节就落库。</p>
+
+      <p>这些东西写进代码，比写在班规里管用。</p>
+
+      <h3>④ 课表</h3>
+
+      <figure>
+        <img src="shots/app/03-timetable.png" alt="课表">
+        <figcaption><b>图 4</b>　教师端课表</figcaption>
+      </figure>
+
+      <p>第 10 周、本周、11 月 2 日到 11 月 8 日，上面可以翻周。</p>
+
+      <p>节次一行一行排，周一到周五横着铺。上午 4 节、下午 4 节，每格显示科目、班级、老师和地点。</p>
+
+      <p>周三第 3 节那个格子被描了红框，右上角一个"▲1"——同一个时段给同一个老师排了两个班，它自己会算出来。</p>
+
+      <h3>⑤ 作业</h3>
+
+      <figure>
+        <img src="shots/app/06-homework.png" alt="作业收交">
+        <figcaption><b>图 5</b>　教师端作业收交</figcaption>
+      </figure>
+
+      <p>四张统计卡：8 份作业、平均提交率 27%、待收 21 人次、已交 87 人次。</p>
+
+      <p>左边是提交率趋势（近 8 周、按周平均），右边是整体状态构成的环图：已交 74、迟交 8、订正中 5、免交 3、未交 21。</p>
+
+      <p>再往下可以按类型筛（书面 / 实践 / 口头）、按状态筛（有未交 / 已交齐）、按时间筛（进行中 / 已截止）。</p>
+
+      <p>每份作业一张卡：标题、发布与截止时间、提交进度条、已交 / 未交人数。右上角是"剩 6 天"或者"已截止"。</p>
+
+      <h3>⑥ 成绩</h3>
+
+      <figure>
+        <img src="shots/app/07-scores.png" alt="成绩">
+        <figcaption><b>图 6</b>　教师端成绩</figcaption>
+      </figure>
+
+      <p>最上面是考试卡片，一场考试一张：科目标签、发布状态、已录入人数。</p>
+
+      <p>中间一排数字：40 人参考、平均分 229.4 / 300、最高 268 / 最低 187、及格率 100%、优秀率 13%、需特别关注 1 人。</p>
+
+      <p>下面是分数段分布柱状图，最高那根 24 人，第二根 11 人。</p>
+
+      <p>右上角那几个按钮：新建考试、科目设置、导入成绩、分析报告（筛选 · 对比）、导出成绩单。</p>
+
+      <h3>⑦ 班级</h3>
+
+      <figure>
+        <img src="shots/app/09-classes.png" alt="班级管理">
+        <figcaption><b>图 7</b>　教师端班级管理</figcaption>
+      </figure>
+
+      <p>班级页是五个页签：班级信息 / 进度 / 值日 / 分组 / 德育。</p>
+
+      <p>1.0 里这是四个独立模块，现在收进一个页面——它们都是"看一眼就走"的东西，不值得各占一个导航项。</p>
+
+      <p>每个班一张卡：班名、教室、学生数、已排座人数、小组数。按钮是座位表、学生名单、分组、编辑班级、导入名单、导出名单、清空座位、删除班级。</p>
+
+      <h3>⑧ 打字</h3>
+
+      <figure>
+        <img src="shots/app/08-typing.png" alt="打字">
+        <figcaption><b>图 8</b>　教师端打字配置页</figcaption>
+      </figure>
+
+      <p>这是教师端的配置页，不是学生玩的界面。</p>
+
+      <p>一个开放开关：开了，学生端"今日"和底部导航立刻出现"打字"入口；关了，入口消失，但成绩和宠物都留着。</p>
+
+      <p>下面选中文词库的年级（一到九年级），只影响"中文词语"那一章的范围。</p>
+
+      <p>右边是参与统计：每个班已练多少人、累计多少星、最快多少 KPM、通关多少关。下面是班级排行榜，按本周星光 / 总星 / 手速三个榜切换。</p>
+
+      <h3>⑨ 学生端 · 今日</h3>
+
+      <figure>
+        <img src="shots/s38/s38-02-学生端-今日.png" alt="学生端今日">
+        <figcaption><b>图 9</b>　学生端「今日」页（PC 界面）</figcaption>
+      </figure>
+
+      <p>学生在机房电脑上打开 <code>/s/</code> 就是这一页，不装 App，不用注册，输一次网址就进去了。下面四张学生端截图都是机房 PC 界面。</p>
+
+      <p>左侧是页签：今日、作业、资料、测验、座位、打字。</p>
+
+      <p>顶上三张卡：今天 3 份资料、0 项待交作业、我的座位在 1 排 1 列。</p>
+
+      <p>往下是签到卡："第 3 节签到，已签到"。迟到与否是服务端按课表时间算的，不是学生自己选的。</p>
+
+      <p>再往下是打字冒险岛的入口；最底下左右两块，左边是本课资料——老师当节下发的文件直接列在这，右边是待交作业。</p>
+
+      <h3>⑩ 学生端 · 作业</h3>
+
+      <figure>
+        <img src="shots/s38/s38-03-学生端-作业.png" alt="学生端作业">
+        <figcaption><b>图 10</b>　学生端「作业」页（PC 界面）</figcaption>
+      </figure>
+
+      <p>顶上两笔数：8 份作业、已完成 8 份。</p>
+
+      <p>列表一条一份：科目和标题、截止日期，右边是状态——已提交 · 待批改、已批改。</p>
+
+      <p>学生不用再问"我交了没"。</p>
+
+      <h3>⑪ 学生端 · 资料</h3>
+
+      <figure>
+        <img src="shots/s38/s38-05-学生端-资料.png" alt="学生端资料">
+        <figcaption><b>图 11</b>　学生端「资料」页（PC 界面）</figcaption>
+      </figure>
+
+      <p>老师下发的资料，按课程分组，顶上两笔数：1 个分组、3 份文件。</p>
+
+      <p>这一页早一版叫"课程"，2.0.38 改成了"资料"——只列老师下发的，不再显示课表里的科目。课表（第几节上什么）那是给老师排课用的，学生知道下一节上机房就够了。</p>
+
+      <p>每个文件右边一个"预览"，点开在线看，不用下载，也不占学生电脑的磁盘；网页类的直接"打开"，还会自动带上学生的学号姓名。</p>
+
+      <h3>⑫ 学生端 · 座位</h3>
+
+      <figure>
+        <img src="shots/s38/s38-04-学生端-座位表.png" alt="学生端座位表">
+        <figcaption><b>图 12</b>　学生端「座位」页（PC 界面）</figcaption>
+      </figure>
+
+      <p>整间教室的座位表，讲台固定在上方，自己那格高亮（图里是第 1 排第 1 列）。</p>
+
+      <p>有个细节值得说：老师端可以把讲台设在上方或下方，学生端统一翻到上方显示，座位号仍然和老师那张表一致。</p>
+
+      <p>左侧数字是第几排，顶部数字是第几列，格子左下角是座位号。图例里标了班干部和组长，右下角还能看到全班 36 人都在自己的位置上。</p>
+
+      <p>四页看下来，学生端只有一个原则：只给本班、本人。</p>
+
+      <p>座位表是唯一会下发同班同学姓名的接口——只给姓名、学号、座位号、小组、班干部职务，<strong>不含电话、成绩、内部 id，也不带考勤状态</strong>。</p>
+
+      <p>手机号、家长信息、别人的成绩，在服务端就被裁掉了。</p>
+
+      <hr class="rule">
+
+      <h2>三、15 个模块，一个一个对</h2>
+
+      <p>这是这篇文章最实在的部分。上一篇里我列了 15 个模块，这次挨个说它们去哪了、变成了什么。</p>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>1.0 模块</th><th>2.0 在哪</th><th>具体变化</th></tr></thead>
+          <tbody>
+            <tr><td>座位表</td><td>常用 · 座位</td><td>拖拽排座、框选分组全保留；新增实时签到、按状态筛人、强制考勤、结算本节</td></tr>
+            <tr><td>考勤</td><td>并进「座位」</td><td>不再手点状态，服务端按课表判定：5 分钟内出勤、超 5 分钟迟到、15 分钟没到缺勤，请假优先</td></tr>
+            <tr><td>课表</td><td>常用 · 课表</td><td>新增节次时间重叠校验、同老师撞课标红、星期栏吸顶常驻</td></tr>
+            <tr><td>作业</td><td>教学 · 作业</td><td>新增提交率趋势、状态构成环图、导出收交明细；学生端能自己看交没交</td></tr>
+            <tr><td>成绩</td><td>教学 · 成绩</td><td>新增批量粘贴录入、及格率 / 优秀率、分数段分布、分析报告、从测验一键导入</td></tr>
+            <tr><td>德育</td><td>班务 · 班级（德育页签）</td><td>记分逻辑没变，数据从本机搬到服务端</td></tr>
+            <tr><td>分组</td><td>班务 · 班级（分组页签）</td><td>框选分组保留，组徽标、组内角色、成员管理都在</td></tr>
+            <tr><td>值日</td><td>班务 · 班级（值日页签）</td><td>分区、岗位、轮换保留</td></tr>
+            <tr><td>学习进度</td><td>班务 · 班级（进度页签）</td><td>保留</td></tr>
+            <tr><td>学生档案</td><td>班务 · 学生</td><td>新增账号状态、批量重置密码、成长报告、通讯录导出</td></tr>
+            <tr><td>班级管理</td><td>班务 · 班级</td><td>变成五个页签的统一入口</td></tr>
+            <tr><td>待办</td><td>其他 · 待办</td><td>新增今天 / 本周 / 全部、截止日、逾期提醒</td></tr>
+            <tr><td>工具箱</td><td>其他 · 工具</td><td>点名、计时器、番茄钟、自定义链接二维码；<strong>截图工具删了</strong>（下面说为什么）</td></tr>
+            <tr><td>系统设置</td><td>顶栏 · 设置</td><td>新增模块开关、密保、数据备份、在线更新</td></tr>
+            <tr><td>（首页 / 总览）</td><td>常用 · 首页</td><td>1.0 没有独立首页；2.0 新增：班级概览、今日课程、本周德育、待办、学生入口二维码</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>上面这张表是总览，功能细节在上一节的图里都对着说过了。这里只补一件表里写不下的事——我删了一个功能。</p>
+
+      <h3>工具箱：我删了一个功能</h3>
+
+      <p>截图工具，2.0.32 删的。</p>
+
+      <p>原因很实在：局域网 <code>http://192.168.x.x</code> 下，浏览器根本不给屏幕捕获权限，只有 <code>127.0.0.1</code> 或 <code>https</code> 能用。老师在机房用 IP 打开，点截图就是"不支持"。</p>
+
+      <p>一个大部分时候用不了的功能，不如没有。</p>
+
+      <p>后来还删掉一个："学习单整页 HTML 存档"。以前学生一提交，系统会把整页 DOM 克隆一份存成 html。后来发现：真正有用的是学生交的那个文件，页面快照除了占空间没别的用。</p>
+
+      <p><strong>功能不是越多越好。删掉用不上的，剩下的才转得动。</strong></p>
+
+      <hr class="rule">
+
+      <h2>四、2.0 新长出来的五件事</h2>
+
+      <p>前面那 12 张图里没出现的，就是这一节要讲的——它们要么是后台逻辑，要么是还没有合适的截图。</p>
+
+      <h3>1. 大屏和学习单：一节课跑通了</h3>
+
+      <p>这是 2.0 最费劲的一块，也是最值的一块。</p>
+
+      <p>流程是这样的：</p>
+
+      <ol>
+        <li>教师在"大屏"页选课程 → 选学习单 → 按班下发；</li>
+        <li>学生端"今日"对应的课立刻出现"进学习单"；</li>
+        <li>学生点开，服务端验身份、验班级、验签到，签一张票，302 到学习单页；</li>
+        <li>学生作答 / 传文件，提交；</li>
+        <li>大屏实时出现：谁交了、交到哪个窗口。</li>
+      </ol>
+
+      <p>换成上课的视角，是这样三段：</p>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>阶段</th><th>我做什么</th><th>学生看到什么</th></tr></thead>
+          <tbody>
+            <tr><td>课前 2 分钟</td><td>班级下拉选到本节课的班，课程下拉选到对应文件夹，学习单自动下发</td><td>"今日"页的"本课资料"里多出一条，带"打开"</td></tr>
+            <tr><td>课中</td><td>投屏停在大屏页，看四个统计卡（本班已提交 / 未交人数 / 提交率 / 班级总人数）和任务窗口</td><td>点"打开"就进作答页，学号姓名已经带好，不用重填</td></tr>
+            <tr><td>讲解</td><td>点某个窗口的"设为大屏"，那一份放大到讲台屏</td><td>抬头能看到自己的作品被投上去</td></tr>
+            <tr><td>下课</td><td>点"清空"，本节归档，下一节重新开始</td><td>页面回到干净状态，历史记录不丢</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>统计口径也定死了几条，每一条都是踩过坑之后加的：</p>
+
+      <ul>
+        <li><strong>提交率按"本班应交人数"算</strong>，不是按年级或全校。36 人的班交了 9 份就是 25%，不会因为别的班交得多而虚高；</li>
+        <li><strong>同一个学生只算最后一次提交</strong>。学生反复改、反复交，不会把提交数刷到 40 去；</li>
+        <li><strong>按班隔离</strong>。七(1)班的大屏只收七(1)班的提交，同名同姓跨班也不会串——判定先看班级，再看学号或姓名；</li>
+        <li><strong>只统计"提交"，不算正确率</strong>；</li>
+        <li><strong>清空按"课程 + 活动"清</strong>，只清这一节，不动别的课，也不动已经归档的文件。</li>
+      </ul>
+
+      <p>这块以前不是大屏，是 QuickForm。</p>
+
+      <p>QuickForm 是我用得最久的一个工具：收表单、做问卷、导出结果，体验很顺，1.0 的时候我干脆把它接进了自己的工作台，学习单就用它收。但它只知道"有人交了一份表"——不知道这个班 36 个人里谁没交，不知道交上来那份对的是哪台机器前的哪个人，更不知道谁这节课压根没签到。每收回一批，我还得拿名单一条条对：谁没交、谁交了两遍、哪个文件名对不上人。</p>
+
+      <p>上面那几条统计口径，就是那会儿一次次对出来的。所以 2.0 干脆把收件长进了大屏：提交一落库就带着票里的学号和班级，同一个学生只留最后一次，提交率按本班应交人数算。收完就能讲，不用再对一遍名单。</p>
+
+      <p>这里有个设计我当时纠结了很久：<strong>数据服务地址、任务号、学生身份，一个都不出现在学生页面上。</strong></p>
+
+      <p>学生看到的链接是 <code>/g/act/一串id</code>，不是数据库地址，也不是自己的学号。票只存在内存里，12 小时有效，重启就失效。提交时服务端用票里的身份覆盖页面填的学号——防冒名。</p>
+
+      <p>签到闸门也在这一层：今天一笔有效签到都没有，学习单打不开，先回去签到。</p>
+
+      <h3>2. 资料库：文件终于有地方放了</h3>
+
+      <p>这一页暂时没有配图。界面还在调，我没截到满意的，先用文字说。</p>
+
+      <p>1.0 没有文件管理。课件在电脑文件夹里，学生在群里传，收上来的作业在下载文件夹堆着。</p>
+
+      <p>2.0 的资料库是"目录即数据"：</p>
+
+      <pre><code>课件根 / 课程 / 子文件夹 / 文件</code></pre>
+
+      <p>老师用资源管理器直接拷文件进去，刷新就能看到；拷走整个目录就是完整备份。左边树、右边列表，三种视图，网页文件可以"设为学习单"。</p>
+
+      <p>更关键的是<strong>自动归档</strong>。学生交了文件，服务端立刻复制一份到：</p>
+
+      <pre><code>&lt;课程&gt;/&lt;班级&gt;/&lt;学号-姓名&gt;/&lt;原文件名&gt;
+例：信息科技/七1班/20250108-张三/作业.docx</code></pre>
+
+      <p>不用老师打开大屏，不用手动点归档。同名不同内容存成 <code>作业 (2).docx</code>，永不覆盖；纯数据提交不建文件夹。</p>
+
+      <p>2.0 早期不是这么做的：归档靠前端在大屏刷新时顺带跑，老师关掉页面就永远不归档——"学生说交了、资料里没有"就是这么来的。现在改成提交时服务端做，才算真修掉。</p>
+
+      <h3>3. 测验：七种题型，答案不下发</h3>
+
+      <p>2.0.38 刚加的。</p>
+
+      <p>单选、多选、填空、判断、连线、简答、图片上传，七种题型。逐题设分值和答案，按班下发，可以设开放与截止时间、提交次数上限、是否允许多次提交。</p>
+
+      <p>两个开关是分开的：<strong>提交后是否立即显示答案</strong>、<strong>是否立即显示分数</strong>。都在服务端出网前裁剪——学生拿到的试卷里，正确答案、分值、配对关系这些字段根本不存在，连线题只给打乱后的右项。</p>
+
+      <p>判分在服务端。客观题自动判，简答和图片上传要人工批阅，没批就是"待批阅"，不冒充 0 分。</p>
+
+      <p>三处入口分工也定死了：</p>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>入口</th><th>干什么</th><th>不干什么</th></tr></thead>
+          <tbody>
+            <tr><td>大屏</td><td>实时收件看板：谁交了、交到哪个窗口</td><td>不显示答案分数，不算正确率</td></tr>
+            <tr><td>测验页</td><td>唯一的逐题正确率、按班成绩分析</td><td>不另存一份提交、不另算一套分</td></tr>
+            <tr><td>成绩页</td><td>选测验 + 班级 → 换算百分制 → 写成一场考试</td><td>不绕过统计口径直接读原始答卷</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>三处读同一份提交，同一次发布同一个学生只算最后一次。</p>
+
+      <p><strong>为什么大屏不算正确率</strong></p>
+
+      <p>刚做出来的时候我也想把正确率塞进大屏，试过之后放弃了。</p>
+
+      <p>上课的时候我要的是"还有 4 个人没交，我可以再等两分钟"，不是"这道题全班正确率 62%"。后者是把课上成教研，前者才是上课。</p>
+
+      <p>对错和分数留给测验页和成绩页。三处看同一份提交，但各回答各的问题。</p>
+
+      <h3>4. 打字冒险岛</h3>
+
+      <p>上一节第 ⑧ 张图是教师端的开关，学生端玩的是另一套东西。</p>
+
+      <p>信息科技课有个绕不开的起点：<strong>很多七年级学生不会用键盘</strong>，两只食指戳，眼睛在键盘和屏幕之间来回找。这个基础不打掉，后面讲文字处理、讲编程，全都在补打字。</p>
+
+      <p>可打字讲是讲不会的。我说一百遍"手指放在 F 和 J 上"，不如让他自己敲二十分钟。问题是怎么让他愿意敲。</p>
+
+      <p>打字冒险岛把"练指法"拆成能一关一关过的小目标，八个篇章：</p>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>篇章</th><th>练什么</th><th>为什么排在这个位置</th></tr></thead>
+          <tbody>
+            <tr><td>键位熟悉</td><td>基准键 F、J 和周围几个键</td><td>先把手放对地方，不求快</td></tr>
+            <tr><td>字母位置</td><td>26 个字母的实际位置</td><td>手位固定之后再扩到全键盘</td></tr>
+            <tr><td>英文单词</td><td>成词输入</td><td>从"按键"过渡到"打词"</td></tr>
+            <tr><td>大小写与标点</td><td>Shift、逗号句号引号</td><td>加了新手指，速度会掉，得单独练</td></tr>
+            <tr><td>数字小键盘</td><td>右侧数字区</td><td>换一只手，独立成章</td></tr>
+            <tr><td>中文词语</td><td>拼音输入</td><td>换输入法，等于从头再练一次</td></tr>
+            <tr><td>中英混排</td><td>中英切换</td><td>真实文档的样子</td></tr>
+            <tr><td>文章阅读</td><td>整段连续输入</td><td>到这一步才谈速度和耐力</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>七年级一个学期能走完前四章就不错了，后面几章是给学得快的学生留的。</p>
+
+      <p>每章每卷 10 关，第 10 关 BOSS，卷号无限递增。每关内容随机生成，防止背顺序——背下第 3 关那串字母，换一局就没用了。</p>
+
+      <p>逐字变色、实时速度和准确率、三星结算；指法高亮跟着按键走，大写头顶有 ⇧ 角标，错字红标但课文行永远显示原文（改掉的话，学生就不知道自己在打什么了）。</p>
+
+      <p>星星有两个用处：换道具（指法提示卡、加时卡、容错卡、加倍卡，默认都没有），和攒着解锁装扮、孵宠物。牧场里有 12 只原创宠物，BOSS 首通掉蛋，装扮按累计星数一只只开。</p>
+
+      <p>这套东西看着像游戏，其实解决一个很朴素的问题：<strong>打字练习本身没有成就感</strong>。多打一百个字不会让任何人兴奋，但多一颗星会。</p>
+
+      <p>成绩由服务端按公式重算，不信任客户端；老师关掉开关后接口直接拒绝，不是把按钮藏起来而已。</p>
+
+      <h3>5. 多老师、备份、在线更新</h3>
+
+      <p>这三件不是课堂功能，但没有它们，这东西只能自己玩。</p>
+
+      <p><strong>多教师账号隔离</strong>：管理员控制台管账号，每个教师一个工作区（<code>accounts/&lt;id&gt;/</code>），数据互不可见。资料可以共享——勾选目标教师，服务端复制一份过去，不动源文件。老单账号数据升级时映射成 <code>default</code>，零迁移。</p>
+
+      <p><strong>加密备份</strong>：设置里一键导出 <code>.cwbackup</code>，设一个 ≥6 位的备份密码，内含 29 张表 + 配置 + 口令哈希 + 打字成绩 + 学生作品附件。备份文件本身是密文，换电脑导入要输同一个密码。</p>
+
+      <p>导入有两道拦截：空表、或本机有数据而备份 0 行 → 拒绝；本机 ≥5 行而备份 &lt;40% → 二次确认。失败不改动任何数据。</p>
+
+      <p><strong>在线更新</strong>：每 24 小时查一次版本，发现新版提示，下载 → 校验 sha256 → 换装 → 重启。失败自动回滚，也能手动回滚。更新只替换程序文件，数据原地保留。</p>
+
+      <hr class="rule">
+
+      <h2>五、数据还在你自己的机器上</h2>
+
+      <p>上一篇我专门写了一节"数据不出我的电脑"。2.0 这句话要改一下：</p>
+
+      <p><strong>数据不出你自己的机器。</strong></p>
+
+      <p>只不过这台机器从"你的电脑"变成了"你的 NAS / 你的小主机 / 机房里那台常开的电脑"。</p>
+
+      <ul>
+        <li>业务数据在一个 SQLite 文件里，29 张表；课件、学生附件、试卷文件在旁边的目录；</li>
+        <li>学生端只拿得到"本班 + 本人"的字段投影，手机号、家长信息、他人成绩在服务端就裁掉；</li>
+        <li>试卷和答案不进同步快照，否则等于把答案发给学生；</li>
+        <li>备份文件是 AES 密文，密码不存明文；</li>
+        <li>不需要任何第三方云服务，不联网也能跑。</li>
+      </ul>
+
+      <p>代价是：你得有一台常开的机器，得自己做备份，得自己放行防火墙端口。</p>
+
+      <p>这就是"数据自主"的真实价格。我觉得值，但你得知道。</p>
+
+      <h3>还有几句实话，一起说完</h3>
+
+      <p>讲"它能干什么"很容易，讲"它不能干什么"才见真心。所以补在这里：</p>
+
+      <p><strong>它需要一台常开的机器。</strong> NAS、小主机、机房那台不关的电脑都行。但它不是云服务，你关机，学生就进不来。</p>
+
+      <p><strong>它只在局域网里。</strong> 不出公网，不需要域名和备案，代价是学生必须连同一个 Wi-Fi。机房如果开了 AP 隔离，设备之间互相不通，得找网管关掉。</p>
+
+      <p><strong>它不替你做判断。</strong> 谁能请假、谁该扣分、哪份作业算迟交，规则写死在代码里，但边界情况还得人来定。工具只保证"改了就记上"，不保证"改得对"。</p>
+
+      <p><strong>它是按机房电脑设计的。</strong> 学生端面向 1366×768 以上的机房屏幕，一节课 40 分钟，学生在同一台机器上签到、看资料、交文件。手机能打开，但排版会挤——我的课都在机房上，就没往这上面花时间。</p>
+
+      <p><strong>一个班用很顺，一所学校用要慎重。</strong> 我没做过几十个班、几千人的压力测试，也不知道并发高了会怎样。它的定位就是"一个老师带着几个班"，别拿它当校级平台。</p>
+
+      <p>知道这些再决定要不要装，比看完功能就动手更靠谱。</p>
+
+      <hr class="rule">
+
+      <h2>六、这一个月，我主要在修什么</h2>
+
+      <p>上一篇说"AI 写了 2 万多行"。这次重写完，<code>app/</code> 下是 <strong>46 个源码文件、6.7 万行</strong>。</p>
+
+      <p>版本号已经走到 <strong>2.0.38</strong>，中间三十多个小版本，几乎每次都是"改一处、验一处"。</p>
+
+      <p>听起来很顺，实际上大部分时间在修那种"看起来不是 bug 的 bug"。挑四个讲。</p>
+
+      <p><strong>① 弹窗突然变成空白</strong></p>
+
+      <p>管理员控制台点"重置密码"，弹窗只剩一个壳，正文全空。</p>
+
+      <p>查了半天，代码没问题。真正的原因是：弹窗类名用了 <code>ad-*</code>（<code>.ad-ov</code> / <code>.ad-body</code> / <code>.ad-btn</code>），uBlock、AdBlock 这类插件会把 <code>[class^="ad-"]</code> 当成广告块 <code>display:none</code>。</p>
+
+      <p>卡片和按钮还在，中间的正文和输入框被隐藏了。</p>
+
+      <p>改名的改法很土：全部换成 <code>wbd-*</code>。但从那以后我知道，<strong>前端类名也要避开广告拦截器的黑名单</strong>。</p>
+
+      <p><strong>② macOS 更新完，双击没反应</strong></p>
+
+      <p>Windows 上打包，macOS 上解压，<code>.command</code> 文件的权限从 755 变成 644，双击就是"没有权限打开"。</p>
+
+      <p>根因在 zip：<code>ZipInfo</code> 默认 <code>create_system = 0</code>（FAT/MS-DOS），解压器看到"DOS 文件系统"就忽略 Unix 权限位。</p>
+
+      <p>修法是写 <code>create_system = 3</code> + <code>external_attr = mode &lt;&lt; 16</code>，构建完再自检一遍，权限不对直接让构建失败，不产出坏包。</p>
+
+      <p><strong>③ Windows 上重启服务，服务全没了</strong></p>
+
+      <p>自动更新完点"重启"，结果两个进程都没了。</p>
+
+      <p>因为 Windows 的 <code>os.execv</code> 不是 Unix 的"原地换映像"，而是"先起新进程、再退旧进程"。新进程启动时探测端口，旧进程还在监听 → 判定"已有一个实例在运行" → 新进程直接退出；旧进程随后也退。</p>
+
+      <p>修法：重启前先 <code>server_close()</code> 释放监听，给新进程带 <code>WB_RESTARTING=1</code> 标记，端口被占也只等它释放（最多 8 秒），不当成重复启动。</p>
+
+      <p><strong>④ 导入 8MB 备份，页面卡死 15 秒</strong></p>
+
+      <p>局域网 <code>http://</code> 下 <code>crypto.subtle</code> 不可用，AES 解密只能用纯 JS 实现，速度 0.54 MB/s。8MB 要 14.9 秒，全程同步占用主线程，页面定格。</p>
+
+      <p>改成按 64KB 分片解密，每片让出主线程（约 120ms），带进度条。总耗时只多 5%，但界面全程能点。</p>
+
+      <p>顺带确认了一件事：<strong>服务端从来不是瓶颈</strong>（导入 1000 行 0.13 秒）。以后再遇到"导入慢"，先测前端解密，别去改数据库。</p>
+
+      <p>还有一堆小的：学生上传的文件名变成 <code>ä½œä¸š.txt</code>（编码三重转错，单独写了个 <code>fix_filename()</code>）；归档路径多拼了一层 <code>activity/activity/</code>；学习单身份在页面上显示两遍；资料里删个文件就被弹回课程根目录……</p>
+
+      <p>这些东西不会出现在功能列表里，但它们决定了一个东西"能不能每天用"。</p>
+
+      <hr class="rule">
+
+      <h2>七、三条经验，比上次更贵</h2>
+
+      <p>上一篇我给了三条：要求写到细节、规矩提前立死、一次只做一个模块。</p>
+
+      <p>这次重写，三条都还在，但要各加一句。</p>
+
+      <p><strong>① 先定数据模型，再谈界面</strong></p>
+
+      <p>1.0 是"页面驱动"：想到一个模块，画一个页面，数据塞进 localStorage。</p>
+
+      <p>2.0 不行。29 张表、三个端、实时同步，字段一改，三处全崩。</p>
+
+      <p>所以这次我学乖了：先把"班级 / 学生 / 座位 / 考勤 / 作业 / 成绩"这些实体的关系画清楚，谁是主键、谁引用谁、删除时谁跟着删，定完了再让 AI 写界面。</p>
+
+      <p>界面可以改，数据模型改一次要脱一层皮。</p>
+
+      <p><strong>② 边界比功能重要</strong></p>
+
+      <p>"学生能看到什么"这个问题，比"再加一个功能"重要十倍。</p>
+
+      <p>2.0 里每一处学生接口都要过一遍投影：这个字段该不该给他？给了会不会顺带泄露别人？关掉模块后接口是不是真的 403？</p>
+
+      <p>试卷不进同步、座位表不带电话、提交用票里的身份覆盖页面填的学号——这些都是边界，不是功能。</p>
+
+      <p>功能漏了能补，边界漏了是事故。</p>
+
+      <p><strong>③ 验收必须真机，不能只看代码</strong></p>
+
+      <p>AI 说"已修复"的时候，通常是真的改了代码，但不等于真的好了。</p>
+
+      <p>这次每个版本我都跑一遍真机验收：登录走真实表单、hash 路由加 <code>?v=N</code> 防缓存、截图存证。53 张截图一轮，登录页 401 是已知噪音。</p>
+
+      <p>听起来很笨，但它拦住过"接口返回 200 但页面没变"、"改了样式但被缓存"、"本地好使部署后 404"。</p>
+
+      <p><strong>AI 写得快，验收得慢。慢的那一步不能省。</strong></p>
+
+      <hr class="rule">
+
+      <h2>八、开源了，直接拿</h2>
+
+      <p>项目用 MIT 许可证开源，仓库里没有任何真实班级、学生、成绩数据，克隆下来是一套空白工作台。</p>
+
+      <p><strong>仓库地址：</strong></p>
+
+      <ul>
+        <li>Gitee（国内快）：<code>https://gitee.com/shyxiaoniu/teacher-workbench</code></li>
+        <li>GitHub（镜像）：<code>https://github.com/Shyxiaoniu/teacher-workbench</code></li>
+      </ul>
+
+      <p><strong>发行包直链（点开就下，不用装 Git）：</strong></p>
+
+      <pre><code>https://gitee.com/shyxiaoniu/teacher-workbench/raw/main/dist/班级工作台2.0.38-261106.zip</code></pre>
+
+      <p>也可以进仓库，点 <code>dist</code> 目录自己找最新那个 zip。约 5MB。</p>
+
+      <hr class="rule">
+
+      <h3>装法一：直接运行（Windows / macOS，最简单）</h3>
+
+      <p>适合：自己的办公电脑、笔记本、机房临时用、没有 Docker 的环境。</p>
+
+      <p><strong>前置条件：</strong> Windows 10 以上或 macOS，Python 3.9 以上。</p>
+
+      <p>Windows 装 Python 时<strong>务必勾选 "Add Python to PATH"</strong>，否则双击启动脚本会提示找不到 Python。如果你拿到的是带 <code>runtime/</code> 目录的完整离线包，则不用装 Python，解压即用。</p>
+
+      <ol>
+        <li>下载 <code>班级工作台2.0.38-261106.zip</code>，解压到一个<strong>路径不含空格</strong>的目录；</li>
+        <li>Windows 双击 <code>app\启动教师端.bat</code>；macOS 双击 <code>app/启动教师端.command</code>；（第一次运行 Windows 会弹防火墙，必须勾选"专用网络"并允许）</li>
+        <li>浏览器打开 <code>http://127.0.0.1:20020/</code>；</li>
+        <li>首次启动时，<strong>终端窗口会打印管理员账号和初始密码</strong>；</li>
+        <li>学生连同一个 Wi-Fi，浏览器打开 <code>http://&lt;这台电脑的局域网IP&gt;:20020/s/</code>。</li>
+      </ol>
+
+      <pre><code>[workbench] 管理员账号 teacher ／ 初始密码 t12345678
+            只在首次启动打印这一次，登录后请尽快改掉。</code></pre>
+
+      <blockquote>
+        <p><strong>注意：这是"管理员"账号，不是上课用的教师账号。</strong>它只能进 <code>http://127.0.0.1:20020/admin</code>，进去只做一件事——建教师账号。拿它去登教师端，会被弹回登录页。</p>
+      </blockquote>
+
+      <blockquote>
+        <p>忘了教师密码：<code>python launch.py --reset-password</code>。<br>换端口：启动时加 <code>--port 20021</code>。</p>
+      </blockquote>
+
+      <hr class="rule">
+
+      <h3>装法二：Docker（NAS / 常开小主机，推荐长期用）</h3>
+
+      <p>适合：群晖、威联通、Unraid、软路由、迷你主机。装好 Docker 和 Compose 就行。</p>
+
+      <pre><code>git clone https://gitee.com/shyxiaoniu/teacher-workbench.git
+cd teacher-workbench
+cp .env.example .env
+docker compose up -d --build</code></pre>
+
+      <p>等 <code>docker compose ps</code> 里 <code>workbench</code> 和 <code>gateway</code> 都变成 <code>healthy</code>（<code>init</code> 跑完就退出，是正常的）。</p>
+
+      <p>浏览器打开 <code>http://&lt;NAS的局域网IP&gt;:8080/</code>，教师端是 <code>/teacher/</code>，学生端是 <code>/s/</code>。</p>
+
+      <p><code>.env</code> 里只需要改一个地方：<code>WEB_PORT</code>（对外端口）。<code>TZ=Asia/Shanghai</code> 不要动，考勤按本地日期归档。首次部署建议把 <code>WB_ADMIN_PASSWORD</code> 改掉。</p>
+
+      <p>常用运维：</p>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>目的</th><th>命令</th></tr></thead>
+          <tbody>
+            <tr><td>看状态</td><td><code>docker compose ps</code></td></tr>
+            <tr><td>看日志</td><td><code>docker compose logs -f workbench</code></td></tr>
+            <tr><td>升级</td><td><code>docker compose up -d --build</code>（数据不丢）</td></tr>
+            <tr><td>停止</td><td><code>docker compose down</code>（<strong>别加 <code>-v</code></strong>，会删数据卷）</td></tr>
+            <tr><td>忘记密码</td><td><code>docker compose exec workbench python launch.py --reset-password</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <hr class="rule">
+
+      <h3>装完先做这七步</h3>
+
+      <ol>
+        <li><strong>管理员页</strong>：浏览器打开 <code>/admin</code>，用终端打印的管理员账号登录，<strong>先建一个教师账号</strong>（填登录账号、姓名、初始密码，密码至少 8 位）——这一步不做，教师端进不去；</li>
+        <li><strong>班级</strong>页：新建班级；</li>
+        <li><strong>学生</strong>页：导入名单（支持从 Excel 直接粘贴）；</li>
+        <li><strong>课表</strong>页：设节次时间，按周排课；</li>
+        <li><strong>学生端控制台</strong>：设密码策略（统一初始密码 / 独立密码 / 首次登录必改 / 一键重置）；</li>
+        <li><strong>资料</strong>页：建课程文件夹，上传课件；</li>
+        <li><strong>大屏</strong>页：选课程 → 选学习单 → 按班下发。</li>
+      </ol>
+
+      <p>之后老师用自己的教师账号登 <code>/teacher/</code>，学生打开 <code>/s/</code>，选班级、选学号、输密码，就能签到和进学习单了。</p>
+
+      <p>要几个老师一起用，就在管理员页多建几个教师账号。管理员只管账号，班级、学生、资料这些仍在教师端各自配置；<strong>每个教师的数据和文件是分开的</strong>，互不干扰，也不会互相看到对方的班。</p>
+
+      <hr class="rule">
+
+      <h3>四个最容易踩的坑</h3>
+
+      <p><strong>用终端打印的账号登教师端，进不去。</strong> 那个是管理员账号，只能进 <code>/admin</code>。教师端只认教师账号，得先在管理员页建一个，再拿它登 <code>/teacher/</code>。这是我被问得最多的一个问题，所以放在第一个说。</p>
+
+      <p><strong>学生连不上。</strong> 先确认在同一个局域网，再用 <code>http://服务器IP:端口/s/</code>（不是 <code>127.0.0.1</code>）。机房如果开了 AP 隔离，设备之间互相不通，找网管关掉。</p>
+
+      <p><strong>启动日志打印了两条学生端地址。</strong> 正常。<code>192.168.x.x</code> 是物理网卡，给学生用；<code>172.16~31.x.x</code> 通常是 Hyper-V / WSL / Docker 的虚拟网卡，只有本机打得开。</p>
+
+      <p><strong>改了端口，二维码还是旧地址。</strong> 二维码按老师当前打开的地址生成。用 <code>127.0.0.1</code> 打开就会拿到本机地址，换局域网 IP 访问，或设 <code>WB_PUBLIC_URL</code>。</p>
+
+      <hr class="rule">
+
+      <h2>最后</h2>
+
+      <p>1.0 做出来的时候，我觉得最得意的是"一个文件，双击就能用"。</p>
+
+      <p>2.0 做出来之后，最得意的东西变了：<strong>学生在下面点一下签到，我投屏上那个格子就绿了。</strong></p>
+
+      <p>那一瞬间，工具才真的变成课堂的一部分。</p>
+
+      <p>这一个月，近万积分，三十多个版本，6.7 万行代码。我不是程序员，全程没写一行代码。我只是把"我想要什么"讲清楚，然后一遍一遍地验收。</p>
+
+      <p>东西开源了，MIT，随便用、随便改。唯一的请求是：<strong>别把学生真实信息传到公网。</strong></p>
+
+      <p>如果你也在做类似的东西，或者装的过程中卡住了，评论区说一声。</p>
+
+      <hr class="rule">
+
+      <p style="text-align:center;font-size:13px;color:var(--ink-3)">项目：班级工作台 2.0 · MIT License · Copyright (c) 2026 Shyxiaoniu</p>
+    </article>
+  </main>
+</div>
+
+<div class="lb" id="lb"><img src="" alt=""><div class="hint">点击任意处关闭</div></div>
+
+<script>
+(function(){
+  var html=document.documentElement, paper=document.querySelector('.paper');
+  var cn=(paper.innerText.match(/[\u4e00-\u9fa5]/g)||[]).length;
+  var imgs=paper.querySelectorAll('img').length;
+  var h2s=paper.querySelectorAll('h2');
+  document.getElementById('stat').textContent=cn+' 字 · '+imgs+' 张图 · '+h2s.length+' 节';
+
+  var list=document.getElementById('tocList'), links=[];
+  Array.prototype.forEach.call(h2s,function(h,i){
+    var id='sec'+i; h.id=id;
+    var a=document.createElement('a');
+    a.href='#'+id; a.textContent=h.textContent;
+    list.appendChild(a); links.push(a);
+  });
+
+  var obs=new IntersectionObserver(function(es){
+    es.forEach(function(e){
+      if(e.isIntersecting){
+        links.forEach(function(a){a.classList.remove('active');});
+        var idx=Array.prototype.indexOf.call(h2s,e.target);
+        if(links[idx]) links[idx].classList.add('active');
+      }
+    });
+  },{rootMargin:'-15% 0px -70% 0px'});
+  Array.prototype.forEach.call(h2s,function(h){obs.observe(h);});
+
+  var segW=document.getElementById('segWidth');
+  segW.addEventListener('click',function(e){
+    var b=e.target.closest('button'); if(!b) return;
+    segW.querySelectorAll('button').forEach(function(x){x.classList.remove('on');});
+    b.classList.add('on');
+    document.body.classList.toggle('phone', b.dataset.w==='414');
+    paper.style.maxWidth = b.dataset.w==='414' ? '414px' : '';
+  });
+
+  var segT=document.getElementById('segTheme');
+  segT.addEventListener('click',function(e){
+    var b=e.target.closest('button'); if(!b) return;
+    segT.querySelectorAll('button').forEach(function(x){x.classList.remove('on');});
+    b.classList.add('on');
+    html.setAttribute('data-theme', b.dataset.t);
+  });
+
+  var lb=document.getElementById('lb'), lbImg=lb.querySelector('img');
+  paper.addEventListener('click',function(e){
+    if(e.target.tagName==='IMG'){ lbImg.src=e.target.src; lb.classList.add('on'); }
+  });
+  lb.addEventListener('click',function(){lb.classList.remove('on');});
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape') lb.classList.remove('on'); });
+})();
+</script>
+</body>
+</html>

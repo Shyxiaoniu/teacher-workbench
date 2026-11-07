@@ -6673,6 +6673,21 @@ body:has(.mini-bar) .corner-credit { display:none; }
    和每一行（6 个按钮 180px）是两张独立的 grid，auto 各算各的，
    于是前 6 列整体错开半个屏。末列改成固定宽度，两张 grid 的列线才对得上。 */
 .cw-list-h,.cw-lrow{grid-template-columns:24px 30px minmax(0,1fr) 76px 88px 116px 184px}
+/* 2026-11-06：文件归属徽章 / 二级学生目录 / 当前路径条 */
+.cw-owner{display:inline-block;margin-top:4px;padding:2px 8px;border-radius:7px;
+  background:var(--brand-soft);color:var(--brand-primary);font-size:11px;font-weight:600;
+  border:1px solid rgba(15,110,86,.16);white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.cw-owner i{font-style:normal;color:var(--status-warning,#B5741B);font-weight:500}
+.cw-tree-sub2{padding-left:26px !important;font-size:12px}
+.cw-tree-sub2 .ti-ic{font-size:12px}
+.cw-tree-sub2 .ti-nm{color:var(--text-secondary)}
+.cw-tree-sub2.on .ti-nm{color:var(--brand-primary);font-weight:700}
+.cw-pathbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;
+  background:var(--brand-soft);border:1px solid rgba(15,110,86,.16);border-radius:10px;
+  padding:7px 11px;margin:0 0 10px;font-size:12px}
+.cw-pathbar .cw-path-txt{font-weight:700;color:var(--brand-primary)}
+.cw-pathbar .cw-path-tip{color:var(--text-secondary);flex:1;min-width:140px}
+.cw-pathbar .btn{padding:4px 10px;font-size:11.5px;width:auto;flex:none}
 .cw-lrow .mt{font-size:11.5px;color:var(--text-secondary);white-space:nowrap}
 .cw-list-h>:last-child{text-align:right;padding-right:2px}
 /* 宽屏下列表已有独立「类型」列，第二行的「PDF·已推送」是重复信息，收掉让文件名更长 */
@@ -7982,6 +7997,45 @@ function toast(msg) {
    使用」的短句留在页面上，成段解释一律收进来。
    ============================================================ */
 const HQ_TEXT = {
+  /* —— 测验 / 检测（2.0.38+）：大段说明统一收进旁侧问号气泡 —— */
+  quizPolicy: ''
+    + '<b>三处入口各管一件事</b><br>'
+    + '<b>大屏（上课页）</b>：实时收件看板，只统计「谁交了 / 交到哪个窗口」，'
+    + '不显示答案与分数，也不算正确率。<br>'
+    + '<b>本页（测验 / 检测）</b>：唯一的逐题正确率、分数、按班提交与成绩分析入口，'
+    + '还能导出成绩 CSV、人工批阅简答与图片题。<br>'
+    + '<b>成绩页</b>：把某次测验某班成绩换算成百分制，导入成一场考试后走既有成绩分析。<br>'
+    + '<b>统一口径</b>：三处读同一份提交；同一次发布同一名学生只算最后一次提交，不重复计数。'
+    + '试卷与提交独立存放，不进学生端同步快照（防止答案提前下发）。',
+  quizFormat: ''
+    + '<b>整份试卷一次导入</b>：把 .txt / .md / .json 拖进来，或直接粘贴，'
+    + '点「解析预览」看解析结果，确认后整份载入，不用逐题添加。<br>'
+    + '<b>标准文本格式</b>（可点「填入示例」）：<br>'
+    + '<code># 试卷名称：单元检测</code> / <code># 课程：信息科技</code> 写元信息；<br>'
+    + '<code>一、单选题（每题 5 分）</code> 声明题型与默认分值，也可在题目里写 '
+    + '<code>2. [多选] 题干（5分）</code>；<br>'
+    + '<code>A. 选项</code> 写选项，<code>答案：A,C</code> 写答案；'
+    + '填空多个等价答案用 <code>|</code> 分隔；连线题用 <code>中国=北京</code> 每行一对。<br>'
+    + '<b>题干与选项图片</b>：用 Markdown <code>![图](data:image/png;base64,…)</code> 或图片 URL；'
+    + '写在题干行 → 题干图片，写在选项行 → 该选项图片。<br>'
+    + '也支持直接导入本工作台导出的试卷 JSON、旧随堂测的题目 JSON。<br><br>'
+    + '<b>Word / Excel 模板（一行一题）</b>：<br>'
+    + '表头写 <code>题号｜题型｜题干｜选项A｜选项B｜选项C｜选项D｜答案｜分值｜解析｜题干图片</code>，'
+    + '顺序随意、缺列跳过。题型填 单选/多选/填空/判断/连线/简答/图片上传。'
+    + '没有「选项A…」列时，可在「选项」一格里用 <code>A. xx B. yy</code> 全部写完；'
+    + '连线题在「选项」或「答案」里每行写 <code>左=右</code>；判断题答案 对/错/√/× 都认。<br>'
+    + '<b>.docx</b>：有题目表格就按表格解析，没有就按上面的文本格式读段落，表格单元格里的内嵌图片会自动带上。<br>'
+    + '<b>.xlsx</b>：读第一个工作表，按同一套表头解析（图片请在单元格里写图片链接）。<br>'
+    + '<b>.xls</b>：老版 Excel 也能直接读（OLE2 + BIFF8，自己解析行列与共享字符串），'
+    + '合并单元格/颜色/字体这类格式不还原；超长富文本可能被截断，遇到怪文件建议另存为 .xlsx。<br>'
+    + '<b>.doc</b>：老版 Word 是二进制文档，只能按纯文本尽力提取，排版与图片会丢 —— '
+    + '请在 Word 里「另存为」.docx 后再导入，最稳。',
+  quizBank: ''
+    + '<b>试题库</b>：导入试卷时可勾选「同时加入试题库」，也可以在试卷库里把整套题目入库。'
+    + '题库里勾选若干题目，点「用选中题目新建试卷」即可快速组卷；同 id 重复入库会覆盖而不是刷出一堆重复题。',
+  quizArchive: ''
+    + '学生提交的文件按 <code>课程 / 班级 / 学号-姓名 / 原文件名</code> 归档。'
+    + '路径条会显示当前所在班级与学生；历史平铺文件可点「🧹 整理归档」按提交记录自动归位。',
   /* —— 设置 · 数据与备份 —— */
   backup: ''
     + '<b>一键导出</b>：点一次、设一个备份密码，就把<b>服务端 + 本机</b>的全部数据打包成一个 '
@@ -16385,6 +16439,16 @@ function renderActivity() {
   .act-subcfg-nm{flex:0 0 auto;max-width:42%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
   .act-subcfg-inp{flex:1 1 auto;min-width:120px;padding:6px 9px;border:1px solid var(--border,#DDE5E1);border-radius:8px;font-size:13px;background:var(--bg-surface,#fff);color:var(--text-primary);box-sizing:border-box}
   /* 2026-11-04：活动管理弹窗下线（选课直接自动建任务），相关样式移除 */
+  /* AI 提示词弹窗（2026-11-07）：整段可选、可滚、等宽，复制后直接粘给 AI */
+  .sheet-prompt{max-height:46vh;overflow:auto;margin:0;padding:12px 14px;
+    border:1px solid var(--border);border-radius:10px;background:var(--bg-page);
+    color:var(--text-primary);font-family:ui-monospace,Consolas,"Microsoft YaHei",monospace;
+    font-size:12px;line-height:1.78;white-space:pre-wrap;word-break:break-word;
+    user-select:text;-webkit-user-select:text}
+  .sheet-prompt-tip{font-size:12.5px;color:var(--text-secondary);margin-bottom:8px;line-height:1.7}
+  .sheet-prompt-tags{font-size:11.5px;color:var(--text-secondary);margin-top:8px;line-height:1.7}
+  .sheet-prompt-tags code{background:var(--bg-page);border:1px solid var(--border);
+    border-radius:4px;padding:1px 5px;font-size:11px}
 </style>
   ${actClassBarHtml()}
   <div class="act-wrap">
@@ -16410,6 +16474,7 @@ function renderActivity() {
       <div class="act-cust-row">
         <label class="btn btn-ghost btn-sm" style="cursor:pointer">📤 上传网页文件<input id="actCustFile" type="file" accept=".html,.htm" style="display:none" onchange="actCustomLoadFile(event)"></label>
         <button class="btn btn-ghost btn-sm" onclick="actCustomUseDefault()">📝 用默认模板</button>
+        <button class="btn btn-ghost btn-sm" onclick="actSheetPromptOpen()" title="生成一段可直接复制给 AI 的提示词：把工作台的提交接口与题目块约定一起写进学习单网页">🤖 AI 生成提示词</button>
         <label class="act-act" style="cursor:pointer"><input id="actCustPerQ" type="checkbox" checked style="margin:0" onchange="actRenderFileCfg()"> 每题单独提交按钮${hq('guideConv', '题目块写法（进阶）')}</label>
       </div>
       <textarea id="actCustHtml" class="act-cust-edit" spellcheck="false" placeholder="在此粘贴/编辑网页 HTML，或点「上传网页文件」「用默认模板」" oninput="actFileCfgDebounced()"></textarea>
@@ -16456,7 +16521,15 @@ function actSubMatchClass(sub, clsStus) {
   if (subCls && actCurClsName) {
     if (subCls === actCurClsName) return true;
     const known = (dbT('classes') || []).some(c => String(c.name || '').trim() === subCls);
-    if (known) return false;   // 明确是别的班的提交，绝不按姓名硬凑进本班
+    if (known) {
+      /* 2026-11-07：班级名对不上时，先看学号能否在本班精确命中。
+         学生端注入的班级名和教师端班级名常差在全角括号 / 空格上
+         （「七1班」vs「七（1）班」），只凭班级名硬拒会把本班学生挡在外面 ——
+         表现就是「顶部 KPI 0 人、下面任务窗口却有数据」。学号唯一，认它。 */
+      const no0 = String(sub['学号'] || sub['student_no'] || sub['sid'] || '').trim();
+      if (no0 && clsStus.some(stu => String(stu.student_no || '').trim() === no0)) return true;
+      return false;   // 学号也对不上：明确是别的班，绝不按姓名硬凑
+    }
   }
   const no = String(sub['学号'] || sub['student_no'] || '').trim();
   const nm = String(sub['姓名'] || sub['name'] || '').trim();
@@ -17278,6 +17351,146 @@ function actFillCourseVars(html, course) {
 }
 window.actFillCourseVars = actFillCourseVars;
 function actCustomUseDefault() { const el = document.getElementById('actCustHtml'); if (el) el.value = actCustomDefaultTpl(); actCustStatus('已载入默认学习单（文件上传 + 提交）；标题里的 {{COURSE}} 会在生成 / 下发时自动换成课程名'); actRenderFileCfg(); }
+
+/* ===================== 学习单 · AI 提示词（2026-11-07） =====================
+   场景：老师想自己设计（或让 AI 生成）学习单网页，但不知道要怎么接工作台的
+   提交接口。这里给一段**复制即可用**的完整提示词，把「平台已做的事 / 题目块
+   写法 / 字段与归档规则 / 导入格式要求」一次说清，AI 产出的 HTML 直接粘回
+   「自定义学习单」→ 生成页面 → 下发就能用。
+   提示词不写死任务号与地址（AI 不需要自己发请求），末尾附当前环境信息供调试。 */
+function actSheetPromptText() {
+  let course = '', taskId = '';
+  try {
+    course = String(actActiveCourse || '').trim();
+    taskId = String(actActiveId || '').trim();
+    if (!course && typeof actTaskList !== 'undefined') {
+      const t = (actTaskList || []).find(x => String(x.task_id) === String(actActiveId)) || {};
+      course = String(t.course || t.title || '').trim();
+    }
+  } catch (e) {}
+  return [
+    '你是我的前端助手。请帮我生成一份「课堂学习单」单文件网页（HTML + 内联 CSS/JS），',
+    '用在初中信息科技课堂上：学生边看课件边完成任务，提交结果自动回到我的班级工作台。',
+    '',
+    '【一、目标场景】',
+    '1. 我用的是「班级工作台 2.0」，教师端大屏的「自定义学习单」会把这份网页部署成学生页；',
+    '2. 学生的学号 / 姓名 / 班级由平台自动注入，你不需要做登录，也不要收集身份；',
+    '3. 每个任务（一题或一个环节）要有自己的提交按钮，提交后进入大屏对应的数据窗口。',
+    '',
+    '【二、平台已经做了的事（不要重复实现）】',
+    '1. 平台会在每个题目块末尾注入一个 .act-submit-btn 提交按钮，文字取 data-btn；',
+    '2. 平台把学生身份随表单一起提交（字段名「学号」「姓名」「班级」）；',
+    '3. 平台自动收集块内所有带 name 或 data-f 的 input / textarea / select / file 作为本次提交字段；',
+    '4. 提交结果会写到块内的 [data-act-status] 元素上（成功时文案是「提交成功」）。',
+    '',
+    '【三、页面必须遵守的约定】',
+    '1. 单文件：CSS / JS 全部内联；不引用外部 CDN、不引用相对路径的图片和字体；',
+    '   图片用 https 链接或 dataURL（建议单张 < 300KB，整页 < 2MB）。',
+    '2. 每个任务写成一个题目块：',
+    '   <div class="act-q" data-btn="提交任务一" data-act-needlogin>',
+    '     ……题目、输入框……',
+    '     <span data-act-status class="act-st"></span>',
+    '   </div>',
+    '   说明：data-btn 是提交按钮文字；data-act-needlogin 表示需要先登录才能提交；',
+    '   [data-act-status] 是平台回写提交结果的占位元素。',
+    '3. 需要上传文件的块必须有 <input type="file" name="作品截图">；',
+    '   纯数据块加 data-kind="data"，避免被当成文件任务；',
+    '   允许不传文件也能提交，就在块上加 data-allow-empty="1"。',
+    '4. 想让学生跳外链，用 <div data-ext-url="https://…">说明文字</div>，平台会生成按钮；',
+    '   不要自己写 <a href> 把学生带离学习单。',
+    '5. 不要自己写 fetch / XMLHttpRequest 提交，交给平台注入的运行时；',
+    '   不要用 alert 做校验提示，改用块内提示元素。',
+    '6. 手机竖屏可用：viewport、正文 ≥14px、输入框字号 ≥16px（防 iOS 缩放）、按钮 ≥44px 高。',
+    '',
+    '【四、数据怎么回到工作台】',
+    '1. 平台按「按钮」分组：一个提交按钮 = 大屏一个独立窗口；',
+    '2. 字段名用中文（如「任务一答案」「识别结果截图」），大屏表头直接显示，老师一眼看懂；',
+    '3. 一题多空请用不同的 name（同名会被合并成数组）；',
+    '4. 文件按「课程 / 班级 / 学号-姓名 / 原文件名」自动归档，文件名要能认出是什么。',
+    '',
+    '【五、平台导入格式要求（必须满足，否则导不进去）】',
+    '1. 只输出一个完整 HTML 文件，从 <!doctype html> 开始，UTF-8 编码；',
+    '2. 不要拆成多个文件、不要用构建工具产物、不要出现本地绝对路径（file:// 或 C:\\）；',
+    '3. 页面标题写课程名；顶部留一行学生身份占位（平台会替换成真实姓名学号）；',
+    '4. 任务控制在 3 个以内，每个任务一个 .act-q 块；',
+    '5. 生成后我会把整份 HTML 粘到教师端「自定义学习单」→「生成页面」→「下发」。',
+    '',
+    '【六、这次要做的学习单】',
+    '· 课程：' + (course || '（填课程名，如：七年级信息科技）'),
+    '· 课件要点 / 知识点：（在这里粘贴课件文字，越具体越好）',
+    '· 任务设计：（例如：任务一 拖拽排序；任务二 上传截图；任务三 3 道选择 + 1 道简答）',
+    '',
+    '【七、输出要求】',
+    '· 只输出 HTML 代码，不要解释、不要加“以下是代码”之类的话；',
+    '· 代码要能直接保存成 .html 打开就有样式和交互；',
+    '· 如果我的课件要点里有表格或流程，请转成可交互的任务，而不是照抄成静态文字。',
+    '',
+    '【附：当前环境信息（一般不用写进代码，调试时参考）】',
+    '· 平台地址：' + location.origin,
+    '· 当前任务号：' + (taskId || '（下发时自动生成）'),
+    '· 学生页地址：平台部署后形如 /submit/custom.html?task=<任务号>',
+    '· 提交接口：POST /api/v2/student/submit?t=<票>（带票，平台自动处理）',
+    '· 备用匿名口：POST /api/act/<任务号>'
+  ].join('\n');
+}
+window.actSheetPromptText = actSheetPromptText;
+
+function actSheetPromptOpen() {
+  const text = actSheetPromptText();
+  const body = '<div class="sheet-prompt-tip">'
+    + '把下面这段整段复制给 AI（DeepSeek / 豆包 / ChatGPT 都行），再把「课件要点」和「任务设计」补上，'
+    + '它会按工作台的提交约定生成一份<b>可直接导入</b>的学习单网页。</div>'
+    + '<pre class="sheet-prompt" id="actSheetPromptBox">' + esc(text) + '</pre>'
+    + '<div class="sheet-prompt-tags">已覆盖：目标场景 · 平台自动做的事 · 题目块写法 · '
+    + '数据回传与归档 · 导入格式要求 · 输出规范　·　全文 ' + text.length + ' 字</div>';
+  const foot = '<button type="button" class="btn btn-primary" style="width:auto" id="actSheetPromptCopyBtn"'
+    + ' onclick="actSheetPromptCopy()">📋 一键复制提示词</button>'
+    + '<button type="button" class="btn btn-ghost" style="width:auto" onclick="closeFloat()">关闭</button>';
+  showFloat('AI 学习单生成提示词', body, { footer: foot });
+  const layer = document.getElementById('floatLayer');
+  if (layer) layer.classList.add('wide');
+}
+window.actSheetPromptOpen = actSheetPromptOpen;
+
+/* 全选提示词正文（复制失败时的兜底：让老师直接 Ctrl+C） */
+function actSheetPromptSelect() {
+  const box = document.getElementById('actSheetPromptBox');
+  if (!box) return false;
+  try {
+    const r = document.createRange();
+    r.selectNodeContents(box);
+    const s = window.getSelection();
+    s.removeAllRanges();
+    s.addRange(r);
+    return true;
+  } catch (e) { return false; }
+}
+function actSheetPromptCopy() {
+  const text = actSheetPromptText();
+  const btn = document.getElementById('actSheetPromptCopyBtn');
+  const flash = function (msg, ok) {
+    if (btn) {
+      btn.textContent = msg;
+      setTimeout(function () { btn.textContent = '📋 一键复制提示词'; }, 1900);
+    }
+    toast(ok ? ('提示词已复制（' + text.length + ' 字），去粘给 AI 吧')
+             : '复制被浏览器拦了：已全选，按 Ctrl+C 复制');
+  };
+  const fallback = function () {
+    try {
+      if (!actSheetPromptSelect()) { flash('✗ 复制失败，请手动全选', false); return; }
+      const ok = document.execCommand && document.execCommand('copy');
+      flash(ok ? '✓ 已复制' : '✗ 已全选，请按 Ctrl+C', !!ok);
+    } catch (e) { flash('✗ 已全选，请按 Ctrl+C', false); }
+  };
+  // 局域网 http 访问时 navigator.clipboard 不可用（非安全上下文），必须留 execCommand 兜底
+  if (navigator.clipboard && navigator.clipboard.writeText && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(function () { flash('✓ 已复制', true); }, fallback);
+    return;
+  }
+  fallback();
+}
+window.actSheetPromptCopy = actSheetPromptCopy;
 function actCustStatus(t, cls) { const el = document.getElementById('actCustStatus'); if (el) { el.textContent = t || ''; el.className = 'act-muted' + (cls ? (' ' + cls) : ''); } }
 function actCustomClear() { const el = document.getElementById('actCustHtml'); if (el) el.value = ''; actCustStatus('已清空'); actRenderFileCfg(); }
 
@@ -17325,8 +17538,8 @@ function actRenderFileCfg() {
         : '不勾选：学生必须选择文件才能提交本题；勾选：允许空文件提交。')
     + '</div>';
 }
-let _qfFileCfgTimer = null;
-function actFileCfgDebounced() { if (_qfFileCfgTimer) clearTimeout(_qfFileCfgTimer); _qfFileCfgTimer = setTimeout(actRenderFileCfg, 350); }
+let _actFileCfgTimer = null;
+function actFileCfgDebounced() { if (_actFileCfgTimer) clearTimeout(_actFileCfgTimer); _actFileCfgTimer = setTimeout(actRenderFileCfg, 350); }
 /* 把某个题目块（.act-q，兼容旧 .q-block）的某个属性写入文本框 HTML（DOM 解析 → 改 → 整文档序列化） */
 function actWriteBlockAttr(idx, attr, value) {
   const el = document.getElementById('actCustHtml'); if (!el) return false;
@@ -17702,14 +17915,36 @@ function actTaskWindowsHtml(allMatched, layout) {
           + '<span class="no">' + esc(actRosterNo(s)) + '</span>'
           + '<span class="ts">' + esc((actRosterTs(s) || '').slice(5) || '—') + '</span></div>').join('')
         : '<div class="act-win-empty">这个任务还没有人提交</div>');
+    /* 每个窗口顶部的「大屏样式」统计（牛哥 2026-11-06 截图标注）。
+       复用 .act-kpi 的边框 / 顶色 / 圆角 / 数值配色，只缩小一号，
+       所以排版间距和控件风格跟顶部四张 KPI 卡是同一套。 */
+    let clsTotal = 0;
+    try { clsTotal = (typeof actClassStudents === 'function' && typeof actCurClass === 'function')
+      ? (actClassStudents(actCurClass()) || []).length : 0; } catch (e) {}
+    const missing = Math.max(0, clsTotal - n);
+    const rate = clsTotal ? Math.min(100, Math.round(n / clsTotal * 100)) : 0;
+    const filesN = bRows
+      ? bRows.filter(r => r.has_file).length
+      : one.filter(s => (typeof actAttachments === 'function' ? actAttachments(s) : []).length).length;
+    const kpi = (cls, lab, val, sub, key) =>
+      '<div class="act-kpi ' + cls + ' mini"><div class="lab">' + lab + '</div>'
+      + '<div class="val" data-win-kpi="' + key + '">' + val + '</div>'
+      + '<div class="sub">' + sub + '</div></div>';
+    const kpis = '<div class="act-win-kpis">'
+      + kpi('ok', '已提交', n, '本窗口', 'sub')
+      + kpi('red', '未交人数', missing, clsTotal ? '尚未提交' : '先导入名单', 'miss')
+      + kpi('amber', '提交率', rate + '%', '已交/总数', 'rate')
+      + kpi('', '含文件', filesN, '带附件', 'files')
+      + '</div>';
     /* 窗口名是老师手填的，可能带单引号 —— 直接塞进 onclick 会截断 JS 字符串。
        先 encodeURIComponent 再补一次 %27，取用时 decodeURIComponent 还原。 */
     const enc = qzJs(b);
     return '<div class="act-win' + (bound && bound === b ? ' is-bound' : '') + '" data-act-win="' + esc(b) + '">'
       + '<div class="act-win-hd"><b>' + esc(b) + '</b>'
       + '<span class="n">已交 <em data-win-n>' + n + '</em> 人</span>'
-      + '<button type="button" class="qz-mini" onclick="actSetBoundWindow(decodeURIComponent(\'' + enc + '\'))" title="把这个窗口设为当前大屏并绑定其统计数据">设为大屏</button>'
+      + '<button type="button" class="btn btn-ghost btn-sm" onclick="actSetBoundWindow(decodeURIComponent(\'' + enc + '\'))" title="把这个窗口设为当前大屏并绑定其统计数据">设为大屏</button>'
       + '</div>'
+      + kpis
       + '<div class="act-win-list" data-win-list data-qz-keep="win-' + bi + '">' + list + '</div>'
       + '</div>';
   }).join('');
@@ -17720,7 +17955,7 @@ function actTaskWindowsHtml(allMatched, layout) {
     + '<label class="chk" style="display:inline-flex;align-items:center;gap:5px;font-size:12.5px">'
     + '<input type="checkbox" data-bind-auto' + (auto ? ' checked' : '') + ' onchange="actToggleAutoFollow(this)"> 新提交自动绑定到对应窗口</label>'
     + '<span class="act-muted" data-bind-total>' + (boardWins ? Object.keys(boardWins).length + ' 个窗口 · ' + ((QT.board||{}).total||0) + ' 人' : '正在同步…') + '</span>'
-    + '<button type="button" class="qz-mini" onclick="actSetBoundWindow(\'\')">清除绑定</button>'
+    + '<button type="button" class="btn btn-ghost btn-sm" onclick="actSetBoundWindow(\'\')">清除绑定</button>'
     + '</div>'
     + '<div class="act-note">共 <b>' + taskBtns.length + '</b> 个窗口，按提交按钮 / 测验固定分组：'
     + '同一名学生在同一个窗口里只出现一次。新提交到达时<b>只刷新它所在的那个窗口</b>，'
@@ -17755,6 +17990,7 @@ function actSwitchTab(which) {
 window.actSwitchTab = actSwitchTab;
 
 async function actInit() {
+  try { quizEnsureCss(); } catch (e) {}   // 窗口统计卡 / 绑定条样式（与大屏同页生效）
   actPing();
   actLoadNet(true);          // 顺手探一次局域网地址，供学生链接使用
   renderActClassInfo();
@@ -18073,12 +18309,25 @@ function actDashboardHtml(j, subs, matched, clsStus, cls, allMatched) {
   // 已提交按「去重后的学号」统计，避免同一学生多次提交导致提交率超过 100%
   const subKeys = new Set();
   matched.forEach(s => { const no = String(s['学号'] || s['student_no'] || '').trim(); const nm = String(s['姓名'] || s['name'] || '').trim(); subKeys.add(no || nm); });
-  const submitted = subKeys.size;
+  /* 2026-11-07：绑定窗口后，顶部 4 张 KPI 换成「该窗口」的口径。
+     以前 actSetBoundWindow 只加高亮，绑定不参与任何统计，点了像没反应。
+     窗口数据取 QT.board（与窗口列表同源），按当前班名单过滤，口径与窗口完全一致。 */
+  const boundWin = (typeof actBoundWindow === 'function') ? actBoundWindow() : '';
+  const boardWins = (typeof QT !== 'undefined' && QT.board && QT.board.windows) ? QT.board.windows : null;
+  const boundRows = boundWin
+    ? ((typeof actWinRowsFor === 'function') ? (actWinRowsFor(boundWin, boardWins) || []) : [])
+    : null;
+  const useBound = !!boundWin;
+  const submitted = useBound ? boundRows.length : subKeys.size;
   const notSub = Math.max(0, clsTotal - submitted);
   const rate = clsTotal ? Math.min(100, Math.round(submitted / clsTotal * 100)) : 0;
   const today = new Date().toISOString().slice(0, 10);
-  const todayN = matched.filter(s => (s.submitted_at || '').slice(0, 10) === today).length;
-  const attN = matched.filter(s => actAttachments(s).length).length;
+  const todayN = useBound
+    ? boundRows.filter(r => String(r.at || '').slice(0, 10) === today).length
+    : matched.filter(s => (s.submitted_at || '').slice(0, 10) === today).length;
+  const attN = useBound
+    ? boundRows.filter(r => r.has_file).length
+    : matched.filter(s => actAttachments(s).length).length;
   // 提交顺序：matched 已是「去重 + 提交时间升序」，直接复用（提交越晚排序越靠后）
   const ordered = matched;
   const matchedKeys = new Set(matched.map(s => { const no = String(s['学号']||s['student_no']||'').trim(); const nm = String(s['姓名']||s['name']||'').trim(); return no || nm; }));
@@ -18093,22 +18342,31 @@ function actDashboardHtml(j, subs, matched, clsStus, cls, allMatched) {
   return ''
     + '<div class="act-dash-top">'
     + '<div class="act-dash-hd"><div class="hd-bar"></div><div><div class="hd-t">课程数据大屏</div>'
-    + '<div class="hd-s">' + esc(j.task_title || actActiveId) + '　·　当前班级：<b>' + esc(String(clsName)) + '</b>　·　按班级收集</div></div>'
+    + '<div class="hd-s">' + esc(j.task_title || actActiveId) + '　·　当前班级：<b>' + esc(String(clsName)) + '</b>　·　'
+    + (useBound ? '统计窗口：<b>' + esc(boundWin) + '</b>' : '全部任务累计')
+    + '　·　按班级收集</div></div>'
   + '<div class="hd-r"><span class="act-dot ' + (submitted ? 'on' : 'off') + '"></span><span class="act-muted">' + (submitted ? '实时数据' : '暂无提交') + '</span>'
   + '<button class="btn btn-ghost btn-sm" onclick="actRenderDash()">刷新</button>'
   + '<button class="btn btn-ghost btn-sm" onclick="actClearSubs()" title="清空本课程全部提交数据（不可恢复）">🗑 清空</button></div></div>'
     + '<div class="act-kpis">'
-    + '<div class="act-kpi ok"><div class="lab">本班已提交</div><div class="val">' + submitted + '</div><div class="sub">提交数量</div></div>'
-    + '<div class="act-kpi red"><div class="lab">未交人数</div><div class="val">' + notSub + '</div><div class="sub">尚未提交</div></div>'
-    + '<div class="act-kpi amber"><div class="lab">提交率</div><div class="val">' + rate + '%</div><div class="sub">已交 / 班级总人数</div></div>'
-    + '<div class="act-kpi"><div class="lab">班级总人数</div><div class="val">' + clsTotal + '</div><div class="sub">今日提交 ' + todayN + ' · 含文件 ' + attN + '</div></div>'
+    + '<div class="act-kpi ok"><div class="lab">' + (useBound ? '本窗口已交' : '本班已提交') + '</div>'
+    +   '<div class="val" data-top-kpi="sub">' + submitted + '</div><div class="sub">'
+    +   (useBound ? '仅统计所选窗口' : '提交数量') + '</div></div>'
+    + '<div class="act-kpi red"><div class="lab">未交人数</div>'
+    +   '<div class="val" data-top-kpi="miss">' + notSub + '</div><div class="sub">尚未提交</div></div>'
+    + '<div class="act-kpi amber"><div class="lab">提交率</div>'
+    +   '<div class="val" data-top-kpi="rate">' + rate + '%</div><div class="sub">'
+    +   (useBound ? '本窗口 / 班级总人数' : '已交 / 班级总人数') + '</div></div>'
+    + '<div class="act-kpi"><div class="lab">班级总人数</div><div class="val">' + clsTotal + '</div>'
+    +   '<div class="sub">今日提交 ' + todayN + ' · 含文件 ' + attN + '</div></div>'
     + '</div></div>'
     + (matched.length === 0 && subs.length > 0
         ? '<div class="act-warn">⚠ 本课程已收到 <b>' + subs.length + '</b> 份提交，但当前班级「<b>' + esc(String(clsName)) + '</b>」匹配到 <b>0</b> 份。'
           + '常见原因：① 上方「选择班级」选错了；② 该班学生名单（学号 / 姓名）还没导入，或与学生填写的不一致。'
           + '可展开下方「本活动全部提交」核对原始数据。</div>'
         : '')
-    + '<div class="act-sec"><h3>本班提交趋势（按日）</h3><canvas id="actChartTrend" width="320" height="170"></canvas></div>'
+    /* 2.0.38+（牛哥截图标注「删掉不要了」）：本班提交趋势按日图整体下线，
+       课堂要的是每个提交窗口的实时人数，不是历史折线。 */
     + actTaskWindowsHtml(allMatched || matched, actTaskLayout)
     + '<div class="act-sec"><h3>学生作品</h3>'
     +   '<div id="actRecentBox"></div></div>'
@@ -18133,12 +18391,42 @@ async function actClearSubs() {
   // 弹窗里显示课程标题（而不是看不出含义的任务号），选不到时才退回任务号
   const t = actTaskList.find(x => x.task_id === actActiveId);
   const tName = (t && String(t.title || '').trim()) || actActiveId;
-  const ok = await uiConfirm('确定清空课程「' + tName + '」的全部提交数据吗？此操作不可恢复。', { title: '一键清空数据' });
+  const boundWin = (typeof actBoundWindow === 'function') ? actBoundWindow() : '';
+  const ok = await uiConfirm(
+    (boundWin
+      ? '确定清空窗口「' + boundWin + '」的全部提交吗？'
+      : '确定清空课程「' + tName + '」在大屏上的全部提交数据吗？')
+    + '此操作不可恢复。', { title: '一键清空数据' });
   if (!ok) return;
   try {
-    const r = await fetch('/api/v2/act-clear?task=' + encodeURIComponent(actActiveId), { method: 'POST' });
-    const j = await r.json().catch(() => ({}));
-    if (!j || !j.ok) { toast('清空失败：' + ((j && j.msg) || r.status)); return; }
+    /* 2026-11-07 根因修复：大屏窗口是「全局看板」（所有任务的提交都按按钮名进来），
+       以前只清当前任务 act_task —— 别的任务同名窗口的数据一条没动，所以点完
+       「清空」页面没变化、刷新后数据还在。现在按窗口反查来源任务号逐个清。 */
+    const winsMap = (QT.board && QT.board.windows) || {};
+    const tasks = new Set();
+    if (boundWin) {
+      // 绑定了窗口：只清这个窗口的数据，不牵连别的任务
+      (winsMap[boundWin] || []).forEach(r => { if (r.task) tasks.add(String(r.task)); });
+    } else {
+      tasks.add(String(actActiveId));
+      Object.keys(winsMap).forEach(w => {
+        if (w.indexOf('测验：') === 0) return;      // 测验成绩有独立的删除入口，不在这里清
+        (winsMap[w] || []).forEach(r => { if (r.task) tasks.add(String(r.task)); });
+      });
+    }
+    let deleted = 0;
+    for (const tid of Array.from(tasks)) {
+      const r = await fetch('/api/v2/act-clear?task=' + encodeURIComponent(tid), { method: 'POST' });
+      const j = await r.json().catch(() => ({}));
+      if (j && j.ok) deleted += Number(j.deleted) || 0;
+    }
+    if (!deleted) {
+      // 没有可删的记录时也把本地看板刷一遍，避免老师以为「点了没反应」
+      try { await quizBoardLoad(true); } catch (e2) {}
+      actRenderDash();
+      toast('没有可清空的提交（看板已刷新）');
+      return;
+    }
     /* 2026-11-05：提交记录删了，但从这里归档到「资料」的副本还在。
        老师清空后再有新提交触发自动归档，旧作品又会被看见，像是数据回来了。
        这里顺手把本次活动的归档副本一起删掉（索引缺失 / 老数据失败都不拦清空）。 */
@@ -18153,7 +18441,10 @@ async function actClearSubs() {
         if (ar && ar.ok) removed = Number(ar.removed) || 0;
       }
     } catch (e) { /* 归档副本清理失败不影响清空本身 */ }
-    toast('已清空全部提交数据' + (removed ? '，并清理归档副本 ' + removed + ' 个' : ''));
+    /* 关键：重新拉一次看板再重绘。以前只调 actRenderDash()，窗口读的还是
+       内存里的旧 QT.board，所以数据「删了还在」。 */
+    try { await quizBoardLoad(true); } catch (e2) {}
+    toast('已清空 ' + deleted + ' 条提交' + (removed ? '，并清理归档副本 ' + removed + ' 个' : ''));
     actRenderDash();
   } catch (e) { toast('清空失败：' + e.message); }
 }
@@ -18327,12 +18618,7 @@ function actGalleryHtml(subs) {
 }
 
 function actDrawCharts(j, subs) {
-  const byDay = {};
-  subs.forEach(s => { const d = (s.submitted_at || '').slice(0, 10); if (d) byDay[d] = (byDay[d] || 0) + 1; });
-  let days = Object.keys(byDay).sort();
-  if (days.length > 10) days = days.slice(-10);
-  const trend = days.map(d => ({ label: d.slice(5), v: byDay[d] }));
-  actDrawBars('actChartTrend', trend, '提交数');
+  /* 趋势图已按需求删除（2026-11-06 标注）；这里只保留其余图表的数据准备。 */
   const ignore = new Set(['_ip', '_sheet', '_tasks', '_submission_id', 'submitted_at',
     'attachment', '姓名', '学号', '作品链接', 'file']);
   const fieldCount = {};
@@ -35741,16 +36027,38 @@ function cwPaintRoot() {
 function cwPaintTree() {
   const tree = document.getElementById('cwTree');
   if (!tree) return;
+  /* 二级学生文件夹（2026-11-06）：归档结构是 <课程>/<班级>/<学号-姓名>/，
+     以前树里只列一级班级目录，学生目录看不见，右侧又把子目录文件平铺出来，
+     老师就分不清文件是谁交的。这里从 rel_dir 推导出第二级并挂到班级下。 */
+  const subs2Of = (parent) => {
+    const set = new Set();
+    (cwState.files || []).forEach(f => {
+      const rel = String(f.rel_dir || '');
+      if (rel.indexOf(parent + '/') === 0) {
+        const seg = rel.slice(parent.length + 1).split('/')[0];
+        if (seg) set.add(seg);
+      }
+    });
+    return Array.from(set).sort((a, b) => String(a).localeCompare(String(b), 'zh'));
+  };
   const subHtml = (course) => (cwState.course === course && (cwState.subs || []).length)
-    ? cwState.subs.map(s =>
-      '<div class="cw-tree-item cw-tree-sub' + (cwState.sub === s ? ' on' : '') + '"'
-      + ' data-course="' + esc(course) + '" data-sub="' + esc(s) + '" onclick="cwPickSub(this.dataset.sub)"'
-      + ' title="' + esc(s) + '">'
-      + '<span class="ti-ic">📂</span>'
-      + '<span class="ti-nm">' + esc(s) + '</span>'
-      + '<span class="ti-ops"><button type="button" class="ti-del" title="删除文件夹（仅限空文件夹）"'
-      + ' onclick="event.stopPropagation();cwRmdirFolder(this.closest(\'[data-sub]\').dataset.sub)">🗑</button></span>'
-      + '</div>').join('')
+    ? cwState.subs.map(s => {
+        const main = '<div class="cw-tree-item cw-tree-sub' + (cwState.sub === s ? ' on' : '') + '"'
+          + ' data-course="' + esc(course) + '" data-sub="' + esc(s) + '" onclick="cwPickSub(this.dataset.sub)"'
+          + ' title="' + esc(s) + '（班级）">'
+          + '<span class="ti-ic">📂</span>'
+          + '<span class="ti-nm">' + esc(s) + '</span>'
+          + '<span class="ti-ops"><button type="button" class="ti-del" title="删除文件夹（仅限空文件夹）"'
+          + ' onclick="event.stopPropagation();cwRmdirFolder(this.closest(\'[data-sub]\').dataset.sub)">🗑</button></span>'
+          + '</div>';
+        return main + subs2Of(s).map(k => {
+          const full = s + '/' + k;
+          return '<div class="cw-tree-item cw-tree-sub2' + (cwState.sub === full ? ' on' : '') + '"'
+            + ' data-course="' + esc(course) + '" data-sub="' + esc(full) + '"'
+            + ' onclick="cwPickSub(this.dataset.sub)" title="' + esc(full) + '（学生）">'
+            + '<span class="ti-ic">👤</span><span class="ti-nm">' + esc(k) + '</span></div>';
+        }).join('');
+      }).join('')
     : '';
   const newSubBtn = (cwState.course && cwState.course !== '未分课程')
     ? '<div class="cw-tree-new"><button onclick="cwNewFolder()">＋ 在「' + esc(cwState.course) + '」里新建文件夹</button></div>'
@@ -35830,7 +36138,8 @@ async function cwPickCourse(name, keep) {
     cwState.sheet = String(j.sheet || '');   // 该课程已设的学习单网页（列表行据此打标）
     cwState.subs = j.subs || [];             // 课程内一级子文件夹（树里挂课程下）
     /* 子文件夹被删 / 改名后不能停在一个已经不存在的位置 */
-    if (cwState.sub && cwState.subs.indexOf(cwState.sub) < 0) cwState.sub = '';
+    /* sub 现在可能是「七1班/01-张三」两级路径，只校验第一段是否还在 */
+    if (cwState.sub && cwState.subs.indexOf(String(cwState.sub).split('/')[0]) < 0) cwState.sub = '';
     cwPaintFiles(cwState.files);
     /* 子文件夹列表跟着刷新：新建 / 删除文件夹后不用整页重载也能立刻在树里看到 */
     cwPaintTree();
@@ -36165,6 +36474,7 @@ function cwFileCard(f, idx) {
     + '</div>'
     + '<div class="ft"><div class="fn">' + esc(f.name) + '</div>'
     +   meta
+    +   cwOwnerHtml(f)       /* 缩略图视图也要能看到「班级 · 学号-姓名」 */
     +   '<div class="acts">'
     +     sendBtn
     +     cwSheetBtn(f, true)
@@ -36181,6 +36491,16 @@ function cwListHead() {
   return '<div class="cw-list-h"><span></span><span></span><span>文件</span>'
     + '<span class="tp">类型</span><span class="sz">大小</span><span class="mt">修改时间</span>'
     + '<span style="text-align:right">操作</span></div>';
+}
+/* 文件归属（2026-11-06）：rel_dir = 班级/学号-姓名，
+   列表里明确写出来，不再是一堆认不出是谁的平铺文件名。 */
+function cwOwnerHtml(f) {
+  const parts = String(f.rel_dir || '').split('/').filter(Boolean);
+  if (!parts.length || parts[0].indexOf('_') === 0) return '';
+  const cls = parts[0], stu = parts[1] || '';
+  return '<span class="cw-owner" title="文件所属班级与学生">'
+    + '🏫 ' + esc(cls) + (stu ? ' · 👤 ' + esc(stu) : ' · 未归类（可点「整理归档」）')
+    + '</span>';
 }
 function cwListRow(f, idx) {
   const kind = f.kind || cwKindOf(f.name);
@@ -36203,7 +36523,8 @@ function cwListRow(f, idx) {
     + '<span class="ic">' + fileTypeIcon(f.name, 17) + '</span>'
     + '<span style="min-width:0"><span class="fn">' + esc(f.name) + '</span>'
     +   '<span class="sub">' + esc(CW_KIND_NAME[kind] || '文件')
-    +   (f.archived ? ' · 活动归档' : (sent ? ' · 已推送' : '')) + '</span></span>'
+    +   (f.archived ? ' · 活动归档' : (sent ? ' · 已推送' : '')) + '</span>'
+    +   cwOwnerHtml(f) + '</span>'
     + '<span class="tp">' + esc(CW_KIND_NAME[kind] || '文件') + '</span>'
     + '<span class="sz">' + esc(f.size_text || '—') + '</span>'
     + '<span class="mt">' + esc(f.mtime || '—') + '</span>'
@@ -36215,8 +36536,10 @@ function cwCmpRow(f, idx) {
   const kind = f.kind || cwKindOf(f.name);
   const sent = !f.archived && cwSentRow(f.id);
   const selCls = cwState.sel.has(String(f.id)) ? ' sel' : '';
+  const ownerPath = String(f.rel_dir || '').split('/').filter(Boolean).join(' / ');
   return '<div class="cw-cmp' + selCls + '" data-id="' + esc(f.id) + '" data-kind="' + esc(kind) + '"'
-    + ' onclick="cwPreviewLocal(this)" title="' + esc(f.name + (f.size_text ? ' · ' + f.size_text : '')) + '">'
+    + ' onclick="cwPreviewLocal(this)" title="'
+    + esc(f.name + (f.size_text ? ' · ' + f.size_text : '') + (ownerPath ? ' · ' + ownerPath : '')) + '">'
     + cwPickBox(f)
     + '<span class="ic">' + fileTypeIcon(f.name, 15) + '</span>'
     + '<span class="fn">' + esc(f.name) + '</span>'
@@ -36227,6 +36550,48 @@ function cwCmpRow(f, idx) {
     +   (f.archived ? '' : '<button title="共享给其他老师" onclick="event.stopPropagation();cwShareDialog(this)">🤝</button>')
     +   '<button class="cw-del" title="删除" onclick="event.stopPropagation();cwDeleteLocal(this)">🗑</button>'
     + '</span></div>';
+}
+
+/* 归档自愈（2026-11-06）：老数据里平铺在班级目录的文件，按提交记录的
+   「原文件名 → 学号/姓名/班级」反查后移进 <班级>/<学号-姓名>/。
+   只在检测到平铺文件时静默跑一次；也可点路径条上的「整理归档」手动跑。 */
+let _cwNormDone = false;
+async function cwRefreshFilesKeepSub() {
+  if (!cwState.course) return;
+  const j = await cwReq('list?course=' + encodeURIComponent(cwState.course));
+  cwState.files = j.files || [];
+  cwState.sheet = String(j.sheet || '');
+  cwState.subs = j.subs || [];
+  cwPaintFiles(cwState.files);
+  cwPaintTree();
+}
+function cwNormalizeReq() {
+  return fetch('/api/v2/teacher/activity/normalize-archive', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
+  }).then(r => r.json().catch(() => ({})));
+}
+async function cwNormalizeArchive() {
+  try {
+    const j = await cwNormalizeReq();
+    toast(j.message || (j.ok ? '整理完成' : (j.msg || '整理失败')));
+    await cwRefreshFilesKeepSub();
+  } catch (e) { toast('整理失败：' + (e.message || e)); }
+}
+window.cwNormalizeArchive = cwNormalizeArchive;
+function cwMaybeNormalize() {
+  if (_cwNormDone || !cwState.files || !cwState.files.length) return;
+  const flat = cwState.files.some(f => {
+    const p = String(f.rel_dir || '').split('/').filter(Boolean);
+    return p.length === 1 && p[0].indexOf('_') !== 0 && !f.archived;
+  });
+  if (!flat) return;
+  _cwNormDone = true;              // 只自动跑一次，避免每次刷新都扫盘
+  cwNormalizeReq().then(j => {
+    if (j.ok && (j.moved || 0) > 0) {
+      toast('已把 ' + j.moved + ' 个平铺文件整理到「学号-姓名」文件夹');
+      cwRefreshFilesKeepSub();
+    }
+  }).catch(() => {});
 }
 
 function cwFilesBox(list) {
@@ -36272,7 +36637,17 @@ function cwPaintFiles(files) {
   }
   const own = shown.filter(f => !f.archived);
   const arc = shown.filter(f => f.archived);
-  let h = '';
+  /* 当前路径条：明确「课程 › 班级 › 学号-姓名」，并给出归档规则与整理入口 */
+  const pathParts = [cwState.course].concat(sub ? sub.split('/') : []);
+  let h = '<div class="cw-pathbar">'
+    + '<span class="cw-path-txt">📁 ' + pathParts.map(p => esc(p)).join(' › ') + '</span>'
+    + '<span class="cw-path-tip">' + (sub.indexOf('/') >= 0
+        ? '当前是某位学生的作品文件夹，文件归属已明确'
+        : (sub ? '班级目录：每位学生的作品单独放在「学号-姓名」子文件夹' : '课程根目录'))
+    + '</span>'
+    + '<button type="button" class="btn btn-ghost" onclick="cwNormalizeArchive()">🧹 整理归档</button>'
+    + '</div>';
+  cwMaybeNormalize();
   if (own.length) {
     h += '<div class="cw-sec-t">' + (sub ? esc(sub) : '资料') + '（' + own.length + '）</div>' + cwFilesBox(own);
   }
@@ -37277,6 +37652,10 @@ window.addEventListener('error', e => {
    ========================================================================== */
 const QT = { papers:[], publishes:[], classes:[], now:null, board:null, policy:null,
              tab:'papers', curPub:'', curClass:'', stats:null, editor:null,
+             bank:[], bankSel:new Set(), bankFilter:'', imp:null, impFile:null,
+             /* 题库视图：cards 卡片 / list 列表 / compact 紧凑，记住上次选择 */
+             bankView: (function(){ try { return LS.get('wb-qz-bank-view','cards') || 'cards'; }
+                                   catch(e){ return 'cards'; } })(),
              bound:false, es:null, autoFollow:true, busy:false };
 
 const QZ_TYPES = [['single','单选题'],['multiple','多选题'],['blank','填空题'],
@@ -37325,7 +37704,56 @@ function quizEnsureCss(){
 .qz-score-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:#eef7f3;border:1px solid #cfe8dd;border-radius:11px;padding:9px 12px;margin-bottom:12px;font-size:12.5px}
 .act-win.is-bound{border-color:var(--brand-primary,#0F6E56);box-shadow:0 0 0 2px rgba(15,110,86,.13)}
 .act-win-hd .qz-mini{font-size:11px;padding:2px 7px}
+.act-win-hd .btn-sm,.act-bind-bar .btn-sm{padding:3px 9px;font-size:11px;width:auto;flex:none}
+.act-win-hd{align-items:center}
+/* 窗口顶部统计：直接复用顶部 .act-kpi 的配色/边框/圆角，只缩小一号 */
+.act-win-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:0 0 9px}
+.act-kpi.mini{padding:7px 9px;border-top-width:3px;border-radius:9px;box-shadow:none;min-width:0}
+.act-kpi.mini .lab{font-size:10.5px;letter-spacing:0;white-space:nowrap}
+.act-kpi.mini .val{font-size:22px;margin-top:0}
+.act-kpi.mini .sub{font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media(max-width:760px){.act-win-kpis{grid-template-columns:repeat(2,1fr)}}
 .act-bind-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:rgba(15,110,86,.07);border:1px solid rgba(15,110,86,.22);border-radius:10px;padding:8px 11px;margin-bottom:10px;font-size:12.5px}
+/* 试题库 / 导入预览 / 题干与选项图片 */
+.qz-bank-pick{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+.qz-bank-pick .chk{font-size:12px;display:inline-flex;align-items:center;gap:4px}
+/* 试题库列表 / 紧凑视图（与资料页三视图同一套分段控件与密度） */
+.qz-bank-title{display:inline-flex;align-items:center;gap:6px;font-weight:600}
+.qz-img-xs{width:26px;height:26px;object-fit:cover;border-radius:5px;border:1px solid var(--line,#e6eae8)}
+.qz-bank-tbl td{vertical-align:middle}
+.qz-bank-tbl .btn-sm{padding:3px 9px;font-size:11px;width:auto;flex:none}
+.qz-cmp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:7px}
+.qz-cmp{display:flex;align-items:center;gap:8px;border:1px solid var(--line,#e4e8e6);
+  border-radius:9px;padding:7px 10px;font-size:12.5px;background:var(--card,#fff)}
+.qz-cmp input{flex:none;margin:0}
+.qz-cmp-t{flex:none;font-size:10.5px;color:var(--brand-primary,#0F6E56);background:#eef4f1;border-radius:5px;padding:1px 6px}
+.qz-cmp-fn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qz-cmp-pt{flex:none;color:var(--ink3,#6b7772);font-size:11px}
+.qz-cmp-x{flex:none;border:0;background:transparent;color:var(--ink3,#6b7772);cursor:pointer;font-size:12px}
+.qz-cmp-x:hover{color:#B3261E}
+/* 选图片 / 选文件：隐藏原生 file input，用工作台同款凸起按钮触发 */
+/* 教师端 .btn 默认 width:100%（整行），在工具条 / 文件选择里要按内容宽度排 */
+.qz-bar .btn,.qz-img-edit .btn{width:auto;flex:none}
+.qz-file-btn{position:relative;overflow:hidden;cursor:pointer;display:inline-flex;
+  align-items:center;gap:5px;width:auto;flex:none}
+.qz-file-btn input[type=file]{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;font-size:0}
+.qz-file-name{font-size:11.5px;color:var(--ink3,#6b7772);max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qz-file-name.on{color:var(--brand-primary,#0F6E56);font-weight:600}
+/* 格式提示常驻：选完文件也还能看到能传什么 */
+.qz-file-hint{font-size:11px;color:var(--ink3,#6b7772);opacity:.85}
+.qz-img-edit .btn-sm{padding:4px 10px;font-size:11.5px;width:auto;flex:none}
+.qz-img-sm{display:block;max-width:100%;max-height:88px;border-radius:8px;border:1px solid var(--line,#e6eae8);margin:5px 0}
+.qz-img-opt{max-width:100%;max-height:70px;border-radius:7px;border:1px solid var(--line,#e6eae8);margin-top:4px}
+.qz-img-edit{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:6px 0;font-size:11.5px;color:var(--ink3,#6b7772)}
+.qz-img-edit input[type=file]{font-size:11px;max-width:190px}
+.qz-prev{margin-top:10px}
+.qz-prev-hd{font-size:12.5px;color:var(--brand-primary,#0F6E56);margin-bottom:7px}
+.qz-prev-list{max-height:280px;overflow:auto;border:1px solid var(--line,#e4e8e6);border-radius:10px}
+.qz-prev-row{padding:7px 10px;border-bottom:1px solid var(--line,#eceeec);font-size:12.5px;line-height:1.7}
+.qz-prev-row:last-child{border-bottom:0}
+.qz-prev-row .qz-note{margin-left:6px}
+.qz-err{background:#fdeceb;border:1px solid #f0c9c5;color:#8a1c14;font-size:12.5px}
+.qz-opt-img label{display:flex;align-items:center;gap:8px}
 @media(max-width:760px){.qz-row label{min-width:100%}.qz-grid{grid-template-columns:1fr}}
 `;
   document.head.appendChild(s);
@@ -37351,6 +37779,8 @@ async function quizInit(silent){
     QT.papers = j.papers || []; QT.publishes = j.publishes || [];
     QT.classes = j.classes || []; QT.now = j.now || null;
     QT.board = j.board || null; QT.policy = j.policy || null;
+    try { QT.bank = (await quizApi('/api/v2/quiz/teacher/bank')).bank || []; }
+    catch (e2) { /* 题库读失败不影响其它页签 */ }
     if (!QT.curPub || !QT.publishes.some(p=>String(p.id)===String(QT.curPub)))
       QT.curPub = QT.publishes.length ? String(QT.publishes[0].id) : '';
   } catch(e){ if (!silent) toast('测验数据载入失败：' + e.message); }
@@ -37372,15 +37802,15 @@ function quizRender(keep, skipStats){
   const root = document.getElementById('qzRoot'); if (!root) return;
   const draw = () => {
     const p = QT.policy || {};
+    /* 只留一行必要说明，成段解释收进旁侧问号气泡（工作台统一的 .hq 拟物圆钮） */
     root.innerHTML =
-      '<div class="qz-hd"><h3>测验 / 检测</h3>'
-      + '<p><b>大屏</b>：' + esc(p.screen||'实时收件看板') + '</p>'
-      + '<p><b>本页</b>：' + esc(p.quiz||'逐题与成绩分析') + '</p>'
-      + '<p><b>成绩页</b>：' + esc(p.scores||'导入汇总分析') + '</p>'
-      + '<p>统一口径：' + esc(p.rule||'同一发布同一学生只算最后一次提交')
-      + '　·　服务端时间 ' + esc((QT.now||{}).date||'') + ' ' + esc((QT.now||{}).time||'') + '</p></div>'
+      '<div class="qz-hd"><h3>测验 / 检测' + hq('quizPolicy', '看三处入口与数据口径') + '</h3>'
+      + '<p>大屏管收件 · 本页管分析 · 成绩页管汇总　·　服务端时间 '
+      + esc((QT.now||{}).date||'') + ' ' + esc((QT.now||{}).time||'') + '</p></div>'
       + '<div class="qz-tabs">'
-      + [['papers','📝 试卷库'],['publish','📤 发布与检测'],['data','📊 提交与成绩']].map(([k,n])=>
+      + [['papers','📝 试卷库'],
+         ['bank','📚 试题库' + ((QT.bank||[]).length ? ' · ' + QT.bank.length : '')],
+         ['publish','📤 发布与检测'],['data','📊 提交与成绩']].map(([k,n])=>
           '<button type="button" class="qz-tab'+(QT.tab===k?' on':'')+'" onclick="quizTab(\''+k+'\')">'+n+'</button>').join('')
       + '</div><div id="qzBody">' + quizBodyHtml() + '</div>';
   };
@@ -37393,6 +37823,7 @@ function quizTab(t){ QT.tab = t; quizRender(false); }
 window.quizTab = quizTab;
 function quizBodyHtml(){
   if (QT.tab === 'papers') return quizPapersHtml();
+  if (QT.tab === 'bank') return quizBankHtml();
   if (QT.tab === 'publish') return quizPublishListHtml();
   return quizDataHtml();
 }
@@ -37404,12 +37835,19 @@ function quizPapersHtml(){
     + '<div class="qz-acts">'
     + '<button type="button" class="qz-mini" onclick="quizEditorOpen(\''+esc(p.id)+'\')">✎ 编辑</button>'
     + '<button type="button" class="qz-mini" onclick="quizPublishOpen(\'\',\''+esc(p.id)+'\')">📤 发布</button>'
+    + '<button type="button" class="qz-mini" onclick="quizBankAddPaper(\''+esc(p.id)+'\')">📚 加入题库</button>'
     + '<button type="button" class="qz-mini danger" onclick="quizPaperDelete(\''+esc(p.id)+'\')">删除</button>'
     + '</div></div>').join('');
-  return '<div class="qz-bar"><button type="button" class="btn btn-primary" style="width:auto" onclick="quizEditorOpen(\'\')">＋ 新建试卷</button>'
-    + '<span class="qz-note">题型：单选 / 多选 / 填空 / 判断 / 连线 / 简答 / 图片上传。简答与图片需人工批阅，其余由服务端自动判分。</span></div>'
+  /* 2026-11-06：试题库只保留顶部页签一个入口。
+     这里原来还有一个「📚 试题库（N）」按钮，和页签是同一个库的两个入口，
+     看着像两个题库；已移除，题库数量改由页签本身显示。 */
+  return '<div class="qz-bar">'
+    + '<button type="button" class="btn btn-primary" style="width:auto" onclick="quizEditorOpen(\'\')">＋ 新建试卷</button>'
+    + '<button type="button" class="btn" style="width:auto" onclick="quizImportOpen()">⬆ 导入整份试卷</button>'
+    + hq('quizFormat', '看试卷导入格式')
+    + '</div>'
     + (QT.papers.length ? '<div class="qz-grid">' + cards + '</div>'
-      : '<div class="qz-empty">还没有试卷，点「＋ 新建试卷」开始配置。</div>');
+      : '<div class="qz-empty">还没有试卷：点「＋ 新建试卷」逐题配置，或「⬆ 导入整份试卷」一次载入。</div>');
 }
 function qzJs(s){ return encodeURIComponent(String(s||'')).replace(/'/g, '%27'); }
 function quizPublishListHtml(){
@@ -37424,6 +37862,7 @@ function quizPublishListHtml(){
       + '<span class="qz-tag '+(p.allow_multiple?'':'off')+'">'+(p.allow_multiple?'可多次提交（上限 '+p.max_attempts+' 次）':'仅一次')+'</span>'
       + '<span class="qz-tag '+(p.show_answer?'':'off')+'">提交后'+(p.show_answer?'显示':'不显示')+'答案</span>'
       + '<span class="qz-tag '+(p.show_score?'':'off')+'">提交后'+(p.show_score?'显示':'不显示')+'分数</span>'
+      + '<span class="qz-tag '+(p.show_analysis?'':'off')+'">解析'+(p.show_analysis?'开放':'不开放')+'</span>'
       + '<span class="qz-tag warn">大屏窗口：'+esc(p.window||'')+'</span></div>'
       + '<div class="qz-acts">'
       + '<button type="button" class="qz-mini" onclick="quizOpenData(\''+esc(p.id)+'\')">📊 查看提交与成绩</button>'
@@ -37433,7 +37872,7 @@ function quizPublishListHtml(){
       + '</div></div>';
   }).join('');
   return '<div class="qz-bar"><button type="button" class="btn btn-primary" style="width:auto" onclick="quizPublishOpen(\'\')">＋ 发布测验</button>'
-    + '<span class="qz-note">发布后学生端按登录班级自动匹配试卷；时间、次数、显示答案 / 分数都在服务端判定。</span></div>'
+    + '<span class="qz-note">学生端按登录班级自动匹配' + hq('quizPolicy', '看发布与分析口径') + '</span></div>'
     + (QT.publishes.length ? '<div class="qz-grid">' + cards + '</div>'
       : '<div class="qz-empty">还没有发布记录。先建试卷，再点「＋ 发布测验」。</div>');
 }
@@ -37445,6 +37884,308 @@ function quizGoScreen(w){
   toast('已把「'+w+'」设为当前大屏窗口');
 }
 window.quizGoScreen = quizGoScreen;
+
+/* ---------------- 整份试卷导入 ----------------
+   老师把 .txt/.md/.json 或粘贴的整份试卷一次解析载入；解析在服务端
+   （core/quiz_import.py），前端先预览再确认，避免逐题手工添加。 */
+function qzImgTag(url, cls){
+  if (!url) return '';
+  return '<img class="' + (cls || 'qz-img-sm') + '" src="' + esc(url) + '" alt="题目图片">';
+}
+function qzAnsText(q){
+  const a = q.answer;
+  if (a == null || a === '') return q.type === 'match' ? (q.pairs||[]).map(p=>p.l+'='+p.r).join('、') : '—';
+  if (Array.isArray(a)) return a.map(x=>Array.isArray(x)?x.join('='):String(x)).join('、');
+  return String(a) + ((q.accept||[]).length ? '（' + q.accept.join(' / ') + '）' : '');
+}
+function quizBankAddPaper(pid){
+  quizApi('/api/v2/quiz/teacher/bank/add', {paper_id:pid}).then(async j=>{
+    toast('已把 ' + j.added + ' 道新题加入试题库');
+    await quizInit(true); quizRender(true);
+  }).catch(e=>toast('加入题库失败：' + e.message));
+}
+window.quizBankAddPaper = quizBankAddPaper;
+function quizBankToggle(id, on){
+  if (on) QT.bankSel.add(String(id)); else QT.bankSel.delete(String(id));
+  const b = document.getElementById('qzBankCount');
+  if (b) b.textContent = QT.bankSel.size;
+}
+window.quizBankToggle = quizBankToggle;
+function quizBankFilter(v){ QT.bankFilter = v; quizRender(true); }
+window.quizBankFilter = quizBankFilter;
+function quizBankSelectAll(){
+  const list = (QT.bank||[]).filter(q=>!QT.bankFilter || q.type===QT.bankFilter);
+  const allOn = list.every(q=>QT.bankSel.has(String(q.id)));
+  list.forEach(q=>allOn ? QT.bankSel.delete(String(q.id)) : QT.bankSel.add(String(q.id)));
+  quizRender(true);
+}
+window.quizBankSelectAll = quizBankSelectAll;
+function quizBankDelete(id){
+  quizApi('/api/v2/quiz/teacher/bank/delete', {id:id}).then(async ()=>{
+    QT.bankSel.delete(String(id)); await quizInit(true); quizRender(true);
+    toast('已从试题库移除');
+  }).catch(e=>toast('删除失败：' + e.message));
+}
+window.quizBankDelete = quizBankDelete;
+function quizBankNewPaper(){
+  const ids = Array.from(QT.bankSel);
+  if (!ids.length) { toast('先勾选要组卷的题目'); return; }
+  const title = '题库组卷 ' + new Date().toLocaleDateString('zh-CN');
+  quizApi('/api/v2/quiz/teacher/paper/from-bank', {ids:ids, title:title}).then(async j=>{
+    QT.bankSel.clear(); await quizInit(true); QT.tab = 'papers'; quizRender(false);
+    quizEditorOpen(j.paper.id);
+    toast('已用 ' + j.count + ' 道题新建试卷，可继续改标题与题目');
+  }).catch(e=>toast('组卷失败：' + e.message));
+}
+window.quizBankNewPaper = quizBankNewPaper;
+/* 试题库三视图（2026-11-06）：与「资料」页同一套分段控件 .cw-seg，
+   卡片看内容、列表看答案与分值、紧凑一屏扫几十题。视图选择记住上次用的。 */
+function quizBankView(v){
+  QT.bankView = (v === 'list' || v === 'compact') ? v : 'cards';
+  try { LS.set('wb-qz-bank-view', QT.bankView); } catch (e) {}
+  quizRender(true);
+}
+window.quizBankView = quizBankView;
+function quizBankPickBox(q){
+  return '<input type="checkbox"' + (QT.bankSel.has(String(q.id)) ? ' checked' : '')
+    + ' onchange="quizBankToggle(\'' + esc(q.id) + '\',this.checked)" title="选入组卷">';
+}
+function quizBankOptTags(q){
+  return (q.options || []).map(o => '<span class="qz-tag">' + esc(o.key || '') + ' '
+    + esc(o.text || '') + (o.image ? ' 🖼' : '') + '</span>').join('');
+}
+function quizBankHtml(){
+  const all = QT.bank || [];
+  const typeOpts = [['', '全部题型']].concat(QZ_TYPES)
+    .map(([k, n]) => '<option value="' + k + '"' + (QT.bankFilter === k ? ' selected' : '') + '>'
+      + n + '</option>').join('');
+  const list = all.filter(q => !QT.bankFilter || q.type === QT.bankFilter);
+  const views = [['cards', '▦ 卡片'], ['list', '☰ 列表'], ['compact', '▪ 紧凑']];
+  const bar = '<div class="qz-bar">'
+    + '<select class="qz-sel" style="width:auto" onchange="quizBankFilter(this.value)">' + typeOpts + '</select>'
+    + '<div class="cw-seg" role="group" aria-label="题库视图">'
+    + views.map(([k, n]) => '<button type="button" data-bv="' + k + '"'
+      + (QT.bankView === k ? ' class="on"' : '') + ' onclick="quizBankView(\'' + k + '\')">' + n + '</button>').join('')
+    + '</div>'
+    + '<button type="button" class="btn btn-ghost btn-sm" onclick="quizBankSelectAll()">全选 / 清空</button>'
+    + '<button type="button" class="btn btn-primary" style="width:auto" onclick="quizBankNewPaper()">＋ 用选中题目新建试卷（<span id="qzBankCount">' + QT.bankSel.size + '</span>）</button>'
+    + '<span class="qz-note">共 ' + list.length + ' 题</span>'
+    + hq('quizBank', '看试题库用法') + '</div>';
+  if (!list.length) return bar + '<div class="qz-empty">'
+    + (all.length ? '这个题型下还没有题目' : '试题库还是空的：导入试卷时勾选「同时加入试题库」，或在试卷库点「📚 加入题库」。')
+    + '</div>';
+  if (QT.bankView === 'list') return bar + quizBankListHtml(list);
+  if (QT.bankView === 'compact') return bar + quizBankCmpHtml(list);
+  const cards = list.map(q => {
+    const t = QZ_TYPE_NAME[q.type] || q.type;
+    const opts = quizBankOptTags(q);
+    return '<div class="qz-card qz-bank-q">'
+      + '<div class="qz-bank-pick">' + quizBankPickBox(q)
+      + '<span class="qz-tag">' + esc(t) + '</span>'
+      + '<span class="qz-tag off">' + esc(q.score) + ' 分</span></div>'
+      + '<h4>' + qzImgTag(q.title_image, 'qz-img-sm') + esc(q.title || '（无题干）') + '</h4>'
+      + (opts ? '<div class="qz-meta">' + opts + '</div>' : '')
+      + '<div class="qz-meta">答案：' + esc(qAnsTextSafe(q)) + '</div>'
+      + '<div class="qz-acts"><button type="button" class="btn btn-ghost btn-sm danger"'
+      + ' onclick="quizBankDelete(\'' + esc(q.id) + '\')">移出题库</button></div>'
+      + '</div>';
+  }).join('');
+  return bar + '<div class="qz-grid">' + cards + '</div>';
+}
+function quizBankListHtml(list){
+  return '<div class="qz-scroll"><table class="qz-tbl qz-bank-tbl"><thead><tr>'
+    + '<th style="width:34px"></th><th style="width:90px">题型</th><th>题干</th>'
+    + '<th style="width:150px">答案</th><th style="width:60px">分值</th>'
+    + '<th style="width:78px">操作</th></tr></thead><tbody>'
+    + list.map(q => '<tr>'
+      + '<td>' + quizBankPickBox(q) + '</td>'
+      + '<td><span class="qz-tag">' + esc(QZ_TYPE_NAME[q.type] || q.type) + '</span></td>'
+      + '<td><span class="qz-bank-title">' + (q.title_image ? '<img class="qz-img-xs" src="'
+          + esc(q.title_image) + '" alt="">' : '') + esc(q.title || '（无题干）') + '</span>'
+      + ((q.options || []).some(o => o.image) ? '<span class="qz-tag off">含图片选项</span>' : '')
+      + '</td>'
+      + '<td>' + esc(qAnsTextSafe(q)) + '</td>'
+      + '<td>' + esc(q.score) + '</td>'
+      + '<td><button type="button" class="btn btn-ghost btn-sm danger"'
+      + ' onclick="quizBankDelete(\'' + esc(q.id) + '\')">移除</button></td>'
+      + '</tr>').join('')
+    + '</tbody></table></div>';
+}
+function quizBankCmpHtml(list){
+  return '<div class="qz-cmp-grid">' + list.map(q =>
+    '<div class="qz-cmp">' + quizBankPickBox(q)
+    + '<span class="qz-cmp-t">' + esc(QZ_TYPE_NAME[q.type] || q.type) + '</span>'
+    + '<span class="qz-cmp-fn" title="' + esc(q.title || '') + '">'
+    + (q.title_image ? '🖼 ' : '') + esc(q.title || '（无题干）') + '</span>'
+    + '<span class="qz-cmp-pt">' + esc(q.score) + ' 分</span>'
+    + '<button type="button" class="qz-cmp-x" title="移出题库"'
+    + ' onclick="quizBankDelete(\'' + esc(q.id) + '\')">✕</button>'
+    + '</div>').join('') + '</div>';
+}
+function qAnsTextSafe(q){ try { return qzAnsText(q); } catch(e){ return '—'; } }
+
+function quizImportFillSample(){
+  quizApi('/api/v2/quiz/teacher/sample').then(j=>{
+    QT.impFile = null;      // 文本示例与已选的 Word/Excel 文件互斥
+    const t = document.getElementById('qzImpText'); if (t) t.value = j.sample || '';
+    const nm = document.getElementById('qzImpFileName');
+    if (nm) { nm.textContent = '已填入示例内容，可直接改成你的试卷'; nm.classList.add('on'); }
+    toast('已填入示例，按这个格式替换成你的试卷即可');
+  }).catch(e=>toast('读取示例失败：'+e.message));
+}
+window.quizImportFillSample = quizImportFillSample;
+function quizImportReadFile(input){
+  const f = input.files && input.files[0]; if (!f) return;
+  const nameEl = document.getElementById('qzImpFileName');
+  const setLab = (txt, on) => {
+    if (!nameEl) return;
+    nameEl.textContent = txt;
+    nameEl.classList.toggle('on', !!on);
+  };
+  const ext = String(f.name || '').toLowerCase().replace(/^.*\./, '');
+  const textExts = ['txt', 'md', 'json'];
+  const officeExts = ['docx', 'xlsx', 'doc', 'xls'];
+
+  if (officeExts.indexOf(ext) >= 0) {
+    if (f.size > 8 * 1024 * 1024) {
+      setLab('文件 ' + Math.round(f.size / 1024 / 1024) + ' MB，超过 8MB 上限', false);
+      toast('文件太大：请精简后重试（上限 8MB）');
+      input.value = '';
+      return;
+    }
+    const rd = new FileReader();
+    rd.onload = function(){
+      QT.impFile = { name: f.name, data: String(rd.result || '') };
+      setLab(f.name + ' · ' + Math.max(1, Math.round(f.size / 1024)) + ' KB', true);
+      if (ext === 'doc') {
+        // .xls 已按 BIFF8 原生读行列，只有 .doc 才需要纯文本兜底
+        toast('老版 .doc 会尽力提取纯文本；排版与图片建议另存为 .docx 后导入');
+      }
+      quizImportOfficePreview();     // 选完直接解析预览，少点一次
+    };
+    rd.readAsDataURL(f);
+    return;
+  }
+
+  if (textExts.indexOf(ext) < 0) {
+    setLab('只支持 .docx / .xlsx / .doc / .xls / .txt / .md / .json，当前是 .' + ext, false);
+    toast('文件格式不支持：请用 Word / Excel / 文本格式，或直接粘贴内容');
+    input.value = '';
+    return;
+  }
+  if (f.size > 2 * 1024 * 1024) {
+    setLab('文件 ' + Math.round(f.size / 1024 / 1024) + ' MB，超过 2MB 上限', false);
+    toast('文件太大：请控制在 2MB 以内，或直接粘贴内容');
+    input.value = '';
+    return;
+  }
+  QT.impFile = null;
+  const rd = new FileReader();
+  rd.onload = function(){
+    const t = document.getElementById('qzImpText'); if (t) t.value = String(rd.result||'');
+    setLab(f.name + ' · ' + Math.max(1, Math.round(f.size / 1024)) + ' KB', true);
+    toast('已读入 ' + f.name + '，点「解析预览」看看题目');
+  };
+  rd.readAsText(f, 'utf-8');
+}
+async function quizImportOfficePreview(){
+  const box = document.getElementById('qzImpPreview');
+  if (!box || !QT.impFile) return;
+  box.innerHTML = '<div class="qz-empty">正在解析 ' + esc(QT.impFile.name) + ' …</div>';
+  try {
+    const j = await quizApi('/api/v2/quiz/teacher/import-file',
+      {filename: QT.impFile.name, data: QT.impFile.data, preview: true,
+       title: String(QT.impFile.name || '').replace(/\.[^.]+$/, '') || '导入试卷'});
+    QT.imp = j.preview;
+    box.innerHTML = quizImportPreviewHtml(j.preview, j.warnings)
+      + (j.degraded ? '<div class="qz-note" style="color:var(--status-warning)">⚠ '
+        + '老版格式按纯文本提取，复杂排版与图片可能丢失；建议另存为 .docx / .xlsx 后再导入。</div>' : '');
+  } catch (e) {
+    box.innerHTML = '<div class="qz-err" style="padding:10px;border-radius:9px">' + esc(e.message) + '</div>';
+  }
+}
+window.quizImportOfficePreview = quizImportOfficePreview;
+window.quizImportReadFile = quizImportReadFile;
+function quizImportPreviewHtml(paper, warnings){
+  const qs = (paper && paper.questions) || [];
+  let h = '<div class="qz-prev-hd">✅ 解析出 <b>' + qs.length + '</b> 道题　·　试卷名：<b>'
+    + esc((paper||{}).title||'') + '</b>　·　课程：' + esc((paper||{}).course||'—') + '</div>';
+  if ((warnings||[]).length) h += '<div class="qz-note" style="color:var(--status-warning)">⚠ '
+    + warnings.slice(0,6).map(esc).join('；') + '</div>';
+  h += '<div class="qz-prev-list">' + qs.map((q,i)=>{
+    const imgs = (q.title_image ? ' 🖼题干图' : '')
+      + ((q.options||[]).some(o=>o.image) ? ' 🖼选项图' : '');
+    return '<div class="qz-prev-row"><b>'+(i+1)+'.</b> <span class="qz-tag">'
+      + esc(QZ_TYPE_NAME[q.type]||q.type) + '</span> ' + esc(q.title||'（无题干）')
+      + '<span class="qz-note">' + imgs + ' · 答案 ' + esc(qAnsTextSafe(q))
+      + ' · ' + esc(q.score) + ' 分</span></div>';
+  }).join('') + '</div>';
+  return h;
+}
+async function quizImportPreview(){
+  if (QT.impFile) return quizImportOfficePreview();   // Word / Excel：走文件解析
+  const t = document.getElementById('qzImpText');
+  const box = document.getElementById('qzImpPreview');
+  if (!t || !box) return;
+  if (!t.value.trim()) { toast('先粘贴试卷内容或选择文件'); return; }
+  box.innerHTML = '<div class="qz-empty">正在解析…</div>';
+  try {
+    const j = await quizApi('/api/v2/quiz/teacher/import', {text:t.value, preview:true});
+    QT.imp = j.preview;
+    box.innerHTML = quizImportPreviewHtml(j.preview, j.warnings);
+  } catch(e){ box.innerHTML = '<div class="qz-err" style="padding:10px;border-radius:9px">'
+    + esc(e.message) + '</div>'; }
+}
+window.quizImportPreview = quizImportPreview;
+async function quizImportSave(){
+  const add = !!(document.getElementById('qzImpBank')||{}).checked;
+  let j;
+  try {
+    if (QT.impFile) {
+      j = await quizApi('/api/v2/quiz/teacher/import-file',
+        {filename: QT.impFile.name, data: QT.impFile.data,
+         preview: false, add_to_bank: add,
+         title: String(QT.impFile.name || '').replace(/\.[^.]+$/, '') || '导入试卷'});
+    } else {
+      const t = document.getElementById('qzImpText'); if (!t) return;
+      if (!t.value.trim()) { toast('先粘贴试卷内容或选择文件'); return; }
+      j = await quizApi('/api/v2/quiz/teacher/import',
+        {text: t.value, preview: false, add_to_bank: add});
+    }
+    closeFloat(); QT.tab = 'papers'; QT.impFile = null;
+    await quizInit(true); quizRender(false);
+    toast('已导入整份试卷（' + (j.paper.questions||[]).length + ' 题）'
+      + (add ? '，试题库 +' + j.bank_added : '')
+      + (j.degraded ? '；老格式仅提取了文本' : ''));
+  } catch(e){ toast('导入失败：' + e.message); }
+}
+window.quizImportSave = quizImportSave;
+async function quizImportOpen(){
+  quizEnsureCss();
+  QT.impFile = null;      // 每次打开都是一次新的导入，别残留上次选的文件
+  /* 文件选择用工作台同款凸起按钮触发（隐藏原生 file input），
+     并把支持格式直接写在旁边，不用点开文件对话框才知道能传什么。 */
+  const body = '<div class="qz-bar">'
+    + '<label class="btn btn-primary qz-file-btn">📄 选择试卷文件'
+    +   '<input type="file" id="qzImpFile"'
+    +   ' accept=".docx,.xlsx,.doc,.xls,.txt,.md,.json,text/plain,application/json"'
+    +   ' onchange="quizImportReadFile(this)"></label>'
+    + '<span class="qz-file-name" id="qzImpFileName">未选择文件</span>'
+    + '<span class="qz-file-hint">支持 .docx / .xlsx / .xls（均可直接解析）、.doc（文本兜底）、.txt / .md / .json，≤ 8MB</span>'
+    + '<button type="button" class="btn" onclick="quizImportFillSample()">📄 填入示例</button>'
+    + hq('quizFormat','看试卷导入格式与 Word/Excel 模板') + '</div>'
+    + '<textarea id="qzImpText" class="qz-ta" style="min-height:190px;font-family:ui-monospace,Consolas,monospace"'
+    + ' placeholder="把整份试卷粘贴到这里，或点上方选择 .txt / .json 文件"></textarea>'
+    + '<div class="qz-bar" style="margin-top:8px">'
+    + '<label class="chk" style="font-size:12.5px"><input type="checkbox" id="qzImpBank" checked> 同时把这批题目加入试题库</label>'
+    + '<button type="button" class="qz-mini" onclick="quizImportPreview()">🔍 解析预览</button></div>'
+    + '<div id="qzImpPreview" class="qz-prev"></div>';
+  const foot = '<button type="button" class="btn btn-primary" style="width:auto" onclick="quizImportSave()">确认导入整份试卷</button>'
+    + '<button type="button" class="btn btn-ghost" style="width:auto" onclick="closeFloat()">取消</button>';
+  showFloat('导入整份试卷', body, {footer:foot});
+  const layer = document.getElementById('floatLayer'); if (layer) layer.classList.add('wide');
+}
+window.quizImportOpen = quizImportOpen;
 
 /* ---------------- 试卷编辑器 ---------------- */
 function quizEditorOpen(id){
@@ -37483,8 +38224,8 @@ function quizEditorBind(){
     const el = e.target; if (!el || !el.getAttribute) return;
     const pf = el.getAttribute('data-pf');
     if (pf && QT.editor) { QT.editor[pf] = el.value; return; }
-    const qf = el.getAttribute('data-qf');
-    if (qf && QT.editor) { const [i,k] = qf.split('|'); const q = QT.editor.questions[Number(i)];
+    const qzf = el.getAttribute('data-qzf');
+    if (qzf && QT.editor) { const [i,k] = qzf.split('|'); const q = QT.editor.questions[Number(i)];
       if (q) q[k] = el.value; if (k==='score') quizEditorSum(); return; }
     const of = el.getAttribute('data-of');
     if (of && QT.editor) { const [i,j,k] = of.split('|'); const q = QT.editor.questions[Number(i)];
@@ -37495,7 +38236,22 @@ function quizEditorBind(){
     const tp = el.getAttribute('data-type');
     if (tp && QT.editor) { const q = QT.editor.questions[Number(tp)]; if (!q) return;
       const n = quizNewQ(el.value); n.id = q.id; n.title = q.title; n.score = q.score;
-      QT.editor.questions[Number(tp)] = n; quizEditorFill(); }
+      QT.editor.questions[Number(tp)] = n; quizEditorFill(); return; }
+    /* 题干 / 选项图片：读成 dataURL 存进题目，学生端直接渲染 */
+    const ti = el.getAttribute('data-qtitleimg'), oi = el.getAttribute('data-qoptimg');
+    if ((ti !== null || oi !== null) && el.files && el.files[0] && QT.editor) {
+      const f = el.files[0];
+      if (f.size > 400 * 1024) { toast('图片请控制在 400KB 以内'); el.value = ''; return; }
+      const rd = new FileReader();
+      rd.onload = function(){
+        const url = String(rd.result || '');
+        if (ti !== null) QT.editor.questions[Number(ti)].title_image = url;
+        else { const [qi, oj] = String(oi).split('|').map(Number);
+          const q = QT.editor.questions[qi]; if (q && q.options[oj]) q.options[oj].image = url; }
+        quizEditorFill();
+      };
+      rd.readAsDataURL(f);
+    }
   });
 }
 function quizEditorSum(){
@@ -37509,10 +38265,18 @@ function quizEditorFill(){
   box.innerHTML = QT.editor.questions.map((q,i)=>{
     let cfg = '';
     if (q.type==='single' || q.type==='multiple'){
-      cfg = '<div class="qz-note">选项（答案填字母；多选填 A,C）</div>'
+      cfg = '<div class="qz-note">选项（答案填字母；多选填 A,C）。每个选项都能配一张图，纯图片选项把文字留空即可</div>'
         + (q.options||[]).map((o,j)=>'<div class="qz-opt"><span class="k">'+esc(o.key||String.fromCharCode(65+j))+'</span>'
-          + '<input class="qz-inp" data-of="'+i+'|'+j+'|text" value="'+esc(o.text)+'" placeholder="选项内容">'
-          + '<button type="button" class="qz-mini danger" onclick="quizDelOpt('+i+','+j+')">✕</button></div>').join('')
+          + '<input class="qz-inp" data-of="'+i+'|'+j+'|text" value="'+esc(o.text)+'" placeholder="选项文字（可留空，只放图片）">'
+          + '<button type="button" class="qz-mini danger" onclick="quizDelOpt('+i+','+j+')">✕</button></div>'
+          + '<div class="qz-img-edit" style="margin-left:32px"><span>选项 '+esc(o.key||String.fromCharCode(65+j))+' 图片</span>'
+          + '<label class="btn btn-ghost btn-sm qz-file-btn">选择图片'
+          +   '<input type="file" accept="image/*" data-qoptimg="'+i+'|'+j+'"></label>'
+          + (o.image
+            ? qzImgTag(o.image,'qz-img-opt')
+              + '<button type="button" class="btn btn-ghost btn-sm" onclick="quizClearOptImg('+i+','+j+')">移除</button>'
+            : '<span class="qz-file-name">可留空</span>')
+          + '</div>').join('')
         + '<button type="button" class="qz-mini" onclick="quizAddOpt('+i+')">＋ 加选项</button>';
     } else if (q.type==='blank'){
       cfg = '<div class="qz-note">标准答案；其它可接受的写法用逗号分隔写在「备选答案」</div>';
@@ -37520,7 +38284,7 @@ function quizEditorFill(){
       cfg = '<div class="qz-note">正确答案由下拉选择，学生端只会看到「对 / 错」两个选项</div>';
     } else if (q.type==='match'){
       cfg = '<div class="qz-note">每行一条配对，格式 <b>左项=右项</b>；学生端按左项下拉选右项</div>'
-        + '<textarea class="qz-ta" data-qf="'+i+'|pairsText" placeholder="北京=中国\n东京=日本">'+esc(q.pairsText||'')+'</textarea>';
+        + '<textarea class="qz-ta" data-qzf="'+i+'|pairsText" placeholder="北京=中国\n东京=日本">'+esc(q.pairsText||'')+'</textarea>';
     } else if (q.type==='essay'){
       cfg = '<div class="qz-note">简答题不自动判分，需在测验页人工批阅；这里填参考要点</div>';
     } else if (q.type==='image'){
@@ -37528,24 +38292,36 @@ function quizEditorFill(){
     }
     let ans = '';
     if (q.type==='judge'){
-      ans = '<div class="qz-row"><label>正确答案</label><select class="qz-sel" data-qf="'+i+'|answer">'
+      ans = '<div class="qz-row"><label>正确答案</label><select class="qz-sel" data-qzf="'+i+'|answer">'
         + '<option value="对"'+(q.answer==='对'?' selected':'')+'>对</option>'
         + '<option value="错"'+(q.answer==='错'?' selected':'')+'>错</option></select></div>';
     } else if (q.type==='match' || q.type==='image'){
       ans = '';
     } else if (q.type==='essay'){
-      ans = '<div class="qz-row"><label>参考要点</label><input class="qz-inp" data-qf="'+i+'|answer" value="'+esc(q.answer||'')+'"></div>';
+      ans = '<div class="qz-row"><label>参考要点</label><input class="qz-inp" data-qzf="'+i+'|answer" value="'+esc(q.answer||'')+'"></div>';
     } else {
-      ans = '<div class="qz-row"><label>正确答案</label><input class="qz-inp" data-qf="'+i+'|answer" value="'+esc(q.answer||'')+'"></div>';
-      if (q.type==='blank') ans += '<div class="qz-row"><label>备选答案</label><input class="qz-inp" data-qf="'+i+'|acceptText" value="'+esc((q.accept||[]).join(','))+'" placeholder="用逗号分隔"></div>';
+      ans = '<div class="qz-row"><label>正确答案</label><input class="qz-inp" data-qzf="'+i+'|answer" value="'+esc(q.answer||'')+'"></div>';
+      if (q.type==='blank') ans += '<div class="qz-row"><label>备选答案</label><input class="qz-inp" data-qzf="'+i+'|acceptText" value="'+esc((q.accept||[]).join(','))+'" placeholder="用逗号分隔"></div>';
     }
     return '<div class="qz-q"><div class="qz-q-hd"><span class="idx">第 '+(i+1)+' 题</span>'
       + '<select class="qz-sel" style="width:auto" data-type="'+i+'">'
       + QZ_TYPES.map(([k,n])=>'<option value="'+k+'"'+(q.type===k?' selected':'')+'>'+n+'</option>').join('') + '</select>'
-      + '<label style="font-size:12px;min-width:auto">分值</label><input class="qz-inp" style="width:70px" type="number" min="0" step="1" data-qf="'+i+'|score" value="'+esc(q.score)+'">'
+      + '<label style="font-size:12px;min-width:auto">分值</label><input class="qz-inp" style="width:70px" type="number" min="0" step="1" data-qzf="'+i+'|score" value="'+esc(q.score)+'">'
       + '<button type="button" class="qz-mini danger" onclick="quizDelQ('+i+')">删除本题</button></div>'
-      + '<input class="qz-inp" data-qf="'+i+'|title" value="'+esc(q.title||'')+'" placeholder="题干">'
-      + '<div style="margin-top:7px">'+cfg+'</div>' + ans + '</div>';
+      + '<input class="qz-inp" data-qzf="'+i+'|title" value="'+esc(q.title||'')+'" placeholder="题干">'
+      + '<div class="qz-img-edit"><span>🖼 题干图片</span>'
+      + '<label class="btn btn-ghost btn-sm qz-file-btn">选择图片'
+      +   '<input type="file" accept="image/*" data-qtitleimg="'+i+'"></label>'
+      + (q.title_image
+        ? qzImgTag(q.title_image,'qz-img-sm')
+          + '<button type="button" class="btn btn-ghost btn-sm" onclick="quizClearTitleImg('+i+')">移除</button>'
+        : '<span class="qz-file-name">未选择（JPG / PNG / SVG，≤400KB）</span>')
+      + '</div>'
+      + '<div style="margin-top:7px">'+cfg+'</div>' + ans
+      + '<div class="qz-row" style="margin-top:8px"><label>答案解析</label>'
+      + '<input class="qz-inp" data-qzf="'+i+'|analysis" value="'+esc(q.analysis||'')+'"'
+      + ' placeholder="选填：开放「提交后显示答案解析」时，随答案一起给学生看"></div>'
+      + '</div>';
   }).join('');
   quizEditorSum();
 }
@@ -37555,8 +38331,16 @@ function quizAddOpt(i){ const q=QT.editor.questions[i]; if(!q) return;
   q.options.push({key:String.fromCharCode(65+q.options.length),text:''}); quizEditorFill(); }
 function quizDelOpt(i,j){ const q=QT.editor.questions[i]; if(!q) return; q.options.splice(j,1);
   q.options.forEach((o,k)=>o.key=String.fromCharCode(65+k)); quizEditorFill(); }
+function quizClearTitleImg(i){
+  if (QT.editor && QT.editor.questions[i]) { delete QT.editor.questions[i].title_image; quizEditorFill(); }
+}
+function quizClearOptImg(i,j){
+  const q = QT.editor && QT.editor.questions[i];
+  if (q && q.options[j]) { delete q.options[j].image; quizEditorFill(); }
+}
 window.quizAddQ=quizAddQ; window.quizDelQ=quizDelQ;
 window.quizAddOpt=quizAddOpt; window.quizDelOpt=quizDelOpt;
+window.quizClearTitleImg=quizClearTitleImg; window.quizClearOptImg=quizClearOptImg;
 async function quizEditorSave(){
   const p = JSON.parse(JSON.stringify(QT.editor));
   if (!String(p.title||'').trim()) { toast('给试卷起个名字'); return; }
@@ -37610,8 +38394,10 @@ function quizPublishOpen(id, paperId){
     + '<div class="qz-row"><label>允许多次提交</label><label class="chk" style="font-size:12.5px"><input type="checkbox" id="qzPubMulti"'+(d.allow_multiple?' checked':'')+'> 开启后按上面的次数上限控制</label></div>'
     + '<div class="qz-row"><label>提交后显示答案</label><label class="chk" style="font-size:12.5px"><input type="checkbox" id="qzPubAns"'+(d.show_answer?' checked':'')+'> 由服务端裁剪，关闭时答案根本不会发给学生</label></div>'
     + '<div class="qz-row"><label>提交后显示分数</label><label class="chk" style="font-size:12.5px"><input type="checkbox" id="qzPubScore"'+(d.show_score?' checked':'')+'> 只显示客观题得分；简答 / 图片待批阅</label></div>'
+    + '<div class="qz-row"><label>提交后显示答案解析</label><label class="chk" style="font-size:12.5px"><input type="checkbox" id="qzPubAnalysis"'+(d.show_analysis?' checked':'')+'> 需同时开启「显示答案」；关闭时解析不会下发给学生</label></div>'
     + '<div class="qz-row"><label>大屏窗口</label><input id="qzPubWin" class="qz-inp" value="'+esc(d.window||'')+'" placeholder="留空自动生成「测验：测验名」"></div>'
-    + '<div class="qz-note">一次发布固定绑定一个窗口：学生提交时只刷新大屏里这一个窗口，不会串到别的任务窗口，也不会整页跳回顶部。</div>'
+    + '<div class="qz-note">一次发布绑定一个大屏窗口，新提交只刷新该窗口'
+    + hq('quizPolicy', '看窗口绑定与刷新说明') + '</div>'
     + '<div class="qz-row"><label>状态</label><select id="qzPubStatus" class="qz-sel" style="width:auto">'
     + '<option value="published"'+(d.status!=='draft'&&d.status!=='closed'?' selected':'')+'>发布（学生可见）</option>'
     + '<option value="draft"'+(d.status==='draft'?' selected':'')+'>草稿（学生不可见）</option>'
@@ -37633,6 +38419,7 @@ async function quizPublishSave(id){
     class_ids:classes, open_at:v('qzPubOpen').replace('T',' '), close_at:v('qzPubClose').replace('T',' '),
     max_attempts:Number(v('qzPubMax'))||1, allow_multiple:ck('qzPubMulti'),
     show_answer:ck('qzPubAns'), show_score:ck('qzPubScore'),
+    show_analysis:ck('qzPubAnalysis'),
     window:v('qzPubWin').trim(), status:v('qzPubStatus') };
   try { await quizApi('/api/v2/quiz/teacher/publish/save',{publish:payload});
     closeFloat(); toast('已推送到所选班级的学生端'); await quizInit(true); quizRender(false);
@@ -37662,8 +38449,8 @@ function quizDataHtml(){
         + '<td>'+b.needs_grade+'</td></tr>').join('')
       + (rows.length?'':'<tr><td colspan="9" style="text-align:center;color:var(--ink3)">这次测验还没有提交数据</td></tr>')
       + '</tbody></table></div>'
-      + '<div class="qz-note" style="margin-top:8px">口径：每人只算最后一次提交；分数为客观题得分（满分 '+s.full+'），简答 / 图片题需人工批阅后计入。'
-      + '大屏只显示「谁交了」，不显示这里的分数与逐题正确率。</div>'
+      + '<div class="qz-note" style="margin-top:8px">满分 ' + s.full + '　·　每人只算最后一次提交'
+      + hq('quizPolicy', '看完整统计口径') + '</div>'
       + '<h4 style="margin:16px 0 6px;font-size:14px">逐题作答情况</h4>'
       + (qs.length ? '<div class="qz-scroll"><table class="qz-tbl"><thead><tr><th>题目</th><th>题型</th><th>答对 / 作答</th><th>正确率</th></tr></thead><tbody>'
           + qs.map((q,i)=>{ const t=(s.question_stats||{})[q.id]||{};
@@ -37882,6 +38669,9 @@ function actSetBoundWindow(w, auto){
   if (lab) lab.textContent = w || '自动（跟随最近提交）';
   const chk = document.querySelector('#actBindBar [data-bind-auto]');
   if (chk) chk.checked = QT.autoFollow;
+  /* 2026-11-07：绑定不只是加个高亮 —— 顶部 4 张 KPI 要换成这个窗口的口径。
+     actRenderDash 内有滚动还原，重绘不会把人甩回顶部。 */
+  if (!auto) { try { actRenderDash(); } catch (e) {} }
 }
 window.actSetBoundWindow = actSetBoundWindow;
 function actToggleAutoFollow(el){
@@ -37931,6 +38721,27 @@ async function actRefreshWindow(w){
     const num = box.querySelector('[data-win-n]');
     if (list) list.innerHTML = actWinRowsHtml(rows);
     if (num) num.textContent = rows.length;
+    /* 顶部统计条跟名单一起更新，别出现「人数变了、KPI 还是旧值」 */
+    let clsTotal = 0;
+    try { clsTotal = (typeof actClassStudents === 'function' && typeof actCurClass === 'function')
+      ? (actClassStudents(actCurClass()) || []).length : 0; } catch (e2) {}
+    const setK = (k, v) => { const el = box.querySelector('[data-win-kpi="' + k + '"]');
+      if (el) el.textContent = v; };
+    setK('sub', rows.length);
+    setK('miss', Math.max(0, clsTotal - rows.length));
+    setK('rate', (clsTotal ? Math.min(100, Math.round(rows.length / clsTotal * 100)) : 0) + '%');
+    setK('files', rows.filter(r => r.has_file).length);
+    /* 顶部 KPI 跟着绑定窗口走：SSE 局部刷新也要同步，否则只有窗口数字在动 */
+    try {
+      if (typeof actBoundWindow === 'function' && actBoundWindow() === key) {
+        const t = document.querySelector('#actPaneDash [data-top-kpi="sub"]');
+        if (t) t.textContent = rows.length;
+        const mi = document.querySelector('#actPaneDash [data-top-kpi="miss"]');
+        if (mi) mi.textContent = Math.max(0, clsTotal - rows.length);
+        const rt = document.querySelector('#actPaneDash [data-top-kpi="rate"]');
+        if (rt) rt.textContent = (clsTotal ? Math.min(100, Math.round(rows.length / clsTotal * 100)) : 0) + '%';
+      }
+    } catch (e3) {}
   } catch(e){ /* 局部刷新失败不影响原有轮询兜底 */ }
 }
 window.actRefreshWindow = actRefreshWindow;

@@ -156,11 +156,30 @@ def _archive_after_submit(task, who, res):
                 course = title
         if not course:
             return None
+        # 身份多来源兜底（2026-11-06）：学习单页面没注入身份 / 用了英文别名时，
+        # 以前会落成「未命名学生」甚至平铺在班级目录里，老师认不出是谁交的。
+        first = lambda *vals: next((str(v).strip() for v in vals if v not in (None, "")), "")
+        name = first((who or {}).get("姓名"), (who or {}).get("name"))
+        no = first((who or {}).get("学号"), (who or {}).get("student_no"),
+                   (who or {}).get("sid"))
+        cls_name = first((who or {}).get("班级"), (who or {}).get("cls"),
+                         (who or {}).get("class_name"))
+        # 还缺就从刚落库的这条提交记录里反查（同一学生票 / 中文字段都认）
+        if not (name and no):
+            try:
+                for s in reversed(ACT.submissions(task) or []):
+                    if not isinstance(s, dict):
+                        continue
+                    name = name or first(s.get("姓名"), s.get("name"))
+                    no = no or first(s.get("学号"), s.get("student_no"), s.get("sid"))
+                    cls_name = cls_name or first(s.get("班级"), s.get("cls"))
+                    if name and no:
+                        break
+            except Exception:
+                pass
         items = [{"name": str(f.get("name") or ""), "url": str(f.get("url") or ""),
-                  "student": str((who or {}).get("姓名") or ""),
-                  "no": str((who or {}).get("学号") or "")} for f in files]
-        out = LEG.CW.archive_items(course, title, "", items,
-                                   cls=str((who or {}).get("班级") or ""))
+                  "student": name, "no": no, "class": cls_name} for f in files]
+        out = LEG.CW.archive_items(course, title, "", items, cls=cls_name)
         if not (out or {}).get("ok"):
             # 归档失败不影响提交，但要留一条痕迹，方便老师反馈「文件没进资料」时排查
             try:
@@ -3337,6 +3356,54 @@ class Handler(LEG.Handler):
         # ------------------------------------------------------------------
         # 活动管理（2026-11-03 · 方案 B）：新建/改名/删除/清空/删单条
         # ------------------------------------------------------------------
+        if path == "/api/v2/teacher/activity/normalize-archive":
+            # 2026-11-06：老数据里平铺在班级目录、认不出提交者的作品，
+            # 按「提交记录里的原文件名 → 学号/姓名/班级」反查后移进学生文件夹。
+            if not self._is_teacher():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            mapping = {}
+            try:
+                with ACT.lock:
+                    rows = ACT.conn.execute(
+                        "SELECT f.orig, s.sid, s.name, s.cls, s.data FROM act_file f "
+                        "LEFT JOIN act_submission s ON s.id=f.sub_id").fetchall()
+                for r in rows:
+                    orig = str(r[0] or "").strip()
+                    if not orig:
+                        continue
+                    no = str(r[1] or "").strip()
+                    nm = str(r[2] or "").strip()
+                    cls = str(r[3] or "").strip()
+                    try:
+                        d = json.loads(r[4] or "{}")
+                        if isinstance(d, dict):
+                            no = no or str(d.get("学号") or d.get("student_no") or "").strip()
+                            nm = nm or str(d.get("姓名") or d.get("name") or "").strip()
+                            cls = cls or str(d.get("班级") or d.get("cls") or "").strip()
+                    except Exception:
+                        pass
+                    mapping.setdefault(orig.lower(), {"class": cls, "no": no, "student": nm})
+            except Exception as e:
+                return self._json({"ok": False, "msg": "读取提交记录失败：%s" % e}, 500)
+            moved, skipped, details = 0, [], []
+            try:
+                courses, _err = LEG.CW.list_courses()
+            except Exception:
+                courses = []
+            for c in (courses or []):
+                name = str(c.get("name") or "")
+                if not name:
+                    continue
+                res = LEG.CW.normalize_student_dirs(name, mapping)
+                n = len(res.get("moved") or [])
+                moved += n
+                skipped.extend(res.get("skipped") or [])
+                if n:
+                    details.append({"course": name, "n": n})
+            return self._json({"ok": True, "moved": moved, "skipped": skipped[:20],
+                               "details": details,
+                               "message": "已按「学号-姓名」整理 %d 个文件" % moved})
+
         if path == "/api/v2/teacher/activity/save":
             if not self._is_teacher():
                 return self._json({"ok": False, "msg": "未登录"}, 401)

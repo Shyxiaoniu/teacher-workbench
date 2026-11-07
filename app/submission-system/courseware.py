@@ -1159,6 +1159,52 @@ def _archive_items_locked(course, activity, base, items, cls=""):
                                                   cls_label)}
 
 
+def normalize_student_dirs(course, mapping):
+    """自愈：把班级目录下「平铺」的学生作品移进 <班级>/<学号-姓名>/（2026-11-06）。
+
+    老数据 / 身份注入失败时，文件会直接躺在班级目录里，列表看不出是谁交的。
+    mapping = {原文件名(小写): {class, no, student}}，由 server.py 从
+    act_file.orig + act_submission 的学号姓名班级反查构造。
+    只在「班级目录」这一层找平铺文件；已经在学生子目录里的不动。
+    """
+    course_dir = abs_of(safe_course(course))
+    if not course_dir or not os.path.isdir(course_dir):
+        return {"ok": True, "moved": [], "skipped": [], "msg": "课程目录不存在"}
+    moved, skipped = [], []
+    for cls_name in sorted(os.listdir(course_dir)):
+        cls_dir = os.path.join(course_dir, cls_name)
+        # _活动数据 / _活动作品 / 隐藏目录不是班级目录
+        if not os.path.isdir(cls_dir) or cls_name.startswith((".", "_")):
+            continue
+        for fn in sorted(os.listdir(cls_dir)):
+            src = os.path.join(cls_dir, fn)
+            if not os.path.isfile(src) or fn.startswith(".") or fn.lower() in _IGNORE:
+                continue
+            info = mapping.get(fn.lower()) or mapping.get(fix_filename(fn).lower())
+            if not info:
+                # 同名文件加过 (2) 后缀的，也认一次
+                bare = re.sub(r"\s*\(\d+\)(\.[^.]+)?$", lambda m: (m.group(2) or ""), fn)
+                info = mapping.get(bare.lower())
+            if not info:
+                skipped.append({"name": fn, "class": cls_name, "msg": "提交记录里找不到归属"})
+                continue
+            stu = _student_folder(info.get("no"), info.get("student"), cls_dir)
+            if stu == "未命名学生":
+                skipped.append({"name": fn, "class": cls_name, "msg": "提交记录里没有学号 / 姓名"})
+                continue
+            try:
+                stu_dir = os.path.join(cls_dir, stu)
+                os.makedirs(stu_dir, exist_ok=True)
+                target, _renamed = _unique_target(stu_dir, fn)
+                shutil.move(src, target)
+                moved.append({"name": fn, "class": cls_name, "student": stu,
+                              "rel": rel_of(target)})
+            except Exception as e:
+                skipped.append({"name": fn, "class": cls_name, "msg": "移动失败：%s" % e})
+    return {"ok": True, "moved": moved, "skipped": skipped,
+            "msg": "已按学号-姓名整理 %d 个文件" % len(moved)}
+
+
 def archive_clear(course, activity, cls=""):
     """清空入口（同样要串行，理由见 _IDX_LOCK）。"""
     with _IDX_LOCK:

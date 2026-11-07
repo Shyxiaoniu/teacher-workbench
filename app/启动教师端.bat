@@ -3,6 +3,12 @@ chcp 65001 >nul
 cd /d "%~dp0"
 rem ---- 解释器发现链（全部离线可用）----
 rem 1) 随包 runtime（发行版自带，无需安装 Python）
+rem    2026-11-07：免安装包把运行时放在解压目录根部（app 的上一级），
+rem    而这里已经 cd 进 app，所以要先找 ..\runtime；同时兼容放进 app 的老布局。
+if exist "..\runtime\win-x64\python\python.exe" (
+  "..\runtime\win-x64\python\python.exe" launch.py %*
+  goto :done
+)
 if exist "runtime\win-x64\python\python.exe" (
   "runtime\win-x64\python\python.exe" launch.py %*
   goto :done

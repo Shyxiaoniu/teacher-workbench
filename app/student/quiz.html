@@ -6,6 +6,9 @@
 <title>测验 / 检测 · 班级工作台</title>
 <link rel="stylesheet" href="style.css">
 <style>
+/* 独立作答页不能用 id="app"：学生端 style.css 里 #app{display:flex} 会把
+   所有题目挤成一排窄列。这里显式锁成普通块级容器。 */
+#qzxApp{display:block;width:100%;max-width:820px;margin:0 auto;padding:16px 14px 110px;box-sizing:border-box}
 .qzx-wrap{max-width:820px;margin:0 auto;padding:16px 14px 110px}
 .qzx-hd{background:var(--card,#fff);border:1px solid var(--line,#e4e8e6);border-radius:14px;padding:14px 16px;margin-bottom:12px}
 .qzx-hd h1{margin:0 0 6px;font-size:19px;font-weight:700}
@@ -18,7 +21,17 @@
 .qzx-q-t .ty{font-size:11px;font-weight:500;color:var(--ink3,#6b7772);border:1px solid var(--line,#e4e8e6);border-radius:6px;padding:1px 7px;margin-left:6px;white-space:nowrap}
 .qzx-opt{display:flex;align-items:flex-start;gap:9px;padding:9px 10px;border:1px solid var(--line,#e6eae8);border-radius:9px;margin:6px 0;cursor:pointer;font-size:13.5px;line-height:1.6}
 .qzx-opt:has(input:checked){border-color:var(--brand-primary,#0F6E56);background:rgba(15,110,86,.06)}
-.qzx-opt input{margin-top:3px;flex:none}
+/* 学生端 style.css 有全局 input{width:100%;padding:11px 13px}，会把单选/复选框
+   也拉成整行输入框，把选项文字挤成竖排。这里在作答页内显式还原成原生控件。 */
+.qzx-opt input[type=radio],.qzx-opt input[type=checkbox]{
+  width:auto;height:16px;flex:none;margin:3px 0 0;padding:0;border:0;
+  background:transparent;accent-color:var(--brand-primary,#0F6E56);box-shadow:none;
+}
+.qzx-opt input:focus{outline:2px solid var(--brand-primary,#0F6E56);outline-offset:2px}
+.qzx-opt span{flex:1;min-width:0;display:block}
+.qzx-opt img,.qzx-title-img{max-width:100%;max-height:190px;height:auto;border-radius:9px;
+  border:1px solid var(--line,#e6eae8);display:block;margin-top:7px}
+.qzx-title-img{margin:0 0 9px}
 .qzx-inp,.qzx-ta,.qzx-sel{width:100%;box-sizing:border-box;border:1px solid var(--line,#dfe5e2);border-radius:9px;padding:9px 11px;font-size:13.5px;background:var(--card,#fff);color:inherit}
 .qzx-ta{min-height:96px;resize:vertical;line-height:1.7}
 .qzx-match{display:flex;gap:8px;align-items:center;margin:7px 0}
@@ -36,13 +49,15 @@
 .qzx-ans .ok{color:#0F6E56;font-weight:700}
 .qzx-ans .bad{color:#B3261E;font-weight:700}
 .qzx-ans .mut{color:var(--ink3,#6b7772)}
+.qzx-ana{margin-top:6px;padding:7px 10px;border-radius:8px;background:#fffdf5;
+  border:1px solid #f0e2b8;color:#6b4e12;font-size:12.5px;line-height:1.75}
 .qzx-err{background:#fdeceb;border:1px solid #f0c9c5;color:#8a1c14;border-radius:12px;padding:13px 15px;margin-bottom:12px;font-size:13px}
 .qzx-loading{text-align:center;padding:44px 12px;color:var(--ink3,#6b7772);font-size:13.5px}
 @media(max-width:520px){.qzx-wrap{padding:12px 10px 118px}.qzx-q{padding:12px}}
 </style>
 </head>
 <body>
-<div class="qzx-wrap" id="app"><div class="qzx-loading">正在读取试卷…</div></div>
+<div class="qzx-wrap" id="qzxApp"><div class="qzx-loading">正在读取试卷…</div></div>
 <script>
 (function(){
   'use strict';
@@ -66,7 +81,7 @@
             match:'连线题',essay:'简答题',image:'图片上传'};
 
   function render(){
-    var app=$('#app'); if(!app) return;
+    var app=$('#qzxApp'); if(!app) return;
     if(!S.paper){ app.innerHTML='<div class="qzx-loading">正在读取试卷…</div>'; return; }
     var p=S.pub||{}, paper=S.paper;
     var can = p.open && (p.allow_multiple ? (Number(p.attempts||0)<Number(p.max_attempts||1))
@@ -95,7 +110,9 @@
       return '<div class="qzx-q" data-q="'+esc(q.id)+'"><div class="qzx-q-t">'
         +'<span class="n">第 '+(i+1)+' 题</span>'
         +'<span class="ty">'+esc(TN[q.type]||q.type)+'</span> '
-        +esc(q.title||'')+'</div>'+questionHtml(q,i)+'</div>';
+        +esc(q.title||'')+'</div>'
+        +(q.title_image?'<img class="qzx-title-img" src="'+esc(q.title_image)+'" alt="题干图片">':'')
+        +questionHtml(q,i)+'</div>';
     }).join('');
     var foot='<div class="qzx-foot"><div class="qzx-foot-in">'
       +'<span class="qzx-prog" id="qzxProg">共 '+(paper.questions||[]).length+' 题</span>'
@@ -113,8 +130,11 @@
       var opts=(q.options||[]);
       if(!opts.length) opts=[{key:'A',text:'选项 A'},{key:'B',text:'选项 B'}];
       return opts.map(function(o){
+        /* 兼容「图片作为选项」：文字可以为空，只显示一张图，点整块仍可选中 */
         return '<label class="qzx-opt"><input type="'+(t==='multiple'?'checkbox':'radio')+'" '
-          +'name="q_'+id+'" value="'+esc(o.key)+'"><span><b>'+esc(o.key)+'.</b> '+esc(o.text)+'</span></label>';
+          +'name="q_'+id+'" value="'+esc(o.key)+'"><span><b>'+esc(o.key)+'.</b> '+esc(o.text||'')
+          +(o.image?'<img src="'+esc(o.image)+'" alt="选项 '+esc(o.key)+' 图片">':'')
+          +'</span></label>';
       }).join('');
     }
     if(t==='judge') return ['对','错'].map(function(v){
@@ -164,12 +184,12 @@
   }
   function hasAnswer(q){
     var id=q.id;
-    if(q.type==='single'||q.type==='judge') return !!$('#app input[name="q_'+CSS.escape(id)+'"]:checked');
-    if(q.type==='multiple') return $$('#app input[name="q_'+CSS.escape(id)+'"]:checked').length>0;
+    if(q.type==='single'||q.type==='judge') return !!$('#qzxApp input[name="q_'+CSS.escape(id)+'"]:checked');
+    if(q.type==='multiple') return $$('#qzxApp input[name="q_'+CSS.escape(id)+'"]:checked').length>0;
     if(q.type==='blank'||q.type==='essay'){
-      var el=$('#app [data-qi="'+CSS.escape(id)+'"]'); return !!(el&&String(el.value||'').trim());
+      var el=$('#qzxApp [data-qi="'+CSS.escape(id)+'"]'); return !!(el&&String(el.value||'').trim());
     }
-    if(q.type==='match') return $$('#app [data-ml]').some(function(s){return !!s.value;});
+    if(q.type==='match') return $$('#qzxApp [data-ml]').some(function(s){return !!s.value;});
     if(q.type==='image') return !!S.imgs[id];
     return false;
   }
@@ -178,13 +198,13 @@
     (S.paper.questions||[]).forEach(function(q){
       var id=q.id;
       if(q.type==='single'||q.type==='judge'){
-        var el=$('#app input[name="q_'+CSS.escape(id)+'"]:checked'); out[id]=el?el.value:'';
+        var el=$('#qzxApp input[name="q_'+CSS.escape(id)+'"]:checked'); out[id]=el?el.value:'';
       } else if(q.type==='multiple'){
-        out[id]=$$('#app input[name="q_'+CSS.escape(id)+'"]:checked').map(function(x){return x.value;});
+        out[id]=$$('#qzxApp input[name="q_'+CSS.escape(id)+'"]:checked').map(function(x){return x.value;});
       } else if(q.type==='blank'||q.type==='essay'){
-        var t=$('#app [data-qi="'+CSS.escape(id)+'"]'); out[id]=t?t.value:'';
+        var t=$('#qzxApp [data-qi="'+CSS.escape(id)+'"]'); out[id]=t?t.value:'';
       } else if(q.type==='match'){
-        var m={}; $$('#app [data-ml]').forEach(function(s){
+        var m={}; $$('#qzxApp [data-ml]').forEach(function(s){
           if(s.getAttribute('data-ml')&&s.value) m[s.getAttribute('data-ml')]=s.value;});
         out[id]=m;
       } else if(q.type==='image'){
@@ -247,7 +267,9 @@
           :d.correct===false?'<span class="bad">✗ 答错</span>':'<span class="mut">待批阅</span>';
         return '<div style="margin:7px 0"><b>'+(i+1)+'. '+esc(q.title||'')+'</b> '+mark
           +'<br><span class="mut">你的作答：</span>'+esc(fmt(mineV)||'（未作答）')
-          +'<br><span class="mut">正确答案：</span>'+esc(right||'—')+'</div>';
+          +'<br><span class="mut">正确答案：</span>'+esc(right||'—')
+          +(a.analysis?'<div class="qzx-ana">💡 解析：'+esc(a.analysis)+'</div>':'')
+          +'</div>';
       }).join('');
       h+='<div class="qzx-ans"><b>答案对照</b>'+lines+'</div>';
     } else {
@@ -256,16 +278,16 @@
     return h+'</div>';
   }
   function boot(){
-    if(!PUB){$('#app').innerHTML='<div class="qzx-err">缺少测验编号，请从学生端「测验」页进入。</div>';return;}
+    if(!PUB){$('#qzxApp').innerHTML='<div class="qzx-err">缺少测验编号，请从学生端「测验」页进入。</div>';return;}
     api('/api/v2/quiz/student/paper?pub='+encodeURIComponent(PUB)).then(function(j){
-      if(!j.ok){ $('#app').innerHTML='<div class="qzx-err">'+esc(j.msg||'打不开这份测验')
+      if(!j.ok){ $('#qzxApp').innerHTML='<div class="qzx-err">'+esc(j.msg||'打不开这份测验')
         +'<br><br><a href="/s/#quiz">← 返回学生端</a></div>'; return; }
       S.paper=j.paper;S.pub=j.publish;S.now=j.now;S.cls=j.class_name;S.me=j.student;
       return api('/api/v2/quiz/student/result?pub='+encodeURIComponent(PUB)).then(function(k){
         if(k.ok) S.receipt=k.receipt; render();
       });
     }).catch(function(){
-      $('#app').innerHTML='<div class="qzx-err">连不上老师电脑，请确认在同一 Wi-Fi 后刷新。</div>';
+      $('#qzxApp').innerHTML='<div class="qzx-err">连不上老师电脑，请确认在同一 Wi-Fi 后刷新。</div>';
     });
   }
   boot();

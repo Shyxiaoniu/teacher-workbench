@@ -221,6 +221,17 @@ class QuizAPI(object):
             p = self.q.paper((qs.get("id") or [""])[0])
             return self.ok(paper=p) if p else self.err("试卷不存在", 404)
 
+        if path == "/api/v2/quiz/teacher/bank":
+            if not self.teacher():
+                return self.err("未登录", 401)
+            return self.ok(bank=self.q.bank_list())
+
+        if path == "/api/v2/quiz/teacher/sample":
+            if not self.teacher():
+                return self.err("未登录", 401)
+            from quiz_import import SAMPLE
+            return self.ok(sample=SAMPLE)
+
         if path == "/api/v2/quiz/teacher/stats":
             if not self.teacher():
                 return self.err("未登录", 401)
@@ -327,12 +338,17 @@ class QuizAPI(object):
             out["auto_full"] = rec.get("auto_full")
             out["full"] = rec.get("full")
         if pub.get("show_answer"):
+            # 答案解析独立开关：只有「显示答案」+「开放解析」同时为真才下发，
+            # 否则连字段都不带，避免学生从回执里翻到解析。
+            with_analysis = bool(pub.get("show_analysis"))
+            out["show_analysis"] = with_analysis
             paper = self.q.paper(rec.get("paper_id")) or {}
             ans = {}
             for q in (paper.get("questions") or []):
                 qid = str(q.get("id") or "")
                 ans[qid] = {"answer": q.get("answer"), "accept": q.get("accept") or [],
-                            "pairs": q.get("pairs") or []}
+                            "pairs": q.get("pairs") or [],
+                            "analysis": (str(q.get("analysis") or "") if with_analysis else "")}
             out["answers"] = ans
             if with_detail:
                 out["detail"] = rec.get("detail") or {}
@@ -356,7 +372,11 @@ class QuizAPI(object):
                         continue
                     act_subs.append({"按钮": d.get("按钮") or d.get("button") or "",
                                      "data": d,
-                                     "submitted_at": d.get("submitted_at") or ""})
+                                     # 来源任务号：大屏按窗口反查该清哪个 act_task
+                                     "task": str(tid),
+                                     "submitted_at": d.get("submitted_at") or "",
+                                     "has_file": bool(d.get("attachment") or d.get("_files")
+                                                      or d.get("file") or d.get("作品链接"))})
         except Exception:
             pass
         return self.q.board(act_subs)
@@ -392,6 +412,78 @@ class QuizAPI(object):
             if not p:
                 return self.err("试卷内容不对")
             return self.ok(paper=p)
+
+        # ---- 整份试卷导入（严格按标准试卷格式解析，支持先预览再载入） ----
+        if path == "/api/v2/quiz/teacher/import":
+            from quiz_import import parse_paper_text
+            text = str(body.get("text") or "")
+            res = parse_paper_text(text, str(body.get("title") or "导入试卷"))
+            if not res.get("ok"):
+                return self.err("；".join(res.get("errors") or ["解析失败"]))
+            if body.get("preview"):
+                return self.ok(preview=res["paper"], warnings=res.get("warnings") or [])
+            p = self.q.save_paper(res["paper"])
+            added = updated = 0
+            if body.get("add_to_bank"):
+                added, updated = self.q.bank_add(res["paper"].get("questions") or [])
+            return self.ok(paper=p, warnings=res.get("warnings") or [],
+                           bank_added=added, bank_updated=updated)
+
+        # ---- Word / Excel 试卷导入（.docx / .xlsx 完整解析，.doc 文本兜底） ----
+        if path == "/api/v2/quiz/teacher/import-file":
+            from quiz_import import parse_office_blob
+            fn = str(body.get("filename") or "")
+            raw = str(body.get("data") or "")
+            if raw.startswith("data:") and "," in raw:
+                raw = raw.split(",", 1)[1]
+            try:
+                blob = base64.b64decode(raw, validate=False)
+            except Exception:
+                return self.err("文件内容读取失败，请重新选择文件")
+            if not blob:
+                return self.err("文件是空的")
+            if len(blob) > 8 * 1024 * 1024:
+                return self.err("文件超过 8MB，请精简后再导入")
+            res = parse_office_blob(fn, blob, str(body.get("title") or "导入试卷"))
+            if not res.get("ok"):
+                return self.err("；".join(res.get("errors") or ["解析失败"]))
+            if body.get("preview"):
+                return self.ok(preview=res["paper"], warnings=res.get("warnings") or [],
+                               kind=res.get("kind"), degraded=bool(res.get("degraded")))
+            p = self.q.save_paper(res["paper"])
+            if not p:
+                return self.err("试卷内容不完整，未保存")
+            added = updated = 0
+            if body.get("add_to_bank"):
+                added, updated = self.q.bank_add(res["paper"].get("questions") or [])
+            return self.ok(paper=p, warnings=res.get("warnings") or [],
+                           kind=res.get("kind"), degraded=bool(res.get("degraded")),
+                           bank_added=added, bank_updated=updated)
+
+        # ---- 试题库 ----
+        if path == "/api/v2/quiz/teacher/bank/add":
+            pid = str(body.get("paper_id") or "")
+            qs = body.get("questions")
+            if not isinstance(qs, list):
+                p = self.q.paper(pid)
+                if not p:
+                    return self.err("试卷不存在", 404)
+                qs = p.get("questions") or []
+            a, u = self.q.bank_add(qs)
+            return self.ok(added=a, updated=u, total=len(self.q.bank_list()))
+
+        if path == "/api/v2/quiz/teacher/bank/delete":
+            return self.ok(deleted=self.q.bank_delete(body.get("id")))
+
+        if path == "/api/v2/quiz/teacher/paper/from-bank":
+            ids = body.get("ids") if isinstance(body.get("ids"), list) else []
+            picked = self.q.bank_pick(ids)
+            if not picked:
+                return self.err("题库里没有选中的题目")
+            p = self.q.save_paper({"title": str(body.get("title") or "题库组卷"),
+                                   "course": str(body.get("course") or ""),
+                                   "desc": "从试题库选择组成", "questions": picked})
+            return self.ok(paper=p, count=len(picked))
 
         if path == "/api/v2/quiz/teacher/paper/delete":
             ok = self.q.delete_paper(body.get("id"))

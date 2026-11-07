@@ -4,7 +4,7 @@
    设计约束：
    1. 不改工作台原有函数：只往 #sePanel 里画东西，靠观察 DOM 自动挂载/刷新。
    2. 所有数据来自 /api/enh/*；模板 / 素材 / 状态都存服务端，换电脑不丢。
-   3. 学生链接优先用局域网地址（复用工作台的 qfStudentBase），避免发给学生打不开。
+   3. 学生链接优先用局域网地址（复用工作台的 actStudentBase），避免发给学生打不开。
    ========================================================================= */
 (function () {
   'use strict';
@@ -57,16 +57,14 @@
     return n + ' B';
   }
   function base() {
-    try { if (typeof qfStudentBase === 'function') return qfStudentBase(); } catch (e) {}
+    try { if (typeof actStudentBase === 'function') return actStudentBase(); } catch (e) {}
     return location.origin;
   }
 
   /* ---------------- 取当前活动 / 班级 ---------------- */
   function taskKey() {
-    var k = '';
-    try { if (typeof qfActiveId !== 'undefined' && qfActiveId) k = qfActiveId; } catch (e) {}
-    if (!k) { var s = $('qfTaskSel'); if (s && s.value) k = s.value; }
-    return k || '';
+    try { if (typeof actActiveId !== 'undefined' && actActiveId) return String(actActiveId); } catch (e) {}
+    return '';
   }
   function classId() {
     try { if (typeof actCurClass === 'function') { var v = actCurClass(); return v == null ? '' : String(v); } } catch (e) {}
@@ -86,19 +84,13 @@
   function taskInfo() {
     var key = taskKey(), title = '', ap = '';
     try {
-      if (typeof qfTaskList !== 'undefined' && qfTaskList) {
-        for (var i = 0; i < qfTaskList.length; i++) {
-          if (qfTaskList[i].task_id === key) { title = qfTaskList[i].title || ''; ap = qfTaskList[i].api || ''; }
+      if (typeof actTaskList !== 'undefined' && actTaskList) {
+        for (var i = 0; i < actTaskList.length; i++) {
+          if (String(actTaskList[i].task_id) === String(key)) title = actTaskList[i].title || '';
         }
       }
     } catch (e) {}
-    if (!title) {
-      var s = $('qfTaskSel');
-      if (s && s.selectedIndex >= 0 && s.options[s.selectedIndex]) title = s.options[s.selectedIndex].text || '';
-    }
-    if (!ap) {
-      try { if (typeof qfApiBase === 'function') ap = qfApiBase().replace(/\/+$/, '') + '/api/' + key; } catch (e) {}
-    }
+    // 取不到 api 就留空（与原行为一致），由服务端按活动任务自行解析提交口
     return { key: key, title: title || key, api: ap };
   }
 

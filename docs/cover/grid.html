@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  *{margin:0;padding:0}
+  body{position:relative;width:1536px;height:1024px;overflow:hidden}
+  img{position:absolute;left:0;top:0;width:1536px;height:1024px;display:block}
+  svg{position:absolute;left:0;top:0}
+</style>
+</head>
+<body>
+  <img src="2_35_1_wide_banner_illustratio_2026-11-07T13-18-40.png">
+  <svg id="g" width="1536" height="1024"></svg>
+<script>
+  var svg = document.getElementById('g');
+  var NS = 'http://www.w3.org/2000/svg';
+  // 与 cover.html 相同的屏幕四角（art 像素坐标）
+  var QUAD = [[499,304],[694,295],[691,497],[498,506]];
+  var poly = document.createElementNS(NS, 'polygon');
+  poly.setAttribute('points', QUAD.map(function(p){return p[0]+','+p[1];}).join(' '));
+  poly.setAttribute('fill', 'rgba(255,0,0,.18)');
+  poly.setAttribute('stroke', 'red');
+  poly.setAttribute('stroke-width', 3);
+  svg.appendChild(poly);
+  QUAD.forEach(function(p, i){
+    var t = document.createElementNS(NS, 'text');
+    t.setAttribute('x', p[0]+6); t.setAttribute('y', p[1]-6);
+    t.setAttribute('fill', 'red'); t.setAttribute('font-size', 16);
+    t.textContent = i;
+    svg.appendChild(t);
+  });
+</script>
+</body>
+</html>

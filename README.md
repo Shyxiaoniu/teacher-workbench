@@ -206,7 +206,7 @@ http://<服务器局域网 IP>:8080/        ← Docker 部署的入口；直接�
 | | 方式一：直接运行 | 方式二：Docker（推荐） |
 |---|---|---|
 | 适合 | 教师机、笔记本、机房临时使用、无外网环境 | NAS、常开小主机、正式长期部署 |
-| 前置 | Windows 10+ / macOS，Python 3.9+（或带运行时的离线包） | 装好 Docker 与 Compose |
+| 前置 | Windows 10+ / macOS，**无需安装 Python**（包内已带运行时） | 装好 Docker 与 Compose |
 | 启动 | 双击 `启动教师端` | `docker compose up -d --build` |
 | 对外端口 | `20020` | `8080` 一个端口全包 |
 | 开机自启 | 需自行加计划任务 | 随 Docker 自启 |
@@ -214,10 +214,15 @@ http://<服务器局域网 IP>:8080/        ← Docker 部署的入口；直接�
 **共同部署前准备：** 学生设备与服务器同一局域网（机房关闭 AP 隔离）；服务器设固定 IP
 或 DHCP 保留；预留 20 GB 以上磁盘；防火墙放行对外端口；服务器不休眠。
 
-### 方式一：直接运行
+### 方式一：直接运行（免安装）
 
-1. 解压 / 克隆到本地（路径尽量不含空格）；Windows 双击 `app\启动教师端.bat`，macOS 双击 `app/启动教师端.command`；
+1. 解压发行包到本地（路径尽量不含空格）；Windows 双击根目录 `启动工作台.bat`，
+   macOS 双击 `启动工作台.command`；
 2. 浏览器打开 `http://127.0.0.1:20020/`；学生访问 `http://<这台电脑的局域网 IP>:20020/s/`。
+
+**不需要安装 Python**：包内 `runtime/win-x64/python/` 已带 Python 3.13.7 运行时，
+启动器会优先使用它。只有「克隆源码、不用发行包」这种方式，才需要本机装 Python 3.9+
+并加入 PATH。
 
 常用启动参数：`--port 20021`（换端口）、`--no-browser`、`--reset-password`（忘记教师密码）、`--no-dialog`。
 首次运行 Windows 防火墙弹窗必须允许「专用网络」。
@@ -391,17 +396,28 @@ docker compose up -d --build
 （2.0.1 → 2.0.2 → 2.0.3 …），便于逐次追踪；主版本 / 次版本号只在数据表破坏性
 变更或大改版时才动。`app/updater.py::vtuple` 按段比较数字，2.0.1 > 2.0 判定天然成立。
 
-### 发行包
+### 发行包（离线包，唯一产物）
+
+打包前先在仓库根放好运行时（只需做一次，约 20 MB）：
+
+```bash
+# 下载官方嵌入式运行时，解压到 runtime/win-x64/python/
+# https://www.python.org/ftp/python/3.13.7/python-3.13.7-embed-amd64.zip
+```
+
+然后执行打包：
 
 ```bash
 python tools/make_release.py                 # 版本取 VERSION，日期取当天
 python tools/make_release.py --out D:\dist   # 指定输出目录（默认 dist/）
 ```
 
-命名 `班级工作台<版本>-<yyMMdd>.zip`。脚本自动跳过运行期数据（`app/data/`、课件库、
+命名 **`班级工作台<版本>-<yyMMdd>.zip`** —— 下载页与在线更新按这个格式取包，不要改名。
+**只产出这一个离线包，不再产源码包**：包内 `runtime/win-x64/python/` 已带 Python 3.13.7，
+用户解压后双击即用、无需安装任何环境依赖。脚本自动跳过运行期数据（`app/data/`、课件库、
 附件、日志、`.git`、`__pycache__`），产物在 `dist/`（已被 .gitignore 忽略）。
-包里：启动脚本 + `app/` 全部程序 + docker 全套 + `docs/shots/` 截图 + README + LICENSE。
-解压即用的空白工作台，不含任何真实数据。
+包里：`启动工作台.bat` / `.command` + `app/` 全部程序 + `runtime/` 运行时 + docker 全套 +
+`docs/shots/` 截图 + README + LICENSE。解压即用的空白工作台，不含任何真实数据。
 
 > **Gitee「发行版」页面为空是正常的**：仓库里的 `dist/` 只是一个普通目录（构建产物），
 > 和 Gitee 的「发行版（Releases）」功能是两回事——后者需要在 Gitee 网页上手动

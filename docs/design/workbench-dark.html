@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>班级工作台 2.0 · 工作台界面设计稿（深色版）</title>
+<style>
+/* ============================================================
+   设计令牌 —— 改这里就能整体换肤
+   ============================================================ */
+:root{
+  --bg-0:#040d0b;
+  --bg-1:#071a16;
+
+  --panel:rgba(13,44,38,.58);
+  --panel-solid:#0b2a24;
+  --panel-head:rgba(255,255,255,.02);
+
+  --line:rgba(96,230,199,.12);
+  --line-strong:rgba(96,230,199,.26);
+
+  --ink:#EAF7F3;
+  --ink-2:#A5C6BD;
+  --ink-3:#6C8F87;
+
+  --teal:#3BE3BB;
+  --teal-deep:#12A385;
+  --amber:#F5B65D;
+  --violet:#A98BFF;
+  --coral:#FF8574;
+
+  --r-lg:18px;
+  --r-md:12px;
+  --r-sm:9px;
+
+  --gap:16px;
+  --shadow:0 24px 48px -28px rgba(0,0,0,.9), 0 2px 0 rgba(255,255,255,.03) inset;
+}
+
+*{margin:0;padding:0;box-sizing:border-box}
+
+html,body{width:1600px;height:1000px;overflow:hidden}
+body{
+  font-family:"Inter","Segoe UI","Microsoft YaHei UI","Microsoft YaHei",sans-serif;
+  background:var(--bg-0);
+  color:var(--ink);
+  -webkit-font-smoothing:antialiased;
+  font-variant-numeric:tabular-nums;
+}
+
+/* ============================================================
+   底：深绿渐变 + 双光源 + 极细网格
+   ============================================================ */
+.shell{
+  position:relative;width:1600px;height:1000px;
+  display:flex;
+  background:
+    radial-gradient(900px 620px at 78% -10%, rgba(52,220,182,.17), rgba(52,220,182,0) 62%),
+    radial-gradient(760px 520px at 8% 108%, rgba(24,120,102,.22), rgba(24,120,102,0) 66%),
+    linear-gradient(150deg,#061714 0%,#040d0b 46%,#061a16 100%);
+}
+.shell::before{
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background-image:
+    linear-gradient(rgba(96,230,199,.045) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(96,230,199,.045) 1px,transparent 1px);
+  background-size:56px 56px;
+  mask-image:radial-gradient(1200px 780px at 60% 30%,#000 30%,transparent 82%);
+}
+
+/* ============================================================
+   左侧导航
+   ============================================================ */
+.rail{
+  position:relative;z-index:2;flex:none;width:196px;
+  padding:22px 14px;
+  display:flex;flex-direction:column;gap:6px;
+  border-right:1px solid rgba(96,230,199,.08);
+  background:linear-gradient(180deg,rgba(7,26,22,.72),rgba(4,13,11,.42));
+}
+.brand{display:flex;align-items:center;gap:10px;padding:4px 8px 20px}
+.brand .logo{
+  width:34px;height:34px;border-radius:10px;flex:none;
+  display:grid;place-items:center;
+  background:linear-gradient(145deg,#2FD8AF,#118C74);
+  box-shadow:0 6px 18px -6px rgba(47,216,175,.6), 0 0 0 1px rgba(255,255,255,.12) inset;
+  font-size:16px;font-weight:800;color:#04201a;
+}
+.brand .nm{font-size:14px;font-weight:700;letter-spacing:.4px;line-height:1.25}
+.brand .nm small{display:block;font-size:10.5px;font-weight:400;color:var(--ink-3);letter-spacing:1.2px}
+
+.nav{display:flex;flex-direction:column;gap:3px;margin-top:4px}
+.nav a{
+  display:flex;align-items:center;gap:10px;
+  height:38px;padding:0 11px;border-radius:10px;
+  color:var(--ink-2);text-decoration:none;
+  font-size:13.5px;letter-spacing:.3px;
+  transition:.18s;
+}
+.nav a .ico{width:17px;height:17px;flex:none;opacity:.72}
+.nav a:hover{background:rgba(96,230,199,.06);color:var(--ink)}
+.nav a.on{
+  color:#fff;background:linear-gradient(90deg,rgba(59,227,187,.20),rgba(59,227,187,.04));
+  box-shadow:0 0 0 1px rgba(59,227,187,.22) inset;
+}
+.nav a.on .ico{opacity:1;color:var(--teal)}
+.nav a.on::after{
+  content:"";margin-left:auto;width:5px;height:5px;border-radius:50%;
+  background:var(--teal);box-shadow:0 0 10px var(--teal);
+}
+.nav .grp{font-size:10.5px;color:var(--ink-3);letter-spacing:2px;padding:16px 11px 6px}
+
+.rail-foot{margin-top:auto;padding:10px 11px;font-size:11px;color:var(--ink-3);line-height:1.7}
+.rail-foot b{color:var(--ink-2);font-weight:600}
+
+/* ============================================================
+   主区
+   ============================================================ */
+.main{position:relative;z-index:2;flex:1;min-width:0;display:flex;flex-direction:column}
+
+.topbar{
+  height:58px;flex:none;display:flex;align-items:center;gap:14px;
+  padding:0 26px;
+  border-bottom:1px solid rgba(96,230,199,.08);
+}
+.crumb{font-size:13px;color:var(--ink-3);display:flex;align-items:center;gap:8px}
+.crumb b{color:var(--ink);font-weight:600;font-size:14px}
+.crumb .dot{width:3px;height:3px;border-radius:50%;background:var(--ink-3)}
+
+.pills{display:flex;gap:6px;margin-left:8px}
+.pill{
+  height:26px;padding:0 12px;border-radius:8px;
+  display:flex;align-items:center;gap:6px;
+  font-size:12px;color:var(--ink-2);
+  border:1px solid rgba(96,230,199,.14);
+  background:rgba(96,230,199,.05);
+}
+.pill.on{color:#062A23;background:linear-gradient(180deg,#4AECC6,#2CCBA6);border-color:transparent;font-weight:700}
+.pill .bd{width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.8}
+
+.spacer{flex:1}
+
+.clock{font-size:13px;color:var(--ink-2);letter-spacing:1px}
+.avatar{
+  display:flex;align-items:center;gap:9px;padding-left:14px;margin-left:6px;
+  border-left:1px solid rgba(96,230,199,.10);
+}
+.avatar .ph{
+  width:30px;height:30px;border-radius:50%;
+  background:linear-gradient(145deg,#2FD8AF,#0E7A66);
+  display:grid;place-items:center;font-size:12px;font-weight:800;color:#04201a;
+}
+.avatar span{font-size:12.5px;color:var(--ink-2)}
+
+/* ---------- 标题行 ---------- */
+.hero{
+  flex:none;display:flex;align-items:flex-end;gap:16px;
+  padding:20px 26px 0;
+}
+.hero h1{font-size:26px;font-weight:800;letter-spacing:.5px;line-height:1.1}
+.hero .sub{font-size:12.5px;color:var(--ink-3);margin-top:7px;letter-spacing:.4px}
+.hero .acts{margin-left:auto;display:flex;gap:9px;align-items:center}
+.btn{
+  height:34px;padding:0 15px;border-radius:9px;
+  display:inline-flex;align-items:center;gap:7px;
+  font-size:13px;font-weight:600;letter-spacing:.3px;
+  border:1px solid rgba(96,230,199,.18);
+  background:rgba(96,230,199,.06);color:var(--ink);
+  cursor:pointer;
+}
+.btn.primary{
+  background:linear-gradient(180deg,#4AECC6,#22BF9C);
+  color:#03251D;border-color:transparent;
+  box-shadow:0 10px 24px -12px rgba(59,227,187,.9);
+}
+.btn .ico{width:15px;height:15px}
+
+/* ---------- KPI ---------- */
+.kpis{
+  flex:none;display:grid;grid-template-columns:repeat(4,1fr);
+  gap:var(--gap);padding:16px 26px 0;
+}
+.kpi{
+  position:relative;overflow:hidden;
+  border-radius:var(--r-md);
+  padding:15px 17px;
+  background:linear-gradient(158deg,rgba(16,54,46,.82),rgba(8,28,24,.62));
+  border:1px solid var(--line);
+  box-shadow:var(--shadow);
+}
+.kpi::after{
+  content:"";position:absolute;left:0;top:0;bottom:0;width:3px;
+  background:var(--c);opacity:.9;box-shadow:0 0 18px var(--c);
+}
+.kpi .lb{font-size:11.5px;color:var(--ink-3);letter-spacing:1.4px;display:flex;align-items:center;gap:6px}
+.kpi .val{font-size:33px;font-weight:800;line-height:1.12;margin-top:9px;letter-spacing:-.5px}
+.kpi .val em{font-size:13px;font-style:normal;font-weight:600;color:var(--ink-3);margin-left:4px}
+.kpi .tag{
+  position:absolute;right:15px;top:15px;
+  font-size:11px;padding:3px 8px;border-radius:6px;
+  color:var(--c);background:color-mix(in srgb,var(--c) 12%,transparent);
+  border:1px solid color-mix(in srgb,var(--c) 26%,transparent);
+}
+.kpi .bar{height:3px;border-radius:2px;background:rgba(255,255,255,.07);margin-top:11px;overflow:hidden}
+.kpi .bar i{display:block;height:100%;border-radius:2px;background:linear-gradient(90deg,var(--c),transparent)}
+
+/* ---------- 栅格 ---------- */
+.grid{
+  flex:1;min-height:0;
+  display:grid;gap:var(--gap);
+  grid-template-columns:repeat(12,1fr);
+  grid-template-rows:1.14fr .92fr;
+  padding:14px 26px 20px;
+}
+.p-seat{grid-column:span 7}
+.p-today{grid-column:span 5}
+.p-dash{grid-column:span 5}
+.p-todo{grid-column:span 3}
+.p-works{grid-column:span 4}
+
+.panel{
+  position:relative;min-height:0;overflow:hidden;
+  display:flex;flex-direction:column;
+  border-radius:var(--r-lg);
+  background:linear-gradient(158deg,rgba(15,50,43,.78),rgba(7,25,21,.66));
+  border:1px solid var(--line);
+  box-shadow:var(--shadow);
+  backdrop-filter:blur(6px);
+}
+.panel::before{
+  content:"";position:absolute;inset:0 0 auto 0;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(120,244,214,.34),transparent);
+}
+.p-head{
+  flex:none;display:flex;align-items:center;gap:10px;
+  height:46px;padding:0 16px;
+  border-bottom:1px solid rgba(96,230,199,.08);
+  background:var(--panel-head);
+}
+.p-head h3{font-size:13.5px;font-weight:700;letter-spacing:.6px}
+.p-head .hint{font-size:11px;color:var(--ink-3);letter-spacing:.4px}
+.p-head .right{margin-left:auto;display:flex;align-items:center;gap:8px}
+.p-body{flex:1;min-height:0;padding:12px 16px;overflow:hidden}
+
+.mini{
+  height:25px;padding:0 10px;border-radius:7px;
+  font-size:11.5px;color:var(--ink-2);
+  border:1px solid rgba(96,230,199,.16);background:rgba(96,230,199,.05);
+  display:inline-flex;align-items:center;gap:5px;cursor:pointer;
+}
+.mini.on{color:#062A23;background:rgba(59,227,187,.9);border-color:transparent;font-weight:700}
+
+/* ---------- 座位 ---------- */
+.seat-top{display:flex;align-items:center;gap:14px;margin-bottom:10px}
+.podium{
+  flex:none;width:100%;height:22px;border-radius:6px;
+  display:grid;place-items:center;
+  font-size:11px;letter-spacing:6px;color:rgba(59,227,187,.75);
+  background:linear-gradient(90deg,rgba(59,227,187,.03),rgba(59,227,187,.12),rgba(59,227,187,.03));
+  border:1px solid rgba(59,227,187,.16);
+}
+.legend{margin-left:auto;display:flex;gap:12px;font-size:11px;color:var(--ink-3)}
+.legend i{width:7px;height:7px;border-radius:2px;display:inline-block;margin-right:5px;vertical-align:-1px}
+
+.seats{
+  display:grid;grid-template-columns:repeat(6,1fr);gap:6px;
+}
+.seat{
+  position:relative;height:39px;border-radius:8px;
+  display:flex;flex-direction:column;justify-content:center;
+  padding:0 8px;
+  border:1px solid rgba(96,230,199,.10);
+  background:rgba(255,255,255,.025);
+  font-size:11.5px;color:var(--ink-2);
+  letter-spacing:.2px;
+}
+.seat b{
+  position:absolute;right:7px;top:5px;
+  font-size:9.5px;font-weight:600;color:rgba(255,255,255,.26);
+}
+.seat.s-ok{border-color:rgba(59,227,187,.30);background:rgba(59,227,187,.09);color:#D8FFF5}
+.seat.s-late{border-color:rgba(245,182,93,.34);background:rgba(245,182,93,.10);color:#FFE3BC}
+.seat.s-leave{border-color:rgba(169,139,255,.32);background:rgba(169,139,255,.09);color:#E4DAFF}
+.seat.s-none{border-color:rgba(255,255,255,.06);background:rgba(255,255,255,.015);color:rgba(255,255,255,.34)}
+.seat.s-me{box-shadow:0 0 0 1.5px rgba(59,227,187,.75), 0 0 18px -4px rgba(59,227,187,.8)}
+
+/* ---------- 今日课程 ---------- */
+.lessons{display:flex;flex-direction:column;gap:8px;height:100%}
+.lesson{
+  flex:1;min-height:0;display:flex;align-items:center;gap:12px;
+  padding:0 12px;border-radius:10px;
+  border:1px solid rgba(96,230,199,.08);
+  background:rgba(255,255,255,.02);
+}
+.lesson .tp{width:64px;flex:none;font-size:12px;color:var(--ink-2);letter-spacing:.5px;line-height:1.45}
+.lesson .tp small{display:block;font-size:10px;color:var(--ink-3)}
+.lesson .ct b{font-size:13px;font-weight:700;display:block;line-height:1.4}
+.lesson .ct span{font-size:11px;color:var(--ink-3)}
+.lesson .st{
+  margin-left:auto;font-size:11px;padding:4px 9px;border-radius:6px;flex:none;
+  color:var(--ink-3);background:rgba(255,255,255,.04);
+}
+.lesson.now{
+  border-color:rgba(59,227,187,.34);
+  background:linear-gradient(90deg,rgba(59,227,187,.16),rgba(59,227,187,.02));
+  box-shadow:0 0 0 1px rgba(59,227,187,.12) inset;
+}
+.lesson.now .st{color:#062A23;background:var(--teal);font-weight:700}
+.lesson.past{opacity:.55}
+
+/* ---------- 大屏收件 ---------- */
+.dash-top{display:flex;align-items:center;gap:16px;margin-bottom:14px}
+.ring{
+  --p:67;
+  width:86px;height:86px;flex:none;border-radius:50%;
+  background:conic-gradient(var(--teal) calc(var(--p)*1%), rgba(255,255,255,.07) 0);
+  display:grid;place-items:center;position:relative;
+}
+.ring::after{
+  content:"";position:absolute;inset:7px;border-radius:50%;
+  background:#0a2420;box-shadow:0 0 24px rgba(59,227,187,.22) inset;
+}
+.ring .n{position:relative;z-index:1;text-align:center;line-height:1}
+.ring .n b{font-size:20px;font-weight:800}
+.ring .n i{display:block;font-size:9.5px;font-style:normal;color:var(--ink-3);margin-top:3px;letter-spacing:.5px}
+
+.dash-meta b{font-size:14px;font-weight:700;letter-spacing:.3px}
+.dash-meta p{font-size:11.5px;color:var(--ink-3);margin-top:5px;line-height:1.6}
+.dash-meta .pulse{
+  display:inline-flex;align-items:center;gap:6px;margin-top:8px;
+  font-size:11px;color:var(--teal);
+}
+.pulse i{width:6px;height:6px;border-radius:50%;background:var(--teal);box-shadow:0 0 0 3px rgba(59,227,187,.16)}
+
+.wins{display:flex;flex-direction:column;gap:7px}
+.win{
+  display:flex;align-items:center;gap:10px;
+  height:34px;padding:0 11px;border-radius:8px;
+  background:rgba(255,255,255,.025);
+  border:1px solid rgba(96,230,199,.08);
+  font-size:11.5px;color:var(--ink-2);
+}
+.win .nm{width:112px;flex:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.win .track{flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,.07);overflow:hidden}
+.win .track i{display:block;height:100%;background:linear-gradient(90deg,#2FD8AF,#4AECC6)}
+.win .num{width:44px;text-align:right;flex:none;font-size:11px;color:var(--ink-3)}
+.win .num b{color:var(--ink);font-weight:700}
+
+/* ---------- 待办 ---------- */
+.todo{display:flex;flex-direction:column;gap:8px}
+.todo .it{
+  display:flex;gap:10px;align-items:flex-start;
+  padding:8px 11px;border-radius:9px;
+  background:rgba(255,255,255,.022);
+  border:1px solid rgba(96,230,199,.07);
+}
+.todo .cb{
+  width:14px;height:14px;border-radius:4px;flex:none;margin-top:2px;
+  border:1.4px solid rgba(96,230,199,.4);
+}
+.todo .cb.done{background:var(--teal);border-color:var(--teal);position:relative}
+.todo .cb.done::after{
+  content:"";position:absolute;left:3.5px;top:1px;width:4px;height:7px;
+  border:1.6px solid #062A23;border-top:0;border-left:0;transform:rotate(42deg);
+}
+.todo .tx b{font-size:12px;font-weight:600;display:block;line-height:1.45}
+.todo .tx span{font-size:10.5px;color:var(--ink-3);display:block;margin-top:3px}
+.todo .it.done .tx b{text-decoration:line-through;color:var(--ink-3)}
+.todo .due{
+  margin-left:auto;font-size:10px;padding:2px 6px;border-radius:5px;flex:none;
+  color:var(--amber);background:rgba(245,182,93,.12);
+}
+
+/* ---------- 作品流 ---------- */
+.works{display:flex;flex-direction:column;gap:7px}
+.work{
+  display:flex;align-items:center;gap:10px;
+  height:36px;padding:0 10px;border-radius:8px;
+  background:rgba(255,255,255,.02);
+  border:1px solid rgba(96,230,199,.06);
+  font-size:11.5px;
+}
+.work .ext{
+  width:26px;height:26px;border-radius:6px;flex:none;
+  display:grid;place-items:center;
+  font-size:8.5px;font-weight:800;letter-spacing:.3px;
+  color:#062A23;background:linear-gradient(145deg,#4AECC6,#1FA88B);
+}
+.work .ext.doc{background:linear-gradient(145deg,#8FC7FF,#3B7FD4);color:#06192E}
+.work .ext.img{background:linear-gradient(145deg,#FFC58A,#E08A3C);color:#2A1704}
+.work .who{width:66px;flex:none;color:var(--ink);font-weight:600}
+.work .fn{flex:1;min-width:0;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.work .tm{flex:none;color:var(--ink-3);font-size:10.5px}
+.work .ok{flex:none;font-size:10px;color:var(--teal);background:rgba(59,227,187,.10);padding:2px 7px;border-radius:5px}
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- ============ 左侧导航 ============ -->
+  <aside class="rail">
+    <div class="brand">
+      <div class="logo">牛</div>
+      <div class="nm">班级工作台<small>WORKBENCH 2.0</small></div>
+    </div>
+
+    <nav class="nav">
+      <a class="on"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 10.5 12 3l9 7.5"/><path d="M5.5 9.5V21h13V9.5"/></svg>工作台</a>
+      <a><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M9 20h6M12 16v4"/></svg>数据大屏</a>
+      <a><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>座位表</a>
+      <a><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>课程资料</a>
+      <a><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 5a2 2 0 0 1 2-2h13v18H6a2 2 0 0 1-2-2z"/><path d="M8 3v18"/></svg>作业</a>
+      <a><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 20V10M10 20V4M16 20v-6M2 20h18"/></svg>成绩</a>
+      <a><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 9h8M8 13h8M8 17h4"/></svg>测验</a>
+
+      <div class="grp">其他</div>
+      <a><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="2" y="6" width="20" height="11" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M7 13.5h10"/></svg>打字冒险岛</a>
+      <a><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2 2 2 0 1 1-4 0 1.7 1.7 0 0 0-2.9-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 3 15a2 2 0 1 1 0-4 1.7 1.7 0 0 0 1.4-2.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 10 4.6a2 2 0 1 1 4 0 1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0 1.2 2.9 2 2 0 1 1 0 4z"/></svg>设置</a>
+    </nav>
+
+    <div class="rail-foot">
+      <b>v2.0.38</b> · 本地部署<br>数据存本机 · 无云端
+    </div>
+  </aside>
+
+  <!-- ============ 主区 ============ -->
+  <main class="main">
+
+    <header class="topbar">
+      <div class="crumb">
+        <b>七(1)班</b><span class="dot"></span>信息科技<span class="dot"></span>第 5 节
+      </div>
+      <div class="pills">
+        <div class="pill on"><span class="bd"></span>本班</div>
+        <div class="pill">七(2)班</div>
+        <div class="pill">七(3)班</div>
+      </div>
+      <div class="spacer"></div>
+      <div class="clock">10:58:24</div>
+      <div class="avatar">
+        <div class="ph">牛</div><span>牛老师</span>
+      </div>
+    </header>
+
+    <section class="hero">
+      <div>
+        <h1>工作台</h1>
+        <div class="sub">2026 年 11 月 7 日 星期五 · 上午第 5 节 · 机房 A</div>
+      </div>
+      <div class="acts">
+        <div class="btn"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg>新建学习单</div>
+        <div class="btn primary"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M9 20h6"/></svg>推送到大屏</div>
+      </div>
+    </section>
+
+    <!-- KPI -->
+    <section class="kpis">
+      <div class="kpi" style="--c:#3BE3BB">
+        <div class="lb">本节应到</div>
+        <div class="val">36<em>人</em></div>
+        <div class="tag">七(1)班</div>
+        <div class="bar"><i style="width:100%"></i></div>
+      </div>
+      <div class="kpi" style="--c:#4FC3F7">
+        <div class="lb">已签到</div>
+        <div class="val">32<em>/ 36</em></div>
+        <div class="tag">88.9%</div>
+        <div class="bar"><i style="width:88.9%"></i></div>
+      </div>
+      <div class="kpi" style="--c:#F5B65D">
+        <div class="lb">异常考勤</div>
+        <div class="val">4<em>人</em></div>
+        <div class="tag">迟到 3 · 请假 1</div>
+        <div class="bar"><i style="width:11%"></i></div>
+      </div>
+      <div class="kpi" style="--c:#A98BFF">
+        <div class="lb">待批作业</div>
+        <div class="val">12<em>份</em></div>
+        <div class="tag">3 天后截止</div>
+        <div class="bar"><i style="width:33%"></i></div>
+      </div>
+    </section>
+
+    <!-- 栅格 -->
+    <section class="grid">
+
+      <!-- 座位与考勤 -->
+      <div class="panel p-seat">
+        <div class="p-head">
+          <h3>座位与考勤</h3>
+          <span class="hint">实时 · 登录即签到</span>
+          <div class="right">
+            <div class="mini on">全班</div>
+            <div class="mini">未签到 4</div>
+            <div class="mini">请假 1</div>
+          </div>
+        </div>
+        <div class="p-body">
+          <div class="seat-top">
+            <div class="podium">讲 台</div>
+            <div class="legend">
+              <span><i style="background:#3BE3BB"></i>已签到</span>
+              <span><i style="background:#F5B65D"></i>迟到</span>
+              <span><i style="background:#A98BFF"></i>请假</span>
+              <span><i style="background:rgba(255,255,255,.16)"></i>未到</span>
+            </div>
+          </div>
+          <div class="seats">
+            <div class="seat s-ok"><b>01</b>邵嘉怡</div>
+            <div class="seat s-ok"><b>02</b>曾芷恩</div>
+            <div class="seat s-ok"><b>03</b>杜泽昊</div>
+            <div class="seat s-ok"><b>04</b>任俏彤</div>
+            <div class="seat s-late"><b>05</b>邹晓晴</div>
+            <div class="seat s-ok"><b>06</b>陈一诺</div>
+
+            <div class="seat s-ok"><b>07</b>丁永嘉</div>
+            <div class="seat s-ok s-me"><b>08</b>唐梦琪</div>
+            <div class="seat s-ok"><b>09</b>许卓然</div>
+            <div class="seat s-none"><b>10</b>曾宇辰</div>
+            <div class="seat s-ok"><b>11</b>叶语桐</div>
+            <div class="seat s-ok"><b>12</b>李雨桐</div>
+
+            <div class="seat s-ok"><b>13</b>刘海铭</div>
+            <div class="seat s-ok"><b>14</b>钟子涵</div>
+            <div class="seat s-late"><b>15</b>欧阳予</div>
+            <div class="seat s-ok"><b>16</b>周芷晴</div>
+            <div class="seat s-ok"><b>17</b>吴思远</div>
+            <div class="seat s-ok"><b>18</b>何嘉琪</div>
+
+            <div class="seat s-ok"><b>19</b>任泽宇</div>
+            <div class="seat s-ok"><b>20</b>王子墨</div>
+            <div class="seat s-ok"><b>21</b>赵梓萱</div>
+            <div class="seat s-ok"><b>22</b>王可欣</div>
+            <div class="seat s-none"><b>23</b>孔梓涵</div>
+            <div class="seat s-ok"><b>24</b>梁嘉俊</div>
+
+            <div class="seat s-ok"><b>25</b>黄一诺</div>
+            <div class="seat s-ok"><b>26</b>陈思远</div>
+            <div class="seat s-late"><b>27</b>李欣然</div>
+            <div class="seat s-ok"><b>28</b>廖宇轩</div>
+            <div class="seat s-ok"><b>29</b>罗晨希</div>
+            <div class="seat s-ok"><b>30</b>卢梓涵</div>
+
+            <div class="seat s-ok"><b>31</b>邓雨桐</div>
+            <div class="seat s-ok"><b>32</b>谢子轩</div>
+            <div class="seat s-none"><b>33</b>陈嘉怡</div>
+            <div class="seat s-ok"><b>34</b>周子墨</div>
+            <div class="seat s-leave"><b>35</b>吴嘉慧</div>
+            <div class="seat s-none"><b>36</b>李泽楷</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 今日课程 -->
+      <div class="panel p-today">
+        <div class="p-head">
+          <h3>今日课程</h3>
+          <span class="hint">5 节 · 3 个班</span>
+          <div class="right"><div class="mini">本周</div></div>
+        </div>
+        <div class="p-body">
+          <div class="lessons">
+            <div class="lesson past">
+              <div class="tp">08:50<small>第 3 节</small></div>
+              <div class="ct"><b>信息科技 · 数据与编码</b><span>七(1)班 · 机房 A</span></div>
+              <div class="st">已结束</div>
+            </div>
+            <div class="lesson past">
+              <div class="tp">09:45<small>第 4 节</small></div>
+              <div class="ct"><b>信息科技 · 数据与编码</b><span>七(2)班 · 机房 A</span></div>
+              <div class="st">已结束</div>
+            </div>
+            <div class="lesson now">
+              <div class="tp">10:50<small>第 5 节</small></div>
+              <div class="ct"><b>信息科技 · 键盘指法</b><span>七(1)班 · 机房 A</span></div>
+              <div class="st">进行中</div>
+            </div>
+            <div class="lesson">
+              <div class="tp">14:00<small>第 6 节</small></div>
+              <div class="ct"><b>信息科技 · 数据与编码</b><span>七(3)班 · 机房 A</span></div>
+              <div class="st">未开始</div>
+            </div>
+            <div class="lesson">
+              <div class="tp">15:00<small>第 7 节</small></div>
+              <div class="ct"><b>创客机器人 · 社团</b><span>校队 8 人 · 创客室</span></div>
+              <div class="st">未开始</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 数据大屏 -->
+      <div class="panel p-dash">
+        <div class="p-head">
+          <h3>数据大屏 · 收件</h3>
+          <span class="hint">指法闯关练习</span>
+          <div class="right"><div class="mini">切换任务</div></div>
+        </div>
+        <div class="p-body">
+          <div class="dash-top">
+            <div class="ring" style="--p:67">
+              <div class="n"><b>24</b><i>/ 36</i></div>
+            </div>
+            <div class="dash-meta">
+              <b>已提交 24 人 · 未交 12 人</b>
+              <p>本次下发 2 个收件窗口，学生打开即作答，提交后实时计入</p>
+              <div class="pulse"><i></i>正在实时收集（最近一次提交 12 秒前）</div>
+            </div>
+          </div>
+          <div class="wins">
+            <div class="win">
+              <span class="nm">窗口 1 · 指法作答</span>
+              <span class="track"><i style="width:67%"></i></span>
+              <span class="num"><b>24</b>/36</span>
+            </div>
+            <div class="win">
+              <span class="nm">窗口 2 · 上传截图</span>
+              <span class="track"><i style="width:39%"></i></span>
+              <span class="num"><b>14</b>/36</span>
+            </div>
+            <div class="win">
+              <span class="nm">窗口 3 · 课堂小测</span>
+              <span class="track"><i style="width:11%"></i></span>
+              <span class="num"><b>4</b>/36</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 待办 -->
+      <div class="panel p-todo">
+        <div class="p-head">
+          <h3>待办</h3>
+          <div class="right"><div class="mini">4 项</div></div>
+        </div>
+        <div class="p-body">
+          <div class="todo">
+            <div class="it">
+              <div class="cb"></div>
+              <div class="tx"><b>批改七(1)班作业</b><span>剩余 12 份未批</span></div>
+              <div class="due">今天</div>
+            </div>
+            <div class="it">
+              <div class="cb"></div>
+              <div class="tx"><b>补录 3 名学生考勤</b><span>第 4 节 · 系统未判定</span></div>
+              <div class="due">今天</div>
+            </div>
+            <div class="it">
+              <div class="cb done"></div>
+              <div class="tx done"><b>导入期中成绩</b><span>七(1)班 36 条已写入</span></div>
+            </div>
+            <div class="it">
+              <div class="cb"></div>
+              <div class="tx"><b>备份本周数据</b><span>上次备份 3 天前</span></div>
+              <div class="due">本周</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 学生作品 -->
+      <div class="panel p-works">
+        <div class="p-head">
+          <h3>学生作品</h3>
+          <span class="hint">已归档到 课程 / 班级 / 学号-姓名</span>
+          <div class="right"><div class="mini">全部</div></div>
+        </div>
+        <div class="p-body">
+          <div class="works">
+            <div class="work">
+              <div class="ext img">PNG</div>
+              <div class="who">邵嘉怡</div>
+              <div class="fn">指法练习截图.png</div>
+              <div class="tm">10:57</div>
+              <div class="ok">已收</div>
+            </div>
+            <div class="work">
+              <div class="ext">PY</div>
+              <div class="who">杜泽昊</div>
+              <div class="fn">数据类型判断.py</div>
+              <div class="tm">10:54</div>
+              <div class="ok">已收</div>
+            </div>
+            <div class="work">
+              <div class="ext doc">DOC</div>
+              <div class="who">任俏彤</div>
+              <div class="fn">课堂笔记 · 第 5 课.docx</div>
+              <div class="tm">10:51</div>
+              <div class="ok">已收</div>
+            </div>
+            <div class="work">
+              <div class="ext img">JPG</div>
+              <div class="who">陈一诺</div>
+              <div class="fn">键盘分区图.jpg</div>
+              <div class="tm">10:49</div>
+              <div class="ok">已收</div>
+            </div>
+            <div class="work">
+              <div class="ext">TXT</div>
+              <div class="who">许卓然</div>
+              <div class="fn">指法心得.txt</div>
+              <div class="tm">10:46</div>
+              <div class="ok">已收</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </section>
+  </main>
+</div>
+</body>
+</html>

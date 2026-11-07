@@ -30,6 +30,7 @@ STORE 的 29 表同步体系——/api/v2/sync?scope=student 会把表按班级�
 import json
 import os
 import time
+import hashlib
 import threading
 
 # 七种题型。essay / image 需要人工批阅，不参与自动判分。
@@ -39,6 +40,9 @@ TYPE_NAMES = {
     "single": "单选题", "multiple": "多选题", "blank": "填空题",
     "judge": "判断题", "match": "连线题", "essay": "简答题", "image": "图片上传",
 }
+# 题干 / 选项图片直接以 dataURL 放在 quiz.json 里（免新增静态路由、学生端可直接渲染）。
+# 单张上限按字符数估：约 400KB 的二进制 → base64 约 55 万字符。
+MAX_IMAGE_CHARS = 600000
 
 _JUDGE_TRUE = ("对", "正确", "是", "√", "true", "t", "yes", "y", "a", "1")
 _JUDGE_FALSE = ("错", "错误", "否", "×", "x", "false", "f", "no", "n", "b", "0")
@@ -178,7 +182,8 @@ class QuizStore(object):
     def __init__(self, path):
         self.path = path
         self.lock = threading.RLock()
-        self.data = {"papers": {}, "publishes": {}, "submissions": [], "seq": 0}
+        self.data = {"papers": {}, "publishes": {}, "submissions": [],
+                     "bank": {}, "seq": 0}   # bank = 试题库（2.0.38+）
         self._load()
 
     # ---------------------------------------------------------------- 落盘
@@ -191,6 +196,7 @@ class QuizStore(object):
                     "papers": d.get("papers") if isinstance(d.get("papers"), dict) else {},
                     "publishes": d.get("publishes") if isinstance(d.get("publishes"), dict) else {},
                     "submissions": d.get("submissions") if isinstance(d.get("submissions"), list) else [],
+                    "bank": d.get("bank") if isinstance(d.get("bank"), dict) else {},
                     "seq": int(d.get("seq") or 0),
                 }
         except FileNotFoundError:
@@ -216,6 +222,8 @@ class QuizStore(object):
 
     def snapshot(self):
         with self.lock:
+            if "bank" not in self.data:
+                self.data["bank"] = {}
             return json.loads(json.dumps(self.data, ensure_ascii=False))
 
     def restore(self, data):
@@ -229,7 +237,9 @@ class QuizStore(object):
             if papers is None or publishes is None or subs is None:
                 return 0
             self.data = {"papers": papers, "publishes": publishes,
-                         "submissions": subs, "seq": int(data.get("seq") or 0)}
+                         "submissions": subs,
+                         "bank": data.get("bank") if isinstance(data.get("bank"), dict) else {},
+                         "seq": int(data.get("seq") or 0)}
             self._save()
             return len(papers) + len(publishes) + len(subs)
 
@@ -257,7 +267,12 @@ class QuizStore(object):
             opts = []
             for o in (q.get("options") or []):
                 if isinstance(o, dict):
-                    opts.append({"key": str(o.get("key") or ""), "text": str(o.get("text") or "")})
+                    one = {"key": str(o.get("key") or ""), "text": str(o.get("text") or "")}
+                    # 选项图片（2.0.38+）：dataURL 或站点 URL，题干同理。
+                    # 超长的一律丢掉，避免一份卷子把 quiz.json 撑到几十 MB。
+                    if o.get("image") and len(str(o["image"])) <= MAX_IMAGE_CHARS:
+                        one["image"] = str(o["image"])
+                    opts.append(one)
                 else:
                     opts.append({"key": str(o), "text": str(o)})
             pairs = []
@@ -268,13 +283,18 @@ class QuizStore(object):
                 sc = float(q.get("score") or 0)
             except Exception:
                 sc = 0.0
-            qs.append({
+            one = {
                 "id": str(q.get("id") or ("q%d" % (i + 1))),
                 "type": t, "title": str(q.get("title") or ""),
                 "score": max(0.0, sc), "options": opts, "pairs": pairs,
                 "answer": q.get("answer"), "accept": q.get("accept") or [],
                 "hint": str(q.get("hint") or ""),
-            })
+                # 答案解析：教师填写，学生只在「显示答案 + 开放解析」时看到
+                "analysis": str(q.get("analysis") or ""),
+            }
+            if q.get("title_image") and len(str(q["title_image"])) <= MAX_IMAGE_CHARS:
+                one["title_image"] = str(q["title_image"])
+            qs.append(one)
         with self.lock:
             pid = str(raw.get("id") or "").strip()
             old = self.data["papers"].get(pid) if pid else None
@@ -303,6 +323,78 @@ class QuizStore(object):
             # 已发布的记录 / 已交的答卷保留（历史成绩不能因为删了试卷就消失）
             self._save()
             return True
+
+    # ---------------------------------------------------------------- 试题库
+    def bank_list(self):
+        """试题库全部题目（教师端列表 / 组卷选择器用）。"""
+        with self.lock:
+            out = [dict(v) for v in (self.data.get("bank") or {}).values()]
+        out.sort(key=lambda q: str(q.get("updated_at") or ""), reverse=True)
+        return out
+
+    def bank_add(self, questions):
+        """把若干题目加入试题库。同 id 覆盖（重新导入同一份卷子不会刷出一堆重复），
+        没有 id 的按内容生成稳定 id。返回 (新增, 覆盖)。"""
+        if not isinstance(questions, list):
+            return 0, 0
+        added = updated = 0
+        with self.lock:
+            bank = self.data.setdefault("bank", {})
+            for i, raw in enumerate(questions):
+                if not isinstance(raw, dict):
+                    continue
+                q = json.loads(json.dumps(raw, ensure_ascii=False))
+                qid = str(q.get("id") or "").strip()
+                if not qid:
+                    qid = "b" + hashlib.sha1(
+                        json.dumps(q, ensure_ascii=False, sort_keys=True).encode("utf-8")
+                    ).hexdigest()[:12]
+                q["id"] = "bk_" + qid.replace("bk_", "")
+                q.setdefault("type", "single")
+                if q["type"] not in TYPES:
+                    q["type"] = "single"
+                try:
+                    q["score"] = max(0.0, float(q.get("score") or 0))
+                except Exception:
+                    q["score"] = 0.0
+                q.setdefault("title", "")
+                q.setdefault("options", [])
+                q.setdefault("pairs", [])
+                q.setdefault("accept", [])
+                q.setdefault("answer", "")
+                q["updated_at"] = now_str()
+                if q["id"] in bank:
+                    updated += 1
+                else:
+                    added += 1
+                bank[q["id"]] = q
+            self._save()
+        return added, updated
+
+    def bank_delete(self, qid):
+        qid = str(qid)
+        with self.lock:
+            bank = self.data.setdefault("bank", {})
+            if qid not in bank:
+                return False
+            del bank[qid]
+            self._save()
+            return True
+
+    def bank_pick(self, ids):
+        """按 id 取题目用于组卷；顺序按传入 ids 保持，缺的自动跳过。"""
+        with self.lock:
+            bank = self.data.get("bank") or {}
+            out = []
+            for i, qid in enumerate(ids or []):
+                q = bank.get(str(qid))
+                if not q:
+                    continue
+                d = json.loads(json.dumps(q, ensure_ascii=False))
+                d["id"] = "q%d_%d" % (i + 1, int(time.time() * 1000) % 100000)
+                d.pop("updated_at", None)
+                out.append(d)
+            return out
 
     # ---------------------------------------------------------------- 发布
     def publishes(self):
@@ -342,6 +434,9 @@ class QuizStore(object):
             "allow_multiple": _flag("allow_multiple", False),
             "show_answer": _flag("show_answer", False),
             "show_score": _flag("show_score", False),
+            # 答案解析（2.0.38+）：只有同时开放「显示答案」才有意义，
+            # 关闭时回执里连 analysis 字段都不下发。
+            "show_analysis": _flag("show_analysis", False),
             "status": str(raw.get("status") or old.get("status") or "published"),
             # 大屏窗口名：一次发布固定绑一个窗口，SSE 只刷新这一个窗口，避免错配
             "window": str(raw.get("window") or old.get("window") or "").strip()
@@ -418,6 +513,9 @@ class QuizStore(object):
         qs = []
         for q in (p.get("questions") or []):
             d = {k: q.get(k) for k in ("id", "type", "title", "options", "hint")}
+            # 题干 / 选项图片不是答案，照常下发给学生端
+            if q.get("title_image"):
+                d["title_image"] = q["title_image"]
             # 判断题 / 连线题要给选项，但不给哪个是正确项。
             # 连线题尤其不能直接下发 pairs（那就是答案表）：
             # 只给打乱后的右项候选 + 左项列表，配对关系留在服务端判分。
@@ -509,13 +607,16 @@ class QuizStore(object):
                 w = str(s.get("window") or "测验")
                 wins.setdefault(w, []).append({
                     "name": s.get("name") or "", "no": str(s.get("student_no") or ""),
-                    "at": s.get("submitted_at") or "", "from": "quiz",
+                    "at": s.get("submitted_at") or "", "from": "quiz", "task": "",
+                    # 图片上传题落盘后答案里带 url；窗口「含文件」统计用它
+                    "has_file": any(isinstance(v, dict) and v.get("url")
+                                    for v in (s.get("answers") or {}).values()),
                 })
                 quiz_total += 1
         for s in (act_submissions or []):
             if not isinstance(s, dict):
                 continue
-            w = str(s.get("按钮") or s.get("button") or s.get("task") or "").strip()
+            w = str(s.get("按钮") or s.get("button") or "").strip()
             w = " ".join(w.split())
             if not w or w == "整页提交":
                 continue
@@ -525,6 +626,11 @@ class QuizStore(object):
                 "no": str(d.get("学号") or d.get("student_no") or d.get("sid") or ""),
                 "at": str(s.get("submitted_at") or d.get("submitted_at") or ""),
                 "from": "sheet",
+                # 来源任务号：大屏「清空」要按窗口反查该清哪个 act_task，
+                # 否则只清当前任务、别的任务同名窗口的数据会一直留着。
+                "task": str(s.get("task") or ""),
+                "has_file": bool(s.get("has_file") or d.get("attachment")
+                                 or d.get("_files") or d.get("file")),
             })
         out = {}
         for w, rows in wins.items():
