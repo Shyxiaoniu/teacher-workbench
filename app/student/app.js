@@ -20,9 +20,15 @@
   var S = { me: null, rev: 0, T: {}, flags: {}, vis: {}, view: 'today', es: null,
             now: null,   /* 服务端「现在第几节」（loadNow 定期刷新，2026-11-04） */
             loading: true, seatmap: null,
+            /* H5 网页设计（2.0.39）：老师开服务 + 允许添加，学生点一次入口卡
+               才把「设计」页签加进导航（记在 localStorage，换设备重新添加）。 */
+            designOn: false, designAdd: true, designSubmit: true, designAdded: false,
             /* 测验/检测（2.0.38）：不进 sync 快照（试卷含答案），独立接口按会话班级下发 */
             quiz: { list: null, loading: false } };
   var WD = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+  /* 学生自己「添加」H5 网页设计页签的标记：老师开放 + 学生点过入口卡才为 1。
+     换设备要重新添加一次，避免把入口强塞给还没准备用的同学。 */
+  var DESIGN_ADD_KEY = 'wb-design-added';
 
   /* ---------------- 工具 ---------------- */
   function $(s) { return document.querySelector(s); }
@@ -161,11 +167,26 @@
     setInterval(loadNow, 60000);
   }
 
-  /* 打字冒险岛开关（2026-11-02）：老师开放/关闭后学生端入口实时增减 */
+  /* 功能开关（2.0.39 起统一入口）：老师改开关后学生端入口实时增减。
+     打字 / H5 网页设计都在这里刷新，别各写一份。 */
+  function applyDesignFlag(d) {
+    d = d || {};
+    S.designOn = !!d.enabled;
+    S.designAdd = d.add !== false;
+    S.designSubmit = d.submit !== false;
+    if (!S.designOn || !S.designAdd) {
+      S.designAdded = false;
+      return;
+    }
+    var v = '0';
+    try { v = localStorage.getItem(DESIGN_ADD_KEY) || '0'; } catch (e) {}
+    S.designAdded = v === '1';
+  }
   function refreshTyping() {
     api('/api/v2/auth/session').then(function (j) {
       if (j && j.ok) {
         S.typingOn = !!(j.typing && j.typing.enabled);
+        applyDesignFlag(j.design);
         render();
       }
     }).catch(function () {});
@@ -416,6 +437,19 @@
         '<span class="tag hot">去闯关 ›</span></div>'
       : '';
 
+    /* H5 网页设计入口卡（2.0.39）：老师开放 + 允许添加才出现。
+       没添加过的同学点一次 = 添加页签并直接进去；添加过的显示「继续设计」。 */
+    var designHtml = (S.designOn && S.designAdd)
+      ? '<div class="card" data-design-go style="cursor:pointer;display:flex;align-items:center;gap:14px">' +
+        '<div style="font-size:32px;line-height:1">🎨</div>' +
+        '<div style="flex:1"><b style="font-size:15.5px">H5 网页设计</b>' +
+        '<div style="font-size:12.5px;color:var(--ink3);margin-top:3px">' +
+        (S.designAdded ? '接着改你的网页 · 做好一键交给老师'
+                       : '左边写代码 · 右边看效果 · 做好一键交给老师') +
+        '</div></div>' +
+        '<span class="tag hot">' + (S.designAdded ? '继续设计 ›' : '添加 ›') + '</span></div>'
+      : '';
+
     return '<div class="stat-grid">' +
       '<div class="stat"><div class="stat-num">' + tm.list.length + '<small>份</small></div>' +
       '<div class="stat-label">' + (tm.fresh ? '今日资料' : '最近资料') + '</div></div>' +
@@ -430,6 +464,7 @@
       '</div>' +
       ckHtml +
       typingHtml +
+      designHtml +
       '<div class="cols2">' +
       '<div class="card"><h3>' + (tm.fresh ? '本课资料' : '最近下发的资料') +
         '<span class="more">点一下直接打开</span></h3>' + matsHtml + '</div>' +
@@ -570,16 +605,20 @@
     /* 座位表（2026-11-03）：与教师端同一张图，讲台固定朝上，自己高亮 */
     { id: 'seat', name: '座位', ic: '🪑' },
     /* 打字冒险岛：老师开放后显示，站内 iframe 内嵌（2026-11-02） */
-    { id: 'typing', name: '打字', ic: '⌨️' }
+    { id: 'typing', name: '打字', ic: '⌨️' },
+    /* H5 网页设计（2.0.39）：老师开放 + 学生自己添加后出现；
+       点开在本页框架内打开设计器，不跳新标签页。 */
+    { id: 'design', name: '设计', ic: '🎨' }
   ];
-  var VIEWS = ['today', 'homework', 'courses', 'quiz', 'seat', 'typing'];
+  var VIEWS = ['today', 'homework', 'courses', 'quiz', 'seat', 'typing', 'design'];
   var TITLES = {
     today: ['今日', '签到 · 课堂学习单 · 要交的作业'],
     homework: ['我的作业', '全部作业与提交状态 · 点一条查看详情'],
     courses: ['我的资料', '老师下发的资料 · 点一下直接打开，不用下载'],
     quiz: ['我的测验', '老师下发给本班的检测 · 点开作答，按设置显示答案与分数'],
     seat: ['我的座位', '座位表 · 讲台固定在上方 · 高亮你自己的位置'],
-    typing: ['打字冒险岛', '闯关练打字 · 赢星星 · 孵宠物 · 上排行榜']
+    typing: ['打字冒险岛', '闯关练打字 · 赢星星 · 孵宠物 · 上排行榜'],
+    design: ['我的网页设计', '左边写 HTML/CSS · 右边实时预览 · 点一次提交就交给老师']
   };
 
   function pendingCount() { return todoHomeworks().length; }
@@ -594,6 +633,11 @@
   function go(v) {
     /* 每次进测验页重新拉一次，老师刚发布的卷子不用等刷新页面 */
     if (v === 'quiz') S.quiz.list = null;
+    /* 设计页：没添加过就先引导去今日页点「添加」，别给一块空白 */
+    if (v === 'design' && !designReady()) {
+      toast('先在「今日」页点一下「H5 网页设计」卡片，把它添加到导航');
+      v = 'today';
+    }
     S.view = v;
     try { location.hash = v; } catch (e) {}
     render();
@@ -625,6 +669,8 @@
       return;
     }
     if (VIEWS.indexOf(S.view) < 0) S.view = 'today';
+    /* 设计页没权限时不能停在那儿（老师刚关掉 / 还没添加） */
+    if (S.view === 'design' && !designReady()) S.view = 'today';
     /* 打字页防「闪退」（2026-11-04 牛哥反馈）：打字页是 iframe 内嵌，
        render() 每次整体重画 #app 会把 iframe 连根拔掉重建——游戏整页重载、
        正在打的关直接跳回首页。SSE 推送 / 10 秒轮询 / 配置刷新都会触发
@@ -632,11 +678,15 @@
        开关也没被老师关掉）一律不再动 DOM，切走后自动恢复。 */
     if (S.view === 'typing' && S.typingOn &&
         document.querySelector('iframe[data-typing-embed]')) return;
+    /* 设计页同理（2.0.39）：正在写代码时被 SSE 重绘 = 输入框重建、代码全丢，
+       这比打字页「跳首页」还严重。iframe 在就绝不重建。 */
+    if (S.view === 'design' && designReady() &&
+        document.querySelector('iframe[data-design-embed]')) return;
     /* 座位表走独立接口（整间教室的网格），首次进页面时拉一次；
        拿到数据后 loadSeatmap 自己再 render 一遍（2026-11-03）。 */
     if (S.view === 'seat' && !S.seatmap) loadSeatmap();
     var map = { today: vToday, homework: vHwAll, courses: vCourses,
-                quiz: vQuiz, seat: vSeat, typing: vTyping };
+                quiz: vQuiz, seat: vSeat, typing: vTyping, design: vDesign };
     var t = TITLES[S.view] || TITLES.today;
     app.innerHTML =
       '<aside class="sidebar">' + sideHtml() + '</aside>' +
@@ -664,6 +714,10 @@
     // 今日页「打字冒险岛」入口卡 → 站内切到打字页（2026-11-02）
     var tgo = document.querySelector('[data-typing-go]');
     if (tgo) tgo.onclick = function () { go('typing'); };
+    /* H5 网页设计入口卡（2.0.39）：学生点一次 = 添加页签 + 直接进来。
+       「添加」本身记在 localStorage，下次打开导航里就有「设计」。 */
+    var dgo = document.querySelector('[data-design-go]');
+    if (dgo) dgo.onclick = function () { addDesign(); };
     /* 课堂活动入口（data-act / data-locked）已随按课表的旧模块下线
        （2026-11-04）：学生端不再有按课节的学习单入口，只留资料打开。 */
     // 资料页 / 今日「本课资料」：点开在线预览或一键打开
@@ -684,14 +738,30 @@
     });
   }
 
+  /* 设计页可用 = 老师开了服务 + 允许添加 + 学生自己添加过 */
+  function designReady() { return !!(S.designOn && S.designAdd && S.designAdded); }
+  /** 导航项要不要显示（侧栏与底部 Tab 共用一套判断，别写两遍） */
+  function navShown(n) {
+    if (n.id === 'typing' && !S.typingOn) return false;
+    if (n.id === 'design' && !designReady()) return false;
+    if (n.flag && S.flags[n.flag] === false) return false;
+    return true;
+  }
+  /** 学生点「添加」：记住标记 → 导航出现「设计」→ 直接进去 */
+  function addDesign() {
+    try { localStorage.setItem(DESIGN_ADD_KEY, '1'); } catch (e) {}
+    S.designAdded = true;
+    toast('已添加「设计」到左侧导航');
+    go('design');
+  }
+
   function paintNav() {
     /* 侧边栏（宽屏） */
     var side = $('#sideNav');
     if (side) {
       side.innerHTML = NAV.map(function (n) {
         if (n.group) return '<div class="nav-gt">' + n.group + '</div>';
-        if (n.id === 'typing' && !S.typingOn) return '';
-        if (n.flag && S.flags[n.flag] === false) return '';
+        if (!navShown(n)) return '';
         return '<div class="side-item' + (S.view === n.id ? ' active' : '') + '" data-go="' + n.id + '">' +
           '<span class="ic">' + n.ic + '</span>' + n.name + badgeFor(n.id) + '</div>';
       }).join('');
@@ -700,8 +770,7 @@
     var bar = $('#tabbar');
     if (bar) {
       bar.innerHTML = NAV.filter(function (n) {
-          if (n.id === 'typing' && !S.typingOn) return false;
-          return n.id && (!n.flag || S.flags[n.flag] !== false);
+          return n.id && navShown(n);
         })
         .map(function (n) {
           return '<button class="tab' + (S.view === n.id ? ' on' : '') + '" data-go="' + n.id + '">' +
@@ -727,6 +796,35 @@
     return '<iframe data-typing-embed="1" src="/typing/?embed=1" title="打字冒险岛" ' +
       'style="width:100%;height:calc(100vh - 150px);min-height:460px;' +
       'border:1.5px solid var(--line,#eee);border-radius:16px;background:#F8F2E4;' +
+      'box-shadow:0 6px 20px rgba(60,30,10,.06)"></iframe>';
+  }
+
+  /* ---------------- 视图：H5 网页设计（2.0.39） ----------------
+     设计器本身是独立单页（/design/student.html），放进 iframe 嵌在
+     学生端框架里显示，不跳新标签页；?embed=1 去掉页面外边距。
+     编辑、预览、提交都在 iframe 内部完成，外层只负责「给一块地方」。 */
+  function vDesign() {
+    if (!S.designOn) {
+      return '<div class="card" style="text-align:center;padding:44px 20px">' +
+        '<div style="font-size:40px">🚧</div>' +
+        '<div style="font-weight:600;margin-top:8px">老师还没开启网页设计</div>' +
+        '<div style="font-size:12.5px;color:var(--ink3);margin-top:4px">开启后这里就能写网页、交作品</div></div>';
+    }
+    if (!S.designAdd) {
+      return '<div class="card">' + emptyBox('老师暂未开放添加',
+        '这一页还没对同学开放，等老师在教师端点一下开关') + '</div>';
+    }
+    if (!S.designAdded) {
+      return '<div class="card" style="text-align:center;padding:38px 20px">' +
+        '<div style="font-size:40px">🎨</div>' +
+        '<div style="font-weight:600;margin-top:8px">把「网页设计」加到我的页面？</div>' +
+        '<div style="font-size:12.5px;color:var(--ink3);margin:4px 0 16px">' +
+        '添加后左侧导航会多一个「设计」，随时能回来接着写</div>' +
+        '<button class="btn" style="width:auto;padding:0 22px" data-design-go>添加并打开</button></div>';
+    }
+    return '<iframe data-design-embed="1" src="/design/student.html?embed=1" title="H5 网页设计" ' +
+      'style="width:100%;height:calc(100vh - 150px);min-height:520px;' +
+      'border:1.5px solid var(--line,#eee);border-radius:16px;background:var(--card,#FFFCF4);' +
       'box-shadow:0 6px 20px rgba(60,30,10,.06)"></iframe>';
   }
 
@@ -1770,6 +1868,7 @@
       S.me.id = j.student.student_id;   // 统一字段：recordOf 等处用 me.id 比对
       S.flags = j.modules || {};
       S.typingOn = !!(j.typing && j.typing.enabled);
+      applyDesignFlag(j.design);
       S.rev = j.rev || 0;
       return pull(0, true).then(function () {
         document.body.innerHTML =

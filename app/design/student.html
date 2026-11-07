@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-mode="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>H5 网页设计 · 班级工作台</title>
+<link rel="stylesheet" href="/design/design.css?v=2.0.39">
+</head>
+<body>
+<div class="ds-app">
+
+  <!-- 顶部工具条：模板 / 设备 / 知识库 / 保存 / 提交。学生端页头已有标题，
+       这里不再重复大标题，只留一行功能与状态。 -->
+  <header class="ds-bar">
+    <div class="ds-brand">
+      <span class="dot"></span>
+      <b>H5 网页设计</b>
+      <small>左边写代码 · 右边看效果</small>
+    </div>
+    <div class="ds-actions">
+      <select id="tplSel" title="换一个起步模板（会覆盖当前代码，先保存草稿再换）">
+        <option value="">选择模板…</option>
+      </select>
+      <div class="seg" id="devSeg" title="预览宽度">
+        <button type="button" data-w="1000" class="on">桌面</button>
+        <button type="button" data-w="768">平板</button>
+        <button type="button" data-w="390">手机</button>
+      </div>
+      <button class="btn ghost sm" id="btnKb" title="查标签、查样式、看示例">📖 知识库</button>
+      <button class="btn sm" id="btnSave" title="保存到服务器，换设备也能接着写">保存草稿</button>
+      <button class="btn primary sm" id="btnSubmit" title="一键截图并提交给老师">提交作品</button>
+    </div>
+  </header>
+
+  <div class="ds-intro" id="intro"></div>
+
+  <div class="ds-body">
+    <!-- 左：代码 -->
+    <section class="ds-code">
+      <div class="ds-tabs">
+        <button type="button" data-tab="html" class="on">HTML</button>
+        <button type="button" data-tab="css">CSS</button>
+        <span class="sp"></span>
+        <span class="hint" id="tabHint">只写 body 里的内容</span>
+      </div>
+      <div class="ds-editor">
+        <textarea id="edHtml" spellcheck="false" autocomplete="off"
+          placeholder="在这里写网页内容，例如：&#10;<h1>我的第一个网页</h1>&#10;<p>你好！</p>"></textarea>
+        <textarea id="edCss" spellcheck="false" autocomplete="off" hidden
+          placeholder="在这里写样式，例如：&#10;h1 { color: #b45b33; }"></textarea>
+      </div>
+      <div class="ds-status">
+        <b id="stTitle">未命名网页</b>
+        <span id="stChars"></span>
+        <span class="sp"></span>
+        <span id="stSaved">未保存</span>
+      </div>
+    </section>
+
+    <!-- 右：实时预览（srcdoc，脚本不执行，只渲染 HTML/CSS） -->
+    <section class="ds-preview">
+      <div class="ds-pv-head">
+        <b>实时预览</b>
+        <span class="size" id="pvSize"></span>
+        <span class="sp"></span>
+        <button class="btn ghost sm" id="btnRefresh" title="重新渲染一次（改完代码会自动刷新）">↻ 刷新</button>
+      </div>
+      <div class="ds-stage" id="stage">
+        <div class="ds-holder" id="holder">
+          <div class="ds-canvas" id="canvas">
+            <iframe id="pv" sandbox="allow-same-origin" title="网页预览"></iframe>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 知识库抽屉 -->
+    <aside class="ds-kb" id="kbPanel" aria-hidden="true">
+      <div class="kb-head">
+        <b>网页设计知识库</b>
+        <button class="x" id="kbClose" title="收起">×</button>
+      </div>
+      <div class="kb-search">
+        <input id="kbSearch" type="search" placeholder="搜标签、属性或效果，如 flex / 圆角 / 渐变">
+      </div>
+      <div class="kb-cats" id="kbCats"></div>
+      <div class="kb-list" id="kbList"></div>
+    </aside>
+  </div>
+</div>
+
+<div class="ds-toast" id="toast"></div>
+<div id="busyBox"></div>
+
+<script src="/design/kb.js?v=2.0.39"></script>
+<script src="/design/studio.js?v=2.0.39"></script>
+</body>
+</html>

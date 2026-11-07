@@ -77,6 +77,8 @@ class Workspace(object):
             # 独立 quiz.json + quiz_files/，按账号隔离。
             "quiz": os.path.join(d, "quiz.json"),
             "quiz_files": os.path.join(d, "quiz_files"),
+            # H5 网页设计草稿（2.0.39）：过程文件，独立 design.json
+            "design": os.path.join(d, "design.json"),
             "submissions": os.path.normpath(sub),
             "courseware": os.path.normpath(cw),
         }

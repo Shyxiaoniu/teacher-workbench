@@ -485,6 +485,26 @@ class QuizAPI(object):
                                    "desc": "从试题库选择组成", "questions": picked})
             return self.ok(paper=p, count=len(picked))
 
+        if path == "/api/v2/quiz/teacher/paper/append-bank":
+            """把题库里选中的题追加到一份已有试卷（2026-11-07）。
+
+            以前题库全选只有「新建试卷」一条路，想把几道好题补进已有卷子，
+            只能手动重录。这里保留原题顺序，把选中题接在末尾。
+            """
+            ids = body.get("ids") if isinstance(body.get("ids"), list) else []
+            pid = str(body.get("paper_id") or "").strip()
+            p = self.q.paper(pid)
+            if not p:
+                return self.err("试卷不存在", 404)
+            picked = self.q.bank_pick(ids)
+            if not picked:
+                return self.err("题库里没有选中的题目")
+            qs = (p.get("questions") or []) + picked
+            p2 = self.q.save_paper({"id": pid, "title": p.get("title"),
+                                    "course": p.get("course"), "desc": p.get("desc"),
+                                    "questions": qs})
+            return self.ok(paper=p2, added=len(picked), total=len(qs))
+
         if path == "/api/v2/quiz/teacher/paper/delete":
             ok = self.q.delete_paper(body.get("id"))
             return self.ok(deleted=ok) if ok else self.err("试卷不存在", 404)

@@ -6644,6 +6644,12 @@ body:has(.mini-bar) .corner-credit { display:none; }
 .cw-tree-item.cw-tree-sub .ti-ops{display:none}
 .cw-tree-item.cw-tree-sub:hover .ti-ops,
 .cw-tree-item.cw-tree-sub.on .ti-ops{display:flex}
+/* 树节点折叠箭头（2026-11-07）：课程 / 班级各有一枚，点它只切展开态不选中 */
+.cw-tree-tw{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;
+  flex:none;margin-right:3px;border-radius:4px;cursor:pointer;user-select:none;
+  color:var(--text-secondary);font-size:10px;line-height:1;transition:.12s}
+.cw-tree-tw:hover{background:var(--brand-soft);color:var(--brand-primary)}
+.cw-tree-sub .cw-tree-tw{margin-left:-4px}
 .cw-tree-new{margin-top:6px;border-top:1px dashed var(--border);padding-top:8px}
 .cw-tree-new button{width:100%;border:1px dashed var(--border);background:transparent;
   color:var(--text-secondary);border-radius:9px;padding:7px;font-size:12.5px;cursor:pointer;
@@ -6678,7 +6684,23 @@ body:has(.mini-bar) .corner-credit { display:none; }
   background:var(--brand-soft);color:var(--brand-primary);font-size:11px;font-weight:600;
   border:1px solid rgba(15,110,86,.16);white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
 .cw-owner i{font-style:normal;color:var(--status-warning,#B5741B);font-weight:500}
-.cw-tree-sub2{padding-left:26px !important;font-size:12px}
+/* 题库 · 加入已有试卷：一行一份卷子，单选 + 题数 */
+.qz-append-list{display:flex;flex-direction:column;gap:6px;max-height:40vh;overflow:auto}
+.qz-append-row{display:flex;align-items:center;gap:9px;padding:8px 11px;border:1px solid var(--border);
+  border-radius:9px;cursor:pointer;font-size:13px}
+.qz-append-row:hover{border-color:var(--brand-primary);background:var(--brand-soft)}
+.qz-append-row input{width:15px;height:15px;accent-color:var(--brand-primary);margin:0;cursor:pointer}
+.qz-append-row .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qz-append-row .m{color:var(--text-secondary);font-size:12px;white-space:nowrap}
+
+/* 2026-11-07：学生目录必须明显缩进在班级之下（归档结构 课程/班级/学生/文件）。
+   原来这里 padding-left:26px，而班级是 margin-left:18px + padding 8px = 26px，
+   两者总缩进一样，看着像同级。现在改成 margin 36px，比班级多一级，并加一条
+   虚线连接线，让「班级 > 学生」的从属关系一眼可见。 */
+.cw-tree-sub2{margin-left:36px;padding:4px 8px;font-size:12px;position:relative}
+.cw-tree-sub2::before{content:'';position:absolute;left:-12px;top:0;bottom:0;
+  border-left:1px dashed var(--border,rgba(0,0,0,.12))}
+.cw-tree-sub2:last-child::before{height:50%}
 .cw-tree-sub2 .ti-ic{font-size:12px}
 .cw-tree-sub2 .ti-nm{color:var(--text-secondary)}
 .cw-tree-sub2.on .ti-nm{color:var(--brand-primary);font-weight:700}
@@ -7191,6 +7213,7 @@ const ICONS = {
   guide:  '<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5v-15Z"/><path d="M8 7.5h8M8 11h5"/><path d="M4 20.5A2.5 2.5 0 0 1 6.5 18H20"/>',
   chart2: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/>',
   keyboard:'<rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M6 14h.01M18 14h.01M9 14h6"/>',
+  code:   '<path d="m9 5-5 7 5 7"/><path d="m15 5 5 7-5 7"/>',
   down:   '<path d="M12 3v12M7 11l5 5 5-5"/><path d="M4 20h16"/>',
   up:     '<path d="M12 21V9M7 13l5-5 5 5"/><path d="M4 4h16"/>',
   trash:  '<path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13"/>',
@@ -7242,7 +7265,8 @@ const ICON_C = {
   star:      ['#FFF6DC','#B5741B','#B5741B','#FFFFFF'],
   progress:   ['#E4F7E9','#1D7A4C','#1D7A4C','#FFFFFF'],
   flag:      ['#FDEAF1','#B03A62','#B03A62','#FFFFFF'],
-  upload:    ['#E1F5EE','#0F6E56','#0F6E56','#FFFFFF']
+  upload:    ['#E1F5EE','#0F6E56','#0F6E56','#FFFFFF'],
+  code:      ['#E3F4F1','#0F766E','#0F766E','#FFFFFF']
 };
 
 function icon(name, size = 17) {
@@ -7431,8 +7455,9 @@ const NAV_GROUPS = [
   { name:'班务', items:['classes','students'] },
   /* 打字（2026-11-05 牛哥要求）：从「教学」挪到「其他」——
      它更像练手小工具，和课堂发放/作业/成绩不是一类。
-     路由 #typing 没变，旧书签照样能打开。 */
-  { name:'其他', items:['todos','tools','typing'] }      // 设置只保留顶栏右上角入口
+     路由 #typing 没变，旧书签照样能打开。
+     H5 网页设计（2.0.39）：同样放在「其他」，老师一键启停的小服务。 */
+  { name:'其他', items:['todos','tools','typing','design'] }      // 设置只保留顶栏右上角入口
 ];
 
 const NAV = [
@@ -7448,6 +7473,7 @@ const NAV = [
   { id:'scores', name:'成绩', icon:'chart' },
   { id:'quiz',   name:'测验', icon:'check' },
   { id:'typing', name:'打字', icon:'keyboard' },
+  { id:'design', name:'设计', icon:'code' },
   { id:'classes', name:'班级', icon:'cap' },
   { id:'students', name:'学生', icon:'user' },
   { id:'todos',  name:'待办', icon:'pin' },
@@ -8002,9 +8028,9 @@ const HQ_TEXT = {
     + '<b>三处入口各管一件事</b><br>'
     + '<b>大屏（上课页）</b>：实时收件看板，只统计「谁交了 / 交到哪个窗口」，'
     + '不显示答案与分数，也不算正确率。<br>'
-    + '<b>本页（测验 / 检测）</b>：唯一的逐题正确率、分数、按班提交与成绩分析入口，'
-    + '还能导出成绩 CSV、人工批阅简答与图片题。<br>'
-    + '<b>成绩页</b>：把某次测验某班成绩换算成百分制，导入成一场考试后走既有成绩分析。<br>'
+    + '<b>本页（测验 / 检测）</b>：组卷、发布与批阅；发布列表里可直接跳到成绩页看分析。<br>'
+    + '<b>成绩页</b>：测验的提交率、逐题正确率、成绩 CSV 与人工批阅都在这里（页面中部「测验成绩分析」）；'
+    + '还能把某次测验某班成绩换算成百分制，导入成一场考试后走既有成绩分析。<br>'
     + '<b>统一口径</b>：三处读同一份提交；同一次发布同一名学生只算最后一次提交，不重复计数。'
     + '试卷与提交独立存放，不进学生端同步快照（防止答案提前下发）。',
   quizFormat: ''
@@ -12019,6 +12045,14 @@ function renderContent(opts = {}) {
       c.innerHTML = '<div style="height:calc(100vh - 128px);min-height:520px">' +
         '<iframe data-typing-admin src="/typing/teacher.html" title="打字练习管理" style="width:100%;height:100%;border:0"></iframe></div>';
     }
+  } else if (state.route === 'design') {
+    /* H5 网页设计管理（2.0.39）：独立页面 iframe 内嵌，复用教师登录会话。
+       和打字页同款「iframe 还在就不重建」——否则同步轮询会把它整页重载，
+       老师刚点开的开关 / 输入到一半的课程名都会丢。 */
+    if (!c.querySelector('iframe[data-design-admin]')) {
+      c.innerHTML = '<div style="height:calc(100vh - 128px);min-height:520px">' +
+        '<iframe data-design-admin src="/design/teacher.html" title="H5 网页设计管理" style="width:100%;height:100%;border:0"></iframe></div>';
+    }
   } else if (DEMO_RENDER[state.route]) {
     c.innerHTML = DEMO_RENDER[state.route]();
   } else {
@@ -12030,9 +12064,9 @@ function renderContent(opts = {}) {
   if (state.route === 'settings') setTimeout(() => { try { acctPaintSec(); } catch (e) {} }, 20);
   if (state.route === 'settings') setTimeout(() => { try { updLoad(); } catch (e) {} }, 30);
   if (state.route === 'settings') setTimeout(() => { try { checkinCfgLoad(); } catch (e) {} }, 40);
-  /* 2.0.38：成绩页顶上加一条「从测验导入」入口（不改原成绩页模板，
-     避免动到那张几千行的成绩表渲染）。 */
-  if (state.route === 'scores') setTimeout(() => { try { quizEnsureCss(); quizInjectScoresEntry(); } catch (e) {} }, 0);
+  /* 2026-11-07：测验的成绩分析（按班提交率 / 逐题正确率 / 导出 / 人工批阅）
+     已从测验页整体迁到成绩页，挂在上方 #scoreQuizBox 里。 */
+  if (state.route === 'scores') setTimeout(() => { try { quizMountScores(); } catch (e) {} }, 0);
 
   /* 首页：学生入口卡要问服务端要局域网地址（地址是运行期才知道的，
      模板里只能放占位，渲染完补一次）。 */
@@ -16485,8 +16519,7 @@ function renderActivity() {
         <button class="btn btn-ghost btn-sm" id="actCustView" onclick="actCustomView()" title="把生成的页面临时部署并打开真实预览（含测试提交能力，可验证与数据大屏同步）">👁 查看</button>
         <button class="btn btn-ghost btn-sm" id="actCustSaveLib" onclick="actCustomSaveLib()" title="弹出「保存到资料库位置」：选课程与子文件夹、可重命名；同名覆盖更新">💾 保存到资料</button>
         <button class="btn btn-ghost btn-sm" id="actCustClear" onclick="actCustomClear()">清空</button>
-        <button class="btn btn-primary btn-sm" id="actPubOpenBtn" onclick="actOpenPublishDialog()" title="选择班级并下发到学生端「今日」（可一次发多个班）">📤 下发</button>
-        <span id="actCustStatus" class="act-muted"></span>
+                <span id="actCustStatus" class="act-muted"></span>
       </div>
       </div>
     </div>
@@ -16781,7 +16814,7 @@ async function actLoadTaskList() {
     actTaskList = ((results[1] || {}).tasks) || [];
     if (!actCourseNames.length) {
       sel.innerHTML = '<option value="">（资料里还没有文件夹，请先到「教学 · 资料」新建并上传）</option>';
-      actActiveId = null; actActiveCourse = ''; actRenderDash(); actPubRepaint(); return;
+      actActiveId = null; actActiveCourse = ''; actRenderDash(); actPaintPubHint(); return;
     }
     sel.innerHTML = actCourseNames.map(n =>
       '<option value="' + esc(n) + '">' + esc(n) + '</option>').join('');
@@ -16799,7 +16832,7 @@ async function actLoadTaskList() {
       ? '连不上课程接口（' + actApiBase() + '），请刷新页面重试'
       : raw;
     sel.innerHTML = '<option value="">加载失败：' + esc(msg) + '</option>';
-    actActiveId = null; actActiveCourse = ''; actRenderDash(); actPubRepaint();
+    actActiveId = null; actActiveCourse = ''; actRenderDash(); actPaintPubHint();
   }
 }
 window.actLoadTaskList = actLoadTaskList;
@@ -16808,7 +16841,7 @@ async function actSelectTask(silent) {
   const sel = document.getElementById('actTaskSel');
   if (!sel) return;
   const course = sel.value;
-  if (!course) { actActiveId = null; actActiveCourse = ''; actRenderDash(); if (silent) actPubRepaint(); return; }
+  if (!course) { actActiveId = null; actActiveCourse = ''; actRenderDash(); if (silent) actPaintPubHint(); return; }
   const courseChanged = course !== actActiveCourse;
   actActiveCourse = course;
   if (courseChanged) await actLoadSheets(course);   // 换课程 → 学习单下拉重载（默认模板 + 本文件夹网页）
@@ -16859,8 +16892,7 @@ async function actSelectTask(silent) {
     } catch (e) {}
   }
   actRenderDash();
-  if (silent) actPubRepaint();
-  else actPublishCurrent();   // 选好课程即发放：写入 activity_pushes，学生端今日可见
+  if (silent) actPaintPubHint();
 }
 window.actSelectTask = actSelectTask;
 
@@ -16882,63 +16914,6 @@ function actStudentSheetUrl(t, clsName) {
     + '&task=' + encodeURIComponent(t.task_id)
     + '&title=' + encodeURIComponent(t.title || t.task_id || '课堂学习单');
 }
-let actPublishing = false;
-async function actPublishCurrent() {
-  const cls = actCurClass();
-  const t = actTaskList.find(x => x.task_id === actActiveId);
-  if (cls == null || !t) { actPaintPubHint(); return; }
-  const cur = actPushOf(cls, t.task_id);
-  if (cur && cur.status !== 'draft') { actPaintPubHint(); return; }   // 已发放
-  if (actPublishing) return;
-  actPublishing = true;
-  try {
-    const clsObj = (dbT('classes') || []).find(c => Number(c.id) === Number(cls));
-    const clsName = clsObj ? clsObj.name : '';
-    const stus = actClassStudents(cls);
-    const students = stus.map(s => ({ sid: String(s.student_no || '').trim(), name: String(s.name || '').trim() })).filter(x => x.sid);
-    // 花名册推给提交服务：学生页学号自动匹配姓名与班级（失败不阻断，学生页可手填）
-    // 注意走同源：/api/roster 要教师会话 cookie，跨源（局域网 IP）既没 cookie 也被 CORS 拦
-    try {
-      fetch('/api/roster', { method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cls: clsName, students }) }).catch(() => {});
-    } catch (e) {}
-    // 课程归属（2026-11-04 改版）：选的就是课件库课程，直接用它
-    //（提交数据归档到课程目录也靠它）；旧数据没有时再走自动匹配兜底
-    let course = actActiveCourse || (cwLinkOf(t.task_id) || {}).course || '';
-    /* 页面部署（2026-11-04 大屏改版）：统一走 actDeploySheet——
-       · 老师刚在设计器「生成」的页面最优先（同一任务）；
-       · 学习单下拉选了资料里的网页 → 拉文件内容注入身份后部署；
-       · 默认学习单 → 服务端还没有页时部署默认模板（不覆盖教师设计页）。
-       注意走同源：/api/custom 要教师会话 cookie。 */
-    try {
-      const dep = await actDeploySheet(t, course);
-      if (dep) toast('已部署学习单页面：' + (actSheetUsedName || '默认模板'));
-    } catch (e) {}
-    const now = new Date().toISOString().slice(0, 16).replace('T', ' ');
-    let row;
-    if (cur) {   // 收回后重新发放
-      row = Object.assign({}, cur, { status: 'published', date: today(),
-        url: actStudentSheetUrl(t, clsName), course: course || '', updated_at: now });
-      dbSet('activity_pushes', actPushes().map(p => (p.id === cur.id ? row : p)));
-    } else {
-      row = {
-        id: 'ap' + Date.now() + Math.floor(Math.random() * 1000),
-        class_id: Number(cls), course: course || '',
-        task_id: String(t.task_id), task_title: String(t.title || t.task_id || ''),
-        url: actStudentSheetUrl(t, clsName),
-        date: today(), status: 'published', updated_at: now
-      };
-      dbSet('activity_pushes', actPushes().concat([row]));
-    }
-    try { syncMark('activity_pushes', row); } catch (e) {}
-    toast('已发放「' + row.task_title + '」' + (row.course ? '（' + row.course + '）' : '') + '：学生端今日可见');
-  } finally {
-    actPublishing = false;
-    actPubRepaint();
-  }
-}
-window.actPublishCurrent = actPublishCurrent;
 /** 收回：学生端立即不可见（SSE 实时推送）。cls 缺省 = 顶部当前班级；多班 chip 传入具体班 */
 function actUnpublish(taskId, cls) {
   if (cls == null) cls = actCurClass();
@@ -16956,7 +16931,7 @@ function actUnpublish(taskId, cls) {
   dbSet('activity_pushes', arr);
   try { syncMark('activity_pushes', hit); } catch (e) {}
   toast('已收回：学生端不再显示这门课程');
-  actPubRepaint();
+  actPaintPubHint();
 }
 window.actUnpublish = actUnpublish;
 
@@ -16980,7 +16955,7 @@ function actSetPushOpen(taskId, cls, open) {
   dbSet('activity_pushes', arr);
   try { syncMark('activity_pushes', hit); } catch (e) {}
   toast(open ? '已启动：学生端可以打开这份学习单' : '已关闭：学生端仍能看到条目，但暂时打不开');
-  actPubRepaint();
+  actPaintPubHint();
 }
 window.actSetPushOpen = actSetPushOpen;
 /** 在「已启动 / 已关闭」之间切换（按钮用） */
@@ -17024,88 +16999,30 @@ window.actPaintPubHint = actPaintPubHint;
    每个班一条 activity_pushes 行（url 里带本班班级名），走同一条同步链路；
    服务端 projection 按 class_id 下发 published（可打开）与 closed（可见但打不开），
    draft 不下发；学生端 SSE 实时收到。 */
-let actPubSel = {};   // 班级勾选状态（String(clsId) -> true）
-function actPushByCls(taskId) {
-  const m = {};
-  actPushes().forEach(p => {
-    if (!p.deleted && String(p.task_id) === String(taskId)) m[String(p.class_id)] = p;
-  });
-  return m;
-}
-function actPubChipsHtml() {
-  const classes = dbT('classes') || [];
-  if (!classes.length) return '<div class="act-muted">还没有班级，请先到「班级」创建。</div>';
-  const t = actTaskList.find(x => x.task_id === actActiveId);
-  if (!t) return '<div class="act-muted">请先在上面选一门课程，这里显示各班下发状态。</div>';
-  const byCls = actPushByCls(t.task_id);
-  return classes.map(c => {
-    const row = byCls[String(c.id)];
-    const st = row ? String(row.status || 'published') : '';
-    const pub = row && st !== 'draft';
-    const closed = pub && st === 'closed';
-    const on = !!actPubSel[String(c.id)];
-    return '<label class="act-pub-chip' + (on ? ' sel' : '') + '">'
-      + '<input type="checkbox" style="margin:0;accent-color:var(--brand-primary)" ' + (on ? 'checked' : '')
-      + ' onchange="actPubToggle(\'' + esc(String(c.id)) + '\', this.checked)">'
-      + esc(c.name)
-      + (on ? ' <span class="act-pub-check">✓</span>' : '')
-      + (pub
-        ? ' <span class="act-pub-badge' + (closed ? ' off' : '') + '">' + (closed ? '已关闭' : '已启动') + ' ' + esc(String(row.date || '').slice(5)) + '</span>'
-          + ' <button type="button" class="btn btn-ghost btn-sm" style="width:auto;padding:0 7px;font-size:11px;line-height:18px"'
-          + ' onclick="event.preventDefault();event.stopPropagation();actTogglePushOpen(\'' + esc(String(t.task_id)) + '\',\'' + esc(String(c.id)) + '\')">' + (closed ? '启动' : '关闭') + '</button>'
-          + ' <button type="button" class="btn btn-ghost btn-sm" style="width:auto;padding:0 7px;font-size:11px;line-height:18px"'
-          + ' onclick="event.preventDefault();event.stopPropagation();actPubChipRevoke(\'' + esc(String(c.id)) + '\',\'' + esc(String(t.task_id)) + '\')">✕</button>'
-        : ' <span class="act-pub-badge off">未下发</span>')
-      + '</label>';
-  }).join('');
-}
-function actPubRepaint() {
-  const box = document.getElementById('actPubChips');
-  if (box) box.innerHTML = actPubChipsHtml();
-  actPaintPubHint();
-}
-window.actPubRepaint = actPubRepaint;
-function actPubToggle(clsId, on) {
-  actPubSel[String(clsId)] = !!on;
-  const box = document.getElementById('actPubChips');
-  if (box) {   // 只改样式不整块重绘，避免复选框失焦
-    const chip = box.querySelector('input[onchange*="\'' + clsId + '\'"]');
-    if (chip) chip.closest('.act-pub-chip').classList.toggle('sel', !!on);
-  }
-}
-window.actPubToggle = actPubToggle;
 
-/** 批量下发：先确保页面已部署（一次），再逐班写 activity_pushes + 推花名册 */
-async function actPublishBatch() {
-  const t = actTaskList.find(x => x.task_id === actActiveId);
-  if (!t) { toast('请先在上面选一门课程'); return; }
-  const sel = Object.keys(actPubSel).filter(k => actPubSel[k]);
-  if (!sel.length) { toast('请先勾选要下发的班级'); return; }
+/** 把一门课程下发给若干班级：部署学习单页 → 逐班写 activity_pushes → 推花名册。
+    2026-11-07：大屏的「📤 下发」按钮与「选课程自动发放」都已删除，
+    这里是唯一实现，由资料页 cwPublishCourseDialog() 调用。 */
+async function publishCourseToClasses(taskArg, courseArg, classIds) {
+  const t = taskArg || actTaskList.find(x => x.task_id === actActiveId);
+  if (!t) return { ok: [], fail: ['找不到课程任务'] };
+  const sel = (classIds || []).map(String).filter(Boolean);
+  if (!sel.length) return { ok: [], fail: ['未选择班级'] };
   const classes = dbT('classes') || [];
-  const msgEl = document.getElementById('actPubBatchMsg');
-  const say = s => { if (msgEl) msgEl.textContent = s; };
-  say('正在下发 ' + sel.length + ' 个班级…');
-  // ① 课程归属（整批一次，归档用）：选的就是课件库课程，直接用它
-  let course = actActiveCourse || String(t.course || '') || (cwLinkOf(t.task_id) || {}).course || '';
-  // ② 页面部署（整批一次）：统一走 actDeploySheet——
-  //    · 老师刚「生成」过的新页面（同一活动）最优先；
-  //    · 学习单下拉选了资料里的网页（含「设为学习单」自动预选）→ 部署这份网页；
-  //    · 都没有 → 服务端还没有页时部署默认模板（不覆盖教师设计页）。
-  //    2026-11-04 修正：原来这里只认设计器页面/默认模板，弹窗批量下发时
-  //    选好的资料学习单会被跳过，学生端拿到的是默认模板页。
+  // ① 课程归属（整批一次，归档用）
+  let course = String(courseArg || actActiveCourse || t.course || '').trim()
+    || (cwLinkOf(t.task_id) || {}).course || '';
+  // ② 页面部署（整批一次）：资料里「设为学习单」的网页 > 设计器页面 > 默认模板
   try {
     const dep = await actDeploySheet(t, course);
-    if (!dep) {
-      // 没部署 ≠ 失败：服务端已有教师设计页时本来就不动；只有拉网页失败才提醒
-      if (actSheetFile) { toast('✗ 学习单网页部署失败，请重试或检查该文件'); say(''); return; }
-    }
-  } catch (e) { toast('✗ 学习单页面部署失败：' + (e.message || e)); say(''); return; }
+    if (!dep && actSheetFile) return { ok: [], fail: ['学习单网页部署失败'] };
+  } catch (e) { return { ok: [], fail: ['页面部署失败：' + (e.message || e)] }; }
   // ③ 逐班写发放记录（每班 url 带本班班级名 + 花名册各推一份）
   const now = new Date().toISOString().slice(0, 16).replace('T', ' ');
-  const ok = [], fail = [];
+  const okList = [], failList = [];
   for (const cid of sel) {
     const clsObj = classes.find(c => String(c.id) === String(cid));
-    if (!clsObj) { fail.push('#' + cid + '（班级不存在）'); continue; }
+    if (!clsObj) { failList.push('#' + cid + '（班级不存在）'); continue; }
     try {
       const stus = actClassStudents(clsObj.id);
       const students = stus.map(s => ({ sid: String(s.student_no || '').trim(), name: String(s.name || '').trim() })).filter(x => x.sid);
@@ -17129,92 +17046,14 @@ async function actPublishBatch() {
         dbSet('activity_pushes', actPushes().concat([row]));
       }
       try { syncMark('activity_pushes', row); } catch (e) { throw new Error('同步推送失败'); }
-      ok.push(clsObj.name);
-    } catch (e) { fail.push(clsObj.name + '（' + (e.message || e) + '）'); }
+      okList.push(clsObj.name);
+    } catch (e) { failList.push(clsObj.name + '（' + (e.message || e) + '）'); }
   }
-  actPubSel = {};
-  actPubRepaint();
-  const title = '「' + (t.title || t.task_id) + '」';
-  if (ok.length && !fail.length) {
-    toast('✓ 已下发 ' + title + ' 到 ' + ok.length + ' 个班级（' + ok.join('、') + '），学生端今日可见');
-    say('✓ 已下发 ' + ok.length + ' 个班级');
-  } else if (ok.length) {
-    toast('已下发 ' + ok.length + ' 个班级（' + ok.join('、') + '）；✗ 失败 ' + fail.length + ' 个：' + fail.join('、'));
-    say('✓ ' + ok.length + ' 班成功，✗ ' + fail.length + ' 班失败');
-  } else {
-    toast('✗ 下发失败：' + fail.join('、'));
-    say('✗ 全部失败');
-  }
+  return { ok: okList, fail: failList };
 }
-window.actPublishBatch = actPublishBatch;
+window.publishCourseToClasses = publishCourseToClasses;
 
-/** 下发 chip 里按班收回（复用 actUnpublish，传具体班级） */
-function actPubChipRevoke(clsId, taskId) { actUnpublish(taskId, clsId); }
-window.actPubChipRevoke = actPubChipRevoke;
 
-/* ===================== ③ 下发到班级 · 入口：改为「下发」按钮 + 弹窗 =====================
-   整块下发逻辑（多选 / 状态跟踪 / 批量发放 / 单班收回）与原来完全一致，
-   只是把原来页面上的 ③ 卡片收进一个弹窗：点「📤 下发」按钮 → 弹出班级列表，
-   多选、明确展示已选状态、已下发的班标注日期且可单独收回；
-   确认 → 执行 actPublishBatch（逻辑零改动）；取消 / Esc / 点遮罩 → 不产生任何变更。 */
-function actOpenPublishDialog() {
-  const t = actTaskList.find(x => x.task_id === actActiveId);
-  if (!t) { toast('请先在上面选一门课程'); return; }
-  const classes = dbT('classes') || [];
-  if (!classes.length) { toast('还没有班级，请先到「班级」创建'); return; }
-
-  const ov = document.createElement('div');
-  ov.className = 'modal-ov';
-  ov.style.zIndex = 4100;          // 高于普通弹窗(1000)与 uiDialog(4000)
-  ov.innerHTML = `
-    <div class="modal act-pub-modal" role="dialog" aria-modal="true">
-      <div class="modal-head">
-        <div>
-          <div class="modal-title">📤 下发到班级</div>
-          <div class="modal-sub">课程「${esc(t.title || t.task_id)}」· 学生端「今日」即时可见 · 可一次发多个班</div>
-        </div>
-        <button type="button" class="act-pub-x" aria-label="关闭" title="关闭">✕</button>
-      </div>
-      <div class="modal-sec">
-        <div class="modal-lb">选择班级（点选切换 · 已选班级高亮显示 ✓ · 已下发的班标注日期，可单独收回）</div>
-        <div class="act-pub-chips" id="actPubChips">加载中…</div>
-      </div>
-      <div class="modal-sec" style="border-bottom:none;padding-top:0">
-        <span class="act-muted" id="actPubBatchMsg" style="font-size:12px"></span>
-      </div>
-      <div class="modal-acts act-pub-acts">
-        <button type="button" class="btn btn-ghost" id="actPubRefresh" style="width:auto">🔄 刷新状态</button>
-        <span style="flex:1"></span>
-        <button type="button" class="btn btn-ghost" id="actPubCancel" style="width:auto">取消</button>
-        <button type="button" class="btn btn-primary" id="actPubGo" style="width:auto">📤 下发所选班级</button>
-      </div>
-    </div>`;
-  document.body.appendChild(ov);
-
-  // 取消 / Esc / 点遮罩：仅关闭，不产生任何数据变更
-  const onKey = e => {
-    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeDialog(); }
-  };
-  const closeDialog = () => {
-    document.removeEventListener('keydown', onKey, true);
-    ov.remove();
-  };
-  // 渲染班级 chips（完全复用既有 actPubChipsHtml / actPubToggle）
-  actPubRepaint();
-  // 绑定弹窗内事件
-  ov.querySelector('#actPubRefresh').addEventListener('click', () => actPubRepaint());
-  ov.querySelector('.act-pub-x').addEventListener('click', closeDialog);
-  ov.querySelector('#actPubCancel').addEventListener('click', closeDialog);
-  ov.querySelector('#actPubGo').addEventListener('click', async () => {
-    await actPublishBatch();         // 内部已含校验、toast 与 actPubRepaint，逻辑零改动
-    closeDialog();
-  });
-  ov.addEventListener('pointerdown', e => { if (e.target === ov) closeDialog(); });
-  document.addEventListener('keydown', onKey, true);
-  // 初始聚焦「下发所选班级」
-  ov.querySelector('#actPubGo').focus();
-}
-window.actOpenPublishDialog = actOpenPublishDialog;
 
 /* ===================== ②·保存到资料库：设计的 HTML 原稿落到资料目录 =====================
    2026-11-04 改为弹窗选位置：选课程 + 子文件夹 + 文件名（重命名），
@@ -30190,6 +30029,7 @@ function openScoreImport() {
     <div class="imp-tabs">
       <button type="button" class="imp-tab on" data-tab="file" onclick="actImpTab('file')">📄 文件批量导入</button>
       <button type="button" class="imp-tab" data-tab="manual" onclick="actImpTab('manual')">✍️ 单个学生录入</button>
+      <button type="button" class="imp-tab" data-tab="quiz" onclick="actImpTab('quiz')">📥 从测验导入</button>
     </div>
 
     <!-- 文件批量导入 -->
@@ -30241,11 +30081,32 @@ function openScoreImport() {
         <button class="btn btn-primary" type="button" id="manSaveBtn" disabled onclick="saveManualScores()">保存</button>
         <button class="btn btn-ghost" type="button" onclick="closeFloat()">取消</button>
       </div>
+    </div>
+
+    <!-- 从测验 / 检测导入（第三个标签页，2026-11-07 从页面顶部收进来） -->
+    <div id="impTabQuiz" style="display:none">
+      <div class="imp-tip">
+        选择一次<b>已发布</b>的测验与班级，把该班学生的作答换算成百分制，直接写进一场新考试；
+        导入后就在成绩页做排名、汇总与报告。
+      </div>
+      <div class="hwp-row">
+        <label class="hwp-lbl" for="qzImpPub">测验</label>
+        <select id="qzImpPub" class="hwp-sel fl-inp"><option value="">点一下这个标签就加载…</option></select>
+      </div>
+      <div class="hwp-row">
+        <label class="hwp-lbl" for="qzImpCls">班级</label>
+        <select id="qzImpCls" class="hwp-sel fl-inp"></select>
+      </div>
+      <div id="qzImpNote" class="qz-note" style="margin-top:6px"></div>
+      <div class="hwp-acts">
+        <button class="btn btn-primary" type="button" onclick="quizImportDo()">导入并查看分析</button>
+        <button class="btn btn-ghost" type="button" onclick="closeFloat()">取消</button>
+      </div>
     </div>`);
   const layer = document.getElementById('floatLayer');
   if (layer) layer.classList.add('wide');
   renderImpExamSubjects();
-  if (window.__impDefaultTab === 'manual') { actImpTab('manual'); window.__impDefaultTab = null; }
+  if (window.__impDefaultTab) { actImpTab(window.__impDefaultTab); window.__impDefaultTab = null; }
 }
 window.openScoreImport = openScoreImport;
 
@@ -30551,8 +30412,12 @@ function actImpTab(which) {
     b.classList.toggle('on', b.getAttribute('data-tab') === which));
   const f = document.getElementById('impTabFile');
   const m = document.getElementById('impTabManual');
+  const q = document.getElementById('impTabQuiz');
   if (f) f.style.display = which === 'file' ? '' : 'none';
   if (m) m.style.display = which === 'manual' ? '' : 'none';
+  if (q) q.style.display = which === 'quiz' ? '' : 'none';
+  /* 测验数据按需加载：成绩页平时不碰测验模块，第一次切到这个标签才拉 */
+  if (which === 'quiz' && typeof impQuizFill === 'function') impQuizFill();
 }
 window.actImpTab = actImpTab;
 
@@ -32390,6 +32255,9 @@ const DEMO_RENDER = {
       <a class="btn btn-ghost" style="width:auto;padding:8px 18px;font-size:13px"
         href="#classes" onclick="goClassHub('morality')">去德育页 →</a>
     </div>
+
+    <!-- 2026-11-07：测验的「提交与成绩」分析从测验页整体迁到这里 -->
+    <div id="scoreQuizBox" data-no-fold></div>
 
     ${statsHtml}
     ${histHtml}
@@ -35551,6 +35419,7 @@ function cwLibPanelHtml() {
         <div class="cw-main">
           <div class="cw-toolbar" id="cwToolbar" hidden>
             <button class="btn btn-primary btn-sm" id="cwUpBtn" onclick="document.getElementById('cwFileInput').click()">⬆ 上传到当前文件夹</button>
+            <button class="btn btn-sm" onclick="cwPublishCourseDialog()" title="把当前课程下发给班级：学生端「今日」出现这门课，点开就是老师设计的学习单">📤 下发本课程到班级</button>
             <div class="cw-seg" role="group" aria-label="浏览视图">
               <button type="button" data-view="grid" onclick="cwSetView('grid')">▦ 缩略图</button>
               <button type="button" data-view="list" onclick="cwSetView('list')">☰ 列表</button>
@@ -35627,6 +35496,69 @@ function cwPushTmpCls(cb) {
   if (lb) lb.classList.toggle('on', cb.checked);
 }
 window.cwPushTmpCls = cwPushTmpCls;
+
+/* ===== 课程下发（2026-11-07 起唯一入口；原大屏「📤 下发」已整体删除） =====
+   资料页把「课程」下发给班级：学生端「今日」出现这门课，点开就是学习单。
+   注意与文件「推送」区分：推送写 materials（学生端资料页看文件），
+   下发写 activity_pushes（学生端今日看课程）。 */
+async function cwTaskForCourse(course) {
+  course = String(course || '').trim();
+  if (!course) return null;
+  try {
+    const r = await fetch(actApiBase() + '/tasks', { mode: 'cors' });
+    if (r.ok) {
+      const j = await r.json();
+      const hit = ((j && j.tasks) || []).find(x =>
+        String(x.title || '').trim() === course || String(x.course || '').trim() === course);
+      if (hit) return hit;
+    }
+  } catch (e) {}
+  try {
+    const r = await fetch('/api/v2/teacher/activity/save', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task_id: '', title: course, description: '',
+                             class_id: 0, course: course })
+    });
+    const j = await r.json();
+    if (j && j.ok && j.task) { actTaskList = (actTaskList || []).concat([j.task]); return j.task; }
+  } catch (e) {}
+  return null;
+}
+window.cwTaskForCourse = cwTaskForCourse;
+
+async function cwPublishCourseDialog(course) {
+  course = String(course || cwState.course || '').trim();
+  if (!course) { toast('先在左侧选一门课程，再点下发'); return; }
+  const classes = dbT('classes') || [];
+  if (!classes.length) { toast('还没有班级数据，先到「班级」页建班'); return; }
+  const defCls = String(curSeatClass() || (classes[0] && classes[0].id) || '');
+  cwPushTmp = { cls: defCls ? [defCls] : [], lesson: '' };
+  const html = '<div class="cw-muted" style="margin-bottom:9px">把课程 <b>' + esc(course) + '</b> 下发给班级：'
+    + '学生端「今日」即时出现这门课，点开就是老师设计的学习单（含提交按钮）。</div>'
+    + '<div class="cw-push-cls">'
+    + classes.map(c => {
+        const on = String(c.id) === defCls;
+        return '<label class="' + (on ? 'on' : '') + '"><input type="checkbox" value="' + esc(c.id) + '"'
+          + (on ? ' checked' : '') + ' onchange="cwPushTmpCls(this)">' + esc(c.name) + '</label>';
+      }).join('')
+    + '</div>'
+    + '<div class="cw-muted" style="font-size:12px;margin-top:10px">下发前会自动部署该课程的学习单页'
+    + '（资料里「设为学习单」的网页优先）；学生端随时可在资料页「推送记录」里撤回文件，'
+    + '课程收回请到大屏顶部状态条点「收回」。</div>';
+  const yes = await uiConfirm(html, { title: '📤 下发到班级', okText: '下发', danger: false });
+  if (!yes) return;
+  const sel = (cwPushTmp.cls || []).slice();
+  if (!sel.length) { toast('请至少选择一个班级'); return; }
+  const t = await cwTaskForCourse(course);
+  if (!t) { toast('找不到（或建不了）这门课的任务，请重试'); return; }
+  const r = await publishCourseToClasses(t, course, sel);
+  if (r.ok.length && !r.fail.length) toast('✓ 已下发「' + course + '」到 ' + r.ok.length + ' 个班级：' + r.ok.join('、'));
+  else if (r.ok.length) toast('已下发 ' + r.ok.length + ' 个班；失败：' + r.fail.join('、'));
+  else toast('下发失败：' + (r.fail.join('、') || '未知错误'));
+  try { actPaintPubHint(); } catch (e) {}
+}
+window.cwPublishCourseDialog = cwPublishCourseDialog;
 
 /** 下发：单个（卡片上的「⬇ 推送」）或批量（勾选后「一键下发」）
     —— 同一个弹窗：默认已选好当前班与当前课节，直接点「下发」就是一键完成；
@@ -36041,16 +35973,28 @@ function cwPaintTree() {
     });
     return Array.from(set).sort((a, b) => String(a).localeCompare(String(b), 'zh'));
   };
-  const subHtml = (course) => (cwState.course === course && (cwState.subs || []).length)
-    ? cwState.subs.map(s => {
+  /* 2026-11-07 折叠：fold[key]=true 表示收起。课程用「课程名」，班级用「课程名/班级」。
+     默认全部展开；点箭头只切状态、不改变当前选中目录。 */
+  const fold = cwState.fold || (cwState.fold = {});
+  const tw = (key, on) => '<span class="cw-tree-tw" data-tw="' + esc(key) + '"'
+    + ' onclick="cwToggleFold(this.dataset.tw, event)" title="' + (on ? '展开' : '收起') + '">'
+    + (on ? '▸' : '▾') + '</span>';
+  const subHtml = (course) => {
+    if (fold[course]) return '';                    // 课程收起：班级整层不渲染
+    if (!(cwState.course === course && (cwState.subs || []).length)) return '';
+    return cwState.subs.map(s => {
+        const clsKey = course + '/' + s;
+        const clsFold = !!fold[clsKey];
         const main = '<div class="cw-tree-item cw-tree-sub' + (cwState.sub === s ? ' on' : '') + '"'
           + ' data-course="' + esc(course) + '" data-sub="' + esc(s) + '" onclick="cwPickSub(this.dataset.sub)"'
           + ' title="' + esc(s) + '（班级）">'
+          + tw(clsKey, clsFold)
           + '<span class="ti-ic">📂</span>'
           + '<span class="ti-nm">' + esc(s) + '</span>'
           + '<span class="ti-ops"><button type="button" class="ti-del" title="删除文件夹（仅限空文件夹）"'
           + ' onclick="event.stopPropagation();cwRmdirFolder(this.closest(\'[data-sub]\').dataset.sub)">🗑</button></span>'
           + '</div>';
+        if (clsFold) return main;                   // 班级收起：学生层不渲染
         return main + subs2Of(s).map(k => {
           const full = s + '/' + k;
           return '<div class="cw-tree-item cw-tree-sub2' + (cwState.sub === full ? ' on' : '') + '"'
@@ -36058,8 +36002,8 @@ function cwPaintTree() {
             + ' onclick="cwPickSub(this.dataset.sub)" title="' + esc(full) + '（学生）">'
             + '<span class="ti-ic">👤</span><span class="ti-nm">' + esc(k) + '</span></div>';
         }).join('');
-      }).join('')
-    : '';
+      }).join('');
+  };
   const newSubBtn = (cwState.course && cwState.course !== '未分课程')
     ? '<div class="cw-tree-new"><button onclick="cwNewFolder()">＋ 在「' + esc(cwState.course) + '」里新建文件夹</button></div>'
     : '';
@@ -36079,6 +36023,7 @@ function cwPaintTree() {
       return '<div class="cw-tree-item' + (c.name === cwState.course && !cwState.sub ? ' on' : '') + '"'
         + ' data-course="' + esc(c.name) + '" data-sub="" onclick="cwPickCourseRoot(this.dataset.course)"'
         + ' title="' + esc(c.name + '（' + c.count + ' 个文件）') + '">'
+        + tw(c.name, !!fold[c.name])
         + '<span class="ti-ic">' + (loose ? '📥' : '📁') + '</span>'
         + '<span class="ti-nm">' + esc(c.name) + '</span>'
         + '<span class="ti-n">' + c.count + '</span>'
@@ -36151,6 +36096,8 @@ window.cwPickCourse = cwPickCourse;
 /** 点课程名 = 明确要回这门课的根目录（cwPickCourse 在「同一课程刷新」时会保留
     当前子文件夹，所以这里先把 sub 清掉再进去，2026-11-05） */
 async function cwPickCourseRoot(name) {
+  cwState.fold = cwState.fold || {};
+  if (name) cwState.fold[name] = false;   // 点课程名 = 展开这门课
   cwState.sub = '';
   return cwPickCourse(name);
 }
@@ -36159,14 +36106,35 @@ window.cwPickCourseRoot = cwPickCourseRoot;
 /* 进入课程内的子文件夹（2026-11-04 新建文件夹功能）：
    文件列表是前端按 rel_dir 过滤的（服务端本来就递归返回全部文件） */
 function cwPickSub(sub) {
+  const parts = String(sub || '').split('/');
+  cwState.fold = cwState.fold || {};
+  /* 2026-11-07：点进被收起的目录时自动展开父链，否则选中项在被折叠的层里，
+     右侧换了内容、左侧却看不到它被选中 —— 这是「状态与层级不符」的典型表现。 */
+  if (parts[0]) cwState.fold[cwState.course] = false;
+  if (parts.length > 1) cwState.fold[cwState.course + '/' + parts[0]] = false;
   cwState.sub = String(sub || '');
   cwState.sel = new Set(); cwState.selLast = -1;
-  document.querySelectorAll('.cw-tree-item').forEach(el => {
-    el.classList.toggle('on', el.dataset.course === cwState.course && el.dataset.sub === cwState.sub);
-  });
+  const tree = document.getElementById('cwTree');
+  const keepTop = tree ? tree.scrollTop : 0;
+  cwPaintTree();                       // 重绘让箭头方向与展开状态同步
+  if (tree) tree.scrollTop = keepTop;
   cwPaintFiles(cwState.files);
 }
 window.cwPickSub = cwPickSub;
+
+/* 树节点折叠开关：课程「课程名」/ 班级「课程名/班级」，只切状态，不动当前目录 */
+function cwToggleFold(key, ev) {
+  if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+  key = String(key || '');
+  if (!key) return;
+  cwState.fold = cwState.fold || {};
+  cwState.fold[key] = !cwState.fold[key];
+  const tree = document.getElementById('cwTree');
+  const keepTop = tree ? tree.scrollTop : 0;
+  cwPaintTree();
+  if (tree) tree.scrollTop = keepTop;
+}
+window.cwToggleFold = cwToggleFold;
 
 /* 课程内新建子文件夹 */
 async function cwNewFolder() {
@@ -37646,7 +37614,7 @@ window.addEventListener('error', e => {
    ----------------------------------------------------------------------------
    入口归属与数据口径（三处只认这一份 quiz.json 的 submissions）：
      · 大屏（上课页）= 实时收件看板：谁交了、交到哪个窗口，不显示答案/分数；
-     · 测验页（这里）  = 唯一的分析入口：逐题正确率、分数、按班提交与成绩；
+     · 测验页（这里）  = 组卷、发布与批阅；提交与成绩分析已迁到「成绩」页；
      · 成绩页          = 把某次测验某班成绩换算成百分制导入成一场考试做汇总分析。
    同一次发布同一名学生只算最后一次提交；刷新一律保留滚动位置。
    ========================================================================== */
@@ -37810,14 +37778,15 @@ function quizRender(keep, skipStats){
       + '<div class="qz-tabs">'
       + [['papers','📝 试卷库'],
          ['bank','📚 试题库' + ((QT.bank||[]).length ? ' · ' + QT.bank.length : '')],
-         ['publish','📤 发布与检测'],['data','📊 提交与成绩']].map(([k,n])=>
+         ['publish','📤 发布与检测']].map(([k,n])=>
           '<button type="button" class="qz-tab'+(QT.tab===k?' on':'')+'" onclick="quizTab(\''+k+'\')">'+n+'</button>').join('')
       + '</div><div id="qzBody">' + quizBodyHtml() + '</div>';
   };
   if (keep === false) draw(); else quizKeepScroll(draw);
   /* skipStats：统计接口返回后只重绘数据段，绝不再发起一轮统计请求，
      否则 quizRender → quizStatsLoad → quizRender 会无限递归。 */
-  if (QT.tab === 'data' && !skipStats) quizStatsLoad(true);
+  /* 2026-11-07：成绩分析已整体迁到「成绩」页，测验页不再有「提交与成绩」标签，
+     也不再在这里触发统计加载（避免两处各拉一次）。 */
 }
 function quizTab(t){ QT.tab = t; quizRender(false); }
 window.quizTab = quizTab;
@@ -37825,7 +37794,7 @@ function quizBodyHtml(){
   if (QT.tab === 'papers') return quizPapersHtml();
   if (QT.tab === 'bank') return quizBankHtml();
   if (QT.tab === 'publish') return quizPublishListHtml();
-  return quizDataHtml();
+  return quizPapersHtml();
 }
 function quizPapersHtml(){
   const cards = QT.papers.map(p =>
@@ -37865,7 +37834,8 @@ function quizPublishListHtml(){
       + '<span class="qz-tag '+(p.show_analysis?'':'off')+'">解析'+(p.show_analysis?'开放':'不开放')+'</span>'
       + '<span class="qz-tag warn">大屏窗口：'+esc(p.window||'')+'</span></div>'
       + '<div class="qz-acts">'
-      + '<button type="button" class="qz-mini" onclick="quizOpenData(\''+esc(p.id)+'\')">📊 查看提交与成绩</button>'
+      + '<button type="button" class="qz-mini" onclick="quizOpenData(\''+esc(p.id)+'\')">📊 去成绩页看成绩</button>'
+      + '<button type="button" class="qz-mini" onclick="quizGradeOpen(\''+esc(p.id)+'\')" title="批阅简答 / 图片题，分数直接计入总分">✍ 人工批阅</button>'
       + '<button type="button" class="qz-mini" onclick="quizPublishOpen(\''+esc(p.id)+'\')">✎ 配置</button>'
       + '<button type="button" class="qz-mini" onclick="quizGoScreen(decodeURIComponent(\''+qzJs(p.window||'')+'\'))">🖥 去大屏窗口</button>'
       + '<button type="button" class="qz-mini danger" onclick="quizPublishDelete(\''+esc(p.id)+'\')">删除</button>'
@@ -37876,7 +37846,12 @@ function quizPublishListHtml(){
     + (QT.publishes.length ? '<div class="qz-grid">' + cards + '</div>'
       : '<div class="qz-empty">还没有发布记录。先建试卷，再点「＋ 发布测验」。</div>');
 }
-function quizOpenData(pid){ QT.curPub = String(pid); QT.tab='data'; quizRender(false); }
+/* 2026-11-07：成绩分析搬到「成绩」页，这里只负责跳过去并选中这次测验 */
+function quizOpenData(pid){
+  QT.curPub = String(pid);
+  try { location.hash = '#scores'; } catch (e) {}
+  setTimeout(() => { try { quizMountScores(); } catch (e) {} }, 80);
+}
 window.quizOpenData = quizOpenData;
 function quizGoScreen(w){
   try { actSetBoundWindow(w); } catch(e){}
@@ -37900,7 +37875,11 @@ function qzAnsText(q){
 }
 function quizBankAddPaper(pid){
   quizApi('/api/v2/quiz/teacher/bank/add', {paper_id:pid}).then(async j=>{
-    toast('已把 ' + j.added + ' 道新题加入试题库');
+    /* 2026-11-07：added=0 不是失败 —— 说明这份卷子的题都已在题库里（按 id 幂等覆盖）。
+       以前一律显示「已把 0 道新题加入试题库」，老师会以为功能坏了。 */
+    toast(j.added
+      ? ('已把 ' + j.added + ' 道新题加入试题库' + (j.updated ? '（另 ' + j.updated + ' 道已存在，按最新内容覆盖）' : ''))
+      : ('这 ' + (j.updated || 0) + ' 道题都已经在试题库里了（已按最新内容覆盖，没有新增）'));
     await quizInit(true); quizRender(true);
   }).catch(e=>toast('加入题库失败：' + e.message));
 }
@@ -37909,17 +37888,44 @@ function quizBankToggle(id, on){
   if (on) QT.bankSel.add(String(id)); else QT.bankSel.delete(String(id));
   const b = document.getElementById('qzBankCount');
   if (b) b.textContent = QT.bankSel.size;
+  /* 2026-11-07：没勾选时「删除所选」必须灰掉，避免空点误删/误清其他数据 */
+  const del = document.getElementById('qzBankDelSel');
+  if (del) del.disabled = !QT.bankSel.size;
 }
 window.quizBankToggle = quizBankToggle;
 function quizBankFilter(v){ QT.bankFilter = v; quizRender(true); }
 window.quizBankFilter = quizBankFilter;
+/* 2026-11-07：全选 / 清空拆成两个动作。
+   以前是一个按钮：筛了题型时 `list` 只是当前题型，「再点一次取消」只清得掉
+   本题型，其他题型已勾的还留着 —— 看着就是「清空没反应」。 */
 function quizBankSelectAll(){
   const list = (QT.bank||[]).filter(q=>!QT.bankFilter || q.type===QT.bankFilter);
-  const allOn = list.every(q=>QT.bankSel.has(String(q.id)));
-  list.forEach(q=>allOn ? QT.bankSel.delete(String(q.id)) : QT.bankSel.add(String(q.id)));
+  list.forEach(q=>QT.bankSel.add(String(q.id)));
   quizRender(true);
 }
 window.quizBankSelectAll = quizBankSelectAll;
+/* 2026-11-07：「清空」改成「删除所选」——原来只取消勾选，老师以为能删题。
+   现在只作用于勾选项：逐个从题库删除（只删题库副本，不动已组进试卷的题），
+   没勾选时按钮是灰的，函数里也再守一道，绝不会误删别的数据。 */
+async function quizBankDeleteSel(){
+  const ids = Array.from(QT.bankSel);
+  if (!ids.length) { toast('先勾选要删除的题目'); return; }
+  const yes = await uiConfirm('从试题库删除选中的 <b>' + ids.length + '</b> 道题？'
+    + '只删题库里的副本，已组进试卷的题目不受影响；删除后不可恢复。',
+    { title: '删除所选题目', okText: '删除' });
+  if (!yes) return;
+  let n = 0, bad = 0;
+  for (const id of ids) {
+    try { await quizApi('/api/v2/quiz/teacher/bank/delete', { id: id }); n++; }
+    catch (e) { bad++; }
+  }
+  QT.bankSel.clear();
+  try { await quizInit(true); } catch (e) {}
+  quizRender(true);
+  if (bad) toast('已删除 ' + n + ' 道，' + bad + ' 道失败（可能已被别处删掉）');
+  else toast('已从试题库删除 ' + n + ' 道题');
+}
+window.quizBankDeleteSel = quizBankDeleteSel;
 function quizBankDelete(id){
   quizApi('/api/v2/quiz/teacher/bank/delete', {id:id}).then(async ()=>{
     QT.bankSel.delete(String(id)); await quizInit(true); quizRender(true);
@@ -37938,6 +37944,45 @@ function quizBankNewPaper(){
   }).catch(e=>toast('组卷失败：' + e.message));
 }
 window.quizBankNewPaper = quizBankNewPaper;
+
+/* 2026-11-07：题库全选 → 加入已有试卷。
+   以前只能「新建试卷」，想把几道好题补进已有卷子只能重录；这里把选中题
+   追加到指定试卷末尾（原题顺序不变）。选卷用 uiDialog + 全局暂存，
+   因为确认按钮点击时弹窗 DOM 已经被移除。 */
+function quizBankAppendPick(pid) { QT.appendPick = String(pid || ''); }
+window.quizBankAppendPick = quizBankAppendPick;
+function quizBankAppendPaper(){
+  const ids = Array.from(QT.bankSel);
+  if (!ids.length) { toast('先勾选要加入的题目'); return; }
+  const papers = (QT.papers || []).slice();
+  if (!papers.length) { toast('还没有试卷可加入，先用「新建试卷」组一份'); return; }
+  QT.appendPick = String((papers[0] || {}).id || '');
+  const html = '<div style="margin-bottom:8px">把选中的 <b>' + ids.length + '</b> 道题追加到：</div>'
+    + '<div class="qz-append-list">'
+    + papers.map((p, i) => {
+        const pid = String(p.id);
+        return '<label class="qz-append-row">'
+          + '<input type="radio" name="qzAppend" value="' + esc(pid) + '"' + (i === 0 ? ' checked' : '')
+          + ' onchange="quizBankAppendPick(this.value)">'
+          + '<span class="t">' + esc(p.title || pid) + '</span>'
+          + '<span class="m">' + ((p.questions || []).length) + ' 题</span></label>';
+      }).join('')
+    + '</div>';
+  uiConfirm(html, { title: '＋ 加入已有试卷', okText: '加入', danger: false }).then(async yes => {
+    if (!yes) return;
+    const pid = QT.appendPick;
+    if (!pid) { toast('请选择一份试卷'); return; }
+    try {
+      const j = await quizApi('/api/v2/quiz/teacher/paper/append-bank', { paper_id: pid, ids: ids });
+      QT.bankSel.clear();
+      await quizInit(true);
+      QT.tab = 'papers'; quizRender(false);
+      toast('已把 ' + j.added + ' 道题加入「' + ((j.paper && j.paper.title) || '试卷')
+            + '」，现在共 ' + j.total + ' 题');
+    } catch (e) { toast('加入失败：' + e.message); }
+  });
+}
+window.quizBankAppendPaper = quizBankAppendPaper;
 /* 试题库三视图（2026-11-06）：与「资料」页同一套分段控件 .cw-seg，
    卡片看内容、列表看答案与分值、紧凑一屏扫几十题。视图选择记住上次用的。 */
 function quizBankView(v){
@@ -37967,8 +38012,12 @@ function quizBankHtml(){
     + views.map(([k, n]) => '<button type="button" data-bv="' + k + '"'
       + (QT.bankView === k ? ' class="on"' : '') + ' onclick="quizBankView(\'' + k + '\')">' + n + '</button>').join('')
     + '</div>'
-    + '<button type="button" class="btn btn-ghost btn-sm" onclick="quizBankSelectAll()">全选 / 清空</button>'
+    + '<button type="button" class="btn btn-ghost btn-sm" onclick="quizBankSelectAll()">全选</button>'
+    + '<button type="button" class="btn btn-ghost btn-sm" id="qzBankDelSel" onclick="quizBankDeleteSel()"'
+    + (QT.bankSel.size ? '' : ' disabled')
+    + ' title="从试题库删除已勾选的题目（只删题库副本，已组进试卷的题不受影响）">删除所选</button>'
     + '<button type="button" class="btn btn-primary" style="width:auto" onclick="quizBankNewPaper()">＋ 用选中题目新建试卷（<span id="qzBankCount">' + QT.bankSel.size + '</span>）</button>'
+    + '<button type="button" class="btn btn-ghost btn-sm" onclick="quizBankAppendPaper()" title="把勾选的题目追加到一份已有试卷末尾">＋ 加入已有试卷</button>'
     + '<span class="qz-note">共 ' + list.length + ' 题</span>'
     + hq('quizBank', '看试题库用法') + '</div>';
   if (!list.length) return bar + '<div class="qz-empty">'
@@ -38434,12 +38483,16 @@ async function quizPublishDelete(id){
 }
 window.quizPublishDelete = quizPublishDelete;
 
-/* ---------------- 提交与成绩数据 ---------------- */
+/* ---------------- 测验成绩分析（2026-11-07 起只挂在「成绩」页的 #scoreQuizBox） ---------------- */
 function quizDataHtml(){
   const opts = QT.publishes.map(p=>'<option value="'+esc(p.id)+'"'+(String(QT.curPub)===String(p.id)?' selected':'')+'>'+esc(p.title)+'</option>').join('');
   const s = QT.stats;
   let inner = '<div class="qz-empty">正在读取统计数据…</div>';
-  if (s) {
+  if (!(QT.publishes || []).length) {
+    /* 空态：没有发布过测验时别一直转「读取中」，直接告诉老师去哪做 */
+    inner = '<div class="qz-empty">还没有发布过测验。到「测验」页组卷、发布后，'
+      + '这里就会显示按班的提交率、平均分与逐题正确率。</div>';
+  } else if (s) {
     const rows = s.classes||[];
     const qs = s.paper.questions||[];
     inner = '<div class="qz-scroll"><table class="qz-tbl"><thead><tr>'
@@ -38458,12 +38511,18 @@ function quizDataHtml(){
               + '<td>'+(t.right||0)+' / '+(t.answered||0)+'</td><td>'+(t.rate||0)+'%</td></tr>'; }).join('')
           + '</tbody></table></div>' : '<div class="qz-empty">这份试卷没有题目</div>')
       + '<div class="qz-bar" style="margin-top:14px">'
-      + '<button type="button" class="qz-mini" onclick="quizExportCsv()">⬇ 导出成绩 CSV</button>'
-      + '<button type="button" class="qz-mini" onclick="quizImportDialog()">📈 导入成绩页分析</button>'
-      + (s.needs_grade ? '<button type="button" class="qz-mini" onclick="quizGradeDialog()">✍ 人工批阅（'+s.needs_grade+' 份待批）</button>' : '')
-      + '<span class="qz-note">导入会把分数换算成百分制，写进成绩页的一场新考试。</span></div>';
+      /* 2026-11-07：导出成绩单在上方工具栏已有（exportScoreXlsx），人工批阅已迁到
+         测验页的发布列表，这里不再重复放按钮，只留一句指路。 */
+      + '<span class="qz-note">这份表已经在成绩页里；导出成绩单用上方「导出成绩单」，'
+      + '把分数换算成百分制写进某场考试用「导入成绩 → 从测验导入」。</span>'
+      + (s.needs_grade ? '<span class="qz-note" style="margin-left:auto">✍ 还有 <b>' + s.needs_grade
+          + '</b> 份待批阅 —— 到「测验」页对应发布上点「人工批阅」</span>' : '')
+      + '</div>';
   }
-  return '<div class="qz-bar"><label class="qz-note">选择测验</label>'
+  return '<div class="qz-bar" style="justify-content:space-between">'
+    + '<b style="font-size:13.5px">📊 测验成绩分析</b>'
+    + '<span class="qz-note">按班提交率 · 逐题正确率 · 成绩明细</span></div>'
+    + '<div class="qz-bar"><label class="qz-note">选择测验</label>'
     + '<select id="qzPubSel" class="qz-sel" style="width:auto;min-width:210px" onchange="quizSelectPub(this.value)" '+(opts?'':'disabled')+'>'
     + (opts||'<option value="">暂无测验</option>') + '</select>'
     + '<button type="button" class="qz-mini" onclick="quizStatsLoad()">🔄 刷新</button>'
@@ -38472,33 +38531,50 @@ function quizDataHtml(){
 }
 function quizSelectPub(v){ QT.curPub = v; quizStatsLoad(); }
 window.quizSelectPub = quizSelectPub;
+/* 成绩页的「测验成绩分析」区块：只换内容、保住滚动，不重建整页 */
+function scoreQuizPaint(){
+  const box = document.getElementById('scoreQuizBox');
+  if (!box) return;
+  const y = box.scrollTop;
+  box.innerHTML = quizDataHtml();
+  box.scrollTop = y;
+}
+window.scoreQuizPaint = scoreQuizPaint;
+
+/* 进成绩页时挂上分析区块：没有测验数据就懒加载一次 */
+async function quizMountScores(){
+  const box = document.getElementById('scoreQuizBox');
+  if (!box) return;
+  if (typeof quizEnsureCss === 'function') quizEnsureCss();
+  try {
+    if (!QT.publishes || !QT.publishes.length) await quizInit(true);
+  } catch (e) {}
+  if (!QT.curPub && (QT.publishes || []).length) QT.curPub = QT.publishes[0].id;
+  box.innerHTML = quizDataHtml();
+  if (QT.curPub) quizStatsLoad(true);
+}
+window.quizMountScores = quizMountScores;
+
 async function quizStatsLoad(quiet){
-  if (!QT.curPub) { QT.stats = null; if (state.route==='quiz') quizRender(true, true); return; }
+  if (!QT.curPub) { QT.stats = null; scoreQuizPaint(); return; }
   try { const j = await quizApi('/api/v2/quiz/teacher/stats?pub='+encodeURIComponent(QT.curPub));
     QT.stats = j.stats; QT.classes = j.classes||QT.classes;
-    if (state.route==='quiz' && QT.tab==='data') {
-      const box = document.getElementById('qzStatsBody');
-      if (box) { const y = box.scrollTop; quizRender(true, true);
-        const nb = document.getElementById('qzStatsBody'); if (nb) nb.scrollTop = y; }
-      else quizRender(true, true);
-    }
+    scoreQuizPaint();          // 2026-11-07：只在成绩页渲染；测验页已无该标签
   } catch(e){ if (!quiet) toast('统计读取失败：'+e.message); }
 }
 window.quizStatsLoad = quizStatsLoad;
-function quizExportCsv(){
-  const s = QT.stats; if (!s || !(s.rows||[]).length) { toast('还没有提交数据'); return; }
-  const head = ['学号','姓名','班级','第几次','提交时间','得分','满分'];
-  const lines = [head.join(',')].concat((s.rows||[]).map(r =>
-    [r.student_no,r.name,r.class_name,r.attempt,r.submitted_at,r.score,r.full]
-      .map(v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"').join(',')));
-  const blob = new Blob(['\ufeff'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'});
-  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-  a.download = '测验成绩-'+(s.publish?s.publish.title:'')+'.csv'; a.click();
-  setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
-}
-window.quizExportCsv = quizExportCsv;
+/* 2026-11-07：测验成绩的 CSV 导出已去掉 —— 成绩页上方「导出成绩单」是唯一的导出入口，
+   两个按钮导同一批成绩，留着只会让老师不知道该点哪个。 */
 
 /* 人工批阅：只对简答 / 图片题给分，服务端按题目分值封顶后重算总分 */
+/* 2026-11-07：人工批阅从成绩页迁到测验页 —— 发布列表点一下就加载该发布的统计再开批阅框 */
+async function quizGradeOpen(pid){
+  QT.curPub = String(pid || '');
+  try { await quizStatsLoad(true); } catch (e) {}
+  quizGradeDialog();
+}
+window.quizGradeOpen = quizGradeOpen;
+
 function quizGradeDialog(){
   const s = QT.stats;
   if (!s) { toast('先选一次测验'); return; }
@@ -38541,29 +38617,44 @@ async function quizGradeSave(){
 }
 window.quizGradeSave = quizGradeSave;
 
-/* ---------------- 成绩页：选择测验 / 班级 → 导入分析 ---------------- */
-function quizInjectScoresEntry(){
-  const c = document.getElementById('content'); if (!c) return;
-  if (c.querySelector('[data-qz-score-entry]')) return;
-  const bar = document.createElement('div');
-  bar.setAttribute('data-qz-score-entry','1');
-  bar.className = 'qz-score-bar';
-  bar.innerHTML = '<b>📥 从测验导入</b><span>选择一次测验与班级，直接导入成绩页做汇总分析</span>'
-    + '<button type="button" class="qz-mini" onclick="quizImportDialog()">选择测验 / 班级…</button>';
-  c.insertBefore(bar, c.firstChild);
+/* ---------------- 从测验 / 检测导入成绩（「导入成绩」弹窗的第三个标签页） ----------------
+   2026-11-07：原来成绩页顶部单独挂一条入口条，与「导入成绩」并排，按钮太散。
+   现在统一收进导入弹窗：文件批量 / 单个录入 / 从测验导入，三种方式同一处。 */
+async function impQuizFill(){
+  const pubSel = document.getElementById('qzImpPub');
+  const clsSel = document.getElementById('qzImpCls');
+  if (!pubSel || !clsSel) return;
+  const note = document.getElementById('qzImpNote');
+  if (pubSel.getAttribute('data-ready') === '1') return;
+  pubSel.innerHTML = '<option value="">加载中…</option>';
+  try {
+    if (typeof quizEnsureCss === 'function') quizEnsureCss();
+    if (!QT.publishes || !QT.publishes.length) await quizInit(true);
+    const pubs = QT.publishes || [];
+    pubSel.innerHTML = pubs.length
+      ? pubs.map(p => '<option value="' + esc(p.id) + '"'
+          + (String(QT.curPub) === String(p.id) ? ' selected' : '') + '>' + esc(p.title) + '</option>').join('')
+      : '<option value="">还没有发布过测验</option>';
+    const classes = QT.classes || [];
+    clsSel.innerHTML = classes.length
+      ? classes.map(c => '<option value="' + esc(c.id) + '">' + esc(c.name)
+          + '（' + (c.n == null ? '?' : c.n) + ' 人）</option>').join('')
+      : '<option value="">暂无班级</option>';
+    if (note) note.innerHTML = '导入口径：该班每人的<b>最后一次提交</b> → 客观题得分 ÷ 试卷满分 × 100（百分制）→ 写进一场新考试。'
+      + '简答 / 图片题未批阅时会提示，不把未批的分数当 0 分算。';
+    pubSel.setAttribute('data-ready', '1');
+  } catch (e) {
+    pubSel.innerHTML = '<option value="">读取失败：' + esc(e.message || e) + '</option>';
+  }
 }
+window.impQuizFill = impQuizFill;
 function quizImportDialog(){
-  quizEnsureCss();
-  if (!QT.publishes.length) { quizInit(true).then(()=>quizImportDialog()); return; }
-  const pubs = QT.publishes.map(p=>'<option value="'+esc(p.id)+'"'+(String(QT.curPub)===String(p.id)?' selected':'')+'>'+esc(p.title)+'</option>').join('');
-  const cls = (QT.classes||[]).map(c=>'<option value="'+esc(c.id)+'">'+esc(c.name)+'（'+c.n+' 人）</option>').join('');
-  const body = '<div class="qz-row"><label>测验</label><select id="qzImpPub" class="qz-sel">'+pubs+'</select></div>'
-    + '<div class="qz-row"><label>班级</label><select id="qzImpCls" class="qz-sel">'+(cls||'<option value="">暂无班级</option>')+'</select></div>'
-    + '<div class="qz-note">导入口径：该班每人的最后一次提交 → 客观题得分 ÷ 试卷满分 × 100（百分制）→ 写进一场新考试。'
-    + '简答 / 图片题未批阅时会提示，不把未批的分数当 0 分算。</div>';
-  const foot = '<button type="button" class="btn btn-primary" style="width:auto" onclick="quizImportDo()">导入并查看分析</button>'
-    + '<button type="button" class="btn btn-ghost" style="width:auto" onclick="closeFloat()">取消</button>';
-  showFloat('从测验 / 检测导入成绩', body, {footer:foot});
+  /* 2026-11-07：不再单独弹一套表单 —— 统一打开「导入成绩」弹窗并定位到第三个标签，
+     成绩页和测验页看到的是同一个导入入口，不会两套 UI 各说各话。 */
+  window.__impDefaultTab = 'quiz';
+  if (typeof openScoreImport === 'function') { openScoreImport(); return; }
+  window.__impDefaultTab = null;
+  toast('成绩导入入口未就绪，请到「成绩」页点「导入成绩」');
 }
 window.quizImportDialog = quizImportDialog;
 async function quizImportDo(){
@@ -38627,7 +38718,7 @@ function quizWatch(){
         if (state.route === 'guide') actRefreshWindow(d.window);
       }
       if (state.route === 'quiz') {
-        if (QT.tab === 'data') quizStatsLoad(true);
+        if (state.route === 'scores') quizStatsLoad(true);   // 分析只在成绩页存在
         else quizInit(true);
       }
       quizBoardLoad(true);

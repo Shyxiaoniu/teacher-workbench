@@ -3620,8 +3620,10 @@ function viewRanch() {
             '<button class="stage-nav next" data-petnav="1" aria-label="下一只宠物">›</button>'
           : '') +
       '</div>' +
-      '<h3>' + (pet ? esc(TD.PET_DEFAULT_NAME || pet.name) : '还没有出战宠物') + '</h3>' +
-      '<div class="mood">' + (pet ? esc(pet.name + ' · ' + pet.mood) : '先去闯一关 BOSS，赢一颗宠物蛋吧！') + '</div>' +
+      /* 2026-11-07：以前标题优先取 TD.PET_DEFAULT_NAME（恒为「小豆丁」），
+         所以换来换去所有宠物都叫小豆丁。改成宠物自己的品种名优先，默认名只兜底。 */
+      '<h3>' + (pet ? esc(pet.name || TD.PET_DEFAULT_NAME) : '还没有出战宠物') + '</h3>' +
+      '<div class="mood">' + (pet ? esc(pet.mood) : '先去闯一关 BOSS，赢一颗宠物蛋吧！') + '</div>' +
       '<div class="title-bar"><span class="title-chip">' + esc(TD.titleFor(pr.stars || 0).name) + '</span>' +
         '<span class="next-title">下一称号：' +
         (TD.nextTitle(pr.stars || 0) ? TD.nextTitle(pr.stars || 0).name + '（' + TD.nextTitle(pr.stars || 0).need + ' 星）' : '已到顶！') +
@@ -3930,8 +3932,8 @@ function bindRanch() {
       render();
       var dd2 = TD.decoById(id);
       if (!wasOn && dd2) {
-        uiToast('「' + dd2.name + '」上身，' + (TD.PET_DEFAULT_NAME || '伙伴') +
-          (dd2.act || '开心地动了动'), 'ok');
+        /* 不写死默认名：这里可能还没出战后一只宠物，叫「伙伴」就不会张冠李戴 */
+        uiToast('「' + dd2.name + '」上身，伙伴' + (dd2.act || '开心地动了动'), 'ok');
       }
     };
   });

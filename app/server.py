@@ -51,6 +51,7 @@ from activity import ActivityStore, parse_multipart   # noqa: E402  课堂活动
 from typing_store import TypingStore   # noqa: E402
 from quiz_store import QuizStore       # noqa: E402  测验/检测（试卷含答案，独立存储）
 from quiz_api import QuizAPI, EPOCH, last_event, bump as quiz_bump   # noqa: E402
+from design_store import DesignStore   # noqa: E402  H5 网页设计草稿（2.0.39）
 from updater import Updater            # noqa: E402  在线更新（检查/下载/安装/回滚）
 import ooxml_preview as OOX            # noqa: E402  课件在线预览（纯 Python 解析 OOXML）
 
@@ -102,6 +103,12 @@ def _quiz_for(a):
     return QuizStore(p["quiz"])
 
 
+def _design_for(a):
+    """H5 网页设计草稿：按账号隔离的 design.json（2.0.39）。"""
+    WS.ensure(a)
+    return DesignStore(WS.paths_for(a)["design"])
+
+
 # 模块级单例改成「按当前请求账号懒加载的代理」：业务代码里几百处
 # STORE.xxx / ACT.xxx / TYPING.xxx 一行都不用改，数据自动按账号隔离。
 # 课堂活动附件落 <工作区>/activity/<活动号>/，URL 仍是 /static/uploads/…。
@@ -110,6 +117,8 @@ ACT = ACC.WorkspaceProxy(_act_for)
 TYPING = ACC.WorkspaceProxy(_typing_for)
 # 测验/检测：独立 quiz.json，不含在学生端同步投影里（防泄答案）
 QUIZ = ACC.WorkspaceProxy(_quiz_for)
+# H5 网页设计：只有学生草稿，提交记录统一走 ACT（大屏 / 作品墙 / 归档同一份）
+DESIGN = ACC.WorkspaceProxy(_design_for)
 
 
 def _quiz_api(handler):
@@ -194,10 +203,147 @@ def _archive_after_submit(task, who, res):
         except Exception:
             pass
         return None
+
+
+# ---------------------------------------------------------------------------
+# H5 网页设计（2.0.39）
+# ---------------------------------------------------------------------------
+# 定位：教师端「其他 · 网页设计」一键启停的小服务，学生在学生端页签里
+# 左边写 HTML/CSS、右边实时预览；点一次「提交作品」= 截图 + 存档 + 归档
+# + 进大屏看板，老师不用再做任何搬运。
+#
+# 数据分两处，各管一段，不重复存：
+#   · 草稿 → DESIGN（design.json，按学生存，可跨设备续写）
+#   · 提交 → ACT（活动库；大屏作品墙、按班统计、自动归档都读这一份）
+# ---------------------------------------------------------------------------
+def design_cfg():
+    """取设计功能配置（缺字段就地补默认值，老配置不用迁移）。"""
+    d = CFG.get("design")
+    if not isinstance(d, dict):
+        d = {}
+        CFG["design"] = d
+    d.setdefault("enabled", False)
+    d.setdefault("allow_add", True)
+    d.setdefault("allow_submit", True)
+    d.setdefault("course", "网页设计")
+    d.setdefault("window", "网页设计作品")
+    d.setdefault("intro", "")
+    return d
+
+
+def design_public_cfg():
+    """给前端的安全副本：开关 / 权限 / 课程 / 窗口 / 任务说明。"""
+    d = design_cfg()
+    return {"enabled": bool(d.get("enabled")),
+            "allow_add": bool(d.get("allow_add")),
+            "allow_submit": bool(d.get("allow_submit")),
+            "course": str(d.get("course") or ""),
+            "window": str(d.get("window") or ""),
+            "intro": str(d.get("intro") or "")}
+
+
+def design_task(course, create=False):
+    """找（或建）这门课在大屏里的收集任务。
+
+    act_task.course 是「资料」里的课程文件夹名，自动归档只认这个字段；
+    title 与课程同名，老师在大屏上方选课程时就能直接选中。
+    """
+    course = str(course or "").strip()
+    if not course:
+        return None
+    try:
+        tasks = ACT.tasks(include_archived=True) or []
+    except Exception:
+        tasks = []
+    for t in tasks:
+        c = str(t.get("course") or "").strip()
+        ti = str(t.get("title") or "").strip()
+        if c == course or (not c and ti == course):
+            if c != course:
+                try:
+                    ACT.update_task(t["task_id"], course=course)
+                    t["course"] = course
+                except Exception:
+                    pass
+            return t
+    if not create:
+        return None
+    try:
+        return ACT.create_task(course,
+                               "H5 网页设计作品（系统自动创建；学生提交的图片与源码在这里）",
+                               0, course)
+    except Exception:
+        return None
+
+
+def design_ensure_course(course):
+    """确保「资料」里有这门课程文件夹（老师直接填新名字也能用）。"""
+    name = str(course or "").strip()
+    if not name:
+        return ""
+    try:
+        safe = LEG.CW.safe_course(name)
+        full = LEG.CW.abs_of(safe)
+        if full:
+            os.makedirs(full, exist_ok=True)
+            return safe
+    except Exception:
+        pass
+    return name
+
+
+def design_full_html(html, css, title):
+    """把学生的 HTML/CSS 拼成一份能独立打开的网页（随作品一起归档）。
+
+    学生只写 body 里的片段 + CSS，这里补上文档骨架，老师双击 .html
+    就能看到和学生屏幕上一样的画面。
+    """
+    t = _html.escape(str(title or "我的网页"), quote=False)
+    return ("<!DOCTYPE html>\n<html lang=\"zh-CN\">\n<head>\n"
+            "<meta charset=\"UTF-8\">\n"
+            "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n"
+            "<title>%s</title>\n<style>\n%s\n</style>\n</head>\n<body>\n%s\n</body>\n</html>\n"
+            % (t, str(css or ""), str(html or "")))
+
+
+def _design_student_last(course, no, name):
+    """学生最近一次设计提交（用于页面上显示「已提交」状态）。"""
+    t = design_task(course)
+    if not t:
+        return None
+    try:
+        subs = ACT.submissions(t["task_id"]) or []
+    except Exception:
+        return None
+    no = str(no or "").strip()
+    name = str(name or "").strip()
+    for s in reversed(subs):
+        if not isinstance(s, dict):
+            continue
+        a = str(s.get("学号") or s.get("student_no") or "").strip()
+        b = str(s.get("姓名") or s.get("name") or "").strip()
+        if (no and a == no) or (not no and name and b == name):
+            return s
+    return None
 if not isinstance(CFG.get("typing"), dict):
     CFG["typing"] = {}
 CFG["typing"].setdefault("enabled", False)
 CFG["typing"].setdefault("grades", [])
+# H5 网页设计（2.0.39）：教师端「其他 · 网页设计」一键启停的小服务。
+#   enabled      总开关：关掉后学生端入口实时消失、提交接口拒收
+#   allow_add    允许学生在学生端「添加」这个功能页（导航里出现「设计」页签）
+#   allow_submit 允许学生提交作品（关掉只能自己练、不能交）
+#   course       归档课程：作品进「资料」的 <课程>/<班级>/<学号-姓名>/，与学习单归档同一套目录
+#   window       大屏窗口名：提交按这个窗口进「上课」页的实时看板
+#   intro        老师写给学生的任务说明（显示在设计页顶部）
+if not isinstance(CFG.get("design"), dict):
+    CFG["design"] = {}
+CFG["design"].setdefault("enabled", False)
+CFG["design"].setdefault("allow_add", True)
+CFG["design"].setdefault("allow_submit", True)
+CFG["design"].setdefault("course", "网页设计")
+CFG["design"].setdefault("window", "网页设计作品")
+CFG["design"].setdefault("intro", "")
 # 课堂签到（2026-11-05）：教师端可整体关闭（默认开启）；
 # 默认按课表当节课时间自动签到，填了 manual_time（HH:MM）就改按这个时间执行。
 if not isinstance(CFG.get("checkin"), dict):
@@ -217,7 +363,7 @@ CFG["update"].setdefault("interval_hours", 24) # 检查间隔（小时）
 PET_IDS = ["cat", "dog", "rabbit", "penguin", "panda", "dino", "unicorn", "dragon"]
 COND = threading.Condition()
 STARTED = time.time()
-VERSION = "2.0.38"
+VERSION = "2.0.39"
 ONLINE_WINDOW = 300      # 5 分钟内活跃算在线
 # 可内联直出的附件类型（其余一律按下载处理，防止同源执行脚本）
 _INLINE_EXTS = {"png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "pdf",
@@ -1098,6 +1244,12 @@ class Handler(LEG.Handler):
                 return self._redirect("/typing/")
             if path.startswith("/typing/"):
                 return self._typing_static(path[len("/typing/"):])
+            # H5 网页设计（2.0.39）：静态页公开（页面无敏感信息），
+            # 权限 / 草稿 / 提交全部走 /api/v2/design/* 鉴权接口。
+            if path == "/design":
+                return self._redirect("/design/")
+            if path.startswith("/design/"):
+                return self._design_static(path[len("/design/"):])
             # 课堂活动接口：/api/act/*（自研）
             if path.startswith("/api/act/") or path == "/api/act":
                 return self._act_api(path, u.query)
@@ -1349,6 +1501,43 @@ class Handler(LEG.Handler):
         import mimetypes
         ctype = mimetypes.guess_type(full)[0] or "application/octet-stream"
         if ctype.startswith("text/") or ctype in ("application/javascript", "application/json"):
+            ctype += "; charset=utf-8"
+        with open(full, "rb") as f:
+            body = f.read()
+        self.send_response(200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-cache")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _design_static(self, rel):
+        """H5 网页设计的静态资源：/design/ → 学生设计器，/design/teacher.html → 教师管理页。
+
+        与打字页同一套做法：静态文件本身不含任何学生数据（老师写的任务说明
+        与开关都在鉴权接口里），未登录也能打开，页面自己进「演示模式」。
+        """
+        rel = (rel or "").replace("\\", "/").lstrip("/")
+        if not rel:
+            rel = "student.html"
+        if ".." in rel.split("/"):
+            return self._json({"ok": False, "msg": "forbidden"}, 403)
+        base = os.path.normpath(os.path.join(ROOT, "design"))
+        full = os.path.normpath(os.path.join(base, rel))
+        try:
+            if os.path.commonpath([base, full]) != base:
+                return self._json({"ok": False, "msg": "forbidden"}, 403)
+        except ValueError:
+            return self._json({"ok": False, "msg": "forbidden"}, 403)
+        if not os.path.isfile(full):
+            return self._html("<h1>页面不存在</h1>", 404)
+        if not full.lower().endswith((".html", ".js", ".css", ".png", ".svg",
+                                      ".ico", ".json", ".webmanifest")):
+            return self._html("<h1>页面不存在</h1>", 404)
+        import mimetypes
+        ctype = mimetypes.guess_type(full)[0] or "application/octet-stream"
+        if ctype.startswith("text/") or ctype in ("application/javascript",
+                                                  "application/json"):
             ctype += "; charset=utf-8"
         with open(full, "rb") as f:
             body = f.read()
@@ -2185,6 +2374,13 @@ class Handler(LEG.Handler):
                    "modules": PJ.module_flags(CFG)}
             # 打字冒险岛开关：学生端靠它决定要不要显示"打字"入口
             out["typing"] = {"enabled": bool((CFG.get("typing") or {}).get("enabled"))}
+            # H5 网页设计（2.0.39）：学生端据此决定「今日」入口卡与导航页签。
+            # add = 允许添加该功能页；submit = 允许提交作品（练习不受影响）。
+            _dg = CFG.get("design") or {}
+            out["design"] = {"enabled": bool(_dg.get("enabled")),
+                             "add": bool(_dg.get("allow_add", True)),
+                             "submit": bool(_dg.get("allow_submit", True)),
+                             "window": str(_dg.get("window") or "")}
             if s["role"] == "teacher":
                 t = ACCOUNTS.current_teacher()
                 out["username"] = (t or {}).get("username") or "teacher"
@@ -2431,6 +2627,81 @@ class Handler(LEG.Handler):
             return self._export(qs)
         if path == "/api/v2/teacher/export-files":
             return self._export_files()
+        if path == "/api/v2/design/me":
+            # H5 网页设计：学生打开设计器时拿初始状态（权限 / 草稿 / 上次提交）
+            s = self._session()
+            out = {"ok": True, "cfg": design_public_cfg()}
+            if not s:
+                out["role"] = None
+                return self._json(out)
+            if s["role"] == "teacher":
+                out["role"] = "teacher"
+                return self._json(out)
+            if s["role"] != "student":
+                return self._json({"ok": False, "msg": "只有学生有设计草稿"}, 403)
+            r = student_row(s.get("student_id"))
+            if not r:
+                return self._json({"ok": False, "msg": "学生档案不存在"}, 404)
+            uid = str(r.get("id"))
+            cfg = design_public_cfg()
+            last = _design_student_last(cfg["course"], r.get("student_no"), r.get("name"))
+            files = (last or {}).get("_files") or []
+            out["role"] = "student"
+            out["me"] = {"id": uid, "name": r.get("name", ""),
+                         "student_no": r.get("student_no", ""),
+                         "class_name": self._class_name(r.get("class_id"))}
+            out["draft"] = DESIGN.draft(uid)
+            out["last"] = ({"at": str(last.get("submitted_at") or ""),
+                            "url": files[0].get("url") if files else "",
+                            "name": files[0].get("name") if files else ""}
+                           if last else None)
+            return self._json(out)
+        if path == "/api/v2/design/config":
+            # 教师管理页：开关状态 + 课程列表 + 提交概览 + 最近作品
+            if not self._is_teacher():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            cfg = design_public_cfg()
+            courses, _err = LEG.CW.list_courses()
+            names = [str(c.get("name") or "") for c in (courses or [])
+                     if not c.get("loose") and c.get("name")]
+            t = design_task(cfg["course"])
+            stats = {"people": 0, "files": 0, "last_at": ""}
+            recent = []
+            if t:
+                try:
+                    subs = ACT.submissions(t["task_id"]) or []
+                except Exception:
+                    subs = []
+                # 一人一条（留最新），与作品墙 / 大屏口径一致
+                by = {}
+                for sub in subs:
+                    key = str(sub.get("学号") or sub.get("姓名") or "")
+                    if not key:
+                        continue
+                    old = by.get(key)
+                    if old is None or str(sub.get("submitted_at") or "") >= str(old.get("submitted_at") or ""):
+                        by[key] = sub
+                rows = sorted(by.values(), key=lambda x: str(x.get("submitted_at") or ""))
+                for sub in rows:
+                    fs = sub.get("_files") or []
+                    stats["files"] += len(fs)
+                    if sub.get("submitted_at") and sub["submitted_at"] > stats["last_at"]:
+                        stats["last_at"] = sub["submitted_at"]
+                stats["people"] = len(rows)
+                for sub in reversed(rows[-12:]):
+                    fs = sub.get("_files") or []
+                    img = next((f for f in fs if str(f.get("name") or "").lower().endswith(".png")),
+                               fs[0] if fs else None)
+                    recent.append({"name": sub.get("姓名") or "",
+                                   "no": sub.get("学号") or "",
+                                   "cls": sub.get("班级") or "",
+                                   "at": sub.get("submitted_at") or "",
+                                   "url": (img or {}).get("url") or "",
+                                   "file": (img or {}).get("name") or ""})
+            return self._json({"ok": True, "cfg": cfg, "courses": names,
+                               "task": ({"task_id": t["task_id"], "title": t.get("title") or "",
+                                         "course": t.get("course") or ""} if t else None),
+                               "stats": stats, "recent": recent})
         if path == "/api/v2/typing/config":
             # 开放状态与年级词库范围：登录与否都可读（学生端入口 / 演示模式都要用）
             t = CFG.get("typing") or {}
@@ -3138,6 +3409,8 @@ class Handler(LEG.Handler):
             # 测验/检测（2.0.38）：quiz.json 不在 29 表里，换设备必须单独搬，
             # 否则试卷、发布设置和成绩全丢。图片附件仍走资料包迁移。
             data["quiz"] = _quiz_snapshot()
+            # H5 网页设计草稿（2.0.39）：学生写到一半的设计稿，换机不该丢
+            data["design"] = _design_snapshot()
             # 附件（学生作品）2.0.23 起默认不进全量备份：
             #   · 它们动辄几十上百 MB，是备份又大又慢的主因（导出要序列化 + 加密，
             #     导入要解密，纯 JS 只有 0.5MB/s）；
@@ -3775,6 +4048,121 @@ class Handler(LEG.Handler):
             STORE.audit("teacher", "change-password", ip)
             return self._json({"ok": True})
 
+        # ---------------- H5 网页设计（2.0.39） ----------------
+        if path == "/api/v2/design/config":
+            # 教师端一键启停 + 学生端权限（添加 / 提交）+ 归档课程 + 大屏窗口
+            if not self._is_teacher():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            d = design_cfg()
+            if "enabled" in body:
+                d["enabled"] = bool(body["enabled"])
+            if "allow_add" in body:
+                d["allow_add"] = bool(body["allow_add"])
+            if "allow_submit" in body:
+                d["allow_submit"] = bool(body["allow_submit"])
+            if "course" in body:
+                c = " ".join(str(body.get("course") or "").split())[:40]
+                if not c:
+                    return self._json({"ok": False, "msg": "请填一个归档课程名"}, 400)
+                # 填了新名字就顺手在「资料」里建好文件夹，学生交上来立刻有地方放
+                d["course"] = design_ensure_course(c)
+                if not str(d.get("window") or "").strip():
+                    d["window"] = d["course"]
+            if "window" in body:
+                w = " ".join(str(body.get("window") or "").split())[:30]
+                d["window"] = w or d["course"]
+            if "intro" in body:
+                d["intro"] = str(body.get("intro") or "")[:500]
+            cfg_save()
+            notify_cfg()
+            STORE.audit("teacher", "design-config",
+                        json.dumps(design_public_cfg(), ensure_ascii=False))
+            return self._json({"ok": True, "cfg": design_public_cfg()})
+        if path == "/api/v2/design/draft":
+            # 草稿即使老师关了功能也照收：关的那一刻最需要留住学生正在写的东西
+            s = self._session()
+            if not s or s["role"] != "student":
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            r = student_row(s.get("student_id"))
+            if not r:
+                return self._json({"ok": False, "msg": "学生档案不存在"}, 404)
+            if body.get("clear"):
+                return self._json(DESIGN.clear_draft(str(r.get("id"))))
+            res = DESIGN.save_draft(str(r.get("id")), body.get("html"),
+                                    body.get("css"), body.get("title"))
+            return self._json(res)
+        if path == "/api/v2/design/submit":
+            # 一键提交：预览图（PNG）+ 完整源码（HTML）→ 活动库 → 自动归档 → 大屏
+            s = self._session()
+            if not s or s["role"] != "student":
+                return self._json({"ok": False, "msg": "请先在学生端登录"}, 401)
+            d = design_cfg()
+            if not d.get("enabled"):
+                return self._json({"ok": False, "msg": "老师还没有开启网页设计"}, 403)
+            if not d.get("allow_submit"):
+                return self._json({"ok": False, "msg": "老师暂未开放提交，先自己练习、保存草稿"}, 403)
+            r = student_row(s.get("student_id"))
+            if not r:
+                return self._json({"ok": False, "msg": "学生档案不存在"}, 404)
+            png = str(body.get("png") or "")
+            if not png.startswith("data:image/png;base64,"):
+                return self._json({"ok": False, "msg": "预览图没有生成成功，请点「重新生成预览」后再提交"}, 400)
+            try:
+                raw = base64.b64decode(png.split(",", 1)[1])
+            except Exception:
+                return self._json({"ok": False, "msg": "预览图数据损坏，请重新截图"}, 400)
+            if not raw:
+                return self._json({"ok": False, "msg": "预览图是空的，请重新截图"}, 400)
+            if len(raw) > 8 * 1024 * 1024:
+                return self._json({"ok": False, "msg": "作品图片超过 8MB，先把图片换成小一点的再交"}, 413)
+            html_src = str(body.get("html") or "")[:200 * 1024]
+            css_src = str(body.get("css") or "")[:100 * 1024]
+            title = " ".join(str(body.get("title") or "").split())[:60] or "我的网页"
+            course = str(d.get("course") or "").strip() or "网页设计"
+            win = str(d.get("window") or "").strip() or course
+            t = design_task(course, create=True)
+            if not t:
+                return self._json({"ok": False, "msg": "创建收集任务失败，请让老师检查课程设置"}, 500)
+            page = design_full_html(html_src, css_src, title)
+            who = {"学号": str(r.get("student_no") or ""),
+                   "姓名": str(r.get("name") or ""),
+                   "班级": self._class_name(r.get("class_id"))}
+            # 按钮名就是大屏窗口名：设计提交在「上课」页单独占一个窗口，
+            # 不会和学习单的其它窗口混在一起。
+            fields = {"按钮": win, "作品": title, "类型": "H5 网页设计", "__kind": "file"}
+            files = [{"name": "网页作品.png", "data": raw, "mime": "image/png"},
+                     {"name": "网页源码.html", "data": page.encode("utf-8"),
+                      "mime": "text/html; charset=utf-8"}]
+            try:
+                res = ACT.add_submission(t["task_id"], fields, files,
+                                         ip=self._client_ip_safe(),
+                                         sid=who["学号"], name=who["姓名"],
+                                         cls=who["班级"], kind="file")
+            except ValueError as e:
+                return self._json({"ok": False, "msg": str(e)}, 413)
+            except LookupError:
+                return self._json({"ok": False, "msg": "收集任务不存在，请让老师重新保存一次设置"}, 404)
+            arc = _archive_after_submit(t["task_id"], who, res)
+            try:
+                quiz_bump({"kind": "submit", "window": win, "from": "design",
+                           "task": t["task_id"], "student_no": who["学号"]})
+                notify()
+            except Exception:
+                pass
+            # 交完把当前版本留成草稿：学生关掉页面再打开，接着改的还是这一版
+            try:
+                DESIGN.save_draft(str(r.get("id")), html_src, css_src, title)
+            except Exception:
+                pass
+            fs = res.get("files") or []
+            STORE.audit("student:%s" % who["姓名"], "design-submit",
+                        "%s → %s（%d 个文件）" % (title, course, len(fs)))
+            return self._json({"ok": True, "at": res.get("submitted_at") or now_str(),
+                               "url": (fs[0].get("url") if fs else ""),
+                               "files": len(fs),
+                               "archived": len((arc or {}).get("saved") or []),
+                               "task": t["task_id"], "window": win,
+                               "course": course})
         # ---------------- 打字冒险岛 ----------------
         if path == "/api/v2/typing/config":
             # 教师开放开关 + 年级词库选择（关掉后学生端入口实时消失）
@@ -4820,6 +5208,12 @@ class Handler(LEG.Handler):
         if isinstance(body.get("quiz"), dict) and body["quiz"]:
             counts["quiz"] = _quiz_restore(body.get("quiz"))
 
+        # H5 网页设计草稿（独立 design.json，2.0.39）
+        if isinstance(body.get("design"), dict) and body["design"]:
+            nd = _design_restore(body.get("design"))
+            if nd:
+                counts["design_drafts"] = nd
+
         # 课堂活动：与 29 表同源但不同表，单独恢复（含附件 base64）
         if isinstance(body.get("activity"), dict) and body["activity"]:
             ar = _act_restore(body.get("activity"))
@@ -4948,6 +5342,22 @@ def _quiz_restore(data):
     """恢复测验数据，返回恢复的对象总数（0 表示没恢复）。"""
     try:
         return QUIZ.restore(data)
+    except Exception:
+        return 0
+
+
+def _design_snapshot():
+    """H5 网页设计草稿快照。读失败不阻塞整份备份导出。"""
+    try:
+        return DESIGN.snapshot()
+    except Exception:
+        return {}
+
+
+def _design_restore(data):
+    """恢复设计草稿，返回恢复的学生数（0 表示没恢复）。"""
+    try:
+        return DESIGN.restore(data)
     except Exception:
         return 0
 
