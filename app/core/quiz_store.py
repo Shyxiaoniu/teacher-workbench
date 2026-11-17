@@ -626,6 +626,11 @@ class QuizStore(object):
                 "no": str(d.get("学号") or d.get("student_no") or d.get("sid") or ""),
                 "at": str(s.get("submitted_at") or d.get("submitted_at") or ""),
                 "from": "sheet",
+                # 模拟/测试提交：大屏单独成窗、按 🧪 标记展示，不被按班过滤掉
+                # （学号 TEST 开头也算，兼容没有 _test 标记的老数据）
+                "test": bool(s.get("test") or d.get("_test") or w == "测试提交"
+                             or str(d.get("学号") or d.get("student_no") or "")
+                             .strip().upper().startswith("TEST")),
                 # 来源任务号：大屏「清空」要按窗口反查该清哪个 act_task，
                 # 否则只清当前任务、别的任务同名窗口的数据会一直留着。
                 "task": str(s.get("task") or ""),

@@ -368,9 +368,16 @@ class QuizAPI(object):
                 for d in (self.act.submissions(tid) or []):
                     if not isinstance(d, dict):
                         continue
-                    if str(d.get("按钮") or "").strip() == "测试提交":
-                        continue
-                    act_subs.append({"按钮": d.get("按钮") or d.get("button") or "",
+                    _btn = " ".join(str(d.get("按钮") or d.get("button") or "").split())
+                    # 2026-11-17：模拟提交（预览页 ?test=1）不再直接丢弃 ——
+                    # 统一归到独立的「测试提交」窗口，老师课前能在大屏看到
+                    # 链路是通的，又不会混进真实提交窗口。
+                    # 学号以 TEST 开头也算（老数据没有 _test 标记时靠它认）。
+                    _test = (bool(d.get("_test")) or _btn == "测试提交"
+                             or str(d.get("学号") or d.get("student_no") or "")
+                             .strip().upper().startswith("TEST"))
+                    act_subs.append({"按钮": "测试提交" if _test else _btn,
+                                     "test": _test,
                                      "data": d,
                                      # 来源任务号：大屏按窗口反查该清哪个 act_task
                                      "task": str(tid),

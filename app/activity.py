@@ -345,6 +345,12 @@ class ActivityStore(object):
         data = dict(data or {})
         if kind in ("file", "data"):
             data["_kind"] = kind
+        # 2026-11-17：模拟/测试提交的标记。前端在 ?test=1 的预览页提交时带 __test=1，
+        # 这里统一收敛成下划线字段（与 _kind 一样内部用，导出与表格都不展示）。
+        # 大屏据此把这条数据单独放进「🧪 测试提交」窗口，绝不动真实窗口；
+        # 「清掉测试数据」也只删带这个标记的行。
+        if str(data.pop("__test", "") or "").strip().lower() in ("1", "true", "yes"):
+            data["_test"] = True
         # 双保险：纯数据任务哪怕被误传了 files，也不落盘、不产生 attachment
         if data.get("_kind") == "data":
             files = []
@@ -507,6 +513,43 @@ class ActivityStore(object):
         except Exception:
             pass
         return True
+
+    def delete_test_submissions(self, task_key):
+        """只删「模拟 / 测试」提交，真实提交一条不碰（2026-11-17）。
+
+        判据两条任一成立即算测试数据：data["_test"] 为真，或「按钮」就是「测试提交」。
+        大屏「🧪 测试提交」窗口上的「清掉测试数据」按钮走这里 —— 老师课前验完
+        链路可以一键清干净，不必冒险用「清空全部提交」。
+        """
+        hit = []
+        with self.lock:
+            rows = self.conn.execute(
+                "SELECT id, data, files FROM act_submission WHERE task_key=?",
+                (str(task_key),)).fetchall()
+            for r in rows:
+                try:
+                    d = json.loads(r["data"] or "{}")
+                except Exception:
+                    continue
+                if not isinstance(d, dict):
+                    continue
+                if (d.get("_test") or str(d.get("按钮") or "").strip() == "测试提交"
+                        or str(d.get("学号") or d.get("student_no") or "").strip()
+                        .upper().startswith("TEST")):
+                    hit.append((int(r["id"]), r["files"]))
+            for sid, _f in hit:
+                self.conn.execute("DELETE FROM act_submission WHERE id=?", (sid,))
+                self.conn.execute("DELETE FROM act_file WHERE sub_id=?", (sid,))
+            self.conn.commit()
+        for _sid, files in hit:
+            try:
+                for url in json.loads(files or "[]"):
+                    p = self.file_path(url)
+                    if p and os.path.isfile(p):
+                        os.remove(p)
+            except Exception:
+                pass
+        return [sid for sid, _ in hit]
 
     def clear(self, task_key):
         with self.lock:
