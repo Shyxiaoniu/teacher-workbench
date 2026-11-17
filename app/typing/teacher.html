@@ -79,7 +79,11 @@ select{font-family:inherit;font-size:14px;padding:8px 12px;border:1.5px solid va
 .play-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 16px;background:#fff;
   border-bottom:1px solid var(--line);box-shadow:0 2px 8px rgba(60,30,10,.05)}
 .play-bar b{font-size:14px}
-.play-view iframe{flex:1;width:100%;border:0}
+.play-view iframe{flex:1;min-height:0;width:100%;border:0}
+/* 练习视图开着时锁掉根滚动（2026-11-17 牛哥反馈「为啥有两个滚动条」）：
+   .play-view 是 fixed 覆盖层，但底下管理面板把 body 撑得很长，
+   根滚动条不会被盖掉，和 iframe 里打字页自己的滚动条叠成两条。 */
+body.play-lock{overflow:hidden}
 /* ---------- 积分管理 ----------
    对齐德育页的规范：表单控件统一 36px 高 / 9px 圆角 / 1px 描边，
    备注改成「标签 + 输入框」两段式，快捷标签沿用德育项目按钮的样式。 */
@@ -405,7 +409,8 @@ function enterPlay() {
     '</div>' +
     '<iframe src="/typing/?embed=1" title="打字练习"></iframe>';
   document.body.appendChild(v);
-  $('#backMgr').onclick = function () { v.remove(); };
+  document.body.classList.add('play-lock');
+  $('#backMgr').onclick = function () { v.remove(); document.body.classList.remove('play-lock'); };
 }
 
 function loadLb() {

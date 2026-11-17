@@ -3907,6 +3907,11 @@ body:has(.mini-bar) .corner-credit { display:none; }
    暗色主题适配：把写死的浅色修掉，原生控件也转深色
    ============================================================ */
 [data-mode="dark"] { color-scheme: dark; }
+/* 原生下拉弹层（2026-11-17 牛哥反馈：夜色下「班级」下拉选项几乎看不见）：
+   Windows 的 Chromium 弹层底色跟系统深浅色走（系统浅色 = 白弹层），
+   而 option 文字继承 select 的浅色（--text-primary）→ 白底浅字看不见。
+   显式给 option 配深底浅字，两种弹层下都可读。 */
+[data-mode="dark"] select option { background:#1B2420; color:#E9F1EE; }
 [data-mode="dark"] .demo-bar {
   background:#2A2418; color:#E7D6AE; border-bottom-color:#453A22;
 }
@@ -4088,6 +4093,17 @@ body:has(.mini-bar) .corner-credit { display:none; }
     inset 0 2px 3px rgba(16,32,27,.11),
     inset 0 -1px 0 rgba(255,255,255,.9);
 }
+/* 拟物风夜色（2026-11-17 牛哥反馈「夜色主题下代码看不到」）：
+   上面这条规则给 textarea 强制了白底渐变，却没配 color —— 夜色模式下
+   文字还是浅色（--text-primary:#E9F1EE），于是白底 + 浅字几乎不可读。
+   学习单 HTML 编辑区这种大段代码最受影响。暗色下换成主题深色渐变。 */
+[data-ui="skeuo"][data-mode="dark"] textarea {
+  background: linear-gradient(180deg, var(--dk-base, #101613) 0%, var(--bg-surface, #141C19) 100%);
+  border:1px solid var(--border);
+  box-shadow: inset 0 2px 3px rgba(0,0,0,.35);
+  color: var(--text-primary);
+}
+[data-ui="skeuo"][data-mode="dark"] textarea::placeholder { color: var(--text-secondary); }
 [data-ui="skeuo"] select.sel,
 [data-ui="skeuo"] #themeSel {
   box-shadow:
@@ -12081,8 +12097,24 @@ function renderPage() {
 }
 
 /** 只重绘主内容区。搜索输入时用它，避免 topbar 被重建导致输入框失焦。 */
-function renderContent(opts = {}) {
-  const nav = NAV.find(n => n.id === state.route);
+/** 打字管理外框高度（2026-11-17 牛哥反馈「右侧总有条滚动条」）：
+    整站是页面级滚动（.content overflow:clip），外框原来写死 calc(100vh - 128px)，
+    但顶栏带班级下拉会折行，实际比 128px 高 —— 整页就被顶出一条
+    只能滚一点点、看着像坏了的滚动条。按顶栏实测高度算：
+    视口 - 顶栏 - content 上下 padding（20 + 46）。 */
+function twAdminFit() {
+  var fr = document.querySelector('iframe[data-typing-admin]');
+  var wrap = fr ? fr.parentNode : null;
+  if (!wrap) return;
+  var tb = document.querySelector('.topbar');
+  var th = tb ? tb.offsetHeight : 52;
+  wrap.style.height = Math.max(520, window.innerHeight - th - 66) + 'px';
+}
+window.addEventListener('resize', function () {
+  if (document.querySelector('iframe[data-typing-admin]')) twAdminFit();
+});
+
+function renderContent(opts = {}) {  const nav = NAV.find(n => n.id === state.route);
   const c = $('#content');
   if (!c) return;
   /* 几乎所有写操作最后都会走到这里重绘，所以把"落盘"挂在这：
@@ -12116,6 +12148,7 @@ function renderContent(opts = {}) {
     if (!c.querySelector('iframe[data-typing-admin]')) {
       c.innerHTML = '<div style="height:calc(100vh - 128px);min-height:520px">' +
         '<iframe data-typing-admin src="/typing/teacher.html" title="打字练习管理" style="width:100%;height:100%;border:0"></iframe></div>';
+      twAdminFit();
     }
   } else if (state.route === 'design') {
     /* H5 网页设计管理（2.0.39）：独立页面 iframe 内嵌，复用教师登录会话。
@@ -16516,6 +16549,11 @@ function renderActivity() {
   .act-win.is-test .act-win-hd b{color:#6A4FB6}
   .act-test-tag{font-size:11px;line-height:1;padding:2px 6px;border-radius:999px;
     background:#EDE7FA;color:#6A4FB6;border:1px solid #D6C9F2;white-space:nowrap}
+  /* 夜色适配（2026-11-17 牛哥反馈「测试窗口行发灰看不清」）：上面这条写死了
+     淡紫渐变底，夜色下浅色字压在浅底上几乎不可读。暗色换半透明深紫渐变 +
+     浅紫标题；🧪 标签本身是浅底深字，两种模式下都可读，不用动。 */
+  [data-mode="dark"] .act-win.is-test{background:linear-gradient(180deg,rgba(106,79,182,.22),rgba(255,255,255,0))}
+  [data-mode="dark"] .act-win.is-test .act-win-hd b{color:#B39DDB}
   .act-allsubs[open] summary{margin-bottom:12px}
 
   /* ===== ④ 自定义上传（教师自制网页模板） ===== */
@@ -17797,19 +17835,23 @@ async function actCustomView() {
     actGeneratedPage = page;
   }
   actGeneratedPageTask = actActiveId;
-  /* 新标签必须「同步」开出来（2026-11-17 牛哥反馈「点查看没反应」）：
-     部署要等两次网络请求（POST /api/custom + 读回校验），等它们回来再
-     window.open 已经不算是用户点击触发的，Chrome/Edge 会静默拦掉弹窗 ——
-     页面上只会停在「正在打开…」，一个新标签都不出来。
-     所以先开一个空白页，部署成功后把它的地址替换成预览链接。 */
-  const preWin = window.open('about:blank', '_blank');
-  const closePre = () => { try { if (preWin && !preWin.closed) preWin.close(); } catch (e) {} };
+  /* 预览走「新标签」（2026-11-17 牛哥明确要求，浮层方案废弃）：
+     要点一：window.open 必须发生在用户点击的同一拍 —— 预览链接只由 task id
+     和班级名决定，不用等部署结果，所以点下瞬间就同步开标签（真手势，不会被
+     弹窗策略拦）；部署完成后再让标签 reload 一次，拿到刚部署好的页面。
+     要点二：万一标签仍被环境吞掉（内嵌面板等，open 返回 null），状态栏追加
+     一条能直接点的链接，老师不会再「点了没反应」。 */
+  const clsObj0 = (dbT('classes') || []).find(c => Number(c.id) === Number(actCurClass()));
+  const prevUrl = location.origin + '/submit/custom.html?task=' + encodeURIComponent(actActiveId)
+    + '&class=' + encodeURIComponent(clsObj0 ? clsObj0.name : '') + '&test=1';
+  const preWin = window.open(prevUrl, '_blank');
+  if (!preWin) actCustLinkHint(prevUrl, '弹窗被拦截，点这里打开预览页');
   actCustStatus('正在部署预览页…');
   try {
     const layView = (() => { try { return actScanLayout(page, true); } catch (e) { return null; } })();
     const r = await fetch('/api/custom', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task: actActiveId, html: page, layout: layView, course: t.course || t.title || actActiveCourse || '' }) });
     const j = await r.json().catch(() => ({}));
-    if (!r.ok || !j.ok) { closePre(); actCustStatus('部署失败：' + (j.msg || r.status), 'err'); return; }
+    if (!r.ok || !j.ok) { actCustStatus('部署失败：' + (j.msg || r.status), 'err'); return; }
     /* 部署后立即读回校验（2026-11-17）：以前只要 POST 返回 ok 就直接开新标签，
        一旦页面实际没写进服务端（多教师账号 / 本机 127.0.0.1 打开而预览链接
        被拼成局域网 IP，读到了另一个工作区的配置），学生看到的会是
@@ -17823,7 +17865,7 @@ async function actCustomView() {
       // 读回失败重试一次；再失败就明确报错，不开一个空壳页
       const r2 = await fetch('/api/custom', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task: actActiveId, html: page, layout: layView, course: t.course || t.title || actActiveCourse || '' }) });
       const j2 = await r2.json().catch(() => ({}));
-      if (!r2.ok || !j2.ok) { closePre(); actCustStatus('部署失败：' + (j2.msg || r2.status), 'err'); return; }
+      if (!r2.ok || !j2.ok) { actCustStatus('部署失败：' + (j2.msg || r2.status), 'err'); return; }
       try {
         const pr2 = await fetch('/api/custom?task=' + encodeURIComponent(actActiveId), { cache: 'no-store' });
         probe = pr2.ok ? await pr2.text() : '';
@@ -17833,23 +17875,30 @@ async function actCustomView() {
         return;
       }
     }
-    actCustStatus('✓ 已部署预览页，正在打开（含「🧪 模拟测试提交」按钮）…', 'ok');
-    const clsObj = (dbT('classes') || []).find(c => Number(c.id) === Number(actCurClass()));
-    const clsName = clsObj ? clsObj.name : '';
-    /* 预览固定用「当前教师端自己的地址」打开（2026-11-17）：
-       换成学生地址（局域网 IP）后新标签拿不到教师会话，服务端按匿名账号
-       读配置，就会出现「老师未开通学习单」的白页。给学生端下发仍走「下发」。 */
-    const link = location.origin + '/submit/custom.html?task=' + encodeURIComponent(actActiveId)
-      + '&class=' + encodeURIComponent(clsName) + '&test=1';
+    actCustStatus('✓ 已部署预览页（含「🧪 模拟测试提交」按钮）', 'ok');
     if (preWin && !preWin.closed) {
-      try { preWin.location.replace(link); } catch (e) { preWin.location.href = link; }
+      try { preWin.location.reload(); } catch (e) {}
       try { preWin.focus(); } catch (e) {}
-    } else {
-      /* 空白页没开出来（浏览器把弹窗拦了）：给一条能直接点的链接，别让老师干等 */
-      actCustStatus('✗ 浏览器拦截了新标签，请允许本站弹窗后重试；也可以直接打开：' + link, 'err');
-      toast('浏览器拦截了新标签，请在地址栏允许弹窗');
     }
-  } catch (e) { closePre(); actCustStatus('✗ ' + e.message, 'err'); }
+  } catch (e) {
+    /* 部署失败就把预开的标签关掉，别留一个「未配置」页面让老师误会 */
+    if (typeof preWin !== 'undefined' && preWin && !preWin.closed) { try { preWin.close(); } catch (e2) {} }
+    actCustStatus('✗ ' + e.message, 'err');
+  }
+}
+
+/* 弹窗被环境吞掉时的兜底（2026-11-17）：在状态栏追加一条能直接点的链接。
+   actCustStatus 用 textContent（防注入），所以链接只能用 DOM 追加。 */
+function actCustLinkHint(link, text) {
+  try {
+    const el = document.getElementById('actCustStatus');
+    if (!el) return;
+    const a = document.createElement('a');
+    a.href = link; a.target = '_blank'; a.rel = 'noopener';
+    a.textContent = ' → ' + (text || '点这里打开');
+    a.style.cssText = 'color:var(--brand-primary);font-weight:600;margin-left:6px;text-decoration:underline;cursor:pointer';
+    el.appendChild(a);
+  } catch (e) {}
 }
 
 /* 任务收集窗口（2026-11-05 重做）
@@ -18014,7 +18063,15 @@ function actSwitchTab(which) {
     const t = tabs[k];
     if (t) t.classList.toggle('active', k === which);
   });
-  if (which === 'dash') actRenderDash();          // 切到可见后再渲染，画布才能正常绘制
+  if (which === 'dash') {
+    /* 切到大屏先重拉一次看板再重绘（2026-11-17）：actInit 只在进页时拉一次
+       board，内存里的 QT.board 是旧快照 —— 模拟提交又不走测验实时事件，
+       测试提交窗口就会一直「没有数据」。 */
+    (async () => {
+      try { if (typeof quizBoardLoad === 'function') await quizBoardLoad(true); } catch (e) {}
+      actRenderDash();          // 切到可见后再渲染，画布才能正常绘制
+    })();
+  }
   if (which === 'works') cwWorksEnter();         // 作品页签：按需拉一次数据再画
 }
 window.actSwitchTab = actSwitchTab;
@@ -18323,7 +18380,14 @@ async function actPollCount() {
     if (!r.ok) return;
     const j = await r.json();
     const n = (j && j.total_submissions) || 0;
-    if (actLastCount >= 0 && n !== actLastCount) { actLastCount = n; actRenderDash(); }
+    if (actLastCount >= 0 && n !== actLastCount) {
+      actLastCount = n;
+      /* 有新提交（含模拟提交）时先把看板重拉一遍再重绘（2026-11-17）：
+         actTaskWindowsHtml 读内存里的 QT.board，actInit 只在进页时拉过一次，
+         模拟提交又不走测验实时事件 —— 不重拉的话「🧪 测试提交」窗口永远空。 */
+      try { if (typeof quizBoardLoad === 'function') await quizBoardLoad(true); } catch (e) {}
+      actRenderDash();
+    }
     else actLastCount = n;
   } catch (e) {}
 }

@@ -370,7 +370,7 @@ PET_IDS = ["cat", "dog", "rabbit", "penguin", "panda", "dino", "unicorn", "drago
            "duck", "bear"]
 COND = threading.Condition()
 STARTED = time.time()
-VERSION = "2.0.42"
+VERSION = "2.0.43"
 ONLINE_WINDOW = 300      # 5 分钟内活跃算在线
 # 可内联直出的附件类型（其余一律按下载处理，防止同源执行脚本）
 _INLINE_EXTS = {"png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "pdf",
