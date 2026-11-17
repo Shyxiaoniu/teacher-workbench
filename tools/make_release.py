@@ -16,6 +16,7 @@
 import argparse
 import os
 import re
+import subprocess
 import sys
 import time
 import zipfile
@@ -346,6 +347,28 @@ def main():
     for k in sorted(tops):
         print("  %-14s %4d 个文件" % (k, tops[k]))
     write_manifest(version, zip_path, name + ".zip")
+    warn_stale_zips(name + ".zip")
+
+
+def warn_stale_zips(current_zip):
+    """提醒清理仓库里残留的旧版本包。
+
+    `.gitignore` 里有 `*.zip`，每个发行包都是靠 `git add -f` 强行塞进仓库的；
+    如果发版时只加新包不删旧包，仓库树就会一个版本多躺 17MB（2.0.42 时
+    里面还压着 2.0.41）。这里只提醒、不自动删——旧包要不要留作回滚由人决定。
+    """
+    try:
+        out = subprocess.run(["git", "ls-files", "dist"], cwd=ROOT,
+                             capture_output=True, text=True, timeout=15).stdout
+    except Exception:
+        return
+    stale = [l for l in out.splitlines() if l.strip() and current_zip not in l]
+    if not stale:
+        return
+    print("提醒：dist 下还有 %d 个旧包被 git 跟踪（仓库树每个多占约 17MB）：" % len(stale))
+    for s in stale:
+        print("  " + s)
+    print("  清理：git rm --cached \"<上面的路径>\"（本地文件保留，只从仓库树移除）")
 
 
 def write_manifest(version, zip_path, zip_name):
