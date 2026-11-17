@@ -1102,11 +1102,15 @@ class Handler(LEG.Handler):
         _who = {"学号": str(fields.get("学号") or fields.get("sid") or ""),
                 "姓名": str(fields.get("姓名") or fields.get("name") or ""),
                 "班级": str(fields.get("班级") or fields.get("cls") or "")}
-        _arc = _archive_after_submit(task_key, _who, res)
+        # 2026-11-17：模拟提交（__test=1）不归档 —— 「测试同学」不该在资料里建文件夹
+        _is_test = str(fields.get("__test") or "").strip().lower() in ("1", "true", "yes")
+        _arc = None if _is_test else _archive_after_submit(task_key, _who, res)
         # 2.0.38：学习单按钮提交也走同一条实时通道，带上所属窗口 →
         # 大屏只刷新那一个窗口，不再等 5 秒轮询整块重绘。
         _win = " ".join(str(fields.get("按钮") or "").split())
-        if _win and _win != "测试提交":
+        if _is_test:
+            _win = "测试提交"
+        if _win:
             quiz_bump({"kind": "submit", "window": _win, "from": "sheet",
                        "task": task_key, "student_no": _who.get("学号")})
             notify()
@@ -2386,9 +2390,13 @@ class Handler(LEG.Handler):
         except LookupError:
             return self._json_cors({"ok": False, "msg": "任务不存在"}, 404)
         # 提交成功立刻就归档：文件直接进「资料」的课程/班级/学号+姓名 文件夹
-        arc = _archive_after_submit(task, who, res)
+        # 2026-11-17：模拟提交（__test=1）不归档，别让「测试同学」在资料里建文件夹
+        _is_test = str(fields.get("__test") or "").strip().lower() in ("1", "true", "yes")
+        arc = None if _is_test else _archive_after_submit(task, who, res)
         _win = " ".join(str(fields.get("按钮") or "").split())
-        if _win and _win != "测试提交":
+        if _is_test:
+            _win = "测试提交"          # 预览页真实按钮点出来的模拟数据也归到测试窗口
+        if _win:
             quiz_bump({"kind": "submit", "window": _win, "from": "sheet",
                        "task": task, "student_no": who.get("学号")})
             notify()
@@ -3863,6 +3871,24 @@ class Handler(LEG.Handler):
         if path.startswith("/api/v2/quiz/"):
             r = _quiz_api(self).post(path, body)
             return r if r is not None else self._json({"ok": False, "msg": "未知接口"}, 404)
+        # 数据大屏：只清「模拟 / 测试提交」（2026-11-17）
+        # 大屏的「🧪 测试提交」窗口上有这个按钮：老师课前验完链路一键清干净，
+        # 绝不会像「清空全部提交」那样把真实数据一起删掉。
+        if path == "/api/v2/act-test-clear":
+            if not self._is_teacher():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            q2 = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            task = str((q2.get("task") or [body.get("task") or ""])[0] or "").strip()
+            if not task:
+                return self._json({"ok": False, "msg": "缺少 task"}, 400)
+            ids = ACT.delete_test_submissions(task)
+            if ids:
+                STORE.audit("teacher", "activity-test-clear",
+                            "%s 清掉 %d 条测试数据" % (task, len(ids)))
+                notify()
+            return self._json({"ok": True, "deleted": len(ids),
+                               "message": ("已清掉 %d 条测试数据" % len(ids))
+                               if ids else "这个活动没有测试数据"})
         # 数据大屏：清空本活动全部提交 / 删除单条提交（需求 5，2026-11-02）
         # 参数走查询串（前端 fetch 只带 URL），body 为空时用 body 兜底。
         # 必须教师登录：学生页与教师页同源，只靠同源校验拦不住学生乱调。

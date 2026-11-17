@@ -16511,6 +16511,11 @@ function renderActivity() {
   .act-win-row .no{font-size:12px;color:var(--text-secondary)}
   .act-win-row .ts{margin-left:auto;font-size:12px;color:var(--text-secondary);font-variant-numeric:tabular-nums}
   .act-win-empty{color:var(--text-secondary);font-size:13px;padding:16px 0;text-align:center}
+  /* 🧪 测试提交窗口（2026-11-17）：淡紫底 + 虚线边，和真实窗口一眼区分 */
+  .act-win.is-test{border-style:dashed;border-color:#B39DDB;background:linear-gradient(180deg,#F7F2FF,rgba(255,255,255,0))}
+  .act-win.is-test .act-win-hd b{color:#6A4FB6}
+  .act-test-tag{font-size:11px;line-height:1;padding:2px 6px;border-radius:999px;
+    background:#EDE7FA;color:#6A4FB6;border:1px solid #D6C9F2;white-space:nowrap}
   .act-allsubs[open] summary{margin-bottom:12px}
 
   /* ===== ④ 自定义上传（教师自制网页模板） ===== */
@@ -17608,8 +17613,8 @@ function actBuildCustomPage(html, opts) {
      原先这里把整页克隆、回填答案、序列化后以 __archive 提交；现在提交结果
      就是学生上传的文件本身，没有文件的任务只留表单数据。整页快照既占空间
      又会跟真实附件混在一起，牛哥定了去掉，别再加回来。 */
-  R.push('function actSubmitBlock(btn,container,label){if(!ACT_USER){var s9=container.querySelector("[data-act-status]");if(s9){s9.textContent="请先在上面填写学号登录";s9.className="act-st err"}return}var _needFiles=!!(container.getAttribute&&container.getAttribute("data-need-file")==="1");if(!_needFiles&&container.querySelectorAll){_needFiles=container.querySelectorAll("input[type=file]").length>0}var _fi=(container!==document.body&&container.querySelectorAll)?container.querySelectorAll("input[type=file]"):[];if(_fi&&_fi.length){var _has=false;for(var _i=0;_i<_fi.length;_i++){var _fl=_fi[_i].files;if(_fl){for(var _j=0;_j<_fl.length;_j++){if(_fl[_j]&&_fl[_j].size>0){_has=true}}}}var _allow=(container.getAttribute&&container.getAttribute("data-allow-empty")==="1");if(!_has&&!_allow){var _s0=container.querySelector("[data-act-status]");if(_s0){_s0.textContent="本题要求上传文件，请选择文件后再提交（老师未开启「允许空文件提交」）。";_s0.className="act-st err"}return}}var _ti=container.querySelectorAll?container.querySelectorAll("input,textarea,select"):[];var _hasTextField=false,_filled=false,_fileSel=false;for(var _a=0;_a<_ti.length;_a++){var _e2=_ti[_a],_tp2=(_e2.type||"").toLowerCase();if(_e2.disabled||_tp2==="hidden")continue;if(_e2.id==="actSid"||(_e2.closest&&_e2.closest("#actLogin")))continue;if(_tp2==="file"){if(_e2.files){for(var _b=0;_b<_e2.files.length;_b++){if(_e2.files[_b]&&_e2.files[_b].size>0)_fileSel=true}}continue}_hasTextField=true;if(_tp2==="checkbox"||_tp2==="radio"){if(_e2.checked)_filled=true}else if(String(_e2.value||"").trim()!==""){_filled=true}}if(_hasTextField&&!_filled&&!_fileSel){var _sc2=container.querySelector("[data-act-status]");if(_sc2){_sc2.textContent="请先填写内容再提交";_sc2.className="act-st err"}return}btn.disabled=true;var st=container.querySelector("[data-act-status]");if(st){st.textContent="准备提交…";st.className="act-st"}actResolveApi().then(function(tgt){if(!tgt){if(st){st.textContent="这一页还没接上提交地址，请让老师检查活动绑定";st.className="act-st err"}btn.disabled=false;return}var fd=actGather(container,_needFiles);fd.append("__kind",_needFiles?"file":"data");if(WB_SUBMIT){fd.append("按钮",label)}else{fd.append("学号",ACT_USER.sid);fd.append("姓名",ACT_USER.name);fd.append("班级",ACT_USER.cls);fd.append("按钮",label)}if(st){st.textContent="提交中…";st.className="act-st"}fetch(tgt,{method:"POST",body:fd,mode:"cors"}).then(function(r){return r.json().catch(function(){return{}}).then(function(j){return {ok:r.ok,j:j}})}).then(function(o){var ok=o.ok||(o.j&&(o.j.ok||o.j.success));if(st){st.textContent=ok?"提交成功":"提交失败";st.className="act-st "+(ok?"ok":"err")}btn.disabled=false}).catch(function(e){if(st){st.textContent="网络错误：连不上提交服务，请确认与老师在同一局域网";st.className="act-st err"}btn.disabled=false})})}');
-  R.push('function actTestSubmit(){actResolveApi().then(function(tgt){if(!tgt){alert("未接上提交地址，请确认活动已绑定");return}var fd=new FormData();fd.append("学号","TEST"+Date.now().toString().slice(-6));fd.append("姓名","测试同学");fd.append("班级",ACT_CLASS||"测试班");fd.append("按钮","测试提交");fd.append("测试内容","「查看-测试提交」模拟数据 "+new Date().toLocaleTimeString());fetch(tgt,{method:"POST",body:fd,mode:"cors"}).then(function(r){return r.json().catch(function(){return{}}).then(function(j){return{ok:r.ok,j:j}})}).then(function(o){var ok=o.ok||(o.j&&(o.j.ok||o.j.success));alert(ok?"✅ 测试提交成功，请切到数据大屏查看":"❌ 提交失败："+(o.j&&o.j.msg||r.status))}).catch(function(e){alert("网络错误："+e.message)})})}');
+  R.push('function actSubmitBlock(btn,container,label){if(!ACT_USER){var s9=container.querySelector("[data-act-status]");if(s9){s9.textContent="请先在上面填写学号登录";s9.className="act-st err"}return}var _needFiles=!!(container.getAttribute&&container.getAttribute("data-need-file")==="1");if(!_needFiles&&container.querySelectorAll){_needFiles=container.querySelectorAll("input[type=file]").length>0}var _fi=(container!==document.body&&container.querySelectorAll)?container.querySelectorAll("input[type=file]"):[];if(_fi&&_fi.length){var _has=false;for(var _i=0;_i<_fi.length;_i++){var _fl=_fi[_i].files;if(_fl){for(var _j=0;_j<_fl.length;_j++){if(_fl[_j]&&_fl[_j].size>0){_has=true}}}}var _allow=(container.getAttribute&&container.getAttribute("data-allow-empty")==="1");if(!_has&&!_allow){var _s0=container.querySelector("[data-act-status]");if(_s0){_s0.textContent="本题要求上传文件，请选择文件后再提交（老师未开启「允许空文件提交」）。";_s0.className="act-st err"}return}}var _ti=container.querySelectorAll?container.querySelectorAll("input,textarea,select"):[];var _hasTextField=false,_filled=false,_fileSel=false;for(var _a=0;_a<_ti.length;_a++){var _e2=_ti[_a],_tp2=(_e2.type||"").toLowerCase();if(_e2.disabled||_tp2==="hidden")continue;if(_e2.id==="actSid"||(_e2.closest&&_e2.closest("#actLogin")))continue;if(_tp2==="file"){if(_e2.files){for(var _b=0;_b<_e2.files.length;_b++){if(_e2.files[_b]&&_e2.files[_b].size>0)_fileSel=true}}continue}_hasTextField=true;if(_tp2==="checkbox"||_tp2==="radio"){if(_e2.checked)_filled=true}else if(String(_e2.value||"").trim()!==""){_filled=true}}if(_hasTextField&&!_filled&&!_fileSel){var _sc2=container.querySelector("[data-act-status]");if(_sc2){_sc2.textContent="请先填写内容再提交";_sc2.className="act-st err"}return}btn.disabled=true;var st=container.querySelector("[data-act-status]");if(st){st.textContent="准备提交…";st.className="act-st"}actResolveApi().then(function(tgt){if(!tgt){if(st){st.textContent="这一页还没接上提交地址，请让老师检查活动绑定";st.className="act-st err"}btn.disabled=false;return}var fd=actGather(container,_needFiles);fd.append("__kind",_needFiles?"file":"data");if(ACT_TEST)fd.append("__test","1");if(WB_SUBMIT){fd.append("按钮",label)}else{fd.append("学号",ACT_USER.sid);fd.append("姓名",ACT_USER.name);fd.append("班级",ACT_USER.cls);fd.append("按钮",label)}if(st){st.textContent="提交中…";st.className="act-st"}fetch(tgt,{method:"POST",body:fd,mode:"cors"}).then(function(r){return r.json().catch(function(){return{}}).then(function(j){return {ok:r.ok,j:j}})}).then(function(o){var ok=o.ok||(o.j&&(o.j.ok||o.j.success));if(st){st.textContent=ok?"提交成功":"提交失败";st.className="act-st "+(ok?"ok":"err")}btn.disabled=false}).catch(function(e){if(st){st.textContent="网络错误：连不上提交服务，请确认与老师在同一局域网";st.className="act-st err"}btn.disabled=false})})}');
+  R.push('function actTestSubmit(){actResolveApi().then(function(tgt){if(!tgt){alert("未接上提交地址，请确认活动已绑定");return}var fd=new FormData();fd.append("学号","TEST"+Date.now().toString().slice(-6));fd.append("姓名","测试同学");fd.append("班级",ACT_CLASS||"测试班");fd.append("按钮","测试提交");fd.append("__test","1");fd.append("测试内容","「查看-测试提交」模拟数据 "+new Date().toLocaleTimeString());fetch(tgt,{method:"POST",body:fd,mode:"cors"}).then(function(r){return r.json().catch(function(){return{}}).then(function(j){return{ok:r.ok,j:j}})}).then(function(o){var ok=o.ok||(o.j&&(o.j.ok||o.j.success));alert(ok?"✅ 测试提交成功，请切到数据大屏查看":"❌ 提交失败："+(o.j&&o.j.msg||r.status))}).catch(function(e){alert("网络错误："+e.message)})})}');
   R.push('function actInitCustom(){');
   R.push('if(ACT_TEST){var lg0=document.getElementById("actLogin");if(lg0&&lg0.parentNode)lg0.parentNode.removeChild(lg0);ACT_USER={sid:"TEST"+(Date.now()+"").slice(-6),name:"测试同学",cls:ACT_CLASS||"测试班"};}');
   R.push('actResolveApi();');
@@ -17839,6 +17844,49 @@ async function actCustomView() {
  *  新实现 = 以「下发时扫描出的按钮清单」为准预建窗口（0 份也显示，老师能对上号），
  *  窗口内按人去重只留最新一条。
  *  2.0.32（牛哥要求）：窗口里只列「谁交了」，不再画选项分布与正确率。 */
+/* 「🧪 测试提交」窗口（2026-11-17）
+   老师的真实痛点：在「查看」预览页点「模拟一条测试提交」，大屏却一条都不显示，
+   没法在课前确认「学生交的东西能到大屏」。原因有两道过滤 ——
+   ① 服务端 board 直接把「按钮=测试提交」丢掉；② 大屏按当前班花名册过滤，
+      「测试同学」不在任何班名单里。现在统一改成：测试数据单独收进这一窗，
+   带 🧪 标记，配一个「清掉测试数据」按钮（只删测试行，真实提交一条不动）。 */
+function actTestWinCard(b, bi, bound) {
+  const wins = (typeof QT !== 'undefined' && QT.board && QT.board.windows) ? QT.board.windows : null;
+  const rows = actWinRowsFor(b, wins) || [];
+  const list = rows.length
+    ? actWinRowsHtml(rows)
+    : '<div class="act-win-empty">还没有测试数据 —— 到「查看」预览页点右下角的「🧪 模拟一条测试提交」，这里就会实时出现一条。</div>';
+  return '<div class="act-win is-test' + (bound === b ? ' is-bound' : '') + '" data-act-win="' + esc(b) + '">'
+    + '<div class="act-win-hd"><b>🧪 测试提交</b>'
+    + '<span class="n">测试 <em data-win-n>' + rows.length + '</em> 条</span>'
+    + '<button type="button" class="btn btn-ghost btn-sm" onclick="actClearTestData()" '
+    + 'title="只删除模拟提交，真实提交一条不动">清掉测试数据</button>'
+    + '</div>'
+    + '<div class="act-win-list" data-win-list data-qz-keep="win-' + bi + '">' + list + '</div>'
+    + '</div>';
+}
+/* 只清测试数据：走 /api/v2/act-test-clear（服务端只删带 _test 标记 / 按钮=测试提交 的行） */
+async function actClearTestData() {
+  const task = (typeof actActiveId !== 'undefined' && actActiveId) ? String(actActiveId) : '';
+  if (!task) { toast('先在上面选一门课程/活动'); return; }
+  if (!confirm('清掉这个活动的全部测试数据？\n\n只会删除「模拟提交」，学生真实提交一条都不动。')) return;
+  try {
+    const r = await fetch('/api/v2/act-test-clear?task=' + encodeURIComponent(task), {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' }, body: '{}'
+    });
+    const j = await r.json().catch(() => ({}));
+    toast(j.message || (j.ok ? '已清掉测试数据' : '清理失败'));
+    if (j.ok) {
+      try { if (typeof quizBoardLoad === 'function') await quizBoardLoad(true); } catch (e) {}
+      try { await actRenderDash(); } catch (e) {}
+    }
+  } catch (e) {
+    toast('清理失败：' + (e.message || e));
+  }
+}
+window.actClearTestData = actClearTestData;
+
 function actTaskWindowsHtml(allMatched, layout) {
   const lay = (layout && typeof layout === 'object') ? layout : {};
   /* 按钮名归一化再去重（2.0.27）：
@@ -17865,9 +17913,12 @@ function actTaskWindowsHtml(allMatched, layout) {
      2.0.38 起：只要另有测验窗口（boardWins 里带「测验：…」），即使学习单
      只有一个按钮也照常开，因为老师要在一个地方看全部实时收件。 */
   const hasQuizWin = taskBtns.some(b => b.indexOf('测验：') === 0);
-  if (taskBtns.length < 2 && !hasQuizWin) return '';
+  /* 只有测试数据、没有真实多窗口时也要开这一区，否则老师还是「看不到数据」 */
+  const hasTestWin = taskBtns.indexOf('测试提交') >= 0;
+  if (taskBtns.length < 2 && !hasQuizWin && !hasTestWin) return '';
   const bound = (typeof actBoundWindow === 'function') ? actBoundWindow() : '';
   const cards = taskBtns.map((b, bi) => {
+    if (b === '测试提交') return actTestWinCard(b, bi, bound);
     const one = actDedupByPerson(rows.filter(s => norm(actTaskOf(s)) === b));  // 同窗口内一人一条
     const bRows = actWinRowsFor(b, boardWins);
     const n = bRows ? bRows.length : one.length;
@@ -39105,13 +39156,19 @@ function actWinRowsFor(b, wins){
     });
   } catch (e) {}
   if (!nos.size && !names.size) return raw;
-  return raw.filter(r => nos.has(String(r.no || '').trim())
+  /* 2026-11-17：模拟提交（测试同学 / TEST 开头学号）本来就不在任何班名单里，
+     以前被这道过滤直接抹掉 —— 老师课前验链路时看到的就是「大屏没有数据」。
+     测试行一律放行，但它们只进「🧪 测试提交」窗口，不会混进真实窗口。 */
+  return raw.filter(r => r.test
+                     || String(r.no || '').toUpperCase().indexOf('TEST') === 0
+                     || nos.has(String(r.no || '').trim())
                      || names.has(String(r.name || '').trim()));
 }
 function actWinRowsHtml(rows){
   if (!rows || !rows.length) return '<div class="act-win-empty">这个任务还没有人提交</div>';
   return rows.map((s,i)=>'<div class="act-win-row"><i style="font-style:normal;font-weight:700;color:var(--brand-primary)">'+(i+1)+'</i>'
     + '<b style="font-weight:600">'+esc(s.name||'—')+'</b>'
+    + (s.test ? '<span class="act-test-tag">🧪 测试</span>' : '')
     + '<span class="no">'+esc(s.no||'')+'</span>'
     + '<span class="ts">'+esc(String(s.at||'').slice(5,16)||'—')+'</span></div>').join('');
 }
