@@ -24,8 +24,6 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # 整目录带上的
 INCLUDE_DIRS = ["app", "docker"]
-# docs 只带 md（截图约 5 MB，本地留着就行）
-INCLUDE_DOC_GLOB = ".md"
 # 根目录散文件
 INCLUDE_FILES = ["README.md", "LICENSE",
                  ".env.example", "docker-compose.yml", "Dockerfile"]
@@ -77,7 +75,7 @@ NOTES = """# {name} · 发行说明
 | `app/` | 工作台主程序：服务端、教师端页面、学生端、打字练习、提交系统、图标、启动脚本（课堂活动已内嵌） |
 | `docker/` | Docker 部署用的入口脚本与 nginx 网关配置 |
 | `Dockerfile` / `docker-compose.yml` / `.env.example` | 容器化部署三件套 |
-| `docs/` | 文档引用的功能截图（`docs/shots/` 下 app / student / student-pc 三个目录；说明文档已整合进 README） |
+| `docs/shots/` | README 里引用的功能截图（只带 README 用到的部分，离线阅读不裂图） |
 | `README.md` | 完整使用说明（项目唯一说明文档）：功能、架构、部署、建班、课堂流程、备份换机、在线更新、常见问题、许可声明 |
 | `LICENSE` | 本项目的 MIT 许可证（Copyright (c) 2026 Shyxiaoniu） |
 
@@ -182,19 +180,16 @@ def collect(with_runtime=True):
                 rel = os.path.relpath(full, ROOT).replace(os.sep, "/")
                 if not blocked(rel):
                     out.append(rel)
-    docs = os.path.join(ROOT, "docs")
-    if os.path.isdir(docs):
-        for fn in sorted(os.listdir(docs)):
-            if fn.endswith(INCLUDE_DOC_GLOB):
-                out.append("docs/" + fn)
-    # 文档里引用的功能截图：一起带上，离线看文档才不会裂图
-    for sub in ("app", "student", "student-pc"):
-        shots = os.path.join(ROOT, "docs", "shots", sub)
-        if not os.path.isdir(shots):
-            continue
-        for fn in sorted(os.listdir(shots)):
-            if fn.lower().endswith((".png", ".jpg", ".jpeg")):
-                out.append("docs/shots/%s/%s" % (sub, fn))
+    # docs 只保留 README.md 引用到的截图，让离线阅读 README 不裂图。
+    # 其余 docs 内容（推文、分析文档、截图素材、预览 HTML）是仓库写作素材，
+    # 对使用者没用，2026-11-10 起一律不进发行包。
+    readme = os.path.join(ROOT, "README.md")
+    if os.path.isfile(readme):
+        with open(readme, "r", encoding="utf-8") as f:
+            for ref in re.findall(r"docs/shots/[^\s\"'`<>\)]+", f.read()):
+                ref = ref.rstrip(".,;")
+                if os.path.isfile(os.path.join(ROOT, ref.replace("/", os.sep))):
+                    out.append(ref)
     for fn in INCLUDE_FILES:
         if os.path.isfile(os.path.join(ROOT, fn)):
             out.append(fn)
