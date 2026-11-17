@@ -22,6 +22,21 @@ import threading
 SPEED_BASE = {1: 26, 2: 34, 3: 26, 4: 22, 5: 16, 6: 12, 7: 30, 8: 15}
 PASS_ACC = 90
 PERFECT_ACC = 97
+# 篇章满星上限（2026-11-17，与 typing-data.js 的 STAR_RULE.starCap 同一份）：
+#   键位熟悉 / 字母位置 = 1 星；英文单词 / 大小写标点 / 数字小键盘 = 2 星；
+#   中文词语 / 文章阅读 / 中英混排 = 3 星。未登记篇章按 3 星。
+STAR_CAP = {1: 1, 2: 1, 3: 2, 4: 2, 7: 2, 5: 3, 6: 3, 8: 3}
+
+
+def max_stars(stage):
+    """某篇章的满星上限（1/2/3）。"""
+    try:
+        v = STAR_CAP.get(int(stage))
+    except Exception:
+        v = None
+    return v if v in (1, 2, 3) else 3
+
+
 WPM_CAP = 120          # 速度封顶：超过视为异常，直接压线
 MIN_DURATION = 3       # 秒：太短的成绩不收
 
@@ -32,11 +47,11 @@ DECO_NEEDS = [10, 20, 40, 60, 80, 100, 130, 160]
 # 同一部位只能穿一件；整套（suit）同时占上衣和下衣。
 DECO_CAT = {
     "hat-red": "head", "crown": "head", "bow": "head", "headset": "head",
-    "cap": "head",
-    "sunglass": "face", "glasses": "face", "earmuffs": "face",
-    "scarf": "top", "vest": "top", "bowtie": "top",
-    "overall": "bottom", "skirt": "bottom",
-    "bg-star": "suit", "robe": "suit",
+    "cap": "head", "flower": "head", "party": "head",
+    "sunglass": "face", "glasses": "face", "earmuffs": "face", "mask": "face",
+    "scarf": "top", "vest": "top", "hoodie": "top", "tee": "top",
+    "overall": "bottom", "skirt": "bottom", "shorts": "bottom",
+    "bg-star": "suit", "robe": "suit", "spacesuit": "suit",
 }
 
 # 装扮售价（与 typing-data.js 的 DECOS.price 一致）
@@ -46,7 +61,11 @@ DECO_PRICE = {
     "hat-red": 150, "crown": 300, "sunglass": 400, "glasses": 380,
     "scarf": 500, "vest": 450, "overall": 550, "skirt": 550,
     "bow": 650, "headset": 750, "robe": 800, "bg-star": 1000,
-    "cap": 320, "earmuffs": 260, "bowtie": 280,
+    "cap": 320, "earmuffs": 260,
+    # 2026-11-17：小红领结（bowtie）下架（看着像内衣），上衣补卫衣 / 条纹 T 恤；
+    # 另新增花环、派对帽、口罩、短裤、太空服。
+    "hoodie": 460, "tee": 300, "flower": 360, "party": 340,
+    "mask": 240, "shorts": 420, "spacesuit": 1200,
 }
 
 # 道具价格与携带上限（与 typing-data.js 的 ITEMS 一致）
@@ -180,15 +199,16 @@ def speed_line(stage, chapter):
 
 
 def stars_for(stage, chapter, acc, wpm):
-    """服务端星级复核（与 levels.js 同款公式）"""
+    """服务端星级复核（与 levels.js 同款公式，含篇章满星上限）"""
     if acc < PASS_ACC:
         return 0
+    cap = max_stars(stage)
     line = speed_line(stage, chapter)
     if acc >= PERFECT_ACC and wpm >= line * 1.3:
-        return 3
+        return min(3, cap)
     if wpm >= line:
-        return 2
-    return 1
+        return min(2, cap)
+    return min(1, cap)
 
 
 class TypingStore:

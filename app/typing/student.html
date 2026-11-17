@@ -586,6 +586,8 @@ body.embed .credit{display:none}
 @keyframes twinkle{0%{transform:scale(0) rotate(-40deg)}70%{transform:scale(1.3) rotate(8deg)}100%{transform:scale(1)}}
 .result h2{font-size:20px;margin-bottom:2px}
 .result .r-sub{color:var(--ink3);font-size:13px;margin-bottom:14px}
+/* 满星上限提示（2.0.42）：基本功/英文篇章封顶 1~2 星，结算时说清楚，别让学生以为丢星 */
+.result .r-cap{color:var(--ink3);font-size:11.5px;margin:-8px 0 12px;line-height:1.5}
 .r-grid{display:flex;gap:10px;justify-content:center;margin:14px 0}
 .r-cell{background:#FFF6EF;border-radius:14px;padding:10px 18px;min-width:92px}
 .r-cell b{display:block;font-size:21px;color:var(--brand)}
@@ -718,6 +720,43 @@ body.embed .credit{display:none}
   padding:16px;margin-top:14px;
   background:radial-gradient(120% 100% at 50% 0%,#FFFEF8,#FFF4D9 72%,#FBEAC1);
   box-shadow:inset 0 1px 0 #fff,0 6px 16px rgba(190,150,60,.12)}
+/* 有蛋时孵蛋卡加呼吸描边（2.0.42：一眼看出"现在可以孵"） */
+.egg-card.egg-hot{border-style:solid;border-color:rgba(214,178,90,.9);
+  animation:eggPulse 2.6s ease-in-out infinite}
+@keyframes eggPulse{
+  0%,100%{box-shadow:inset 0 1px 0 #fff,0 6px 16px rgba(190,150,60,.12)}
+  50%{box-shadow:inset 0 1px 0 #fff,0 6px 22px rgba(214,166,60,.34)}
+}
+/* ---------- 牧场：左右两栏各自独立滚动（2.0.42） ----------
+   牛哥反馈：整个牧场只有一条滚动条，鼠标停在孵蛋卡上滚，动的是整页，
+   装饰/商店那一栏跟着一起跑；反过来也一样 —— 想孵蛋得先把整页拖到底。 
+   现在两栏各自是一块可滚动的小面板（各自出滚动条）：
+     · 鼠标在哪一栏，滚轮就只滚那一栏（overscroll-behavior:contain 挡住外溢）；
+     · 高度 = 牧场可视高度（JS 把 #view 的可用高写进 --vn-h），不撑破页面；
+     · 窄屏（≤1000px）仍是单列自然流，两栏各滚反而难用。 */
+@media (min-width:1001px){
+  /* 外层不再接管滚动：滚轮落在哪一栏就只滚那一栏，页面上不会出现第三条滚动条。
+     两栏高度由 --vn-h 卡死，#view 的 maxHeight 也是同一个值，正好装得下。 */
+  #view.view-scroll{overflow-y:hidden}
+  #view.view-scroll .ranch-grid{align-items:start}
+  #view.view-scroll .ranch-side,
+  #view.view-scroll .ranch-main{
+    max-height:calc(var(--vn-h, 72vh) - 26px);
+    overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
+    scrollbar-width:thin;scrollbar-gutter:stable;
+  }
+  #view.view-scroll .ranch-side{position:static;padding-right:6px}
+  #view.view-scroll .ranch-main{padding-right:6px}
+  #view.view-scroll .ranch-side::-webkit-scrollbar,
+  #view.view-scroll .ranch-main::-webkit-scrollbar{width:8px}
+  #view.view-scroll .ranch-side::-webkit-scrollbar-thumb,
+  #view.view-scroll .ranch-main::-webkit-scrollbar-thumb{
+    background:var(--line);border-radius:99px}
+  #view.view-scroll .ranch-side::-webkit-scrollbar-thumb:hover,
+  #view.view-scroll .ranch-main::-webkit-scrollbar-thumb:hover{background:var(--ink3)}
+  #view.view-scroll .ranch-side::-webkit-scrollbar-track,
+  #view.view-scroll .ranch-main::-webkit-scrollbar-track{background:transparent}
+}
 .egg-card .egg{display:inline-block;animation:wiggle 1.8s ease-in-out infinite;
   filter:drop-shadow(0 4px 5px rgba(160,130,60,.3))}
 .egg-card .egg svg{width:52px;height:62px;display:block}
@@ -1336,10 +1375,18 @@ function api(url, opts) {
   return fetch(url, Object.assign({ credentials: 'same-origin' }, opts || {}))
     .then(function (r) { return r.json().catch(function () { return {}; }); });
 }
-function starsHtml(n) {
+/* 星星渲染。max = 这一关的满星数（1/2/3，见 TD.STAR_RULE.starCap）。
+   键位熟悉 / 字母位置只画 1 颗、英文篇章 2 颗、中文 3 颗 —— 地图上
+   一眼就能看出「这一章最多值几颗星」，不会出现「我明明 3 星怎么只给 1 颗」。 */
+function starsHtml(n, max) {
+  var cap = (max === 1 || max === 2) ? max : 3;
   var out = '';
-  for (var i = 1; i <= 3; i++) out += '<span class="' + (i <= n ? 'on' : 'off') + '">★</span>';
+  for (var i = 1; i <= cap; i++) out += '<span class="' + (i <= n ? 'on' : 'off') + '">★</span>';
   return out;
+}
+function stageMaxStars(stage) {
+  if (window.TD && typeof TD.maxStars === 'function') return TD.maxStars(stage);
+  return 3;
 }
 function fmtSpeed(v, mode) { return (Math.round(v * 10) / 10) + (mode === 'cn' ? ' 字/分' : ' KPM'); }
 /* 全站统一弹窗（app/student/ui-dialog.js）：提示 / 确认 / 警告 / 吐司
@@ -1399,6 +1446,9 @@ function boot() {
   })();
   /* 学生端框架内嵌模式：收窄边距，视觉上融入外层页面 */
   if (qs.get('embed') === '1') document.body.classList.add('embed');
+  /* ?view=ranch|map|lb：直接落到某个页签（2026-11-17，验收截图用；学生正常入口不受影响） */
+  var _qv = (qs.get('view') || '').toLowerCase();
+  if (_qv === 'ranch' || _qv === 'lb') S.view = _qv;
   api('/api/v2/typing/config').then(function (cfg) {
     if (cfg && cfg.ok) S.config = { enabled: !!cfg.enabled, grades: cfg.grades || [] };
     return api('/api/v2/typing/me');
@@ -1632,6 +1682,9 @@ function fitViewScroll() {
   var visibleTop = Math.max(docTop, sy + stickH + 6);
   var h = window.innerHeight - (visibleTop - sy) - foot - 12;
   v.style.maxHeight = Math.max(220, Math.round(h)) + 'px';
+  /* 牧场左右两栏各自滚动时要用这个高度（--vn-h），否则算出来的
+     面板高度和 #view 的可视高度对不上，会多出一条整页滚动条。 */
+  v.style.setProperty('--vn-h', Math.max(220, Math.round(h)) + 'px');
 }
 /* 窗口变化会让回显层换行位置改变，浮动输入框 / 光标 / 候选框要跟着重算 */
 window.addEventListener('resize', function () { fitViewScroll(); placeTypingInput(); });
@@ -1759,7 +1812,7 @@ function viewMap() {
       (!open ? '<span class="lock-tag">🔒</span>' : '') +
       '<div class="no">第 ' + lv + ' 关</div>' +
       '<div class="nm">' + nm + '</div>' +
-      '<div class="stars">' + (open ? starsHtml(stars).replace(/class="on"/g, 'class="on"').replace(/class="off"/g, 'class="off"') : '') + '</div>' +
+      '<div class="stars">' + (open ? starsHtml(stars, stageMaxStars(stg)) : '') + '</div>' +
       (b ? '<div class="best">最好 ' + (Math.round(b.wpm * 10) / 10) + (stage.lang === 'cn' ? ' 字/分' : ' KPM') + '</div>' : '') +
       '</button>';
   }
@@ -1772,6 +1825,8 @@ function viewMap() {
     '<div class="chap-bar"><b>' + stage.icon + ' 第 ' + ch + ' 卷</b>' +
       '<span class="diff-tag d' + diff.n + '">' + diff.name + '</span>' +
       '<span class="chap-done">本卷已通关 ' + done + '/10</span>' +
+      '<span class="chap-done" title="这一章每关最多能拿几颗星：基本功 1 颗、英文 2 颗、中文 3 颗">满星 ' +
+        '★×' + stageMaxStars(stg) + '</span>' +
       '<span class="chap-speed">速度线 ' + TL.speedLine(stg, ch) + unit + '</span>' +
       '<span class="chap-nav">' +
         '<button data-chap="' + Math.max(1, ch - 1) + '" ' + (ch <= 1 ? 'disabled' : '') + '>‹</button>' +
@@ -3408,15 +3463,24 @@ function showResult(stars, wpm, payload, res) {
     (payload.double ? '（加倍卡 · 基础分 ×2）' : ''));
   if (payload.shield && stars > 0 && payload.acc < 90) rewardBits.push('🛡 容错卡生效：这次按通关算，下次试试不用道具');
   var hasNextCh = TL.isBoss(L.level) && stars > 0 && (L.chapter + 1 < 200);
+  var capStars = stageMaxStars(L.stage);
   var mask = document.createElement('div');
   mask.className = 'mask';
   var nextBtn = (stars > 0 && (nextOpen || nextChOpen))
     ? '<button class="btn" id="rNext" data-rsel="next">下一关 ›</button>' : '';
+  /* 满星上限（2026-11-17）：基本功关只值 1 颗、英文关 2 颗、中文关 3 颗。
+     结算文案按「本关上限」判，不然打满 1 星也显示「通关啦」、学生以为没满分。 */
+  var head = stars <= 0 ? '差一点点'
+    : (stars >= capStars ? (capStars >= 3 ? '完美通关！' : '满分过关！')
+      : (stars === 2 ? '优秀！' : '通关啦！'));
   mask.innerHTML =
     '<div class="result">' +
-      '<h2>' + (stars > 0 ? (stars === 3 ? '完美通关！' : stars === 2 ? '优秀！' : '通关啦！') : '差一点点') + '</h2>' +
+      '<h2>' + head + '</h2>' +
       '<div class="r-sub">' + esc(stage.icon + ' ' + L.title) + '</div>' +
-      '<div class="r-stars">' + starsHtml(stars) + '</div>' +
+      '<div class="r-stars">' + starsHtml(stars, capStars) + '</div>' +
+      (capStars < 3
+        ? '<div class="r-cap">本关满星 ' + capStars + ' 颗 · 汉字打字篇章才是 3 星</div>'
+        : '') +
       '<div class="r-grid">' +
         '<div class="r-cell"><b>' + wpm + '</b><span>' + (L.mode === 'cn' ? '字/分钟' : '击键/分钟') + '</span></div>' +
         '<div class="r-cell"><b>' + payload.acc + '%</b><span>准确率</span></div>' +
@@ -3646,7 +3710,7 @@ function viewRanch() {
       '<div class="equip-line" style="margin-top:8px">🖼 ' + esc(TD.bgById(S.ranch.bg).name) +
         '　·　✨ ' + ((S.ranch.fx && TD.effectById(S.ranch.fx)) ? TD.effectById(S.ranch.fx).name : '无特效') + '</div>' +
       (pr.eggs > 0
-        ? '<div class="egg-card"><span class="egg' + (S.eggOpening ? ' egg-open' : '') + '">' + eggSvg() + '</span>' +
+        ? '<div class="egg-card egg-hot"><span class="egg' + (S.eggOpening ? ' egg-open' : '') + '">' + eggSvg() + '</span>' +
           '<div class="egg-t">你有 ' + pr.eggs + ' 颗宠物蛋</div>' +
           '<div class="egg-s">BOSS 关首通掉落 · 孵出一只你没有的伙伴</div>' +
           '<button class="btn" id="eggBtn" ' + (S.eggOpening ? 'disabled' : '') + '>🥚 立刻孵化</button></div>'
@@ -3666,7 +3730,8 @@ function viewRanch() {
     return '<div class="pet-card lock"><div class="ph">❓</div><b>???<div class="lock-tip">孵蛋解锁</div></b></div>';
   }).join('') + '</div>' +
     '<div class="ranch-tip">💡 点击伙伴即可切换出战；点牧场大图也能轮换，装扮会跟着它出现在练习页和排行榜上。</div>';
-  return '<div class="ranch-grid">' + side + '<div>' + grid +
+  /* 右栏（伙伴网格 + 衣柜 + 三个商店）：与左栏各自独立滚动，见 .ranch-main 样式 */
+  return '<div class="ranch-grid">' + side + '<div class="ranch-main">' + grid +
     (pet ? wardrobe() : '') + itemShopBox() + bgShopBox() + fxShopBox() + '</div></div>';
 }
 
@@ -3971,13 +4036,13 @@ function bindRanch() {
         : '「' + d.name + '」需要累计 ' + d.need + ' 星', 'warn');
     };
   });
-  var eb = $('#eggBtn');
-  if (eb) eb.onclick = function () {
+  /* 孵化入口统一成一个函数（2026-11-17）：左侧孵蛋卡与右下悬浮按钮共用，
+     禁用 / 文案变化两处同步（render 会重画，这里只管点下去的那一下）。 */
+  function eggHatch(btn) {
     if (S.demo) {
       var unowned = TD.PETS.map(function (p) { return p.id; })
         .filter(function (id) { return S.progress.pets.indexOf(id) < 0; });
-      S.progress.eggs--;
-      if (unowned.length) {
+      S.progress.eggs--;      if (unowned.length) {
         var pet = unowned[Math.floor(Math.random() * unowned.length)];
         S.progress.pets.push(pet);
         if (!S.ranch.pet) S.ranch.pet = pet;
@@ -4009,7 +4074,9 @@ function bindRanch() {
         }
         render();
       }).catch(function () { render(); });
-  };
+  }
+  var eb = $('#eggBtn');
+  if (eb) eb.onclick = function () { eggHatch(eb); };
 }
 function saveEquip() {
   if (S.demo) {

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>八只宠物的样子 · 打字冒险岛</title>
+<title>全部伙伴的样子 · 打字冒险岛</title>
 <style>
   :root{ --ink:#3B322A; --ink2:#6F6257; --ink3:#9A8B7F; --line:#EADFD2; --brand:#B45B33; }
   *{box-sizing:border-box;margin:0;padding:0}
@@ -35,12 +35,12 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>八只伙伴 · 现在的样子</h1>
+  <h1><span id="petCount">全部</span>伙伴 · 现在的样子</h1>
   <div class="sub">
-    这一版往<b>卡通</b>方向又推了一步：眼睛放大到 6×7、头再放大 6%，腮红铺到 8.8 宽，<br>
-    外加一圈<b>同色系深色轮廓</b>（不是黑线，是主色压暗 60% 的柔和描边）—— 远看是卡通角色，近看仍有硅胶玩具的体积光；<br>
-    八只靠体型与专属道具区分：柴犬尖耳红项圈、垂耳兔真垂耳胡萝卜、企鹅燕尾领结、熊猫竹子、恐龙背棘、独角兽金角鬃毛、小龙翅脉；<br>
-    呼吸 / 眨眼 / 摆尾 / 摇头四层动效常驻，伙伴有了默认名字：<b>小豆丁</b>（品种名退到副标题）。
+    2.0.42 牧场大扩容：伙伴从 8 只增加到 <b>22 只</b>，新增考拉、小猪、老虎、海豹、小鹿、蝙蝠、鲸鱼、猫头鹰、鸭子、小熊；<br>
+    角色统一是卡通画法：眼睛放大、头身比例放大，外加一圈<b>同色系深色轮廓</b>（主色压暗的柔和描边）—— 远看是卡通角色，近看仍有硅胶玩具的体积光；<br>
+    装扮同步扩充：连帽卫衣、条纹 T 恤、花环、派对尖帽、小口罩、运动短裤、太空服等；原「小红领结」下架；<br>
+    呼吸 / 眨眼 / 摆尾 / 摇头动效常驻，伙伴有了默认名字：<b>小豆丁</b>（品种名退到副标题）。
   </div>
   <div class="grid" id="grid"></div>
   <div class="foot">打字冒险岛 · 与牧场、排行榜共用同一份 typing-data.js</div>
@@ -53,6 +53,8 @@
     return '<div class="pet"><span class="stage">' + TD.petSvg(p, []) + '</span>' +
       '<b>' + p.name + '</b><small>' + p.mood + '</small></div>';
   }).join('');
+  var n = document.getElementById('petCount');
+  if (n && window.TD && TD.PETS && TD.PETS.length) n.textContent = TD.PETS.length + ' 只';
 })();
 </script>
 </body>

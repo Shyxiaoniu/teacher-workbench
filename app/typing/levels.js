@@ -320,14 +320,25 @@ window.TL = (function () {
     return L;
   }
 
-  /* ---------------- 星级评定（服务端同款公式） ---------------- */
+  /* ---------------- 星级评定（服务端同款公式） ----------------
+     2026-11-17：星级加「篇章上限」—— 基本功篇章封 1 星、英文 2 星、
+     中文 3 星（上限表在 typing-data.js 的 STAR_RULE.starCap，服务端
+     typing_store.STAR_CAP 是同一份）。上限只压「能拿几颗」，
+     速度线 / 准确率门槛一分没降，想拿满星还是得真快真准。 */
+  function maxStars(stage) {
+    if (window.TD && typeof window.TD.maxStars === 'function') return window.TD.maxStars(stage);
+    var m = (window.TD && window.TD.STAR_RULE && window.TD.STAR_RULE.starCap) || {};
+    var v = m[Number(stage)];
+    return (v === 1 || v === 2 || v === 3) ? v : 3;
+  }
   function starsFor(stage, chapter, acc, speed) {
     var R = window.TD.STAR_RULE;
+    var cap = maxStars(stage);
     var line = speedLine(stage, chapter);
     if (acc < R.passAcc) return 0;
-    if (acc >= R.perfectAcc && speed >= line * 1.3) return 3;
-    if (speed >= line) return 2;
-    return 1;
+    if (acc >= R.perfectAcc && speed >= line * 1.3) return Math.min(3, cap);
+    if (speed >= line) return Math.min(2, cap);
+    return Math.min(1, cap);
   }
 
   /* 统一积分（2026-11-05：金币与积分两套数值 1:1 合并）
@@ -367,7 +378,7 @@ window.TL = (function () {
   }
 
   return {
-    genLevel: genLevel, starsFor: starsFor, speedLine: speedLine,
+    genLevel: genLevel, starsFor: starsFor, speedLine: speedLine, maxStars: maxStars,
     difficulty: difficulty, levelFactor: levelFactor, topicOf: topicOf,
     levelKey: levelKey, isBoss: isBoss,
     articleOf: articleOf, artTier: artTier, articleOfCat: articleOfCat,

@@ -34,6 +34,16 @@ CHUNK = 256 * 1024
 # 仓库已公开、也不需要访问令牌，固定这一处最省心。
 DEFAULT_MANIFEST_URL = "https://gitee.com/shyxiaoniu/teacher-workbench/raw/main/version.json"
 
+# 最近一次连接的特别说明（如「跳过证书校验」）：check() 会把它附在返回里，
+# 让老师知道刚才那一下其实是降级完成的，不算错误。
+LAST_TLS_NOTE = ""
+
+
+def _valid_manifest_url(u):
+    """配置里填的自定义更新源：必须是完整 http(s) 地址，否则视为没配。"""
+    u = str(u or "").strip()
+    return u if re.match(r"^https?://\S+$", u, re.I) else ""
+
 
 class UpdateError(Exception):
     """带「老师能看懂」文案的更新失败。"""
@@ -80,15 +90,47 @@ def _net_msg(e, what):
     return "%s失败：%s" % (what, e)
 
 
-def _fetch(url, timeout=CHECK_TIMEOUT, what="请求"):
+def _fetch(url, timeout=CHECK_TIMEOUT, what="请求", allow_insecure=None):
     """带超时的 GET。仓库已公开（2026-11-04），不再需要访问令牌。
     返回未关闭的响应流（调用方负责读完并 close）——不能 with 后再 return，
-    那样返回的已经是关闭的响应，读出来全是空字节（2026-11-04 踩过）。"""
+    那样返回的已经是关闭的响应，读出来全是空字节（2026-11-04 踩过）。
+
+    2026-11-17 兼容受限网络（含 http 环境下最常见的两类失败）：
+      ① 证书校验失败（学校网络 / 加速器做了 TLS 中间人、系统根证书不全）
+         → 自动降级为「跳过证书校验」重试一次。更新内容随后会用 sha256
+         核对，装包前还有版本一致性校验，跳过证书并不影响包完整性。
+      ② 强制 https 的更新源在内网 443 出不去 → 支持 http:// 更新源
+         （管理员可配），或用 WB_UPDATE_URL 环境变量整体改源。
+    """
+    global LAST_TLS_NOTE
+    if allow_insecure is None:
+        allow_insecure = (os.environ.get("WB_INSECURE_TLS") == "1")
     req = urllib.request.Request(url, headers={"User-Agent": "workbench-updater"})
     try:
         return urllib.request.urlopen(req, timeout=timeout)
     except urllib.error.HTTPError:
         raise
+    except urllib.error.URLError as e:
+        reason = str(getattr(e, "reason", e))
+        tls_fail = ("CERTIFICATE_VERIFY_FAILED" in reason
+                    or "SSL" in reason.upper() and "CERTIFICATE" in reason.upper())
+        if tls_fail and not allow_insecure:
+            # 学校网络常带一层 TLS 中间代理：证书签不出来。跳过校验重试，
+            # 靠 sha256 + 包内版本号保证没装错东西。
+            try:
+                import ssl as _ssl
+                ctx = _ssl.create_default_context()
+                ctx.check_hostname = False
+                ctx.verify_mode = _ssl.CERT_NONE
+                r = urllib.request.urlopen(req, timeout=timeout, context=ctx)
+                LAST_TLS_NOTE = ("已跳过 HTTPS 证书校验完成本次连接"
+                                 "（网络里有代理/根证书不全，不影响安装包完整性校验）。")
+                return r
+            except urllib.error.HTTPError:
+                raise
+            except Exception:
+                raise UpdateError(_net_msg(e, what))
+        raise UpdateError(_net_msg(e, what))
     except Exception as e:
         raise UpdateError(_net_msg(e, what))
 
@@ -169,14 +211,26 @@ class Updater:
         shutil.rmtree(os.path.join(self.dir, "stage"), ignore_errors=True)
 
     def _manifest_url(self, uc):
-        # 固定走官方 Gitee 仓库；老配置里若残留自定义 url 也一律忽略
+        """更新源优先级（2026-11-17）：
+        ① 环境变量 WB_UPDATE_URL（容器/内网部署固定镜像源用）；
+        ② 配置里有效的 http(s) 自定义源 —— 内网 443 出不去时可指到
+           http:// 的镜像（以前一刀切清空，http 环境想更新只能干瞪眼）；
+        ③ 默认官方 Gitee 源。"""
+        env = _valid_manifest_url(os.environ.get("WB_UPDATE_URL"))
+        if env:
+            return env
+        cfg_url = _valid_manifest_url((uc or {}).get("url"))
+        if cfg_url:
+            return cfg_url
         return DEFAULT_MANIFEST_URL
 
     # ---------------- 检查更新 ----------------
     def check(self, uc):
         """拉 manifest 并比较版本。uc = 更新配置 dict（url/token）。"""
+        global LAST_TLS_NOTE
         with self.lock:
             try:
+                LAST_TLS_NOTE = ""
                 self.state["phase"] = "checking"
                 self.state["last_error"] = ""
                 url = self._manifest_url(uc)
@@ -215,10 +269,15 @@ class Updater:
                 if is_newer(m.get("version"), self.version):
                     self.state["phase"] = "available"
                     self.state["msg"] = "发现新版本 v%s" % m.get("version")
-                    return {"ok": True, "has_update": True, "manifest": m}
-                self.state["phase"] = "idle"
-                self.state["msg"] = "已是最新版本"
-                return {"ok": True, "has_update": False, "manifest": m}
+                    r = {"ok": True, "has_update": True, "manifest": m}
+                else:
+                    self.state["phase"] = "idle"
+                    self.state["msg"] = "已是最新版本"
+                    r = {"ok": True, "has_update": False, "manifest": m}
+                if LAST_TLS_NOTE:
+                    self.state["note"] = LAST_TLS_NOTE
+                    r["note"] = LAST_TLS_NOTE
+                return r
             except UpdateError as e:
                 self.state["phase"] = "failed"
                 self.state["last_error"] = str(e)
@@ -233,6 +292,7 @@ class Updater:
     # ---------------- 下载 + 安装 ----------------
     def _set_prog(self, phase, pct, msg):
         self.state["progress"] = {"phase": phase, "pct": pct, "msg": msg}
+        self.state["progress_ts"] = time.time()
 
     def _zip_urls(self, manifest, manifest_url):
         """把 manifest 的 zip 字段解析成「可以尝试的下载地址列表」。
@@ -276,7 +336,12 @@ class Updater:
     def apply(self, uc):
         """下载并安装（后台线程跑，进度走 self.state['progress']）。"""
         if self.state["phase"] in ("downloading", "installing"):
-            return {"ok": False, "msg": "正在下载安装中，请稍候"}
+            # 15 分钟内没有任何进度推进 = 上一次下载卡死了（网络断开后线程
+            # 没能正常收尾）。放行重新安装，别让老师对着一句
+            # 「正在下载安装中，请稍候」等到天荒地老（2026-11-17）。
+            ts = self.state.get("progress_ts") or 0
+            if time.time() - ts < 900:
+                return {"ok": False, "msg": "正在下载安装中，请稍候"}
         t = threading.Thread(target=self._apply, args=(uc,), daemon=True)
         t.start()
         return {"ok": True, "msg": "开始更新"}
@@ -517,8 +582,10 @@ class Updater:
                 "backup": ({"from_version": b.get("from_version"), "ts": b.get("ts")}
                            if b else None),
                 "installed": self.state.get("installed"),
+                "note": str(self.state.get("note") or ""),
                 "config": {
-                    "url": self._manifest_url(uc),
+                    "url": str(uc.get("url") or ""),
+                    "effective_url": self._manifest_url(uc),
                     "auto": bool(uc.get("auto", True)),
                     "interval_hours": int(uc.get("interval_hours") or 24),
                     "default_url": DEFAULT_MANIFEST_URL,

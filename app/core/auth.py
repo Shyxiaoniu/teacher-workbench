@@ -184,6 +184,11 @@ class Sessions(object):
     def __init__(self):
         self._d = {}
         self._lock = threading.RLock()
+        # 被踢下线的会话 → 原因（2026-11-17 单设备登录）：
+        # 会话删掉后 SSE 还拿着这个 token，需要知道「为什么被踢」
+        # 才能在学生端弹出能看懂的提示（在别处登录 / 密码被重置）。
+        self._kicked = {}
+        self._lock = threading.RLock()
 
     def create(self, role, hours=12, student_id=None, account=None):
         """account = 教师账号 id（多教师数据隔离用）。
@@ -237,6 +242,42 @@ class Sessions(object):
     def drop(self, token):
         with self._lock:
             self._d.pop(token, None)
+
+    def drop_student(self, student_id, account=None, except_token=None, reason=""):
+        """踢掉某个学生的所有会话（2026-11-17 单设备登录）。
+
+        什么时候用：
+          · 学生在其他设备登录 —— 旧设备必须退出（一台设备一个账号）；
+          · 老师重置了他的密码 —— 旧会话立即失效，防止用旧身份继续操作。
+        account 限定教师工作区（学生 id 只在工作区内唯一）；None = 不限。
+        返回被踢掉的会话数。被踢原因记进 _kicked，SSE 断开前能读出来。
+        """
+        n = 0
+        with self._lock:
+            now = time.time()
+            for t, s in list(self._d.items()):
+                if s.get("role") != "student" or s.get("student_id") != student_id:
+                    continue
+                if s.get("exp", 0) < now:
+                    continue
+                if account is not None and str(s.get("account") or "") != str(account):
+                    continue
+                if t == except_token:
+                    continue
+                self._d.pop(t, None)
+                if reason:
+                    self._kicked[t] = str(reason)
+                n += 1
+            # 顺手清一次过期原因，避免字典慢慢变大
+            if len(self._kicked) > 512:
+                live = set(self._d)
+                self._kicked = {t: r for t, r in self._kicked.items() if t not in live}
+        return n
+
+    def kick_reason(self, token):
+        """被踢原因（读完即删）：SSE 用它给学生端一句能看懂的话。"""
+        with self._lock:
+            return self._kicked.pop(token, None)
 
     def drop_role(self, role, except_token=None):
         with self._lock:

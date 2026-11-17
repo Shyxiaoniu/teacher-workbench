@@ -17798,10 +17798,36 @@ async function actCustomView() {
     const r = await fetch('/api/custom', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task: actActiveId, html: page, layout: layView, course: t.course || t.title || actActiveCourse || '' }) });
     const j = await r.json().catch(() => ({}));
     if (!r.ok || !j.ok) { actCustStatus('部署失败：' + (j.msg || r.status), 'err'); return; }
+    /* 部署后立即读回校验（2026-11-17）：以前只要 POST 返回 ok 就直接开新标签，
+       一旦页面实际没写进服务端（多教师账号 / 本机 127.0.0.1 打开而预览链接
+       被拼成局域网 IP，读到了另一个工作区的配置），学生看到的会是
+       「老师还没有配置自定义提交页」。现在先确认「服务端有页」再打开。 */
+    let probe = '';
+    try {
+      const pr = await fetch('/api/custom?task=' + encodeURIComponent(actActiveId), { cache: 'no-store' });
+      probe = pr.ok ? await pr.text() : '';
+    } catch (e) { probe = ''; }
+    if (!probe.trim() || probe.indexOf('老师还没有配置自定义提交页') !== -1) {
+      // 读回失败重试一次；再失败就明确报错，不开一个空壳页
+      const r2 = await fetch('/api/custom', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task: actActiveId, html: page, layout: layView, course: t.course || t.title || actActiveCourse || '' }) });
+      const j2 = await r2.json().catch(() => ({}));
+      if (!r2.ok || !j2.ok) { actCustStatus('部署失败：' + (j2.msg || r2.status), 'err'); return; }
+      try {
+        const pr2 = await fetch('/api/custom?task=' + encodeURIComponent(actActiveId), { cache: 'no-store' });
+        probe = pr2.ok ? await pr2.text() : '';
+      } catch (e) { probe = ''; }
+      if (!probe.trim() || probe.indexOf('老师还没有配置自定义提交页') !== -1) {
+        actCustStatus('✗ 页面没有部署成功（服务端读不到这份学习单），请刷新教师端后重试；若仍失败请联系管理员', 'err');
+        return;
+      }
+    }
     actCustStatus('✓ 已部署预览页，正在打开（含「🧪 模拟测试提交」按钮）…', 'ok');
     const clsObj = (dbT('classes') || []).find(c => Number(c.id) === Number(actCurClass()));
     const clsName = clsObj ? clsObj.name : '';
-    const link = actStudentBase() + '/submit/custom.html?task=' + encodeURIComponent(actActiveId)
+    /* 预览固定用「当前教师端自己的地址」打开（2026-11-17）：
+       换成学生地址（局域网 IP）后新标签拿不到教师会话，服务端按匿名账号
+       读配置，就会出现「老师未开通学习单」的白页。给学生端下发仍走「下发」。 */
+    const link = location.origin + '/submit/custom.html?task=' + encodeURIComponent(actActiveId)
       + '&class=' + encodeURIComponent(clsName) + '&test=1';
     window.open(link, '_blank');
   } catch (e) { actCustStatus('✗ ' + e.message, 'err'); }
@@ -34445,6 +34471,11 @@ function updRender() {
   if (s.last_error) {
     h += `<div style="margin-top:8px;color:var(--status-error);font-size:13px;line-height:1.6">⚠ ${esc(s.last_error)}</div>`;
   }
+  /* 降级说明（2026-11-17）：跳过证书校验完成检查这类「带代价的成功」要讲清楚，
+     别让老师以为网络完全正常 / 或以为出了大事。 */
+  if (s.note) {
+    h += `<div style="margin-top:8px;color:var(--status-warning,#B8860B);font-size:12.5px;line-height:1.6">ℹ ${esc(s.note)}</div>`;
+  }
   /* 安装中：进度条 */
   const pg = s.progress || {};
   if (s.phase === 'downloading' || s.phase === 'installing' ||
@@ -34505,7 +34536,11 @@ function updRender() {
       <label class="hwp-row" style="margin:0"><span class="set-k" style="width:auto;flex:none">间隔(时)</span>
         <input id="updInterval" class="fl-inp" type="number" min="1" max="720"
           style="width:90px;flex:none" value="${esc(c.interval_hours || 24)}"></label>
-      <div class="term-hint" style="margin-top:2px">更新源固定为官方 Gitee 仓库，无需配置也不会被改错。</div>
+      <label class="hwp-row" style="margin:0;align-items:flex-start"><span class="set-k" style="width:auto;flex:none">自定义源</span>
+        <input id="updUrl" class="fl-inp" type="url" placeholder="留空 = 官方 Gitee 源；内网镜像可填 http://…/version.json"
+          style="flex:1 1 160px" value="${esc(c.url || '')}"></label>
+      <div class="term-hint" style="margin-top:2px">默认更新源：官方 Gitee 仓库（https），无需配置。
+        学校网络 443 出不去 / 用内网镜像时，可填 http:// 地址；程序对更新包仍做 sha256 与版本校验。</div>
       <div><button class="btn btn-sm" type="button" style="width:auto" onclick="updSaveCfg()">保存设置</button></div>
     </div>
   </details>`;
@@ -34521,6 +34556,7 @@ async function updCheck() {
     const cfg = {
       auto: !!(document.getElementById('updAuto') || {}).checked,
       interval_hours: parseInt(g('updInterval') || '24', 10) || 24,
+      url: (g('updUrl') || '').trim(),
     };
     await fetch('/api/v2/update/config', {
       method: 'POST', credentials: 'same-origin',
@@ -34638,6 +34674,7 @@ async function updSaveCfg() {
   const body = {
     auto: !!(document.getElementById('updAuto') || {}).checked,
     interval_hours: parseInt(g('updInterval') || '24', 10) || 24,
+    url: (g('updUrl') || '').trim(),
   };
   try {
     const r = await fetch('/api/v2/update/config', {

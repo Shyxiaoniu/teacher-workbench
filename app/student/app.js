@@ -128,7 +128,12 @@
 
   function pull(since, snapshot) {
     return api('/api/v2/sync?since=' + since + '&scope=student').then(function (j) {
-      if (j._status === 401) { location.reload(); return; }
+      if (j._status === 401) {
+        /* 被踢的场合交给 kickOut 走 showLogin（带原因），别在这里 reload 把原因冲掉 */
+        if (S.kicked) return;
+        location.reload();
+        return;
+      }
       if (!j.ok) return;
       apply(j.tables, snapshot);
       S.rev = j.rev;
@@ -156,6 +161,14 @@
       S.es.addEventListener('quiz', function () {
         S.quiz.list = null;
         if (S.view === 'quiz') render();
+      });
+      /* 被踢下线（2026-11-17 单设备登录 / 老师重置密码）：
+         服务端在断开 SSE 前会发一个 kick 事件，这里立刻回到登录页并说明原因。
+         学生共用机房时最常发生 —— 停在旧页面上会以为"还能用"。 */
+      S.es.addEventListener('kick', function (e) {
+        var d = {};
+        try { d = JSON.parse(e.data || '{}') || {}; } catch (err) {}
+        kickOut(d.reason || '');
       });
     } catch (e) {}
     setInterval(function () {
@@ -1780,6 +1793,16 @@
   }
 
   /* ---------------- 登录 ---------------- */
+  /* 被踢下线（2026-11-17）：单设备登录 / 老师重置密码后，服务端删掉旧会话，
+     SSE 推 kick 事件 → 这里断开连接、回到登录页，并把原因写在登录框里。
+     防抖：SSE 可能收到不止一次 kick，只处理第一回。 */
+  function kickOut(reason) {
+    if (S.kicked) return;
+    S.kicked = true;
+    try { if (S.es) { S.es.close(); S.es = null; } } catch (e) {}
+    showLogin(reason || '你的账号已在别处登录');
+  }
+
   function showLogin(msg) {
     document.body.innerHTML =
       '<div class="login"><div class="logo">班</div><h1>进入班级</h1>' +

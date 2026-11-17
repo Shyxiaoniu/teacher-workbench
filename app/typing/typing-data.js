@@ -462,7 +462,49 @@ window.TD = (function () {
       bw: 24.2, bh: 22, bcy: 86.2, hr: 22.8, hcy: 47.8 },
     { id: 'sheep',   name: '绵羊咩咩',   mood: '云朵一样的绒毛，抱一下',
       c: '#F4EEE2', ear: 'long', tail: 'puff', belly: '#FFFFFF', expr: 'happy', blush: 1,
-      bw: 26.4, bh: 21.6, bcy: 87.8, hr: 23.8, hcy: 51.2 }
+      bw: 26.4, bh: 21.6, bcy: 87.8, hr: 23.8, hcy: 51.2 },
+
+    /* ---- 2026-11-17 再扩十只（牛哥 2.0.42：图鉴只剩最后几只、蛋孵不出来）----
+       同样只复用渲染器已有的耳型 / 尾型 / 嘴型参数，不新增渲染分支：
+         · 嘴型由 ear / beak / brow / mane / wing 决定 —— 选参数时已经对齐；
+         · 体型参数只在物种差异明显时才覆盖（考拉圆、海豹瘦、鲸鱼扁）。
+       编号顺序即图鉴顺序，服务端 PET_IDS 必须同步。 */
+    { id: 'koala',   name: '考拉抱抱',   mood: '抱着桉树睡着了',
+      c: '#A8B2B9', ear: 'round', tail: 'none', muzzle: '#CBD4DA', belly: '#E4EAED',
+      expr: 'happy', blush: 1,
+      bw: 25.6, bh: 22.4, bcy: 87.4, hr: 25.4, hcy: 53 },
+    { id: 'pig',     name: '小猪哼哼',   mood: '一高兴就转圈圈',
+      c: '#F3B6C2', ear: 'drop', tail: 'curl', muzzle: '#F9CFD7', expr: 'happy', blush: 1,
+      bw: 26.8, bh: 21, bcy: 88, hr: 24.6, hcy: 52.6 },
+    { id: 'tiger',   name: '小虎威威',   mood: '打字声音像小老虎叫',
+      c: '#F2B24C', ear: 'cat', tail: 'curl', belly: '#FFF3D9', expr: 'grin', blush: 1,
+      bw: 25.2, bh: 19.8, bcy: 88.8, hr: 25, hcy: 52.4 },
+    { id: 'seal',    name: '海豹泡泡',   mood: '在键盘旁边拍肚皮',
+      c: '#B7C6D2', ear: 'none', tail: 'none', muzzle: '#DCE7EE', belly: '#F1F6F9',
+      expr: 'happy', whisker: 1, blush: 1,
+      bw: 23.4, bh: 20.6, bcy: 88.6, hr: 24.2, hcy: 51.4 },
+    { id: 'deer',    name: '小鹿斑斑',   mood: '耳朵一动就听到你按错了',
+      c: '#D9A96B', ear: 'long', tail: 'puff', muzzle: '#F2E2C8', belly: '#FFF4E2',
+      expr: 'happy', blush: 1,
+      bw: 21.6, bh: 21.8, bcy: 87.6, hr: 23.6, hcy: 50.6 },
+    { id: 'bat',     name: '小蝙蝠夜夜', mood: '晚上练得比白天快',
+      c: '#8E7AA8', ear: 'cat', tail: 'none', wing: 1, belly: '#C9BCDA', expr: 'grin',
+      bw: 22.8, bh: 19.4, bcy: 88.6, hr: 24, hcy: 51.8 },
+    { id: 'whale',   name: '小鲸鱼蓝蓝', mood: '一口气能潜十关',
+      c: '#6FA8DC', ear: 'none', tail: 'dino', face: '#DCEBF7', belly: '#EAF4FF',
+      expr: 'happy', blush: 1,
+      bw: 27.8, bh: 19.6, bcy: 89, hr: 25.2, hcy: 53.2 },
+    { id: 'owl',     name: '猫头鹰咕咕', mood: '夜里眼睛最亮，盯着你的指法',
+      c: '#A98558', ear: 'crest', tail: 'none', beak: 1, belly: '#E8D9C2', expr: 'happy',
+      bw: 24.4, bh: 22.2, bcy: 86.8, hr: 23.8, hcy: 50.4 },
+    { id: 'duck',    name: '小鸭嘎嘎',   mood: '嘎！这个字母我会',
+      c: '#F7D35A', ear: 'none', tail: 'puff', beak: 1, belly: '#FFF6D8', expr: 'happy',
+      blush: 1,
+      bw: 24.8, bh: 20.4, bcy: 88.4, hr: 23.2, hcy: 51 },
+    { id: 'bear',    name: '小熊笨笨',   mood: '慢一点，但每一键都认真',
+      c: '#B58A5E', ear: 'round', tail: 'none', muzzle: '#E9D3B4', belly: '#F3E2C9',
+      expr: 'happy', blush: 1,
+      bw: 27, bh: 21.4, bcy: 87.6, hr: 26, hcy: 53.4 }
   ];
   /* 玩家的伙伴默认名（QQ 表情那种"给玩偶起名"的感觉）：
      牧场大标题用这个，宠物品种名退到副标题。 */
@@ -596,7 +638,7 @@ window.TD = (function () {
        五类，每个部位都有可选的衣服，才谈得上「搭配」。 */
     { id: 'vest',     name: '小马甲',   need: 0, cat: 'top', price: 450,
       act: '低头整理了一下衣领', box: '30 70 60 40',
-      svg: /* 两片前襟 + 后领，中间故意敞开露出肚子 —— 马甲穿在圆身上，
+      svg: /* 两片前襟 + 后领，中间敞开露出肚子 —— 马甲穿在圆身上，
              全包起来会变成一件"背心袋"，反而看不出是衣服。 */
            '<path d="M41 73q-9 4-9 16v13q0 4 4 4h11V76Z" fill="url(#{{p}}blue)"/>' +
            '<path d="M79 73q9 4 9 16v13q0 4-4 4H73V76Z" fill="url(#{{p}}blue)"/>' +
@@ -605,6 +647,31 @@ window.TD = (function () {
            '<path d="M50 82v20M70 82v20" stroke="#3C5B8A" stroke-opacity=".35" stroke-width="1.4" stroke-linecap="round"/>' +
            '<circle cx="60" cy="87" r="1.7" fill="url(#{{p}}gold)"/>' +
            '<circle cx="60" cy="95" r="1.7" fill="url(#{{p}}gold)"/>' },
+    /* 2026-11-17：上衣槽位补两件「正经衣服」——原来只有小马甲 + 领结，
+       选择太少；卫衣 / 条纹 T 恤都是完整圆领 + 下摆的版型，
+       和「敞开前襟」的小马甲区分得开。 */
+    { id: 'hoodie',   name: '连帽卫衣', need: 0, cat: 'top', price: 460,
+      act: '把帽子往头上一扣', box: '32 72 56 42',
+      svg: /* 圆领 + 袖子 + 下摆罗口：整件包住肩，不露肚子。帽子画在脖子后面一小截，
+             有帽绳才读得出是"卫衣"而不是普通 T 恤。 */
+           '<path d="M42 72q-11 4-12 17l-1 12q0 3.4 3.6 3.4h12.4V74Z" fill="url(#{{p}}blue)"/>' +
+           '<path d="M78 72q11 4 12 17l1 12q0 3.4-3.6 3.4H75.6V74Z" fill="url(#{{p}}blue)"/>' +
+           '<path d="M42 72q18 10 36 0l1.6 8q-19.6 10.4-39.2 0Z" fill="url(#{{p}}blueDark)"/>' +
+           '<path d="M60 80v26" stroke="#2E4A72" stroke-opacity=".22" stroke-width="1.4"/>' +
+           '<path d="M40 96h40" stroke="#2E4A72" stroke-opacity=".3" stroke-width="3"/>' +
+           '<path d="M44 74q-4 8-4 16" stroke="#fff" stroke-opacity=".45" stroke-width="2.4" fill="none" stroke-linecap="round"/>' +
+           '<path d="M57 86v8M63 86v8" stroke="#FFF3D6" stroke-opacity=".9" stroke-width="1.6" stroke-linecap="round"/>' +
+           '<circle cx="57" cy="95" r="1.5" fill="#FFF3D6"/><circle cx="63" cy="95" r="1.5" fill="#FFF3D6"/>' },
+    { id: 'tee',      name: '条纹T恤',  need: 0, cat: 'top', price: 300,
+      act: '抻了抻衣角', box: '34 74 52 38',
+      svg: /* 五道横条纹是唯一辨识点：条纹必须跟着身体弧度走（用两段弧），
+             画成直线会像一块贴纸。 */
+           '<path d="M43 74q-10 4-11 16l-1 10q0 3 3.4 3h11V76Z" fill="#F2F7FB"/>' +
+           '<path d="M77 74q10 4 11 16l1 10q0 3-3.4 3H74V76Z" fill="#F2F7FB"/>' +
+           '<path d="M43 74q17 9 34 0l1.4 6q-18.4 9.6-36.8 0Z" fill="#DDE9F2"/>' +
+           '<path d="M32 82q28 14 56 0M31.4 90q28.6 14 57.2 0M31 97.4q29 14.6 58 0" ' +
+             'stroke="url(#{{p}}blue)" stroke-opacity=".85" stroke-width="3.4" fill="none"/>' +
+           '<path d="M45 76q-3 8-3 14" stroke="#fff" stroke-opacity=".55" stroke-width="2" fill="none" stroke-linecap="round"/>' },
     { id: 'overall',  name: '背带裤',   need: 0, cat: 'bottom', price: 550,
       act: '得意地拍了拍裤兜', box: '34 72 52 42',
       svg: /* 裤体压在身体下半 + 两条背带跨过肩膀：背带是"背带裤"三个字
@@ -658,12 +725,78 @@ window.TD = (function () {
            '<circle cx="87" cy="50.5" r="3" fill="#fff" fill-opacity=".6"/>' +
            '<circle cx="33" cy="58" r="1.4" fill="#D9C8A6" opacity=".7"/>' +
            '<circle cx="93" cy="58" r="1.4" fill="#D9C8A6" opacity=".7"/>' },
-    { id: 'bowtie',   name: '小红领结', need: 0, cat: 'top', price: 280,
-      act: '精神抖擞地立正站好', box: '40 64 40 24',
-      svg: '<path d="M60 76c-7-6-16-7-20-3-3 3-1 9 5 11 5 2 11 0 15-4Z" fill="url(#{{p}}red)"/>' +
-           '<path d="M60 76c7-6 16-7 20-3 3 3 1 9-5 11-5 2-11 0-15-4Z" fill="url(#{{p}}red)"/>' +
-           '<rect x="55.5" y="71.5" width="9" height="9" rx="3" fill="url(#{{p}}redDark)"/>' +
-           '<ellipse cx="57.5" cy="73.5" rx="2" ry="1.4" fill="#fff" fill-opacity=".6"/>' }
+
+    /* 2026-11-17：下架「小红领结」（牛哥 2.0.42 反馈：两片红色缎面挂在胸口，
+       学生一眼看成内衣）。上衣槽位由小马甲 / 连帽卫衣 / 条纹 T 恤承担 ——
+       三件都是完整衣物轮廓，不会再被误读。 */
+
+    /* ---- 2026-11-17 新增六件（牛哥要求「多几种装饰」）----
+       品类互补：头饰补花环 / 派对帽，面饰补口罩，下衣补短裤，整套补太空服；
+       颜色都取自同一套渐变（red/pink/blue/cream/gold），不改渲染器、不散风格。 */
+    { id: 'flower',   name: '花环',     need: 0, cat: 'head', price: 360,
+      act: '低头闻了闻花香', box: '28 14 64 34',
+      svg: /* 七朵小花绕着额头排一圈：每朵 = 五瓣 + 花心，比画一条绿藤更像花环。 */
+           '<path d="M34 40q26-22 52 0" stroke="#7FAE68" stroke-width="3.4" fill="none" stroke-linecap="round"/>' +
+           '<g>' + [
+             [36, 39, '#F7A8C4'], [44, 32, '#FFF0B8'], [52, 28, '#B7D8F5'],
+             [60, 26.5, '#F6BFE0'], [68, 28, '#FFF0B8'], [76, 32, '#B7D8F5'],
+             [84, 39, '#F7A8C4']
+           ].map(function (f) {
+             var x = f[0], y = f[1], c = f[2];
+             return '<g transform="translate(' + x + ',' + y + ')">' +
+               '<circle cx="0" cy="-3.4" r="2.5" fill="' + c + '"/>' +
+               '<circle cx="3.2" cy="-1" r="2.5" fill="' + c + '"/>' +
+               '<circle cx="2" cy="2.8" r="2.5" fill="' + c + '"/>' +
+               '<circle cx="-2" cy="2.8" r="2.5" fill="' + c + '"/>' +
+               '<circle cx="-3.2" cy="-1" r="2.5" fill="' + c + '"/>' +
+               '<circle cx="0" cy="0" r="1.7" fill="url(#{{p}}gold)"/></g>';
+           }).join('') + '</g>' +
+           '<path d="M70 30q8 2 12 8" stroke="#7FAE68" stroke-width="2.2" fill="none" stroke-linecap="round"/>' },
+    { id: 'party',    name: '派对尖帽', need: 0, cat: 'head', price: 340,
+      act: '歪着头摆了摆帽尖', box: '34 6 52 40',
+      svg: /* 圆锥 + 三道斜条纹 + 顶上的绒球；帽檐压到头顶弧线上，别悬空。 */
+           '<path d="M60 6 84 36H36Z" fill="url(#{{p}}pink)"/>' +
+           '<path d="M60 6 70.5 18H50Z" fill="#FFF6D8" opacity=".85"/>' +
+           '<path d="M60 6 60 36" stroke="#C8558A" stroke-opacity=".18" stroke-width="1.2"/>' +
+           '<path d="M46.5 26h27" stroke="#FFF6D8" stroke-opacity=".8" stroke-width="3"/>' +
+           '<path d="M44 22.5 76 12" stroke="#FFF6D8" stroke-opacity=".45" stroke-width="2"/>' +
+           '<path d="M36 36h48" stroke="url(#{{p}}redDark)" stroke-width="4" stroke-linecap="round"/>' +
+           '<ellipse cx="42" cy="34.6" rx="12" ry="1.6" fill="#fff" fill-opacity=".25"/>' +
+           '<circle cx="60" cy="7" r="5.4" fill="url(#{{p}}cream)"/>' +
+           '<circle cx="58" cy="5.4" r="1.6" fill="#fff" fill-opacity=".85"/>' },
+    { id: 'mask',     name: '小口罩',   need: 0, cat: 'face', price: 240,
+      act: '把口罩往上拉了拉', box: '36 58 48 30',
+      svg: /* 口罩盖住鼻子和嘴（眼在下沿之上），耳挂走脸侧；褶皱三道才有布感。 */
+           '<path d="M43 62h34q3 0 3 3v9q0 7-7 7H47q-7 0-7-7v-9q0-3 3-3Z" fill="url(#{{p}}blue)"/>' +
+           '<path d="M43.4 65.4h33.2M43.4 69.4h33.2M43.4 73.4h33.2" stroke="#fff" stroke-opacity=".55" stroke-width="1.5"/>' +
+           '<path d="M43 64.5q-7 1-8 8M77 64.5q7 1 8 8" stroke="#DDE9F2" stroke-width="2" fill="none" stroke-linecap="round"/>' +
+           '<path d="M47 62q13-2 26 0" stroke="#fff" stroke-opacity=".5" stroke-width="1.8" fill="none"/>' },
+    { id: 'shorts',   name: '运动短裤', need: 0, cat: 'bottom', price: 420,
+      act: '抬腿做了个拉伸', box: '34 90 52 26',
+      svg: /* 松紧腰头 + 两条裤管；中间留缝，才看得出是"短裤"不是裙子。 */
+           '<path d="M37 92h46v6H37Z" fill="#3D6FA8" opacity=".55"/>' +
+           '<path d="M37 96h20l1.4 12.4q0 3-3.2 3H40q-3.2 0-3.4-3.2Z" fill="url(#{{p}}blue)"/>' +
+           '<path d="M83 96H63l-1.4 12.4q0 3 3.2 3H80q3.2 0 3.4-3.2Z" fill="url(#{{p}}blue)"/>' +
+           '<path d="M58.6 96h2.8l1.4 13h-5.6Z" fill="#2E4A72" opacity=".25"/>' +
+           '<path d="M60 92.6v3.6" stroke="#FFF3D6" stroke-width="2.2" stroke-linecap="round"/>' +
+           '<path d="M43 96h36" stroke="#fff" stroke-opacity=".35" stroke-width="1.6"/>' +
+           '<path d="M40 99q-2 5-1.6 9" stroke="#fff" stroke-opacity=".4" stroke-width="2" fill="none" stroke-linecap="round"/>' },
+    { id: 'spacesuit', name: '太空服',  need: 0, cat: 'suit', price: 1200,
+      act: '飘起来转了一圈', box: '24 64 72 48',
+      svg: /* 整套：白壳 + 胸前控制板 + 肩部橙色条纹 + 玻璃头盔圈。
+             头盔只画一圈高光弧，不盖住脸（盖住就看不见表情了）。 */
+           '<path d="M42 72q-13 5-13 20v10q0 4 4 4h54q4 0 4-4V92q0-15-13-20q-9 6-18 6t-18-6Z" fill="#EFF4F8"/>' +
+           '<path d="M42 72q-13 5-13 20v6h62v-6q0-15-13-20q-9 6-18 6t-18-6Z" fill="#DCE7F0"/>' +
+           '<path d="M42 72q-6 3-9 9 4 3 9 3Z" fill="#F5A25C" opacity=".9"/>' +
+           '<path d="M78 72q6 3 9 9-4 3-9 3Z" fill="#F5A25C" opacity=".9"/>' +
+           '<rect x="50" y="86" width="20" height="13" rx="3" fill="#3D6FA8" opacity=".75"/>' +
+           '<circle cx="55" cy="90" r="1.7" fill="#8EF0C0"/><circle cx="60" cy="90" r="1.7" fill="#FFD86B"/>' +
+           '<circle cx="65" cy="90" r="1.7" fill="#FF9E9E"/>' +
+           '<path d="M53 95h14" stroke="#EFF4F8" stroke-opacity=".55" stroke-width="1.6"/>' +
+           '<path d="M36 84q-3 6-3 12" stroke="#fff" stroke-opacity=".8" stroke-width="2.4" fill="none" stroke-linecap="round"/>' +
+           '<path d="M60 70q-17 0-17 12" stroke="#BFD2E0" stroke-width="2.4" fill="none" stroke-linecap="round"/>' +
+           '<path d="M60 70q17 0 17 12" stroke="#BFD2E0" stroke-width="2.4" fill="none" stroke-linecap="round"/>' +
+           '<path d="M48 104v6M72 104v6" stroke="#BFD2E0" stroke-width="3" stroke-linecap="round"/>' }
   ];
 
   /* ---------------- 装扮部位（同类互斥） ----------------
@@ -782,6 +915,13 @@ window.TD = (function () {
   var STAR_RULE = {
     passAcc: 90,          // 1 星：准确率下限
     perfectAcc: 97,       // 3 星额外要求
+    /* 各篇章「满星」上限（2026-11-17 牛哥定的星级梯度）：
+       · 键位熟悉 / 字母位置       → 1 星：打的是基本功，过关就有星，但没有满星奖励
+       · 英文单词 / 大小写标点 / 小键盘 → 2 星：有难度，值得两颗
+       · 中文词语 / 文章 / 中英混排  → 3 星：汉字打字是这门课的真正目标，
+         只有中文篇章能拿满三颗星，星数总量自然向中文倾斜。
+       未登记的篇章按 3 星处理（以后加新篇章不会被莫名压成 1 星）。 */
+    starCap: { 1: 1, 2: 1, 3: 2, 4: 2, 7: 2, 5: 3, 6: 3, 8: 3 },
     /* 每章基础速度线（字符/分）。新增两章的理由：
        小键盘是纯数字、指法固定，比字母流快，给 30；
        中英混排每换一次输入法都要停一下，比纯中文还慢，给 15。 */
@@ -792,6 +932,14 @@ window.TD = (function () {
   /* 一~九年级选项（教师端用） */
   var GRADES = ['一年级','二年级','三年级','四年级','五年级','六年级','七年级','八年级','九年级'];
   var GRADE_GROUP = { 1:'low',2:'low',3:'mid',4:'mid',5:'mid',6:'high',7:'mid_school',8:'mid_school',9:'mid_school' };
+
+  /* 某篇章满星上限（1/2/3）：界面画星星、结算文案都用这一处，
+     避免「地图画三颗、实际只给一颗」的错位。 */
+  function maxStars(stage) {
+    var m = STAR_RULE.starCap || {};
+    var v = m[Number(stage)];
+    return (v === 1 || v === 2 || v === 3) ? v : 3;
+  }
 
   function petById(id) { for (var i = 0; i < PETS.length; i++) if (PETS[i].id === id) return PETS[i]; return null; }
   function decoById(id) { for (var i = 0; i < DECOS.length; i++) if (DECOS[i].id === id) return DECOS[i]; return null; }
@@ -1445,6 +1593,7 @@ window.TD = (function () {
     BACKGROUNDS: BACKGROUNDS, EFFECTS: EFFECTS,
     bgById: bgById, effectById: effectById,
     STAR_RULE: STAR_RULE, GRADES: GRADES, GRADE_GROUP: GRADE_GROUP,
+    maxStars: maxStars,
     petById: petById, decoById: decoById, titleFor: titleFor,
     catName: catName, slotClash: slotClash, equipDeco: equipDeco, itemById: itemById,
     nextTitle: nextTitle, petSvg: petSvg, decoSvg: decoSvg,

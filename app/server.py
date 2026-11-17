@@ -360,10 +360,17 @@ if not isinstance(CFG.get("update"), dict):
 CFG["update"].setdefault("url", "")            # 空 = 默认更新源（Gitee raw version.json）
 CFG["update"].setdefault("auto", True)         # 后台定时检查
 CFG["update"].setdefault("interval_hours", 24) # 检查间隔（小时）
-PET_IDS = ["cat", "dog", "rabbit", "penguin", "panda", "dino", "unicorn", "dragon"]
+# 宠物图鉴 id（必须与 typing-data.js 的 PETS 一一对应，顺序即图鉴顺序）。
+# 2026-11-17：原来只列了 8 只，后加的仓鼠 / 狐狸 / 青蛙 / 绵羊孵不出来 ——
+# 学生攒到蛋只会拿到「图鉴已集齐，蛋化作 50 积分」，看着就是「位置满了」。
+# 这次补齐到 22 只（新增 10 只），以后加宠物**必须同步这里**。
+PET_IDS = ["cat", "dog", "rabbit", "penguin", "panda", "dino", "unicorn", "dragon",
+           "hamster", "fox", "frog", "sheep",
+           "koala", "pig", "tiger", "seal", "deer", "bat", "whale", "owl",
+           "duck", "bear"]
 COND = threading.Condition()
 STARTED = time.time()
-VERSION = "2.0.41"
+VERSION = "2.0.42"
 ONLINE_WINDOW = 300      # 5 分钟内活跃算在线
 # 可内联直出的附件类型（其余一律按下载处理，防止同源执行脚本）
 _INLINE_EXTS = {"png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "pdf",
@@ -1259,6 +1266,16 @@ class Handler(LEG.Handler):
                 return self._act_file(path)
             if path.startswith("/teacher/"):
                 return self._teacher_static(path[len("/teacher/"):])
+            # 学习单页面（2026-11-17 重做闸门）：
+            #   · 教师打开 = 预览，带跨账号兜底与默认模板兜底 ——「查看」绝不
+            #     再落到「老师还没有配置自定义提交页」的白页（多教师账号、
+            #     127.0.0.1 打开而预览链接走局域网 IP 时，旧逻辑会读错工作区）；
+            #   · 学生打开 = 原闸门（票兜底 / 关闭提示），不放行未配置任务。
+            if path == "/submit/custom.html" and self._is_teacher():
+                _sh = self._sheet_html_for((qs.get("task") or [""])[0])
+                if _sh is not None:
+                    return self._html(_sh)
+                return super().do_GET()
             # 学习单开关：活动被「关闭」后，非教师直接打开学生页会被拦下；
             # 学生端仍能看到条目（projection 会下发 closed 行），只是点开时打不开。
             if path == "/submit/custom.html" and not self._is_teacher():
@@ -1328,6 +1345,103 @@ class Handler(LEG.Handler):
                 self._json({"ok": False, "msg": "服务端出错了（错误号 %s），请查看服务端日志（docker compose logs workbench）" % eid}, 500)
             except Exception:
                 pass
+
+    # ------------------------------------------------------------------
+    # 学习单页面：教师的「查看 / 预览」兜底（2026-11-17）
+    # ------------------------------------------------------------------
+    _SHEET_MISS_MARK = "老师还没有配置自定义提交页"
+
+    def _sheet_default_html(self, task):
+        """教师预览兜底页：这个任务还没部署过学习单时给一份默认模板，
+        让「用默认模板 → 生成页面 → 查看」这条链路永远看得到页面，
+        而不是一句「老师还没有配置」。提交按钮直接走活动接口 /api/act/<task>。"""
+        course = ""
+        try:
+            course = str((ACT.get_task(task) or {}).get("course") or "").strip()
+        except Exception:
+            course = ""
+        course = course or "课堂"
+        import html as _htmlmod
+        title = _htmlmod.escape(course)
+        return (
+            "<!doctype html><html lang=\"zh-CN\"><head><meta charset=\"utf-8\">"
+            "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
+            "<title>%s · 课堂学习单（预览）</title>"
+            "<style>body{font-family:-apple-system,\"PingFang SC\",\"Microsoft YaHei\",sans-serif;"
+            "max-width:640px;margin:24px auto;padding:0 16px;color:#1A2E28;line-height:1.75}"
+            ".act-q{border:1px solid #DDE5E1;border-radius:14px;padding:16px 18px;margin:16px 0;background:#FBFDFC}"
+            ".hint{background:#E1F5EE;border:1px dashed #0F6E56;border-radius:12px;padding:11px 14px;"
+            "margin:14px 0;font-size:13.5px}"
+            "label{display:block;font-weight:600;margin:12px 0 5px}"
+            "input,textarea{width:100%%;padding:10px;border:1px solid #cfe3dc;border-radius:10px;"
+            "box-sizing:border-box;font-size:14px;font-family:inherit}"
+            ".tip{font-size:12px;color:#5F6E68;margin-top:4px}"
+            ".pv-bar{background:#FFF6D9;border:1px solid #E7C76B;border-radius:12px;"
+            "padding:10px 14px;font-size:13px;margin:14px 0}</style></head><body>"
+            "<h1>%s · 课堂学习单</h1>"
+            "<div class=\"pv-bar\">👀 这是教师预览（默认模板兜底）。学生端看到这份页面的前提是："
+            "你在大屏点了「下发」，或在这里点过「生成页面」。下发后本页会自动接上学生身份与提交逻辑。</div>"
+            "<p>完成后请在下方<b>选择文件提交</b>；系统会自动附上班级、学号与姓名。</p>"
+            "<div class=\"hint\">💡 支持 作业文档、图片、演示文稿等常见格式；提交后老师会在大屏上看到记录。</div>"
+            "<div class=\"act-q\" data-btn=\"提交作业\" data-allow-empty=\"1\">"
+            "<label>课堂作业文件</label>"
+            "<input type=\"file\" name=\"作业文件\" multiple>"
+            "<div class=\"tip\">可按住 Ctrl 一次选择多个文件</div>"
+            "<label>备注（选填）</label>"
+            "<input name=\"备注\" placeholder=\"有问题或想对老师说的话，可以写在这里\">"
+            "</div>"
+            "<div style=\"margin-top:16px\"><button class=\"act-submit-btn\" id=\"pvSubmit\" "
+            "style=\"background:#0F6E56;color:#fff;border:0;padding:11px 22px;border-radius:12px;"
+            "font-size:15px;cursor:pointer\">提交：提交作业</button> "
+            "<span id=\"pvSt\" class=\"tip\" style=\"margin-left:10px\"></span></div>"
+            "<script>document.getElementById('pvSubmit').onclick=function(){"
+            "var fd=new FormData();fd.append('按钮','提交作业');fd.append('测试内容',"
+            "'教师预览测试 '+new Date().toLocaleTimeString());"
+            "var st=document.getElementById('pvSt');st.textContent='提交中…';"
+            "fetch('/api/act/%s',{method:'POST',body:fd,mode:'cors'})"
+            ".then(function(r){return r.json().catch(function(){return{}})})"
+            ".then(function(j){st.textContent=(j&&j.ok)?'✅ 测试提交成功，请到大屏查看':'❌ '+(j&&j.msg||'提交失败');})"
+            ".catch(function(e){st.textContent='网络错误：'+e.message;});};</script>"
+            "</body></html>" % (title, title, urllib.parse.quote(str(task or ""))))
+
+    def _sheet_html_for(self, task):
+        """教师打开 /submit/custom.html 时的页面来源（按优先级）：
+        ① 当前教师工作区里部署过的 custom_templates[task]；
+        ② 其它教师工作区里同 task 的部署（多账号 / 跨域打开时读错工作区的兜底）；
+        ③ 默认模板兜底页（绝不给一句「老师还没有配置」就完事）。
+        找不到任务参数时返回 None → 交回旧处理器。"""
+        task = str(task or "").strip()
+        if not task or "/" in task or ".." in task:
+            return None
+        try:
+            cur = self._custom_html(task)
+        except Exception:
+            cur = ""
+        if cur and self._SHEET_MISS_MARK not in cur:
+            return cur
+        # ② 跨账号兜底：直接读各工作区的 submissions/config.json，不动 ACC 状态
+        me = ACC.current_account()
+        for tid in ACCOUNTS.teacher_ids():
+            if str(tid) == str(me):
+                continue
+            try:
+                cfgp = os.path.join(WS.paths_for(tid)["submissions"], "config.json")
+                with open(cfgp, "r", encoding="utf-8") as f:
+                    cfg = json.load(f)
+            except Exception:
+                continue
+            tpls = cfg.get("custom_templates") if isinstance(cfg, dict) else None
+            html = (tpls or {}).get(task) if isinstance(tpls, dict) else ""
+            if html:
+                cc = cfg.get("custom_course") if isinstance(cfg, dict) else None
+                course = str((cc or {}).get(task) or "") if isinstance(cc, dict) else ""
+                course = course or "课堂"
+                import html as _htmlmod
+                safe = _htmlmod.escape(course)
+                return (html.replace("{{COURSE}}", safe)
+                            .replace("{{course}}", safe))
+        # ③ 默认模板兜底（教师预览专用）
+        return self._sheet_default_html(task)
 
     def _entry(self):
         ua = (self.headers.get("User-Agent") or "").lower()
@@ -3092,8 +3206,16 @@ class Handler(LEG.Handler):
                     self.wfile.write(b": ping\n\n")
                     self.wfile.flush()
                     last_ping = time.time()
-                # 会话过期就断开
-                if not SESS.get(A.parse_cookie(self.headers.get("Cookie"))):
+                # 会话过期 / 被踢就断开（2026-11-17：被踢要先告一声原因，
+                # 学生端收到 kick 立刻弹提示并回到登录页，而不是白屏或停在旧数据上）
+                _tok = A.parse_cookie(self.headers.get("Cookie"))
+                if not SESS.get(_tok):
+                    _why = SESS.kick_reason(_tok) or ""
+                    if _why:
+                        self.wfile.write(("event: kick\ndata: %s\n\n"
+                                          % json.dumps({"reason": _why},
+                                                       ensure_ascii=False)).encode())
+                        self.wfile.flush()
                     break
         except (BrokenPipeError, ConnectionResetError, OSError):
             pass
@@ -3925,9 +4047,12 @@ class Handler(LEG.Handler):
             if not self._is_teacher():
                 return self._json({"ok": False, "msg": "未登录"}, 401)
             u = CFG["update"]
-            # 更新源固定为官方 Gitee 仓库（2026-11-05）：设置页已删掉源地址，
-            # 旧前端/旧配置里带来的 url 一律清空并忽略，防止填错地址导致更新失败。
-            u["url"] = ""
+            # 更新源（2026-11-17 放开）：默认仍是官方 Gitee 仓库；
+            # 内网 443 出不去 / 走镜像的场景允许填一个 http(s) 自定义源，
+            # 填了非法值一律清空，防止填错地址导致更新失败。令牌依旧不收。
+            _raw_url = str(body.get("url") or "").strip()
+            _ok_url = _raw_url if re.match(r"^https?://\S+$", _raw_url, re.I) else ""
+            u["url"] = _ok_url
             u.pop("token", None)
             if "auto" in body:
                 u["auto"] = bool(body.get("auto"))
@@ -4064,6 +4189,19 @@ class Handler(LEG.Handler):
                 return self._json({"ok": False, "msg": why}, 401)
             tok = SESS.create("student", CFG["student"].get("session_hours", 8),
                               student_id=hit.get("id"), account=found_acc)
+            # 单设备登录（2026-11-17 牛哥要求）：
+            # 同一名学生只允许一个设备在线 —— 新设备登录成功，其它设备立刻下线。
+            # 学生共用机房里最常见的场景就是「登错账号」，让他换一台机器接着登，
+            # 旧机器必须自己退回登录页，否则两台上各自签到/提交，数据全乱。
+            _kicked = 0
+            try:
+                _kicked = SESS.drop_student(hit.get("id"), account=found_acc,
+                                            except_token=tok,
+                                            reason="这个账号已在另一台设备登录，本设备已退出")
+                if _kicked:
+                    notify()          # SSE 立刻醒，把 kick 事件推给旧设备
+            except Exception:
+                _kicked = 0
             STORE.audit("student:%s" % hit.get("name"), "login", ip)
             # v2 考勤：登录成功即自动签到（迟到 / 出勤由服务端按课表时间判定）。
             # 失败不影响登录本身——签到还可以在学生端手动补。
@@ -4532,6 +4670,19 @@ class Handler(LEG.Handler):
                 return self._json({"ok": False, "msg": "未登录"}, 401)
             if body.get("all"):
                 STORE.clear_creds()
+                # 全部重置 = 全班口令作废：所有学生会话一起踢下线，
+                # 学生端自动回到登录页（2026-11-17）。
+                try:
+                    n_kick = 0
+                    for _sid in [r.get("id") for r in STORE.table_rows("students")
+                                 if not r.get("deleted")]:
+                        n_kick += SESS.drop_student(
+                            _sid, account=ACC.current_account(),
+                            reason="老师重置了班级密码，请用新密码重新登录")
+                    if n_kick:
+                        notify()
+                except Exception:
+                    pass
                 STORE.audit("teacher", "reset-all-passwords", "")
                 return self._json({"ok": True, "mode": "uniform"})
             sid = body.get("student_id")
@@ -4552,11 +4703,25 @@ class Handler(LEG.Handler):
                     return self._json({"ok": False, "msg": "这个密码太常见了，换一个"}, 400)
                 must = 1 if body.get("must_change", True) else 0
                 STORE.set_cred(row.get("id"), A.hash_password(pwd), must)
+                # 重置口令 → 旧会话立即失效（2026-11-17）：学生端自动退回登录页，
+                # 用新密码登录。不这么做，学生在别的机器上还能接着用旧身份。
+                try:
+                    if SESS.drop_student(row.get("id"), account=ACC.current_account(),
+                                         reason="老师重置了你的密码，请用新密码重新登录"):
+                        notify()
+                except Exception:
+                    pass
                 STORE.audit("teacher", "reset-password",
                             "%s（指定新密码%s）" % (who, "，首次登录须修改" if must else ""))
                 return self._json({"ok": True, "mode": "password", "name": who,
                                    "must_change": bool(must)})
             STORE.clear_creds([row.get("id")])
+            try:
+                if SESS.drop_student(row.get("id"), account=ACC.current_account(),
+                                     reason="老师重置了你的密码，请用班级新密码重新登录"):
+                    notify()
+            except Exception:
+                pass
             STORE.audit("teacher", "reset-password", "%s（回落班级初始密码）" % who)
             return self._json({"ok": True, "mode": "uniform", "name": who})
         # ---------------- 管理员：只管教师账号 ----------------
