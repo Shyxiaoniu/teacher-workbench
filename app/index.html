@@ -17797,12 +17797,19 @@ async function actCustomView() {
     actGeneratedPage = page;
   }
   actGeneratedPageTask = actActiveId;
+  /* 新标签必须「同步」开出来（2026-11-17 牛哥反馈「点查看没反应」）：
+     部署要等两次网络请求（POST /api/custom + 读回校验），等它们回来再
+     window.open 已经不算是用户点击触发的，Chrome/Edge 会静默拦掉弹窗 ——
+     页面上只会停在「正在打开…」，一个新标签都不出来。
+     所以先开一个空白页，部署成功后把它的地址替换成预览链接。 */
+  const preWin = window.open('about:blank', '_blank');
+  const closePre = () => { try { if (preWin && !preWin.closed) preWin.close(); } catch (e) {} };
   actCustStatus('正在部署预览页…');
   try {
     const layView = (() => { try { return actScanLayout(page, true); } catch (e) { return null; } })();
     const r = await fetch('/api/custom', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task: actActiveId, html: page, layout: layView, course: t.course || t.title || actActiveCourse || '' }) });
     const j = await r.json().catch(() => ({}));
-    if (!r.ok || !j.ok) { actCustStatus('部署失败：' + (j.msg || r.status), 'err'); return; }
+    if (!r.ok || !j.ok) { closePre(); actCustStatus('部署失败：' + (j.msg || r.status), 'err'); return; }
     /* 部署后立即读回校验（2026-11-17）：以前只要 POST 返回 ok 就直接开新标签，
        一旦页面实际没写进服务端（多教师账号 / 本机 127.0.0.1 打开而预览链接
        被拼成局域网 IP，读到了另一个工作区的配置），学生看到的会是
@@ -17816,7 +17823,7 @@ async function actCustomView() {
       // 读回失败重试一次；再失败就明确报错，不开一个空壳页
       const r2 = await fetch('/api/custom', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task: actActiveId, html: page, layout: layView, course: t.course || t.title || actActiveCourse || '' }) });
       const j2 = await r2.json().catch(() => ({}));
-      if (!r2.ok || !j2.ok) { actCustStatus('部署失败：' + (j2.msg || r2.status), 'err'); return; }
+      if (!r2.ok || !j2.ok) { closePre(); actCustStatus('部署失败：' + (j2.msg || r2.status), 'err'); return; }
       try {
         const pr2 = await fetch('/api/custom?task=' + encodeURIComponent(actActiveId), { cache: 'no-store' });
         probe = pr2.ok ? await pr2.text() : '';
@@ -17834,8 +17841,15 @@ async function actCustomView() {
        读配置，就会出现「老师未开通学习单」的白页。给学生端下发仍走「下发」。 */
     const link = location.origin + '/submit/custom.html?task=' + encodeURIComponent(actActiveId)
       + '&class=' + encodeURIComponent(clsName) + '&test=1';
-    window.open(link, '_blank');
-  } catch (e) { actCustStatus('✗ ' + e.message, 'err'); }
+    if (preWin && !preWin.closed) {
+      try { preWin.location.replace(link); } catch (e) { preWin.location.href = link; }
+      try { preWin.focus(); } catch (e) {}
+    } else {
+      /* 空白页没开出来（浏览器把弹窗拦了）：给一条能直接点的链接，别让老师干等 */
+      actCustStatus('✗ 浏览器拦截了新标签，请允许本站弹窗后重试；也可以直接打开：' + link, 'err');
+      toast('浏览器拦截了新标签，请在地址栏允许弹窗');
+    }
+  } catch (e) { closePre(); actCustStatus('✗ ' + e.message, 'err'); }
 }
 
 /* 任务收集窗口（2026-11-05 重做）
@@ -20478,6 +20492,16 @@ function editCell(dow, pid, clsId) {
     && Number(l.class_id) === Number(cellCls));
   const period = dbT('periods').find(p => p.id === pid);
   const cur = has ? dbT('courses').find(c => c.id === has.course_id) : null;
+  /* 同一格还有哪些班已经排了课（2026-11-17）：全部班级视图下最容易踩的坑 ——
+     点格子默认落的班和「看到的那节课」不是同一个班，改完就成了「多出一节同名课」。
+     这里把其它班列出来，老师一眼知道要切班级改，而不是重排一节。 */
+  const otherCls = [...new Set(
+    dbT('lessons').filter(l => Number(l.day_of_week) === Number(dow)
+      && Number(l.period_id) === Number(pid)
+      && Number(l.class_id) !== Number(cellCls))
+      .map(l => Number(l.class_id))
+  )].map(id => ((classList().find(c => Number(c.id) === id) || {}).name || ''))
+   .filter(Boolean);
 
   const ov = document.createElement('div');
   ov.className = 'modal-ov';
@@ -20499,6 +20523,8 @@ function editCell(dow, pid, clsId) {
             <option value="__new__" style="color:var(--brand)">＋ 新建班级…</option>
           </select>
         </div>
+        ${otherCls.length ? `<div style="font-size:11.5px;color:var(--text-secondary);margin-top:6px">
+          同一格 ${esc(otherCls.join('、'))} 也排了课 —— 要改那一节，用上面的下拉切换班级。</div>` : ''}
       </div>
       <button class="icon-btn" style="padding:3px 9px;font-size:12px"
         onclick="closeCellDialog()">✕</button>
@@ -32674,6 +32700,14 @@ const DEMO_RENDER = {
       /* 本格有冲突的课 → 整格红描边 + ⚠ 数量角标；悬停提示里能看明细 */
       const confN = list.reduce((a, l) => a +
         ((confMap[Number(dow) + '-' + Number(p.id) + '-' + Number(l.class_id)] || []).length ? 1 : 0), 0);
+      /* 点格子时该编辑哪个班（2026-11-17 牛哥反馈「改已有课却新建了一节」）：
+         以前一律用 fallbackCls —— 当前班，或者「全部班级」视图时的第一个班。
+         结果在「全部班级」里点一个已有课的格子，弹窗落到别的班，老师以为在改
+         那节课，实际给另一个班新排了一节，同一格就出现两条同名课程。
+         现在优先认「这一格已经有课的那个班」，没有课才退回 fallbackCls。 */
+      const editCls = (selCls != null)
+        ? selCls
+        : (list.length ? (Number(list[0].class_id) || fallbackCls) : fallbackCls);
       /* 这一节的作息时间和别的节次重叠 → 格子也标上（虚线，区别于排课冲突的实线） */
       const tClash = pClash.get(Number(p.id)) || [];
       const confWhy = list
@@ -32690,7 +32724,7 @@ const DEMO_RENDER = {
         data-dow="${dow}" data-pid="${p.id}"
         ${confN ? `data-conflict-n="${confN}"` : ''}
         ${tdTip ? `title="${esc(tdTip)}"` : ''}
-        onclick="editCell(${dow}, ${p.id}, ${fallbackCls})">
+        onclick="editCell(${dow}, ${p.id}, ${editCls})">
         ${chips || '<span class="add-hint">+</span>'}
       </td>`;
     };
