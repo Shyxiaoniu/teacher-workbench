@@ -856,6 +856,12 @@ window.TD = (function () {
   ];
   function itemById(id) { for (var i = 0; i < ITEMS.length; i++) if (ITEMS[i].id === id) return ITEMS[i]; return null; }
 
+  /* 积分兑换宠物蛋的单价（2026-11-19）
+     必须与 app/core/typing_store.py 的 EGG_PRICE 完全一致 —— 这里只为
+     "按钮上显示多少钱" 服务，真正的扣款以服务端查表为准，
+     改这里不会让学生少扣或白拿。 */
+  var EGG_PRICE = 300;
+
   /* ---------------- 牧场背景（积分购买） ----------------
      css 会整段写进牧场舞台 .stage-box 的 background —— 纯 CSS 渐变，
      零外部资源。默认背景 '' 不收钱，人人都有；
@@ -1589,7 +1595,7 @@ window.TD = (function () {
     S7_MAP: S7_MAP, S7_TOPIC: S7_TOPIC,
     S8_MAP: S8_MAP, S8_TOPIC: S8_TOPIC,
     PETS: PETS, DECOS: DECOS, TITLES: TITLES, PET_DEFAULT_NAME: PET_DEFAULT_NAME,
-    DECO_CATS: DECO_CATS, ITEMS: ITEMS,
+    DECO_CATS: DECO_CATS, ITEMS: ITEMS, EGG_PRICE: EGG_PRICE,
     BACKGROUNDS: BACKGROUNDS, EFFECTS: EFFECTS,
     bgById: bgById, effectById: effectById,
     STAR_RULE: STAR_RULE, GRADES: GRADES, GRADE_GROUP: GRADE_GROUP,

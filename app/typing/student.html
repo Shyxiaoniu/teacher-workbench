@@ -234,10 +234,34 @@ body.embed .play-wrap{min-height:calc(100vh - 20px)}
   box-shadow:0 8px 26px rgba(60,30,10,.07);
   flex:1 1 auto;display:flex;flex-direction:column;min-height:0}
 .play-body{flex:1 1 auto;display:flex;flex-direction:column;min-height:0}
-.play-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.play-top .bt{font-size:15.5px;font-weight:800}
-.play-top .sub{font-size:11.5px;color:var(--ink3)}
-.live{margin-left:auto;display:flex;gap:8px}
+/* 顶部信息栏（2026-11-19 牛哥反馈「内容挤在一起」）：
+   原来是一排 flex 顺序摆放 —— 返回 / 标题块 / 宠物 / 数值，
+   宠物紧贴在副标题那一行的尾巴上看着像撞在一起，标题块和数值之间
+   又空出一大片，整体既挤又散。
+   现在拆成左右两组、整体两端对齐（justify-content:space-between）：
+     左组 .pt-left  = 返回 + 标题/副标题（不再被宠物挤压）
+     右组 .pt-right = 宠物 + 那排放数值的 chip（宠物是"出战伙伴"，本来就该挨着它的数据）
+   副标题按「篇章 / 目标 / 速度线」拆成小段，段间用 gap 拉开，
+   文字一个没改，只是不再糊成一行。 */
+.play-top{display:flex;align-items:center;justify-content:space-between;
+  gap:10px 20px;flex-wrap:wrap}
+.pt-left{display:flex;align-items:center;gap:14px;min-width:0;flex:1 1 auto;flex-wrap:wrap}
+.pt-title{min-width:0;flex:1 1 auto}
+.play-top .bt{font-size:15.5px;font-weight:800;line-height:1.35}
+.play-top .sub{margin-top:6px;font-size:12px;color:var(--ink3);line-height:1.55;
+  display:flex;flex-wrap:wrap;align-items:center;gap:2px 8px}
+.play-top .sub .sd{opacity:.62;font-weight:700}
+.pt-right{display:flex;align-items:center;gap:12px;flex:0 0 auto;margin-left:auto}
+.live{display:flex;gap:8px}
+/* 窄屏（手机）：两组合各占一行 —— 上一行是「返回 + 标题」，下一行是
+   「宠物 …… 三个数值」两端对齐。原来三行是「返回 / 标题 / 宠物+数值」，
+   宠物和数值挤在半行里，标题又单独占一行浪费高度。 */
+@media (max-width:640px){
+  .play-top{gap:8px 12px}
+  .pt-left{flex:1 1 100%;gap:10px}
+  .pt-right{flex:1 1 100%;margin-left:0;justify-content:space-between}
+  .play-top .sub{font-size:11px;gap:1px 6px}
+}
 .live .chip{font-variant-numeric:tabular-nums}
 .ime-hint{margin-top:10px;background:var(--info-bg);border:1.5px solid var(--info-line);color:var(--info-ink);border-radius:10px;
   padding:8px 12px;font-size:13px;flex:0 0 auto}
@@ -1432,6 +1456,15 @@ html[data-mode="dark"] .tabs button.on{box-shadow:0 4px 12px rgba(0,0,0,.32)}
 /* 蛋品种：块级居中，不能跟「立刻孵化」按钮挤成一行（2026-11-19 实测踩到） */
 .egg-kind-chip{display:block;width:max-content;margin:8px auto 12px;font-size:11.5px;font-weight:700;
   padding:2px 10px;border-radius:999px;background:var(--paper);color:var(--ink2);border:1px solid var(--line)}
+/* 积分兑换宠物蛋（2026-11-19）：孵蛋卡底部一条虚线隔开的「备用渠道」，
+   视觉上明显比「立刻孵化」轻一档 —— 掉落才是主渠道，兑换是兜底。 */
+.egg-buy{margin-top:13px;padding-top:12px;border-top:1px dashed rgba(214,178,90,.55);
+  display:flex;align-items:center;justify-content:center;gap:8px 10px;flex-wrap:wrap}
+.egg-buy .eb-t{font-size:12px;color:var(--ink2);line-height:1.5}
+.egg-buy .eb-t b{color:var(--brand);font-variant-numeric:tabular-nums;font-weight:800}
+.egg-buy .btn{width:auto;flex:none}
+.egg-buy .btn.lack{opacity:.62}
+html[data-mode="dark"] .egg-buy{border-top-color:rgba(214,178,90,.3)}
 .egg-card.egg-flash{animation:eggFlash 1.1s ease-in-out 2}
 @keyframes eggFlash{0%,100%{box-shadow:inset 0 1px 0 #fff,0 6px 16px rgba(190,150,60,.12)}
   45%{box-shadow:0 0 0 4px rgba(232,162,78,.42),0 12px 30px rgba(214,166,60,.5)}}
@@ -1444,7 +1477,7 @@ html[data-mode="dark"] .egg-kind-chip{background:var(--surface);color:var(--ink2
 <div id="app"><div style="text-align:center;padding:80px 0;color:var(--ink3)">正在登上打字冒险岛…</div></div>
 <script src="/student/ui-dialog.js?v=20261102"></script>
 <script src="/typing/pinyin.js?v=20261102w"></script>
-<script src="/typing/typing-data.js?v=20261105a"></script>
+<script src="/typing/typing-data.js?v=20261119"></script>
 <script src="/typing/articles.js?v=20261103a"></script>
 <script src="/typing/levels.js?v=20261102x"></script>
 <script>
@@ -2863,15 +2896,27 @@ function renderPlay() {
     '<div class="play-wrap">' +
       '<div class="play-card">' +
         '<div class="play-top">' +
-          '<button class="btn ghost" id="playBack">‹ 回地图</button>' +
-          '<div><div class="bt">' + esc(stage.icon + ' ' + L.title) +
-            (L.articleTitle ? '　· ' + esc(L.articleTitle) : '') + '</div>' +
-          '<div class="sub">' + esc(stage.name) + ' · 目标：准确率 ≥90% 通关，' + L.speedLine +
-            (L.mode === 'cn' ? ' 字/分' : ' KPM') + ' 拿两星</div></div>' +
-          petHtml +
-          '<div class="live">' + ptsChipHtml() +
-            '<span class="chip" id="liveSpeed">0' + (L.mode === 'cn' ? ' 字/分' : ' KPM') +
-            '</span><span class="chip b" id="liveAcc">100%</span></div>' +
+          '<div class="pt-left">' +
+            '<button class="btn ghost" id="playBack">‹ 回地图</button>' +
+            '<div class="pt-title">' +
+              '<div class="bt">' + esc(stage.icon + ' ' + L.title) +
+                (L.articleTitle ? '　· ' + esc(L.articleTitle) : '') + '</div>' +
+              /* 副标题拆段（文字与原来逐字一致，只是用 gap 把三段拉开：
+                 篇章名 / 通关目标 / 速度线。挤成一行时小字连成一片，学生扫不出来） */
+              '<div class="sub">' +
+                '<span>' + esc(stage.name) + '</span>' +
+                '<span class="sd">·</span>' +
+                '<span>目标：准确率 ≥90% 通关，</span>' +
+                '<span>' + esc(L.speedLine + (L.mode === 'cn' ? ' 字/分' : ' KPM') + ' 拿两星') + '</span>' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+          '<div class="pt-right">' +
+            petHtml +
+            '<div class="live">' + ptsChipHtml() +
+              '<span class="chip" id="liveSpeed">0' + (L.mode === 'cn' ? ' 字/分' : ' KPM') +
+              '</span><span class="chip b" id="liveAcc">100%</span></div>' +
+          '</div>' +
         '</div>' +
         '<div class="play-body">' + body + '</div>' +
       '</div>' +
@@ -3595,6 +3640,22 @@ function startSyncLoop() {
   }, 12000);
 }
 
+/* 宠物蛋掉落判定（与服务端 typing_store.py 的 egg_drop 同一套规则，2026-11-19）：
+   满星必掉；差一星 55%（按「关卡」哈希固定，不会刷出来/刷不掉）；差两星以上不掉。
+   同一关只掉一颗，记在 progress.egg_keys 里；没押中的关卡日后打满星还能补。 */
+function eggRoll(salt) {
+  var s = String(salt), h = 2166136261;
+  for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = (h * 16777619) >>> 0; }
+  return (h % 10000) < 5500;
+}
+function eggDrop(stars, salt, stage) {
+  if (!stars) return false;
+  var cap = stageMaxStars(stage);
+  if (stars >= cap) return true;
+  if (stars >= cap - 1) return eggRoll(salt);
+  return false;
+}
+
 /* ---------------- 结算 ---------------- */
 function submitResult(payload, stars, wpm) {
   if (S.demo) {
@@ -3619,8 +3680,17 @@ function submitResult(payload, stars, wpm) {
       for (var i = 0; i < needs.length; i++) {
         if (pr.stars >= needs[i] && pr.decos.indexOf(pool[i]) < 0) { pr.decos.push(pool[i]); newDecos.push(pool[i]); }
       }
-      var egg = payload.level === 10 && !prev && stars > 0;
-      if (egg) pr.eggs = (pr.eggs || 0) + 1;
+      /* 蛋：满星必掉、差一星看运气，一关一颗（与线上服务端同一套判定） */
+      var egg = false;
+      if (payload.level === 10) {
+        pr.egg_keys = pr.egg_keys || [];
+        if (pr.egg_keys.indexOf(key) < 0 &&
+            eggDrop(stars, key, payload.stage)) {
+          pr.egg_keys.push(key);
+          pr.eggs = (pr.eggs || 0) + 1;
+          egg = true;
+        }
+      }
       demoSave();
       /* 教师练习模式：勾了「计入班级排行榜」就把这关同步给服务端
          （星数与速度由服务端按同一套公式复核，防刷） */
@@ -3815,7 +3885,7 @@ function viewLb() {
   return '<div class="lb-card">' +
     '<div class="lb-title" id="lbTitle">' +
       esc(S.lb.class_name || S.me.class_name || '') + ' · 打字排行榜</div>' +
-    '<div class="lb-sub">每周一星光榜自动清零，坚持每天练一点，榜上见！</div>' +
+    '<div class="lb-sub">每周一只清空「本周星光」这一栏；积分、宠物、装扮都永久保留，不会清零。</div>' +
     '<div class="lb-tabs">' + tabs.map(function (t) {
       return '<button class="' + (S.lb.scope === t[0] ? 'on' : '') + '" data-lbscope="' + t[0] + '">' + t[1] + '</button>';
     }).join('') + '</div>' +
@@ -4119,6 +4189,23 @@ function eggFlushPending() {
   eggGetModal(p.kind, p.count || 1);
 }
 
+/* 孵蛋卡底部那条「积分兑换」补充渠道（2026-11-19）。
+   为什么要有它：宠物蛋的主渠道是 BOSS 关满星掉落，但满星上限分 1/2/3 三档、
+   差一星还有 55% 的运气成分 —— 卡在「一直差一颗星、一直押不中」的学生
+   永远开不完图鉴。这条渠道给攒得住积分的人一条兜底路，价格由服务端定，
+   前端只负责显示与拦截（真正扣款 / 图鉴集齐拒售都在服务端）。 */
+function eggBuyRow() {
+  var price = TD.EGG_PRICE || 300;
+  var pts = (S.progress && S.progress.pts) || 0;
+  var lack = Math.max(0, price - pts);
+  return '<div class="egg-buy">' +
+    '<span class="eb-t">也可以用 <b>' + price + '</b> 积分换一颗</span>' +
+    '<button class="btn line sm' + (lack ? ' lack' : '') + '" id="eggBuy" title="' +
+      (lack ? '积分还差 ' + lack + ' 分' : '花 ' + price + ' 积分换一颗宠物蛋') +
+      '">✨ 积分兑换</button>' +
+    '</div>';
+}
+
 function viewRanch() {
   var pr = S.progress;
   var curPet = S.ranch.pet || (pr.pets && pr.pets[0]) || '';
@@ -4175,12 +4262,14 @@ function viewRanch() {
       (pr.eggs > 0
         ? '<div class="egg-card egg-hot" id="eggCard"><span class="egg' + (S.eggOpening ? ' egg-open' : '') + '">' + eggSvg(ek) + '</span>' +
           '<div class="egg-t">你有 ' + pr.eggs + ' 颗宠物蛋</div>' +
-          '<div class="egg-s">BOSS 关首通掉落 · 孵出一只你没有的伙伴</div>' +
+          '<div class="egg-s">BOSS 关打到满星必掉 · 差一星看运气</div>' +
           '<span class="egg-kind-chip">' + esc(ek.name) + ' · ' + esc(ek.tag) + '</span>' +
-          '<button class="btn" id="eggBtn" ' + (S.eggOpening ? 'disabled' : '') + '>🥚 立刻孵化</button></div>'
-        : '<div class="egg-card" id="eggCard" style="opacity:.78"><span class="egg">' + eggSvg(ek) + '</span>' +
+          '<button class="btn" id="eggBtn" ' + (S.eggOpening ? 'disabled' : '') + '>🥚 立刻孵化</button>' +
+          eggBuyRow() + '</div>'
+        : '<div class="egg-card" id="eggCard"><span class="egg">' + eggSvg(ek) + '</span>' +
           '<div class="egg-t">宠物蛋要从 BOSS 关赢</div>' +
-          '<div class="egg-s">每卷第 10 关首通必掉一颗蛋！</div></div>') +
+          '<div class="egg-s">每卷第 10 关（BOSS）打满星必掉一颗！</div>' +
+          eggBuyRow() + '</div>') +
     '</div>';
   var grid = '<div class="pet-grid">' + TD.PETS.map(function (p) {
     var owned = (pr.pets || []).indexOf(p.id) >= 0;
@@ -4541,6 +4630,42 @@ function bindRanch() {
   }
   var eb = $('#eggBtn');
   if (eb) eb.onclick = function () { eggHatch(eb); };
+
+  /* 积分兑换宠物蛋：价格以服务端 EGG_PRICE 为准，这里只做「余额不够」的即时
+     提示（省一次往返），真正的扣款 / 图鉴集齐拒售都由服务端返回。 */
+  function eggBuy(btn) {
+    var price = TD.EGG_PRICE || 300;
+    var pts = (S.progress && S.progress.pts) || 0;
+    if (pts < price) {
+      uiToast('积分还差 ' + (price - pts) + ' 分，先去闯几关攒一攒', 'warn');
+      return;
+    }
+    if (btn) btn.disabled = true;
+    function back() { if (btn) btn.disabled = false; }
+    if (S.demo) {
+      S.progress.pts = pts - price;
+      S.progress.eggs = (S.progress.eggs || 0) + 1;
+      demoSave();
+      render();
+      setTimeout(focusEggCard, 90);   /* 换到就滚到孵蛋卡并闪一下，接着就能点孵化 */
+      return;
+    }
+    api('/api/v2/typing/buy', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind: 'egg' })
+    }).then(function (r) {
+      back();
+      if (r && r.ok) {
+        S.progress = r.stu || S.progress;
+        render();
+        setTimeout(focusEggCard, 90);
+      } else {
+        uiToast((r && r.msg) || '兑换失败，积分没扣', 'warn');
+      }
+    }).catch(function () { back(); uiToast('网络不通，积分没扣', 'warn'); });
+  }
+  var ebb = $('#eggBuy');
+  if (ebb) ebb.onclick = function () { eggBuy(ebb); };
 }
 function saveEquip() {
   if (S.demo) {

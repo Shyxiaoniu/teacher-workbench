@@ -11,6 +11,7 @@
   · 学生档案只存 student_id，姓名/班级由 server.py 按 STORE 实时补齐，
     学生改名 / 转班后排行榜自动跟着变。
 """
+import hashlib
 import json
 import os
 import time
@@ -90,6 +91,14 @@ EFFECT_PRICE = {
     "snow": 900, "rainbow": 1400, "aurora": 2000,
 }
 
+# 用积分直接兑一颗宠物蛋（2026-11-19 新增，与 typing-data.js 的 EGG_PRICE 一致）。
+# 背景：宠物蛋的主渠道是「BOSS 关满星」，但满星上限分 1/2/3 三档、差一星还有
+# 55% 的运气成分，总有学生卡在「一直差一颗星、一直押不中」上，图鉴永远开不完。
+# 所以补一条兜底渠道：攒够积分直接换一颗。
+# 定价高于一件中档装扮（300），保证「练得好」仍然是最快的路 ——
+# 满星掉蛋是白拿，靠积分换要打十几关才够。
+EGG_PRICE = 300
+
 DEFAULT_RECORD = {
     "best": {},            # levelKey -> {wpm, acc, stars, ts}
     "stars": 0,            # 累计星数（经验）
@@ -97,6 +106,7 @@ DEFAULT_RECORD = {
     "pets": [],            # 已拥有宠物 id
     "decos": [],           # 已解锁装扮 id
     "eggs": 0,             # 待孵化宠物蛋
+    "egg_keys": [],        # 已经掉过蛋的关卡（levelKey），一关只掉一颗、成绩提升可补掉
     "equip": {"pet": "", "decos": [], "bg": "", "fx": ""},
     "pts": 0,              # 统一积分：闯关 / 教师发放获得，全店通用
     "bgs": [],             # 已拥有牧场背景 id
@@ -182,9 +192,53 @@ def _equip_for_lb(stu):
 
 
 def week_key(ts=None):
-    """ISO 周标识，如 2026-W45；每周一自动切换 = 周榜自动清零"""
+    """ISO 周标识，如 2026-W45；每周一自动切换 = 周榜自动清零
+
+    ⚠️ 只有「本周星光」这一项跟着周走，别的都不动。
+    每周重置清单（改代码前先读这段）：
+      · 会重置：week.stars（本周星光，周榜用）
+      · 不重置：pts 积分、pets 宠物、decos 装扮、bgs 背景、effects 特效、
+                items 道具、stars 累计星（解锁装扮的依据）、best 最好成绩、
+                eggs / egg_keys 宠物蛋
+    学生攒的积分和宠物是长期资产，任何「周切换」逻辑都不许碰它们。
+    """
     t = time.localtime(ts or time.time())
     return time.strftime("%G-W%V", t)
+
+
+# ---------------- 宠物蛋掉落（2026-11-19 难度上调） ----------------
+# 旧规则：BOSS 关首通只要拿到 1 星就必掉一颗，八个篇章一周能凑八颗，
+# 宠物几乎不用练就到手，也没人再回头看自己没满星的 BOSS。
+# 新规则（只在 BOSS 关 level==10 生效，按「相对满星」判定）：
+#   · 满星        —— 必掉；
+#   · 差一星      —— 55% 概率（按「学生 + 关卡」哈希固定，不会刷出来/刷不掉）；
+#   · 差两星以上  —— 不掉，回去把速度和准确率练上来还能补。
+# 满星上限因篇章而异（1 星 / 2 星 / 3 星三档），所以拿 stage 1 的 1 星
+# 和 stage 6 的 3 星是同一件事 —— 都是「这一章你已经打到头了」。
+EGG_ROLL_RATE = 0.55
+
+
+def egg_roll(uid, key, rate=EGG_ROLL_RATE):
+    """确定性「抽签」：同一学生对同一关永远得到同一结果。
+
+    用 md5 而不是 random —— 服务端可能因为补发、重算、换机器等原因
+    对同一关反复求值，真随机会出现「刚才掉了现在又没掉」的灵异现象。
+    """
+    seed = ("%s|%s|egg-v2" % (uid, key)).encode("utf-8")
+    h = hashlib.md5(seed).hexdigest()
+    return (int(h[:8], 16) % 10000) < int(round(rate * 10000))
+
+
+def egg_drop(stars, uid, key, stage):
+    """这一关（BOSS）这次该不该掉蛋。stars 传本次复核后的星级。"""
+    if stars <= 0:
+        return False
+    cap = max_stars(stage)
+    if stars >= cap:
+        return True
+    if stars >= cap - 1:
+        return egg_roll(uid, key)
+    return False
 
 
 def speed_line(stage, chapter):
@@ -249,6 +303,22 @@ class TypingStore:
                 old_pts = 0
             stu["pts"] = old_pts + old_coins
             stu.pop("coins", None)
+            migrated = True
+        # 2026-11-19 宠物蛋难度上调：老档案补 egg_keys。
+        # 旧规则是「BOSS 首通 1 星必掉」，所以历史上打通过的 BOSS 关都算已掉过；
+        # 这里只补一个「已掉过」记录，防止新逻辑对老玩家再发一遍 ——
+        # 不扣蛋、不改星级、不动积分和宠物。
+        for stu in self.data["students"].values():
+            if not isinstance(stu, dict) or "egg_keys" in stu:
+                continue
+            owned = []
+            for k, b in (stu.get("best") or {}).items():
+                try:
+                    if str(k).endswith("l10") and int((b or {}).get("stars") or 0) >= 1:
+                        owned.append(str(k))
+                except Exception:
+                    continue
+            stu["egg_keys"] = owned
             migrated = True
         if "coin_log" in self.data:
             if not isinstance(self.data.get("pts_log"), list):
@@ -330,10 +400,6 @@ class TypingStore:
                     stu["week"] = {"k": wk, "stars": 0}
                 stu["week"]["stars"] += gained
                 stu["stars"] += gained
-                # Boss 首通掉宠物蛋
-                if level == 10 and prev is None and stars > 0:
-                    stu["eggs"] = stu.get("eggs", 0) + 1
-                    rewards["egg"] = True
                 # 星数里程碑 → 解锁装扮
                 owned = stu["decos"]
                 deco_pool = ["hat-red", "crown", "sunglass", "glasses",
@@ -356,6 +422,14 @@ class TypingStore:
                 if pending.get("double"):
                     pts += base_pts
                 stu["pts"] = stu.get("pts", 0) + pts
+            # Boss 关掉宠物蛋（2026-11-19 难度上调，见 egg_drop 注释）：
+            # 不再要求「首通」，也允许「首通没掉、后来打高了再补」——
+            # 唯一的铁律是同一关只掉一颗，记在 egg_keys 里。
+            if level == 10 and key not in stu.setdefault("egg_keys", []):
+                if egg_drop(stars, uid, key, stage):
+                    stu["egg_keys"].append(key)
+                    stu["eggs"] = stu.get("eggs", 0) + 1
+                    rewards["egg"] = True
             # 这一关打完了：练习草稿随之作废（只有草稿还停在「本关没打完」）
             dr = stu.get("draft")
             if isinstance(dr, dict) and dr.get("k") == key:
@@ -550,6 +624,27 @@ class TypingStore:
             stu["updated"] = int(time.time())
             self._save()
             return {"ok": True, "stu": self.summary(stu), "fx": fx_id}
+
+    def buy_egg(self, uid, pet_ids=None):
+        """用积分直接兑一颗宠物蛋（BOSS 满星掉蛋之外的兜底渠道）。
+
+        图鉴集齐后不再出售 —— claim_egg 会把多余的蛋折成 50 积分，
+        这时还花 300 换一颗等于白扔 250 分，不如直接拦住。
+        """
+        with self.lock:
+            stu = self._stu(uid)
+            if pet_ids:
+                unowned = [p for p in pet_ids if p not in stu.get("pets", [])]
+                if not unowned:
+                    return {"ok": False, "msg": "宠物图鉴已经集齐，不用再换蛋啦"}
+            err = self._spend_pts(stu, EGG_PRICE)
+            if err:
+                return {"ok": False, "msg": err}
+            stu["eggs"] = stu.get("eggs", 0) + 1
+            stu["updated"] = int(time.time())
+            self._save()
+            return {"ok": True, "stu": self.summary(stu), "eggs": stu["eggs"],
+                    "price": EGG_PRICE}
 
     def use_item(self, uid, item_id):
         """消耗一个道具（进入关卡时用）。道具只影响本关，不写进档案。"""

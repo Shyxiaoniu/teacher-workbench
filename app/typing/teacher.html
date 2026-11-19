@@ -137,7 +137,7 @@ input::placeholder{color:var(--ink3)}
 <body>
 <div id="app"><div style="text-align:center;padding:80px 0;color:#B9AFA4">正在加载打字练习管理面板…</div></div>
 <div class="toast" id="toast"></div>
-<script src="/typing/typing-data.js?v=20261105a"></script>
+<script src="/typing/typing-data.js?v=20261119"></script>
 <script>
 (function () {
 'use strict';
@@ -238,6 +238,8 @@ function body() {
         '<div class="grade-wrap">' + gradeChips + '</div>' +
         '<button class="btn" id="saveGrades">保存年级设置</button>' +
         '<button class="btn ghost" id="resetWeek" style="margin-left:8px">清零本周星光榜</button>' +
+        '<div class="hint" style="margin-top:8px">这个按钮只清「本周星光」这一栏（每周一本来也会自动归零）。' +
+        '积分、宠物、装扮、道具、累计总星、各关最好成绩都是永久数据，任何周切换都不会动。</div>' +
       '</div>' +
       '<div class="card">' +
         '<h2>参与统计</h2>' +
@@ -329,7 +331,7 @@ function bind() {
   var rw = $('#resetWeek');
   if (rw) rw.onclick = function () {
     if (S.demo) { toast('演示模式'); return; }
-    if (!confirm('确定把本周星光榜清零吗？（总星与宠物不受影响）')) return;
+    if (!confirm('确定把本周星光榜清零吗？\n\n只清「本周星光」这一栏，积分、宠物、装扮、累计总星都不受影响。')) return;
     api('/api/v2/typing/reset-week', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
       .then(function (r) { toast(r && r.ok ? '本周星光榜已清零' : '操作失败'); loadLb(); });
   };
