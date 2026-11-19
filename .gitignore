@@ -14,6 +14,9 @@ docker/smoke-test.sh
 # 打包产物（单个 zip 超过 Gitee 100MB 限制，且可从源码重新构建）
 *.zip
 
+# 生成物/临时交付物
+.wbapp_*.genie
+
 # 本地分析与备份目录（截图、报告、旧版快照）
 _analysis/
 _backup/

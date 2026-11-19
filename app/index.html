@@ -7426,6 +7426,10 @@ const state = {
   lastRouteIdx: undefined,
   seatDate: '',
   ckFilter: '',         // 课堂签到：点统计标签后只看这一类（''=不筛选）
+  attPeriod: null,      // 当前记录的第几节（null=按当前时间算）
+  attPeriodMan: false,  // 老师手动选过节次 → 服务端对表不再覆盖、也不自动吸附
+  attPeriodAuto: false, // 已按本班课表吸附过节次 → 同上
+  attPeriodAll: false,  // 签到下拉是否列出全天所有节次（代课 / 补签用）
   attSort: { key:'seat', dir:'asc' },  // 考勤名单排序 {key:name|seat|status|time, dir}
   // 座位排布配置
   seatRows: 7,          // 行数（默认 7 排）
@@ -20490,6 +20494,9 @@ function addPeriodRow() {
   const base = dbT('periods').filter(p=>p.day_of_week===0)
     .sort((a,b)=>a.seq-b.seq);
   const last = base[base.length-1];
+  /* 上限对齐节次设置弹窗里的 max=14：以前「+ 加一节」能一直点到 24 节，
+     时间被顺推到凌晨 05:05，签到下拉里一堆半夜的节次（2026-11-19 牛哥反馈）。 */
+  if (base.length >= 14) return toast('中学课表最多 14 节，已经到顶了');
   const dur = 45;
   let endMin;
   if (!last) {
@@ -20499,12 +20506,15 @@ function addPeriodRow() {
     endMin = st + 10 + dur;
   }
   const seq = base.length + 1;
+  /* id 不能再用 d*100+seq：删过节次、序号重排之后会撞上已有 id（同一 id 两行）。
+     改成「全表最大 id + 1」逐行递增，永撞不上。 */
+  let nextId = (dbT('periods') || []).reduce((m, x) => Math.max(m, Number(x.id) || 0), 0) + 1;
   [0,1,2,3,4,5,6].forEach(d => {
     const dup = dbT('periods').some(x =>
-      x.day_of_week===d && x.seq===seq);
+      Number(x.day_of_week) === d && Number(x.seq) === seq);
     if (dup) return;
     dbT('periods').push({
-      id: d*100+seq, day_of_week:d, seq,
+      id: nextId++, day_of_week:d, seq,
       label: '第'+seq+'节',
       start_time: toHM(endMin - dur), end_time: toHM(endMin),
       kind: 'class'
@@ -20528,21 +20538,71 @@ function removeLastPeriodRow() {
 }
 window.removeLastPeriodRow = removeLastPeriodRow;
 
-/** 删掉指定节次 */
+/** 删掉指定节次（2026-11-19 重写）
+    ------------------------------------------------------------
+    原来只删「当前这一天」的那一行，而且只给周一重编 seq、不改 label：
+    删掉第 9 节后课表上还是「第10节 第11节」，其余 6 天还留着第 9 节，
+    各天节次从此对不齐（签到下拉、导出、服务端判节次全跟着歪）。
+    现在：
+    ① 一周 7 天的同一节一起删，结构保持一致；
+    ② 挂在它上面的排课一起清掉；
+    ③ 剩下的按天重新编 seq，并把「第N节」这种默认名同步改掉（自定义名保留）；
+    ④ attendance / guides 里记的节次号一起前移，历史记录才对得上；
+    ⑤ id 一律不动 —— lessons.period_id 指的是 id，改 id 会把排课全打散。 */
 async function removePeriodRow(id) {
-  const p = dbT('periods').find(x => x.id === Number(id));
+  const p = dbT('periods').find(x => Number(x.id) === Number(id));
   if (!p) return;
-  if (p.seq <= 1) return toast('至少要保留第 1 节');
-  if (!(await uiConfirm(`确定删除「${esc(p.label)}」？该行课程会一并清除。`, { title: '删除节次' }))) return;
-  dbSet('periods', dbT('periods').filter(x =>
-    !(x.day_of_week === p.day_of_week && x.seq === p.seq)));
-  dbSet('lessons', dbT('lessons').filter(l => l.period_id !== p.id));
-  // 重新编号
-  const rest = dbT('periods').filter(x => x.day_of_week === 0)
-    .sort((a,b)=>a.seq-b.seq);
-  rest.forEach((x,i) => { x.seq = i+1; });
-  dbPersist();   // 重新编号后的 seq 也要落盘
-  toast('已删除');
+  const seq = Number(p.seq || p.id);
+  if (seq <= 1) return toast('至少要保留第 1 节');
+  if (!(await uiConfirm(
+    `确定删除「${esc(p.label)}」？\n\n· 一周 7 天的这一节都会删掉（保持各天一致）\n· 这一节排的课会一并清除\n· 后面的节次会自动往前补号`,
+    { title: '删除节次' }))) return;
+
+  const all = dbT('periods') || [];
+  /* ① 记下 7 天里属于这一节的 id，整节删掉 */
+  const killed = new Set(all.filter(x => Number(x.seq || x.id) === seq)
+    .map(x => Number(x.id)));
+  const keep = all.filter(x => Number(x.seq || x.id) !== seq);
+
+  /* ③ 每天各自重编号（先算好，再一次性落盘） */
+  const byDay = {};
+  keep.forEach(x => {
+    const d = Number(x.day_of_week) || 0;
+    (byDay[d] = byDay[d] || []).push(x);
+  });
+  Object.keys(byDay).forEach(d => {
+    byDay[d].sort((a, b) => (Number(a.seq) || 0) - (Number(b.seq) || 0));
+    byDay[d].forEach((x, i) => {
+      const n = i + 1;
+      if (Number(x.seq) !== n) x.seq = n;
+      const lab = String(x.label || '').trim();
+      /* 默认名跟着序号走；「早读 / 晚自习」这类自定义名不动 */
+      if (!lab || /^第\s*\d+\s*节$/.test(lab)) x.label = '第' + n + '节';
+    });
+  });
+
+  dbSet('periods', keep);
+  /* ② 排课：period_id 指向被删的那几行 → 一起清掉 */
+  dbSet('lessons', (dbT('lessons') || []).filter(l => !killed.has(Number(l.period_id))));
+
+  /* ④ 历史记录里的节次号前移一位（> 被删节次的都 -1），
+        否则「第10节」的考勤会挂在新的第10节（其实是原来第11节）上 */
+  const shift = (rows, key) => {
+    let n = 0;
+    (rows || []).forEach(r => {
+      const v = Number(r[key] || 0);
+      if (v > seq) { r[key] = v - 1; n++; }
+    });
+    return n;
+  };
+  const na = shift(dbT('attendance'), 'period');
+  const ng = shift(dbT('guides'), 'period');
+  if (na) dbSet('attendance', dbT('attendance'));
+  if (ng) dbSet('guides', dbT('guides'));
+  dbPersist();
+
+  toast('已删除第 ' + seq + ' 节，后面的节次已重新编号'
+    + (na || ng ? '（' + (na + ng) + ' 条历史记录同步前移）' : ''));
   renderContent();
 }
 window.removePeriodRow = removePeriodRow;
@@ -21441,6 +21501,70 @@ function ttHealPeriods() {
 }
 window.ttHealPeriods = ttHealPeriods;
 
+/** 节次对齐（2026-11-19 牛哥反馈）
+    ------------------------------------------------------------
+    病症：删掉某一节后，课表上出现「第8节 → 第10节」的断号，后面也不往前补 ——
+          旧版删除只重编了 seq、没改 label，而且只动了周一那一套，
+          其余 6 天的节次原封不动，各天从此对不齐。
+    做法：① 各天按现有顺序重编 seq = 1..n，label 里的「第N节」同步改（自定义名保留）；
+          ② 以周一那套为准，其余天裁/补到同样节数 —— 课表格子本来就按周一渲染。
+    保护：超出台数的排课先拦下来，绝不静默丢课。 */
+async function alignPeriods() {
+  const all = dbT('periods') || [];
+  const base = all.filter(p => Number(p.day_of_week) === 0)
+    .sort((a, b) => (Number(a.seq) || 0) - (Number(b.seq) || 0));
+  if (!base.length) return toast('还没有节次，先建一套作息');
+  const N = base.length;
+
+  const seqOf = pid => {
+    const row = all.find(x => Number(x.id) === Number(pid));
+    return row ? Number(row.seq || row.id) : (Number(pid) || 0);
+  };
+  const over = (dbT('lessons') || []).filter(l => seqOf(l.period_id) > N);
+  if (over.length) {
+    return toast('还有 ' + over.length + ' 节课排在「第' + N + '节」之后，先把它们挪走或删掉再对齐');
+  }
+  const extra = all.filter(x => Number(x.day_of_week) !== 0
+    && Number(x.seq || x.id) > N).length;
+  if (!(await uiConfirm(
+    `把一周 7 天对齐成「周一」这一套：每天 ${N} 节。\n\n`
+    + `· 各天重新编号 1~${N}，「第N节」名称跟着序号走（自定义名保留）\n`
+    + (extra ? `· 其余天多出来的 ${extra} 个空节次会删掉\n` : '')
+    + `· 排好的课不动`,
+    { title: '对齐节次', okText: '开始对齐' }))) return;
+
+  const byDay = {};
+  all.forEach(x => {
+    const d = Number(x.day_of_week) || 0;
+    (byDay[d] = byDay[d] || []).push(x);
+  });
+  let nextId = all.reduce((m, x) => Math.max(m, Number(x.id) || 0), 0) + 1;
+  const out = [];
+  [0, 1, 2, 3, 4, 5, 6].forEach(d => {
+    const rows = (byDay[d] || []).slice()
+      .sort((a, b) => (Number(a.seq) || 0) - (Number(b.seq) || 0));
+    if (!rows.length) return;             // 这天本来就没节次 → 不硬造
+    for (let i = 0; i < N; i++) {
+      const tpl = base[i];
+      const row = rows[i];
+      if (row) {
+        row.seq = i + 1;
+        const lab = String(row.label || '').trim();
+        if (!lab || /^第\s*\d+\s*节$/.test(lab)) row.label = '第' + (i + 1) + '节';
+        out.push(row);
+      } else {
+        out.push({ id: nextId++, day_of_week: d, seq: i + 1, label: '第' + (i + 1) + '节',
+          start_time: tpl.start_time, end_time: tpl.end_time, kind: tpl.kind || 'class' });
+      }
+    }
+  });
+  dbSet('periods', out);
+  dbPersist();
+  toast('已对齐：每天 ' + N + ' 节，编号已连续');
+  renderContent();
+}
+window.alignPeriods = alignPeriods;
+
 const DAY_CHK = ['周一','周二','周三','周四','周五','周六','周日'];
 
 function openPeriodSetting() {
@@ -21480,7 +21604,10 @@ function openPeriodSetting() {
       <div class="mt-foot" style="margin-top:16px">
         <button class="btn btn-primary" style="width:100%"
           onclick="ttCfgApply()">应用到选中日期</button>
+        <button class="btn" style="width:100%;margin-top:8px"
+          onclick="alignPeriods()">重排编号 / 对齐各天节次</button>
       </div>
+      <div class="ttc-tip">删过节次、或课表上出现「第8节 → 第10节」这种断号时，点上面第二个按钮</div>
       <div class="ttc-tip">提示：预览只展示周一的时间表，其余日期结构相同</div>
     </div>`;
   showFloat('课表时间设置', body);
@@ -21990,9 +22117,77 @@ function attOfP(stuId, date, period) {
 }
 window.attOfP = attOfP;
 
-function periodList() {
-  return dbT('periods').slice().sort((a, b) => (a.seq || 0) - (b.seq || 0));
+/** 指定日期是周几，口径与 periods / lessons 的 day_of_week 一致（0=周一 … 6=周日）。
+    注意别和 dowOfDate() 混：那个是 1=周一 … 7=周日（首页课程提醒用）。 */
+function dow0OfDate(ds) {
+  const d = new Date((ds || curDate()) + 'T00:00:00');
+  if (isNaN(d.getTime())) return (new Date().getDay() + 6) % 7;
+  return (d.getDay() + 6) % 7;
 }
+window.dow0OfDate = dow0OfDate;
+
+/* 节次表是按星期几各存一套的（周一 id 1~24、周二 101~124 …），
+   所以读的时候必须挑当天那一套、再按 seq 去重（2026-11-19 牛哥反馈）：
+   原来直接整表返回，162 行全塞进签到下拉 → 同一节重复 7 次，
+   还夹着课表里根本没排的节次。某天没节次（老数据只填了周一）就退回周一那套。 */
+function periodList(dow) {
+  const d0 = (dow == null) ? dow0OfDate() : Number(dow);
+  const all = dbT('periods') || [];
+  const base = all.filter(p => Number(p.day_of_week) === 0);   // 课表格子用的那套（模板）
+  let rows = all.filter(p => Number(p.day_of_week) === d0);
+  if (!rows.length) rows = base;
+  const seen = new Set(), out = [];
+  rows.slice()
+    .sort((a, b) => (Number(a.seq) || 0) - (Number(b.seq) || 0)
+      || Number(a.id) - Number(b.id))
+    .forEach(p => {
+      const s = Number(p.seq || p.id) || 0;
+      if (!s || seen.has(s)) return;   // 同 seq 只留 id 最小的那条
+      seen.add(s);
+      out.push(p);
+    });
+  /* 某天缺某个节次也要补齐（2026-11-19）：老数据里只有周一建了第 1 节，
+     周二～周日缺 seq=1 —— 结果课表上明明有第 1 节，签到下拉里却没有，
+     那节课排了课也记不了考勤。这里用课表那套的时间补出来（只读，不写库）。 */
+  if (d0 !== 0 && base.length) {
+    base.slice()
+      .sort((a, b) => (Number(a.seq) || 0) - (Number(b.seq) || 0))
+      .forEach(p => {
+        const s = Number(p.seq || p.id) || 0;
+        if (!s || seen.has(s)) return;
+        seen.add(s);
+        out.push(Object.assign({}, p, { day_of_week: d0, id: d0 * 100 + s }));
+      });
+    out.sort((a, b) => (Number(a.seq) || 0) - (Number(b.seq) || 0));
+  }
+  return out;
+}
+window.periodList = periodList;
+
+/** lessons.period_id 指向的是「周一那套」的节次 id（课表格子固定按 day_of_week===0 渲染），
+    要判断某天有没有课，得先换成 seq 再比 —— 直接拿 period_id 和各天的 id 比会整排错位。 */
+function periodSeqOfId(pid) {
+  const p = (dbT('periods') || []).find(x => Number(x.id) === Number(pid));
+  if (p) return Number(p.seq || p.id) || 0;
+  return Number(pid) || 0;            // 老数据 period_id 本身就是 seq
+}
+window.periodSeqOfId = periodSeqOfId;
+
+/** 某班某天「课表里有课」的节次集合（按 seq）；没排课返回空集合。
+    cls 传 'all' / 空 表示不限班级。 */
+function classPeriodSeqs(cls, date) {
+  const d0 = dow0OfDate(date);
+  const want = (cls === 'all' || cls == null || cls === '') ? null : Number(cls);
+  const out = new Set();
+  (dbT('lessons') || []).forEach(l => {
+    if (Number(l.day_of_week) !== d0) return;
+    if (want != null && Number(l.class_id) !== want) return;
+    const s = periodSeqOfId(l.period_id);
+    if (s) out.add(s);
+  });
+  return out;
+}
+window.classPeriodSeqs = classPeriodSeqs;
 /** 现在第几节（和服务端 _current_period 同一套算法） */
 function curPeriodSeq() {
   const ps = periodList();
@@ -22021,7 +22216,7 @@ function syncServerPeriod() {
     .then(r => r.json())
     .then(j => {
       if (!j || !j.ok || !j.period) return;
-      if (state.attPeriodMan) return;
+      if (state.attPeriodMan || state.attPeriodAuto) return;
       if (Number(state.attPeriod) !== Number(j.period)) {
         state.attPeriod = Number(j.period);
         if (state.route === 'seats' || state.route === 'attendance') renderContent();
@@ -22661,8 +22856,33 @@ window.attListExport = attListExport;
 
 /** 座位表 / 考勤页共用的「课堂签到」状态条（标签可点 → 筛选） */
 function attBoardHtml(cls, date) {
-  const seq = attPeriod();
-  const ps = periodList();
+  let seq = attPeriod();
+  const allPs = periodList();              // 今天这一套，已按 seq 去重
+  /* 只列本班今天有课的节次（2026-11-19）：课表排好了还让人选时间是多余的，
+     更要紧的是原来把「一周 7 天 × 24 节」全列出来，同一节重复 7 次。
+     代课 / 临时调课 / 补签时点「全部节次」放行。 */
+  const mineSeqs = classPeriodSeqs(cls, date);
+  /* 自动吸附到本班今天真正有课的那一节（老师没手动选过的时候）。
+     否则晚上打开座位表，默认落在「当前时间倒推的第 21 节」这种本班没课的时段，
+     下拉就得凭空多出一项、还得手动挑。 */
+  if (mineSeqs.size && !state.attPeriodMan && !state.attPeriodAll
+      && !mineSeqs.has(Number(seq))) {
+    const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+    const toM = t => { const a = String(t || '').split(':'); return (+a[0]) * 60 + (+a[1] || 0); };
+    const cands = allPs.filter(p => mineSeqs.has(Number(p.seq || p.id)));
+    const next = cands.find(p => toM(p.start_time) >= nowMin) || cands[cands.length - 1];
+    if (next) { seq = Number(next.seq || next.id); state.attPeriod = seq; state.attPeriodAuto = true; }
+  }
+  let ps = (mineSeqs.size && !state.attPeriodAll)
+    ? allPs.filter(p => mineSeqs.has(Number(p.seq || p.id)))
+    : allPs.slice();
+  /* 当前节次不在列表里（手动选过别的节 / 服务端判定的节）就补进去，
+     否则 select 会默默显示第一项，看着和实际记的节次不一致。 */
+  if (ps.length && !ps.some(p => Number(p.seq || p.id) === Number(seq))) {
+    const cur = allPs.find(p => Number(p.seq || p.id) === Number(seq));
+    if (cur) ps = ps.concat([cur]).sort((a, b) =>
+      (Number(a.seq) || 0) - (Number(b.seq) || 0));
+  }
   attAutoSettle(cls, date, seq);            // 本节结束自动记旷课
   const st = attStatsOf(cls, date, seq);
   const f = state.ckFilter || '';
@@ -22673,6 +22893,11 @@ function attBoardHtml(cls, date) {
         esc(p.label || ('第' + (p.seq || p.id) + '节'))}${
         p.start_time ? ' ' + esc(p.start_time) : ''}</option>`).join('')}
     </select>` : '';
+  const selAll = mineSeqs.size ? `<button class="ck-cfg-btn" type="button"
+      onclick="state.attPeriodAll=!state.attPeriodAll;renderContent()"
+      title="${state.attPeriodAll ? '只看本班今天课表里的节次'
+        : '今天本班课表只有 ' + [...mineSeqs].sort((a, b) => a - b).join('、') + ' 节有课；点这里看全部节次（代课、补签用）'}"
+      >${state.attPeriodAll ? '只看本班节次' : '全部节次'}</button>` : '';
   const chip = code => {
     const n = Number(st[code]) || 0;
     if (!n) return '';
@@ -22703,6 +22928,7 @@ function attBoardHtml(cls, date) {
       <button class="ck-cfg-btn" type="button" onclick="goCheckinCfg()"
         title="去系统设置里开关签到 / 设手动时间">签到设置</button>
       ${sel}
+      ${selAll}
       <span class="ck-date">${esc(date)} · ${esc(periodLabel(seq))}</span>
       <span class="ck-grow"></span>
       ${state.route === 'seats' ? `<span class="ck-inline-tools">${clsPickerHtml()}${pageSearchHtml()}</span>` : ''}
