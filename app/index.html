@@ -2036,9 +2036,20 @@ body.seat-rsz-dragging .seat:hover { transform:none; box-shadow:none; }
   cursor:pointer; font-size:12px; user-select:none; color:var(--text-primary);
   transition:all var(--dur-fast) var(--ease-out); }
 .ttc-day.on { background:var(--brand-primary); color:#fff; border-color:var(--brand-primary); }
+/* 各天第一节一览（2.0.49）：座位表只显示「今天」那一套，
+   设置面板只显示周一那一套 —— 不把差异摊开，老师永远觉得两边对不上。 */
+.ttc-dayinfo { display:flex; gap:6px; flex-wrap:wrap; }
+.ttc-di { padding:5px 9px; border:1px solid var(--border); border-radius:8px;
+  font-size:11.5px; line-height:1.45; background:var(--bg-surface);
+  color:var(--text-primary); text-align:center; min-width:52px; }
+.ttc-di b { display:block; font-size:11px; font-weight:600; }
+.ttc-di small { font-size:10.5px; color:var(--text-secondary); font-family:var(--font-mono); }
+.ttc-di.today { border-color:var(--brand-primary); box-shadow:0 0 0 1px var(--brand-primary) inset; }
+.ttc-di.diff { border-color:#C4553B; }
+.ttc-di.diff small { color:#C4553B; }
 .ttc-prev { margin-top:4px; padding:10px 12px; background:var(--bg-surface);
   border-radius:8px; font-size:12px; line-height:1.9; font-family:var(--font-mono);
-  white-space:pre; max-height:180px; overflow:auto; color:var(--text-primary); }
+  white-space:pre; max-height:150px; overflow:auto; color:var(--text-primary); }
 .ttc-tip { font-size:11px; color:var(--text-secondary); margin-top:6px; }
 .fl-sub { font-size:11.5px; color:var(--text-secondary); margin-bottom:14px; }
 .fl-lbl {
@@ -8149,7 +8160,7 @@ const HQ_TEXT = {
   /* —— 测验 / 检测（2.0.38+）：大段说明统一收进旁侧问号气泡 —— */
   quizPolicy: ''
     + '<b>三处入口各管一件事</b><br>'
-    + '<b>大屏（上课页）</b>：实时收件看板，只统计「谁交了 / 交到哪个窗口」，'
+    + '<b>大屏页</b>：实时收件看板，只统计「谁交了 / 交到哪个窗口」，'
     + '不显示答案与分数，也不算正确率。<br>'
     + '<b>本页（测验 / 检测）</b>：组卷、发布与批阅；发布列表里可直接跳到成绩页看分析。<br>'
     + '<b>成绩页</b>：测验的提交率、逐题正确率、成绩 CSV 与人工批阅都在这里（页面中部「测验成绩分析」）；'
@@ -21639,10 +21650,14 @@ window.ttHealPeriods = ttHealPeriods;
     保护：超出台数的排课先拦下来，绝不静默丢课。 */
 async function alignPeriods() {
   const all = dbT('periods') || [];
-  const base = all.filter(p => Number(p.day_of_week) === 0)
-    .sort((a, b) => (Number(a.seq) || 0) - (Number(b.seq) || 0));
+  /* 2.0.49：基准必须先按 seq 去重。2026-11-20 库里周一有 27 行（seq 9/13/14/19/21
+     都重复，还串到凌晨 00:30~05:50），老代码直接拿这 27 行当模板，
+     一点「对齐」就把一堆重复节次复制到七天，越修越乱。 */
+  const base = periodsDedupe(all.filter(p => Number(p.day_of_week) === 0));
   if (!base.length) return toast('还没有节次，先建一套作息');
   const N = base.length;
+  const rawMon = all.filter(p => Number(p.day_of_week) === 0).length;
+  const dupMon = rawMon - N;
 
   const seqOf = pid => {
     const row = all.find(x => Number(x.id) === Number(pid));
@@ -21657,6 +21672,7 @@ async function alignPeriods() {
   if (!(await uiConfirm(
     `把一周 7 天对齐成「周一」这一套：每天 ${N} 节。\n\n`
     + `· 各天重新编号 1~${N}，「第N节」名称跟着序号走（自定义名保留）\n`
+    + (dupMon > 0 ? `· 周一有 ${rawMon} 行、其中 ${dupMon} 个重复节次会被去掉\n` : '')
     + (extra ? `· 其余天多出来的 ${extra} 个空节次会删掉\n` : '')
     + `· 排好的课不动`,
     { title: '对齐节次', okText: '开始对齐' }))) return;
@@ -21669,8 +21685,8 @@ async function alignPeriods() {
   let nextId = all.reduce((m, x) => Math.max(m, Number(x.id) || 0), 0) + 1;
   const out = [];
   [0, 1, 2, 3, 4, 5, 6].forEach(d => {
-    const rows = (byDay[d] || []).slice()
-      .sort((a, b) => (Number(a.seq) || 0) - (Number(b.seq) || 0));
+    // 每天也先去重：多出来的重复节次不该占位，否则后面 i 取到的是重复行
+    const rows = periodsDedupe(byDay[d]);
     if (!rows.length) return;             // 这天本来就没节次 → 不硬造
     for (let i = 0; i < N; i++) {
       const tpl = base[i];
@@ -21696,17 +21712,42 @@ window.alignPeriods = alignPeriods;
 const DAY_CHK = ['周一','周二','周三','周四','周五','周六','周日'];
 
 function openPeriodSetting() {
-  const cur = dbT('periods').filter(p=>p.day_of_week===0)
-    .sort((a,b)=>a.seq-b.seq);
+  /* 2.0.49：先按 seq 去重再取参数。原来直接数周一的行数，库里重复行多时
+     「每天节次数」会显示成 27 这种离谱值（输入框上限才 14）。 */
+  const cur = periodsDedupe((dbT('periods') || [])
+    .filter(p => Number(p.day_of_week) === 0));
   if (cur.length && cur[0].start_time && cur[0].end_time) {
     ttCfg.dayStart = cur[0].start_time.slice(0,5);
     const st = toMin(cur[0].start_time), en = toMin(cur[0].end_time);
     ttCfg.duration = en - st;
-    ttCfg.count = cur.length;
+    ttCfg.count = Math.min(24, cur.length);
   }
+  /* 2.0.49：七天第一节一览。座位表 / 考勤页只显示「今天」那一套，
+     这个面板只显示周一那一套 —— 两边不一样时老师会以为「时间设置错了」。
+     把各天实际开始时间摊开，差的标红，一眼看到差在哪、差几天。 */
+  const perDay = DAY_CHK.map((nm, i) => {
+    const rs = periodsDedupe((dbT('periods') || [])
+      .filter(p => Number(p.day_of_week) === i));
+    return { i, nm, n: rs.length,
+             start: rs[0] ? String(rs[0].start_time || '').slice(0, 5) : '' };
+  });
+  const firstStart = perDay[0].start;
+  const dowToday = dow0OfDate();
+  const diffDays = perDay.filter(d => d.start && firstStart && d.start !== firstStart);
+  const byStart = {};
+  diffDays.forEach(d => { (byStart[d.start] = byStart[d.start] || []).push(d.nm); });
+  const startKeys = Object.keys(byStart).sort();
+  const restTxt = (startKeys.length === 1 && diffDays.length >= 3)
+    ? '其余 ' + (diffDays.length === 6 ? '六天' : diffDays.length + ' 天')
+      + ' ' + startKeys[0] + ' 起'
+    : startKeys.map(k => byStart[k].join('、') + ' ' + k + ' 起').join('；');
+  const diffTip = diffDays.length
+    ? `各天作息不一致：周一 ${firstStart} 起，${restTxt}。座位表和考勤页按「今天」显示，`
+      + '跟上面这套参数对不上不是出错；要统一就把「应用到」全选再点应用。'
+    : '';
   const body = `
     <div>
-      <div class="ttc-glabel" style="margin-top:0">时间参数</div>
+      <div class="ttc-glabel" style="margin-top:0">时间参数（基准：周一）</div>
       <div class="ttc-row">
         <div class="f"><label>第一节开始</label>
           <input type="time" id="cfgDayStart" value="${ttCfg.dayStart}"></div>
@@ -21719,25 +21760,35 @@ function openPeriodSetting() {
       </div>
       <div class="ttc-tip">每两节之间自动插入大课间（双倍课间时长）</div>
 
+      <div class="ttc-glabel">各天实际第一节</div>
+      <div class="ttc-dayinfo" id="cfgPerDay">
+        ${perDay.map(d => `<div class="ttc-di${d.i === dowToday ? ' today' : ''}${
+          (d.start && firstStart && d.start !== firstStart) ? ' diff' : ''}"
+          title="${esc(d.start ? (d.nm + '：每天 ' + d.n + ' 节，第 1 节 ' + d.start + ' 起')
+                              : (d.nm + '：这天还没建节次'))}"><b>${d.nm}</b><small>${
+          d.start || '—'}</small></div>`).join('')}
+      </div>
+      <div class="ttc-tip">今天（${DAY_CHK[dowToday] || '—'}）座位表按这一格的时间显示</div>
+      ${diffTip ? `<div class="ttc-tip" style="color:#C4553B">${diffTip}</div>` : ''}
+
       <div class="ttc-glabel">应用到（可多选）</div>
       <div class="ttc-days" id="cfgDays">
         ${DAY_CHK.map((d,i)=>`<div class="ttc-day${ttCfg.applyDays.includes(i)?' on':''}"
           data-i="${i}" onclick="ttCfgToggleDay(this)">${d}</div>`).join('')}
       </div>
-      <div class="ttc-tip">周一到周五通常是同一套作息，周六周日可单独设置</div>
+      <div class="ttc-tip">改完参数点下面的「应用到选中日期」；「重排编号 / 对齐各天节次」只统一编号与节数，不改各天的时间</div>
 
-      <div class="ttc-glabel">预览</div>
+      <div class="ttc-glabel">作息对照</div>
       <div class="ttc-prev" id="cfgPrev"></div>
-
-      <div class="mt-foot" style="margin-top:16px">
-        <button class="btn btn-primary" style="width:100%"
-          onclick="ttCfgApply()">应用到选中日期</button>
-        <button class="btn" style="width:100%;margin-top:8px"
-          onclick="alignPeriods()">重排编号 / 对齐各天节次</button>
-      </div>
-      <div class="ttc-tip">删过节次、或课表上出现「第8节 → 第10节」这种断号时，点上面第二个按钮（预览只展示周一的时间表，其余日期结构相同）</div>
     </div>`;
-  showFloat('课表时间设置', body);
+  /* 2.0.49：按钮移进 float-foot（固定不滚）。加了「各天实际第一节」之后
+     内容变长，放 body 里会被挤到滚动区下面，老师找不到「应用」。 */
+  showFloat('课表时间设置', body, {
+    footer: `<button class="btn btn-primary" style="width:100%"
+        onclick="ttCfgApply()">应用到选中日期</button>
+      <button class="btn" style="width:100%;margin-top:8px"
+        onclick="alignPeriods()">重排编号 / 对齐各天节次</button>`
+  });
   ttCfgPreview();
   ['cfgDayStart','cfgDuration','cfgGap','cfgCount'].forEach(id => {
     const el = document.getElementById(id);
@@ -21758,19 +21809,41 @@ function ttCfgRead() {
 }
 window.ttCfgRead = ttCfgRead;
 
-/** 刷新预览（周一时间表） */
+/** 刷新预览：先列「周一实际」（座位表/考勤页用的就是这套真实数据），
+    再列「按上面参数会生成的样子」。2.0.49 之前只显示模拟结果 ——
+    参数里 08:00 起、隔节翻倍课间，模拟出来是 09:50→10:00 这种，
+    跟库里真实的 09:50/10:45 对不上，老师就以为「座位表的时间和课表设置不一致」。 */
 function ttCfgPreview() {
   ttCfgRead();
-  const out = [];
-  let t = toMin(ttCfg.dayStart);
-  for (let i=0; i<ttCfg.count; i++) {
-    if (i>0) t += (i%2===0) ? ttCfg.gap*2 : ttCfg.gap;
-    const s=t, e=t+ttCfg.duration;
-    out.push('第'+(i+1)+'节  '+toHM(s).slice(0,5)+' - '+toHM(e).slice(0,5));
-    t=e;
-  }
   const el = document.getElementById('cfgPrev');
-  if (el) el.textContent = out.join('\n') || '（请设置节次数）';
+  if (!el) return;
+  const to5 = v => String(v || '').slice(0, 5);
+  const real = periodsDedupe((dbT('periods') || [])
+    .filter(p => Number(p.day_of_week) === 0))
+    .filter(p => p.start_time && p.end_time);
+  const realTxt = real.map(p => (p.label || ('第' + (p.seq || p.id) + '节'))
+    + '  ' + to5(p.start_time) + ' - ' + to5(p.end_time));
+  const sim = [];
+  let t = toMin(ttCfg.dayStart);
+  for (let i = 0; i < ttCfg.count; i++) {
+    if (i > 0) t += (i % 2 === 0) ? ttCfg.gap * 2 : ttCfg.gap;
+    const s = t, e = t + ttCfg.duration;
+    sim.push('第' + (i + 1) + '节  ' + toHM(s).slice(0, 5) + ' - ' + toHM(e).slice(0, 5));
+    t = e;
+  }
+  const norm = a => a.map(x => x.replace(/\s+/g, '').replace(/^第\d+节/, ''));
+  const same = realTxt.length === sim.length
+    && norm(realTxt).every((x, i) => x === norm(sim)[i]);
+  let txt;
+  if (!realTxt.length) {
+    txt = '（周一还没有节次，下面是按上面参数生成的样子）\n' + sim.join('\n');
+  } else if (same) {
+    txt = '周一实际（座位表和考勤页用的就是这套）\n' + realTxt.join('\n');
+  } else {
+    txt = '周一实际（座位表和考勤页用的就是这套）\n' + realTxt.join('\n')
+      + '\n\n按上面参数会生成：\n' + sim.join('\n');
+  }
+  el.textContent = txt;
 }
 window.ttCfgPreview = ttCfgPreview;
 
@@ -22257,6 +22330,24 @@ window.dow0OfDate = dow0OfDate;
    所以读的时候必须挑当天那一套、再按 seq 去重（2026-11-19 牛哥反馈）：
    原来直接整表返回，162 行全塞进签到下拉 → 同一节重复 7 次，
    还夹着课表里根本没排的节次。某天没节次（老数据只填了周一）就退回周一那套。 */
+/** 按 seq 去重（同 seq 只留 id 最小的那条）。
+    与 periodList()、服务端 _periods_today() 同一套规则 —— 三处必须一致，
+    否则「同一节」在不同页面显示的时间会不一样（2026-11-20 那个签到 bug）。 */
+function periodsDedupe(rows) {
+  const seen = new Set(), out = [];
+  (rows || []).slice()
+    .sort((a, b) => (Number(a.seq) || 0) - (Number(b.seq) || 0)
+      || Number(a.id) - Number(b.id))
+    .forEach(p => {
+      const s = Number(p.seq || p.id) || 0;
+      if (!s || seen.has(s)) return;
+      seen.add(s);
+      out.push(p);
+    });
+  return out;
+}
+window.periodsDedupe = periodsDedupe;
+
 function periodList(dow) {
   const d0 = (dow == null) ? dow0OfDate() : Number(dow);
   const all = dbT('periods') || [];

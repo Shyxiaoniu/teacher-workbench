@@ -508,7 +508,7 @@ PET_IDS = ["cat", "dog", "rabbit", "penguin", "panda", "dino", "unicorn", "drago
            "duck", "bear"]
 COND = threading.Condition()
 STARTED = time.time()
-VERSION = "2.0.48"
+VERSION = "2.0.49"
 ONLINE_WINDOW = 300      # 5 分钟内活跃算在线
 # 可内联直出的附件类型（其余一律按下载处理，防止同源执行脚本）
 _INLINE_EXTS = {"png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "pdf",
@@ -5464,8 +5464,10 @@ class Handler(LEG.Handler):
 
         找不到（课间 / 没排作息 / 放学后）就返回 None，让前端按第 1 节处理，
         绝不猜一个错的节次把签到记到别的课上去。
+
+        2.0.49：改成只看「今天」的作息（_periods_today），与前端 periodList 同口径。
         """
-        rows = [r for r in STORE.table_rows("periods") if not r.get("deleted")]
+        rows = _periods_today()
         if not rows:
             return None
         now = time.localtime()
@@ -5508,7 +5510,7 @@ class Handler(LEG.Handler):
         · 其余（放学后 / 本班课表没在用）→ 保持旧行为（上一节补签）。
         cid 为 None（无班级上下文）时等同 _current_period。
         """
-        rows = [r for r in STORE.table_rows("periods") if not r.get("deleted")]
+        rows = _periods_today()          # 2.0.49：只看今天，与前端同一套
         if not rows:
             return None
         lt = time.localtime()
@@ -5600,10 +5602,9 @@ class Handler(LEG.Handler):
             seq = -1.0
         prev_end = None
         try:
-            rows = sorted(
-                [x for x in STORE.table_rows("periods") if not x.get("deleted")],
-                key=lambda x: float(x.get("seq")
-                                    if x.get("seq") not in (None, "") else x.get("id")))
+            # 2026-11-20：上一节下课时间必须取「今天」的，全表遍历会拿到
+            # 别个星期那套（周一 08:00 / 周二~周六 08:55），窗口就差一小时。
+            rows = _periods_today()
         except Exception:
             rows = []
         for x in rows:
@@ -5691,7 +5692,8 @@ class Handler(LEG.Handler):
             if not (1 <= period <= 20):
                 return self._json({"ok": False, "msg": "节次超出范围"}, 400)
             # 时间窗校验：没到课前 / 已下课都明确拒绝（窗口见 _period_time_ok）
-            for r in STORE.table_rows("periods"):
+            # 2.0.49：取今天的行，否则同一节会拿到别的星期那套时间。
+            for r in _periods_today():
                 for k in ("seq", "id"):
                     try:
                         if int(float(r.get(k))) == period:
@@ -6390,6 +6392,68 @@ def _mins_of(v):
         return -1
 
 
+def _periods_today():
+    """今天该用哪套作息：按 day_of_week 过滤 + 同 seq 去重（2.0.49 定版）。
+
+    2026-11-20 牛哥反馈：「教师端座位表上面的时间和课表设置的时间不一致，
+    学生端签到也跟着出问题」。根因是两端取的不是同一批行 ——
+    前端 periodList() 按「今天」过滤，服务端这边却遍历全表 171 行：
+    库里同一个 seq 在周一是 08:00、周二~周六是 08:55（历史重排留下的），
+    按 seq 排序后谁先命中就返回谁，判出来的节次跟页面上显示的差一节，
+    签到时间窗自然全错。
+
+    口径与前端 periodList() 严格对齐：
+      · 先取今天的行；今天一套都没建过 → 退回周一那套（前端也这么兜底）；
+      · 同 seq 多行只留 id 最小的那条（前端也是这个规则）。
+    返回按 seq 升序，调用方不用再排。
+    """
+    rows = [r for r in STORE.table_rows("periods") if not r.get("deleted")]
+    if not rows:
+        return []
+    dow = time.localtime().tm_wday          # 0=周一，与 lessons.day_of_week 同口径
+
+    def dow_of(r):
+        try:
+            return int(float(r.get("day_of_week") or 0))
+        except Exception:
+            return 0
+
+    def seq_of(r):
+        try:
+            return float(r.get("seq") if r.get("seq") not in (None, "") else r.get("id"))
+        except Exception:
+            return 999.0
+
+    def id_of(r):
+        try:
+            return float(r.get("id") or 0)
+        except Exception:
+            return 0.0
+
+    base = [r for r in rows if dow_of(r) == 0]      # 课表格子用的那套（模板）
+    mine = [r for r in rows if dow_of(r) == dow]
+    if not mine:
+        mine = base
+    seen, out = set(), []
+    for r in sorted(mine, key=lambda x: (seq_of(x), id_of(x))):
+        k = seq_of(r)
+        if not k or k in seen:
+            continue
+        seen.add(k)
+        out.append(r)
+    # 今天缺某个节次 → 用周一那套的时间补出来（前端 periodList 也这么补，只读不写库）。
+    # 不补的话：页面上下拉里看得到第 1 节，服务端却判不出第 1 节，又差一节。
+    if dow != 0 and base:
+        for r in sorted(base, key=lambda x: seq_of(x)):
+            k = seq_of(r)
+            if not k or k in seen:
+                continue
+            seen.add(k)
+            out.append(dict(r, day_of_week=dow, id=dow * 100 + int(k)))
+        out.sort(key=seq_of)
+    return out
+
+
 def _manual_checkin_min():
     """老师手动设置的签到时间 → 当天分钟数；没填 / 格式不对返回 None。"""
     t = str((CFG.get("checkin") or {}).get("manual_time") or "").strip()
@@ -6409,7 +6473,7 @@ def absent_sweep_once():
     # 老师把签到关了：连自动记缺勤一起停，否则关了功能还在后台刷旷课
     if not bool((CFG.get("checkin") or {}).get("enabled", True)):
         return 0
-    rows = [r for r in STORE.table_rows("periods") if not r.get("deleted")]
+    rows = _periods_today()          # 2.0.49：按今天的作息判「本节结束」
     if not rows:
         return 0
     lt = time.localtime()

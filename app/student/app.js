@@ -460,39 +460,9 @@
                     : '<button class="btn ck-b" id="ckBtn">一键签到</button>')) +
       '</div>';
 
-    /* 打字冒险岛入口卡（老师开放后才出现，2026-11-02） */
-    var typingHtml = S.typingOn
-      ? '<div class="card" data-typing-go style="cursor:pointer;display:flex;align-items:center;gap:14px">' +
-        '<div style="font-size:32px;line-height:1">⌨️</div>' +
-        '<div style="flex:1"><b style="font-size:15.5px">打字冒险岛</b>' +
-        '<div style="font-size:12.5px;color:var(--ink3);margin-top:3px">闯关练打字 · 赢星星 · 孵宠物 · 上排行榜</div></div>' +
-        '<span class="tag hot">去闯关 ›</span></div>'
-      : '';
-
-    /* H5 网页入口卡（2.0.41）：老师开启 + 允许使用就出现，页签同时自动进导航。
-       卡片只是「快捷入口」，不再承担「添加」职责。 */
-    var designHtml = designReady()
-      ? '<div class="card" data-design-go style="cursor:pointer;display:flex;align-items:center;gap:14px">' +
-        '<div style="font-size:32px;line-height:1">🎨</div>' +
-        '<div style="flex:1"><b style="font-size:15.5px">网页</b>' +
-        '<div style="font-size:12.5px;color:var(--ink3);margin-top:3px">' +
-        (S.designSeen ? '接着改你的网页 · 做好一键交给老师'
-                      : '左边写代码 · 右边看效果 · 做好一键交给老师') +
-        '</div></div>' +
-        '<span class="tag hot">' + (S.designSeen ? '继续写 ›' : '去写 ›') + '</span></div>'
-      : '';
-
-    /* 像素画入口卡（2.0.47）：与网页卡并列，老师开启就出现 */
-    var pixelHtml = pixelReady()
-      ? '<div class="card" data-pixel-go style="cursor:pointer;display:flex;align-items:center;gap:14px">' +
-        '<div style="font-size:32px;line-height:1">🟦</div>' +
-        '<div style="flex:1"><b style="font-size:15.5px">像素画</b>' +
-        '<div style="font-size:12.5px;color:var(--ink3);margin-top:3px">' +
-        (S.pixelSeen ? '接着画你的作品 · 做好一键交给老师'
-                     : '一格一格涂 · 画好一键交给老师') +
-        '</div></div>' +
-        '<span class="tag hot">' + (S.pixelSeen ? '继续画 ›' : '去画 ›') + '</span></div>'
-      : '';
+    /* 打字 / 网页 / 像素 的入口卡已下线（2.0.49 牛哥要求）：
+       学生端统一从左侧导航进，不在「今日」页重复一遍。
+       显隐只看老师那边的服务开关（navShown），与「添加过没有」无关。 */
 
     return '<div class="stat-grid">' +
       '<div class="stat"><div class="stat-num">' + tm.list.length + '<small>份</small></div>' +
@@ -507,9 +477,6 @@
         '<div class="stat-label">我的座位 ›</div></div>' : '') +
       '</div>' +
       ckHtml +
-      typingHtml +
-      designHtml +
-      pixelHtml +
       '<div class="cols2">' +
       '<div class="card"><h3>' + (tm.fresh ? '本课资料' : '最近下发的资料') +
         '<span class="more">点一下直接打开</span></h3>' + matsHtml + '</div>' +
@@ -681,9 +648,10 @@
   function go(v) {
     /* 每次进测验页重新拉一次，老师刚发布的卷子不用等刷新页面 */
     if (v === 'quiz') S.quiz.list = null;
-    /* 设计页：没添加过就先引导去今日页点「添加」，别给一块空白 */
+    /* 设计页 / 像素画：老师没开（或关了「允许使用」）就别给一块空白。
+       2.0.49 起不再有「先去今日页添加」这一步 —— 页签只看老师开关。 */
     if (v === 'design' && !designReady()) {
-      toast('先在「今日」页点一下「H5 网页」卡片，把它添加到导航');
+      toast('老师还没开启「网页」，等开启后这里就能写');
       v = 'today';
     }
     if (v === 'pixel' && !pixelReady()) {
@@ -769,16 +737,9 @@
     document.querySelectorAll('[data-hw]').forEach(function (el) {
       el.onclick = function () { openHw(el.getAttribute('data-hw')); };
     });
-    // 今日页「打字冒险岛」入口卡 → 站内切到打字页（2026-11-02）
-    var tgo = document.querySelector('[data-typing-go]');
-    if (tgo) tgo.onclick = function () { go('typing'); };
-    /* H5 网页入口卡（2.0.41）：点一下直接进编辑器；页签已由服务端开关
-       自动放进导航，这里不再做「添加」动作。 */
-    var dgo = document.querySelector('[data-design-go]');
-    if (dgo) dgo.onclick = function () { openDesign(); };
-    /* 像素画入口卡（2.0.47）：同样点一下直接进画板 */
-    var pgo = document.querySelector('[data-pixel-go]');
-    if (pgo) pgo.onclick = function () { openPixel(); };
+    /* 打字 / 网页 / 像素三张入口卡已下线（2.0.49 牛哥要求）：
+       学生端统一从左侧导航进入，不再在「今日」页重复摆一遍。
+       导航项的显隐只看老师那边的开关，见 navShown()。 */
     /* 课堂活动入口（data-act / data-locked）已随按课表的旧模块下线
        （2026-11-04）：学生端不再有按课节的学习单入口，只留资料打开。 */
     // 资料页 / 今日「本课资料」：点开在线预览或一键打开
@@ -814,20 +775,8 @@
     if (n.flag && S.flags[n.flag] === false) return false;
     return true;
   }
-  /** 从「今日」入口卡进编辑器：只记一下「来过」（下次文案变「继续写」），
-      页签早就在导航里了，不需要再「添加」。 */
-  function openDesign() {
-    try { localStorage.setItem(DESIGN_ADD_KEY, '1'); } catch (e) {}
-    S.designSeen = true;
-    S.designAdded = true;
-    go('design');
-  }
-  /** 从「今日」入口卡进像素画（2.0.47）：同样只记「来过」，页签由服务端开关决定 */
-  function openPixel() {
-    try { localStorage.setItem(PIXEL_ADD_KEY, '1'); } catch (e) {}
-    S.pixelSeen = true;
-    go('pixel');
-  }
+  /* 2.0.49：「今日」入口卡下线后，进入这两个页面只走左侧导航（go('design') /
+     go('pixel')），原来的 openDesign/openPixel 已无调用点，一并删掉。 */
 
   /* ---------------- 图片素材（2.0.41） ----------------
      老师在「资料」里下发的图片，学生在这里点「加到网页」，

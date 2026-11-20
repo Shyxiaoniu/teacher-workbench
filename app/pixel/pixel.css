@@ -175,6 +175,85 @@ html[data-mode="dark"] .px-cur-row input[type=color]{color-scheme:dark}
   .px-bar .ds-brand small{display:none}
 }
 
+/* ---------------- 模板库（2.0.49） ----------------
+   右侧「模板」小卡 + 全屏浮层。浮层复用作品大图那套遮罩配色，
+   卡片白底棋盘格，缩略图最近邻放大，和画布上的观感一致。 */
+.px-ref{
+  display:flex;align-items:center;gap:10px;margin-top:9px;
+  padding:8px;border:1px dashed var(--line-2);border-radius:11px;
+  background:var(--card-2, #fbf7ef);position:relative;
+}
+.px-ref canvas{
+  flex:none;border-radius:7px;border:1px solid var(--line);
+  background:#fff;image-rendering:pixelated;
+}
+.px-ref-txt{min-width:0;display:flex;flex-direction:column;gap:2px}
+.px-ref-txt b{font-size:13px;color:var(--ink)}
+.px-ref-txt span{font-size:11.5px;color:var(--ink3);line-height:1.5}
+.px-ref-x{
+  position:absolute;top:3px;right:3px;width:22px;height:22px;
+  border:none;background:transparent;color:var(--ink3);cursor:pointer;
+  font-size:15px;line-height:1;border-radius:6px;
+}
+.px-ref-x:hover{background:var(--line);color:var(--ink)}
+
+.px-modal{
+  position:fixed;inset:0;z-index:96;display:flex;align-items:center;justify-content:center;
+  background:rgba(30,20,14,.55);padding:20px;
+}
+.px-modal[hidden]{display:none}
+.px-modal-box{
+  background:var(--card);border-radius:18px;box-shadow:var(--shadow-lg);
+  width:min(720px,94vw);max-height:88vh;display:flex;flex-direction:column;
+  overflow:hidden;
+}
+.px-modal-h{
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  padding:14px 16px;border-bottom:1px solid var(--line);flex:none;
+}
+.px-modal-h b{font-size:15px}
+.px-modal-h span{font-size:12px;color:var(--ink3);line-height:1.55;flex:1;min-width:180px}
+.px-modal-x{
+  flex:none;width:30px;height:30px;border-radius:9px;border:1px solid var(--line);
+  background:transparent;color:var(--ink3);font-size:17px;line-height:1;cursor:pointer;
+}
+.px-modal-x:hover{background:var(--brand-soft);color:var(--ink)}
+
+.px-tpl-grid{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));
+  gap:10px;padding:14px 16px 16px;overflow-y:auto;
+}
+.px-tpl-card{
+  display:flex;flex-direction:column;align-items:center;gap:7px;
+  padding:9px 8px 10px;border:1px solid var(--line);border-radius:13px;
+  background:
+    repeating-conic-gradient(#f3eee5 0 25%,#fbf8f1 0 50%) 0 0/12px 12px;
+  transition:border-color .16s ease, box-shadow .16s ease;
+}
+.px-tpl-card:hover{border-color:var(--line-2);box-shadow:0 4px 14px rgba(122,82,50,.10)}
+html[data-mode="dark"] .px-tpl-card{
+  background:repeating-conic-gradient(#2c221b 0 25%,#241b15 0 50%) 0 0/12px 12px;
+}
+.px-tpl-cv{
+  display:block;border-radius:8px;border:1px solid var(--line);
+  image-rendering:pixelated;background:#fff;
+}
+.px-tpl-nm{font-size:12.5px;color:var(--ink2);font-weight:600}
+.px-tpl-ops{display:flex;gap:6px;width:100%}
+.px-mini{
+  flex:1;min-width:0;padding:5px 0;border-radius:8px;cursor:pointer;
+  border:1px solid var(--line);background:var(--card);color:var(--ink2);
+  font-size:11.5px;font-family:inherit;transition:background .14s,border-color .14s,color .14s;
+}
+.px-mini:hover{border-color:var(--line-2);color:var(--ink)}
+.px-mini.primary{background:var(--brand-soft);border-color:var(--line-2);color:var(--brand)}
+.px-mini.primary:hover{background:var(--brand);color:#fff;border-color:var(--brand)}
+@media (max-width:520px){
+  .px-tpl-grid{grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px;padding:12px}
+  .px-tpl-card{padding:8px 6px 9px}
+  .px-tpl-ops{flex-direction:column}
+}
+
 /* ---------------- 教师端：作品墙补充 ---------------- */
 /* 像素画是正方形，作品缩略图用 contain + 棋盘底，缩放后不变形 */
 .px-works .tc-work .th{

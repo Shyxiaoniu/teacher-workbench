@@ -27,6 +27,167 @@
     '#a8c0a0', '#f4c2c2', '#9aa7b8', '#4a4a4a'
   ];
 
+  /* ---------------- 模板（2.0.49） ----------------
+     给「照着练」用的现成图案，一律 16×16 起步：格子少、学生数得清、
+     画完有成就感。px 与草稿同一套编码（'.' = 空，字符 = 调色板下标），
+     下标只指向前 16 个默认色 —— 学生只能往调色板末尾追加颜色，
+     前 16 个不会被改，所以载入模板不需要重映射。
+     新增一个模板：照格式加一条，行数必须 = h、每行字符数必须 = w。
+     ------------------------------------------------------------ */
+  var TEMPLATES = [
+    { id: 'heart', name: '爱心', w: 16, h: 16, px: [
+      '................',
+      '...777....777...',
+      '..77777..77777..',
+      '.77777777777777.',
+      '7777777777777777',
+      '7777777777777777',
+      '7777777777777777',
+      '.77777777777777.',
+      '..777777777777..',
+      '...7777777777...',
+      '....77777777....',
+      '.....777777.....',
+      '......7777......',
+      '.......77.......',
+      '................',
+      '................'
+    ].join('') },
+
+    { id: 'smile', name: '笑脸', w: 16, h: 16, px: [
+      '................',
+      '....33333333....',
+      '..333333333333..',
+      '.33333333333333.',
+      '3333333333333333',
+      '3333003333003333',
+      '3333003333003333',
+      '3333333333333333',
+      '3333333333333333',
+      '3333333333333333',
+      '3333033333303333',
+      '3333300000003333',
+      '.33333333333333.',
+      '..333333333333..',
+      '....33333333....',
+      '................'
+    ].join('') },
+
+    { id: 'house', name: '小房子', w: 16, h: 16, px: [
+      '................',
+      '......7777......',
+      '.....777777.....',
+      '....77777777....',
+      '...7777777777...',
+      '..777777777777..',
+      '.77777777777777.',
+      '.88888888888888.',
+      '.88555888855588.',
+      '.88555888855588.',
+      '.88888888888888.',
+      '.88888833388888.',
+      '.88888833388888.',
+      '.88888833388888.',
+      '.88888833388888.',
+      '4444444444444444'
+    ].join('') },
+
+    { id: 'star', name: '星星', w: 16, h: 16, px: [
+      '................',
+      '.......33.......',
+      '......3333......',
+      '......3333......',
+      '3333333333333333',
+      '.33333333333333.',
+      '..333333333333..',
+      '...3333333333...',
+      '....33333333....',
+      '....33333333....',
+      '...3333333333...',
+      '..3333....3333..',
+      '.3333......3333.',
+      '.33..........33.',
+      '................',
+      '................'
+    ].join('') },
+
+    { id: 'cat', name: '小猫', w: 16, h: 16, px: [
+      '................',
+      '..e..........e..',
+      '..ee........ee..',
+      '..eee......eee..',
+      '..eeeeeeeeeeee..',
+      '.eeeeeeeeeeeeee.',
+      '.ee00eeeeee00ee.',
+      '.ee00eeeeee00ee.',
+      '.eeeeeeeeeeeeee.',
+      '.eeeeeeddeeeeee.',
+      '.eeeeeeeeeeeeee.',
+      '..eeeeeeeeeeee..',
+      '..eeeeeeeeeeee..',
+      '...eeeeeeeeee...',
+      '................',
+      '................'
+    ].join('') },
+
+    { id: 'apple', name: '苹果', w: 16, h: 16, px: [
+      '................',
+      '........2.......',
+      '.......2.44.....',
+      '......2..444....',
+      '.....7777.44....',
+      '....7777777.....',
+      '...777777777....',
+      '..77777777777...',
+      '..77777777777...',
+      '..77777777777...',
+      '..77777777777...',
+      '...777777777....',
+      '....7777777.....',
+      '.....77777......',
+      '................',
+      '................'
+    ].join('') },
+
+    { id: 'fish', name: '小鱼', w: 16, h: 16, px: [
+      '................',
+      '................',
+      '............5...',
+      '...........55...',
+      '..5555555..5....',
+      '.555555555.55...',
+      '555550555555....',
+      '5555555555555...',
+      '5555555555.55...',
+      '.555555555.5....',
+      '..5555555..55...',
+      '...........55...',
+      '............5...',
+      '................',
+      '................',
+      '................'
+    ].join('') },
+
+    { id: 'tree', name: '小树', w: 16, h: 16, px: [
+      '................',
+      '.......44.......',
+      '......4444......',
+      '.....444444.....',
+      '....44444444....',
+      '...4444444444...',
+      '..444444444444..',
+      '.44444444444444.',
+      '4444444444444444',
+      '.44444444444444.',
+      '..444444444444..',
+      '...4444444444...',
+      '.......22.......',
+      '.......22.......',
+      '.......22.......',
+      '................'
+    ].join('') }
+  ];
+
   var S = {
     me: null, role: null, demo: false, practice: false,
     cfg: { enabled: false, allow_add: true, allow_submit: true,
@@ -34,7 +195,7 @@
     w: 32, h: 32, cells: null, pal: [], cur: 0,
     tool: 'pen', brush: 1, mirror: false, grid: true,
     title: '', dirty: false, saving: false, submitting: false,
-    lastSavedAt: 0, last: null, loaded: false,
+    lastSavedAt: 0, last: null, loaded: false, ref: null,
     undo: [], redo: [], stroke: null, saveTimer: 0, rafId: 0
   };
 
@@ -534,6 +695,113 @@
     }
   }
 
+  /* ================= 模板库（2.0.49） ================= */
+  /** 把模板画进任意 canvas（缩略图 / 参考图共用）：最近邻放大，边缘不糊 */
+  function drawTpl(cv, tpl, side) {
+    if (!cv || !tpl) return;
+    var dpr = Math.min(2, window.devicePixelRatio || 1);
+    var n = tpl.w;
+    var cell = side / n;
+    cv.style.width = side + 'px';
+    cv.style.height = side + 'px';
+    cv.width = Math.round(side * dpr);
+    cv.height = Math.round(side * dpr);
+    var ctx = cv.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, side, side);
+    for (var i = 0; i < tpl.px.length; i++) {
+      var ch = tpl.px.charAt(i);
+      if (ch === '.') continue;
+      var k = PAL_CHARS.indexOf(ch);
+      if (k < 0) continue;
+      var x = i % n, y = (i - x) / n;
+      ctx.fillStyle = PAL_DEFAULT[k] || '#000000';
+      var x0 = Math.round(x * cell), y0 = Math.round(y * cell);
+      ctx.fillRect(x0, y0, Math.round((x + 1) * cell) - x0,
+                   Math.round((y + 1) * cell) - y0);
+    }
+  }
+
+  function renderTplGrid() {
+    var g = $('#tplGrid');
+    if (!g) return;
+    g.innerHTML = TEMPLATES.map(function (t, i) {
+      return '<div class="px-tpl-card" data-i="' + i + '">' +
+        '<canvas class="px-tpl-cv" aria-label="' + esc(t.name) + '"></canvas>' +
+        '<div class="px-tpl-nm">' + esc(t.name) + '</div>' +
+        '<div class="px-tpl-ops">' +
+          '<button type="button" class="px-mini" data-act="look">照着画</button>' +
+          '<button type="button" class="px-mini primary" data-act="load">载入</button>' +
+        '</div></div>';
+    }).join('');
+    $$('#tplGrid .px-tpl-card').forEach(function (card) {
+      drawTpl(card.querySelector('canvas'),
+              TEMPLATES[+card.getAttribute('data-i')], 96);
+    });
+  }
+
+  function openTpl() {
+    var m = $('#tplModal');
+    if (!m) return;
+    renderTplGrid();
+    m.hidden = false;
+  }
+  function closeTpl() {
+    var m = $('#tplModal');
+    if (m) m.hidden = true;
+  }
+
+  /** 参考图：只在工具面板里显示一张小图，不动画布，学生照着描 */
+  function setRef(tpl) {
+    S.ref = tpl;
+    var box = $('#pxRef');
+    if (!box) return;
+    box.hidden = false;
+    var nm = $('#refName');
+    if (nm) nm.textContent = tpl.name;
+    drawTpl($('#refCv'), tpl, 76);
+  }
+  function clearRef() {
+    S.ref = null;
+    var box = $('#pxRef');
+    if (box) box.hidden = true;
+  }
+
+  /* 模板下标基于 PAL_DEFAULT 前 16 色，学生只能往后追加，理论上不会变。
+     万一老草稿对不上（或以后默认色改过），此时画布已清空，
+     重排调色板不会污染已有内容。 */
+  function ensureTplPal() {
+    var changed = false;
+    for (var i = 0; i < PAL_DEFAULT.length; i++) {
+      if (String(S.pal[i] || '').toLowerCase() !== PAL_DEFAULT[i].toLowerCase()) {
+        S.pal[i] = PAL_DEFAULT[i];
+        changed = true;
+      }
+    }
+    if (changed) {
+      if (S.cur >= S.pal.length) S.cur = 0;
+      selectColor(S.cur);
+    }
+  }
+
+  /** 把模板直接画到画布上（可继续改，也能 Ctrl+Z 撤回）。返回是否真的画了 */
+  function applyTemplate(tpl) {
+    if (filledCount() && !confirm('把「' + tpl.name + '」画到画布上？\n' +
+        '现在画的会被替换，载入后按 Ctrl+Z 还能撤回。')) {
+      return false;
+    }
+    pushUndo();
+    resetCells(tpl.w, tpl.h, false);
+    ensureTplPal();
+    loadPx(tpl.px, tpl.w, tpl.h);
+    markSize(tpl.w);
+    afterEdit();
+    layout();
+    toast('已载入「' + tpl.name + '」，接着改就行', 'ok');
+    return true;
+  }
+
   /* ================= 交互绑定 ================= */
   function bindCanvas() {
     var cv = $('#cv');
@@ -635,6 +903,40 @@
     $('#colorPick').onchange = function () { addCurColor(this.value); };
 
     $('#btnAddColor').onclick = function () { addCurColor($('#colorPick').value); };
+
+    /* -------- 模板库（2.0.49） -------- */
+    var btnTpl = $('#btnTpl');
+    if (btnTpl) btnTpl.onclick = openTpl;
+    var tplClose = $('#tplClose');
+    if (tplClose) tplClose.onclick = closeTpl;
+    var tplModal = $('#tplModal');
+    if (tplModal) {
+      // 点浮层空白处关掉（和作品大图那个浮层同一手感），点卡片本身不关
+      tplModal.onclick = function (ev) { if (ev.target === tplModal) closeTpl(); };
+    }
+    var tplGrid = $('#tplGrid');
+    if (tplGrid) {
+      tplGrid.onclick = function (ev) {
+        var btn = ev.target.closest ? ev.target.closest('button[data-act]') : null;
+        if (!btn) return;
+        var card = btn.closest('.px-tpl-card');
+        if (!card) return;
+        var t = TEMPLATES[+card.getAttribute('data-i')];
+        if (!t) return;
+        if (btn.getAttribute('data-act') === 'look') {
+          setRef(t);
+          closeTpl();
+          toast('参考图在右侧「模板」栏，照着它一格一格画');
+        } else if (applyTemplate(t)) {
+          closeTpl();       // 用户在 confirm 里点了取消，就留在模板库
+        }
+      };
+    }
+    var refClose = $('#refClose');
+    if (refClose) refClose.onclick = clearRef;
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') closeTpl();
+    });
 
     $('#inpTitle').oninput = function () {
       S.title = this.value;

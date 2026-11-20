@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>像素画 · 班级工作台</title>
-<link rel="stylesheet" href="/design/design.css?v=2.0.47">
-<link rel="stylesheet" href="/pixel/pixel.css?v=2.0.47">
+<link rel="stylesheet" href="/design/design.css?v=2.0.49">
+<link rel="stylesheet" href="/pixel/pixel.css?v=2.0.49">
 </head>
 <body>
 <div class="px-app" id="app">
@@ -56,6 +56,21 @@
     <!-- 右：工具与调色板 -->
     <aside class="px-tools">
       <div class="px-sec">
+        <div class="px-sec-h">模板</div>
+        <button class="btn ghost sm" id="btnTpl" style="width:100%">🧩 打开模板库 · 照着练</button>
+        <!-- 参考图：只显示小图不动画布，学生照着描（2.0.49） -->
+        <div class="px-ref" id="pxRef" hidden>
+          <canvas id="refCv" aria-label="模板参考图"></canvas>
+          <div class="px-ref-txt">
+            <b id="refName">模板</b>
+            <span>照着它画</span>
+          </div>
+          <button class="px-ref-x" id="refClose" type="button"
+            title="收起参考图" aria-label="收起参考图">×</button>
+        </div>
+      </div>
+
+      <div class="px-sec">
         <div class="px-sec-h">工具</div>
         <div class="px-tool-grid" id="tools">
           <button type="button" class="px-tool on" data-tool="pen"><span class="ic">✏️</span>铅笔</button>
@@ -104,6 +119,18 @@
 <div class="ds-toast" id="toast"></div>
 <div id="busyBox"></div>
 
-<script src="/pixel/pixel.js?v=2.0.47"></script>
+<!-- 模板库（2.0.49）：8 个 16×16 小图，照着画或直接载入 -->
+<div class="px-modal" id="tplModal" hidden>
+  <div class="px-modal-box" role="dialog" aria-label="模板库">
+    <div class="px-modal-h">
+      <b>模板库</b>
+      <span>「照着画」在工具面板里显示参考图，画布还空着；「载入」直接把图放到画布上，可以接着改。</span>
+      <button class="px-modal-x" id="tplClose" type="button" title="关闭" aria-label="关闭">×</button>
+    </div>
+    <div class="px-tpl-grid" id="tplGrid"></div>
+  </div>
+</div>
+
+<script src="/pixel/pixel.js?v=2.0.49"></script>
 </body>
 </html>
