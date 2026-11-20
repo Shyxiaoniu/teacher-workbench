@@ -40,6 +40,9 @@ PROJ = os.path.dirname(ROOT)
 # 清的是另一份 config（用户以为密码清掉了，实际没有）。
 DATA = os.environ.get("WB_DATA_DIR") or os.path.join(ROOT, "data")
 CONFIG = os.path.join(DATA, "config.json")
+# 重启请求标记：server.py 收到 /api/v2/update/restart 时先落这个文件再退出，
+# 本启动器看到「退出码 0 + 标记在」就知道是重启，重新拉起而不是报「已停止」。
+RESTART_FLAG = os.path.join(DATA, ".restart-request")
 sys.path.insert(0, os.path.join(ROOT, "core"))
 import ports as PORTX                                    # noqa: E402
 
@@ -116,6 +119,55 @@ def read_cfg():
             return json.load(f)
     except Exception:
         return {}
+
+
+def spawn_server(port, bind, restarting=False):
+    """起 server.py 子进程。
+
+    ⚠️ **stdout/stderr 必须是继承控制台，绝不能再接 subprocess.PIPE。**
+
+    2026-11-20 牛哥在不联网的服务器上用离线包更新，现象是：终端停在原来的
+    界面、显示「服务已停止」，新服务起不来。根因就在这条管道上 ——
+    更新后 server.py 走 os.execv 换进程（Windows 上是「起新进程 → 退旧进程」），
+    旧进程一退，下面的 poll() 立刻返回 0，启动器以为服务崩了，finally 里
+    打印「已停止。」并 sys.exit；而新进程继承的正是那条 PIPE，父进程一退出
+    管道读端就关了，新进程启动时写一行日志就抛 WinError 232
+    （管道的另一端已关闭）→ 新服务当场崩，于是「旧的停了、新的起不来」。
+
+    改成继承控制台后：服务日志实时可见、没有管道可断，重启由启动器自己重新
+    Popen（见 main 里的监视循环），终端窗口也不会退。
+    """
+    env = dict(os.environ)
+    env["PYTHONUTF8"] = "1"
+    env["PYTHONUNBUFFERED"] = "1"
+    # 告诉 server.py「我是被启动器看着的」→ 重启时不 execv 自己，
+    # 而是落标记后正常退出，由本启动器重新拉起新代码。
+    env["WB_SUPERVISED"] = "1"
+    env["WB_RESTART_FLAG"] = RESTART_FLAG
+    if restarting:
+        # 端口刚放开、可能还在 TIME_WAIT：让 server.py 走「等端口空出来、
+        # 绝不换端口」的分支，否则老师的书签 / 桌面图标全指着老地址。
+        env["WB_RESTARTING"] = "1"
+    return subprocess.Popen(
+        [sys.executable, os.path.join(ROOT, "server.py"),
+         "--port", str(port), "--bind", bind,
+         # 端口由启动器负责：子进程绝不能再弹端口窗。以前没带这个参数，
+         # 更新重启时子进程发现端口还在 TIME_WAIT 就会自己弹一个 Tk 窗
+         # （macOS 上看到的「选择端口号」就是它），选完服务起在别处，
+         # 老师的书签还指着老地址 → 表现为怎么都起不来。
+         "--no-dialog"],
+        cwd=ROOT, env=env)
+
+
+def wait_ready(proc, port, seconds=25):
+    """等服务应答 /api/v2/ping。子进程先退出 = 起不来，立刻返回 False。"""
+    for _ in range(int(seconds / 0.3)):
+        if proc.poll() is not None:
+            return False
+        if ping(port):
+            return True
+        time.sleep(0.3)
+    return False
 
 
 def _needs_port_migration(cfg):
@@ -277,39 +329,21 @@ def main():
     log("  端口可用  ✓")
 
     log("[2/4] 启动工作台服务")
-    env = dict(os.environ)
-    env["PYTHONUTF8"] = "1"
-    env["PYTHONUNBUFFERED"] = "1"
-    proc = subprocess.Popen([sys.executable, os.path.join(ROOT, "server.py"),
-                             "--port", str(port), "--bind", args.bind,
-                             # 端口由启动器负责：子进程绝不能再弹端口窗。
-                             # 以前没带这个参数，更新重启时子进程发现端口还在
-                             # TIME_WAIT 就会自己弹一个 Tk 窗（macOS 上看到的
-                             # 「选择端口号」就是它），选完端口服务起在别处，
-                             # 老师的书签还指着老地址 → 表现为怎么都起不来。
-                             "--no-dialog"],
-                            cwd=ROOT, env=env,
-                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                            text=True, errors="replace", bufsize=1)
-
-    ready = False
-    for _ in range(60):
-        if proc.poll() is not None:
-            break
-        if ping(port):
-            ready = True
-            break
-        time.sleep(0.3)
-    if not ready:
-        try:
-            out = proc.stdout.read() if proc.stdout else ""
-        except Exception:
-            out = ""
+    # 上一次重启留下的标记（正常重启后这里会删掉，这是兜底）
+    try:
+        if os.path.exists(RESTART_FLAG):
+            os.remove(RESTART_FLAG)
+    except Exception:
+        pass
+    proc = spawn_server(port, args.bind)
+    if not wait_ready(proc, port):
         try:
             proc.terminate()
         except Exception:
             pass
-        die("服务启动失败。", (out or "")[-1200:] + "\n\n可手动运行看完整报错：\n"
+        die("服务启动失败。",
+            "服务自己打印的报错就在上面几行（跟本窗口同一屏），按它改。\n"
+            "也可以手动跑一遍看完整输出：\n"
             "  %s server.py --port %d" % (sys.executable, port))
     log("  服务已就绪  ✓")
 
@@ -331,8 +365,33 @@ def main():
     code = 0
     try:
         while True:
-            if proc.poll() is not None:
-                log("! 服务已退出（代码 %s）" % proc.returncode)
+            rc = proc.poll()
+            if rc is not None:
+                # 「正常退出（0）+ 重启标记」= 更新后要求重启，不是崩了。
+                # 由本启动器把新代码重新拉起来，终端窗口不退、端口不换。
+                if rc == 0 and os.path.exists(RESTART_FLAG):
+                    try:
+                        os.remove(RESTART_FLAG)
+                    except Exception:
+                        pass
+                    log("")
+                    log("[!] 收到重启请求，正在重新启动服务…")
+                    proc = spawn_server(port, args.bind, restarting=True)
+                    if wait_ready(proc, port):
+                        v = (ping(port) or {}).get("version") or ""
+                        log("  服务已重新就绪  ✓%s" % ("  版本 " + v if v else ""))
+                        hr("-")
+                        log("  服务运行中，关闭本窗口即停止。Ctrl+C 安全退出。")
+                        hr("-")
+                        continue
+                    log("")
+                    log("  ✗ 重启失败：新服务没能起来，报错就在上面几行。")
+                    log("    旧版本代码还在 app/data/updates/backup-v*/ 里，")
+                    log("    可以手动换回去，或直接重开本启动器。")
+                    log("")
+                    code = 1
+                    break
+                log("! 服务已退出（代码 %s）" % rc)
                 code = 1
                 break
             time.sleep(1)

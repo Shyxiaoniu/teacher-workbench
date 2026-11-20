@@ -35312,7 +35312,10 @@ async function updRestart() {
   if (!(await uiConfirm('重启服务？重启期间所有页面（教师端/学生端/大屏）会短暂断开，几十秒内自动恢复。',
         { title: '重启服务', okText: '立即重启', danger: false }))) return;
   toast('正在重启服务…');
-  /* execv 会直接换掉进程，这个请求大概率拿不到响应 —— 逢错不报错 */
+  /* 重启有两种走法（见 server.py 的 /api/v2/update/restart）：
+     有启动器看着 → 先回 ok 再退进程，启动器把新代码拉起来；
+     容器 / 计划任务直跑 → execv 换进程，这个请求大概率拿不到响应。
+     两种都当「可能没响应」处理，靠下面的轮询判断服务是否回来。 */
   fetch('/api/v2/update/restart', {
     method: 'POST', credentials: 'same-origin',
     headers: { 'Content-Type': 'application/json' }, body: '{}' }).catch(() => {});

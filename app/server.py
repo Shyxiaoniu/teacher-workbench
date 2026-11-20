@@ -508,7 +508,7 @@ PET_IDS = ["cat", "dog", "rabbit", "penguin", "panda", "dino", "unicorn", "drago
            "duck", "bear"]
 COND = threading.Condition()
 STARTED = time.time()
-VERSION = "2.0.50"
+VERSION = "2.0.51"
 ONLINE_WINDOW = 300      # 5 分钟内活跃算在线
 # 可内联直出的附件类型（其余一律按下载处理，防止同源执行脚本）
 _INLINE_EXTS = {"png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "pdf",
@@ -4411,11 +4411,56 @@ class Handler(LEG.Handler):
             STORE.audit("teacher", "update-config", "url=%s auto=%s" % (u.get("url") or "默认", u.get("auto")))
             return self._json({"ok": True})
         if path == "/api/v2/update/restart":
-            # 原地重启（execv 换进程映像，端口由新进程重新绑定）。
-            # 前端发起后按「连接断开 → 轮询 /api/v2/state 恢复」处理。
             if not self._is_teacher():
                 return self._json({"ok": False, "msg": "未登录"}, 401)
             STORE.audit("teacher", "update-restart", "version=%s" % VERSION)
+            # 重启服务分两条路（2026-11-20 修「离线包更新后服务起不来」）：
+            #   ① 有启动器看着（launch.py 会注入 WB_SUPERVISED=1 + WB_RESTART_FLAG）：
+            #      落一个标记文件后**正常退出**，由启动器把新代码重新拉起来。
+            #   ② 容器 / 计划任务直跑（没有启动器）：沿用 os.execv 换进程映像。
+            #
+            # ①为什么不能再用 execv：Windows 上 os.execv 是「起新进程 + 退旧进程」，
+            # 旧进程一退，启动器那个 Popen.poll() 就返回 0 → 它以为服务崩了 →
+            # 打印「已停止。」并 sys.exit；而新进程继承的正是启动器那条 PIPE，
+            # 父进程一退出管道读端就关了，新进程启动时写一行日志立刻抛
+            # WinError 232（管道的另一端已关闭）→ 新服务当场崩。
+            # 牛哥在不联网的服务器上离线更新，看到的就是「服务已停止、新服务起不来」。
+            flag = (os.environ.get("WB_RESTART_FLAG") or "").strip()
+            supervised = (os.environ.get("WB_SUPERVISED") == "1") and bool(flag)
+            if supervised:
+                try:
+                    with open(flag, "w", encoding="utf-8") as f:
+                        f.write("%d\n" % int(time.time()))
+                except Exception:
+                    supervised = False        # 标记写不下去就退回 execv，别把服务卡死
+            if supervised:
+                try:
+                    _heal_exec_bits()
+                except Exception:
+                    pass
+                # 必须先把响应发出去再安排退出，否则前端拿到的是「连接被重置」
+                self._json({"ok": True, "msg": "正在重启，几秒后自动恢复"})
+                try:
+                    self.wfile.flush()
+                except Exception:
+                    pass
+                # ⚠️ 这里**不能**调 server_close()：Windows 上关掉监听 socket 后
+                # 主线程的 serve_forever 会抛 OSError 10038（非套接字操作），
+                # 进程以退出码 1 结束 → 启动器判定「崩了」，照样不打重启标记。
+                # 进程整体 os._exit 时 OS 会回收所有句柄，端口自然放开。
+
+                def _bye():
+                    time.sleep(0.45)              # 留时间让上面的响应真的发完
+                    try:
+                        sys.stdout.flush()
+                        sys.stderr.flush()
+                    except Exception:
+                        pass
+                    os._exit(0)                   # 退出码 0 = 告诉启动器「这是重启，不是崩了」
+                threading.Thread(target=_bye, daemon=True, name="restart-exit").start()
+                return
+            # 原地重启（execv 换进程映像，端口由新进程重新绑定）。
+            # 前端发起后按「连接断开 → 轮询 /api/v2/state 恢复」处理。
             try:
                 # ⚠️ Windows 上 os.execv 不是 Unix 那种「原地换映像」，而是
                 # 「先 CreateProcess 起新进程 → 再退出旧进程」，两个进程会有
