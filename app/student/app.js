@@ -330,6 +330,10 @@
       if (s >= 0 && e > s && now >= s && now <= e) return ps[i];
     }
     var past = ps.filter(function (p) { return toMin(p.start_time) >= 0 && toMin(p.start_time) <= now; });
+    /* 2.0.52：课间算下一节的课前（与后端同一口径）。这段只在服务端
+       /student/now 拿不到时兜底用，但口径不能跟服务端打架。 */
+    var nxt = ps.filter(function (p) { return toMin(p.start_time) > now; })[0];
+    if (nxt) return nxt;
     return past.length ? past[past.length - 1] : ps[0];
   }
   function periodSeq() {
@@ -344,7 +348,8 @@
           ? (S.now.checkin.enabled + '|' + S.now.checkin.manual_time) : '';
         var newCk = j.checkin ? (j.checkin.enabled + '|' + j.checkin.manual_time) : '';
         var changed = !S.now || S.now.period !== j.period || S.now.label !== j.label ||
-          S.now.lesson !== j.lesson || oldCk !== newCk;
+          S.now.lesson !== j.lesson || S.now.checkin_ok !== j.checkin_ok ||
+          oldCk !== newCk;
         S.now = j;
         if (changed && S.view === 'today' && !S.loading) render();
       }
@@ -425,12 +430,13 @@
     }).join('') : '<div class="empty">作业都交齐了</div>';
 
     /* 课堂签到卡：登录时服务端已自动签到，这里展示状态；按钮只作补签。
-       lesson=false（服务端按课表判定本班这节没排课）→ 不给签到按钮，
-       显示「无课」，跟服务端签到闸门的口径一致（2026-11-04）。 */
+       checkin_ok=false（服务端判定今天本班完全没有排课）→ 不给签到按钮，
+       跟服务端签到闸门口径一致。注意别再拿 lesson 判：lesson 只表示
+       「这一节有没有排课」，而闸门 2.0.52 起已放宽到「今天有课就能签」。 */
     var ck = myCheckin();
     var p = curPeriod();
     var pLabel = p ? (p.label || ('第' + (p.seq || '') + '节')) : '本节课';
-    var noLesson = !!(S.now && S.now.lesson === false);
+    var noLesson = !!(S.now && S.now.checkin_ok === false);
     var ckDone = ck && (ck.status === 'checked' || ck.status === 'present' || ck.status === 'late');
     var ckTxt;
     if (ckDone) {
@@ -440,7 +446,7 @@
     } else if (ck && ck.status === 'absent') {
       ckTxt = '缺勤（本节课超15分钟未登录，已记缺勤）';
     } else if (noLesson) {
-      ckTxt = '本节本班没有排课，不用签到';
+      ckTxt = '今天本班没有排课，不用签到';
     } else {
       ckTxt = ck ? esc(attLabel(ck.status)) : '还没签到，点右边按钮';
     }

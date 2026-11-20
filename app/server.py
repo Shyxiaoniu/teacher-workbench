@@ -508,7 +508,7 @@ PET_IDS = ["cat", "dog", "rabbit", "penguin", "panda", "dino", "unicorn", "drago
            "duck", "bear"]
 COND = threading.Condition()
 STARTED = time.time()
-VERSION = "2.0.51"
+VERSION = "2.0.52"
 ONLINE_WINDOW = 300      # 5 分钟内活跃算在线
 # 可内联直出的附件类型（其余一律按下载处理，防止同源执行脚本）
 _INLINE_EXTS = {"png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "pdf",
@@ -5534,7 +5534,19 @@ class Handler(LEG.Handler):
             s, e = mins(r.get("start_time")), mins(r.get("end_time"))
             if s >= 0 and e > s and s <= cur <= e:
                 return r
-        # 不在任何一节里：取“已经过去的最近一节”，方便课间补签
+        # 2.0.52：课间（上一节下课 ~ 下一节上课）算「下一节的课前」。
+        # 原来取「已经过去的最近一节」→ 课间学生签到被记到刚下课的节次，
+        # 时间窗早已结束，整个课间 9 分钟谁都签不了（牛哥 11-20 反馈）。
+        # 与 _class_period_now / 前端 curPeriodSeq 同一口径。
+        nxt = None
+        for r in rows:
+            s = mins(r.get("start_time"))
+            if s > cur:
+                nxt = r
+                break
+        if nxt is not None:
+            return nxt
+        # 放学后（当天已经没有下一节）：退回最后一节，交给时间窗去拒
         past = [r for r in rows if mins(r.get("start_time")) >= 0
                 and mins(r.get("start_time")) <= cur]
         return past[-1] if past else rows[0]
@@ -5601,7 +5613,10 @@ class Handler(LEG.Handler):
                     p = int(float(nxt.get("seq") or nxt.get("id") or 0))
                 except Exception:
                     p = 0
-                if p and self._class_lesson_at(cid, dow, p) is True:
+                # 2.0.52：工作日的课间一律算「下一节的课前」，不再要求本班
+                # 下一节排过课。否则课表没排到这一节时，课间登录会被判成
+                # 上一节（时间窗早已结束）→ 整个课间谁都签不了到。
+                if p and (self._class_lesson_at(cid, dow, p) is True or dow < 5):
                     return nxt
         past = [r for r in rows if mins(r.get("start_time")) >= 0
                 and mins(r.get("start_time")) <= cur]
@@ -5697,7 +5712,14 @@ class Handler(LEG.Handler):
                "period": period, "label": label,
                "checkin": self._checkin_cfg()}
         if cid is not None and period:
-            out["lesson"] = self._class_lesson_at(cid, time.localtime().tm_wday, period)
+            dow = time.localtime().tm_wday
+            lesson = self._class_lesson_at(cid, dow, period)
+            out["lesson"] = lesson
+            # 2.0.52：学生端「能不能签到」用这个字段，别自己拼 lesson ——
+            # 签到闸门工作日已放开（课表没排到这一节也允许签），直接拿
+            # lesson 判会把本该能签的节次显示成「无课」、连按钮都不给。
+            out["checkin_ok"] = not (lesson is False and dow >= 5
+                                     and not self._class_has_lesson_today(cid, dow))
         return out
 
     def _student_checkin(self, body):
@@ -5809,6 +5831,28 @@ class Handler(LEG.Handler):
             return True
         return "no_table" if not has_any else False
 
+    def _class_has_lesson_today(self, cid, dow):
+        """本班这个星期几有没有课（不看具体第几节）。
+
+        2.0.52 牛哥反馈「课表设了课，学生却签到不了」：签到闸门原来按
+        「此刻这一节有没有排课」卡，而课表常常只排了个别节次、或老师临时
+        调课补课，于是整班被堵在门外；偏偏自动记缺勤（absent_sweep_once）
+        是按「今天这个班有课」扫的 —— 一边不让人签到，一边把全班记旷课。
+        两边必须同口径：今天有课就允许签，今天完全没课才拦。
+        周末 / 无课日下午的假出勤仍然拦得住（今天一条课都没有）。
+        """
+        for l in STORE.table_rows("lessons"):
+            if l.get("deleted"):
+                continue
+            if str(l.get("class_id") or "") != str(cid):
+                continue
+            try:
+                if int(float(l.get("day_of_week"))) == int(dow):
+                    return True
+            except Exception:
+                continue
+        return False
+
     def _write_checkin(self, sid, st, p, period, d, source):
         """登录自动签到 / 学生手动签到共用的落库核心。
 
@@ -5839,11 +5883,16 @@ class Handler(LEG.Handler):
         # 课表闸门（2026-11-03 牛哥反馈）：本班这个时段没排课就不允许签到。
         # 以前只校验节次合法性与时间窗：课表没排课的日子（周末/无课日下午）
         # 登录照样被记一笔出勤，考勤统计出现假全勤。
-        # 退化口径：本班课表完全没在用（0 条课）就不拦，保持旧行为。
-        lesson = self._class_lesson_at(st.get("class_id"),
-                                       time.localtime().tm_wday, period)
-        if lesson is False:
-            return False, "第 %s 节本班今天没有排课，无需签到" % period
+        # 2.0.52（牛哥 11-20「课表设了课却签到不了」）：
+        #   · 工作日一律放行 —— 课表常常只排了个别节次、临时调课补课更是常态，
+        #     按「这一节有没有排课」卡人会把整班堵在门外；老师开着签到开关
+        #     本身就是在收签到。
+        #   · 周末保留闸门：本班周末没排课就别记考勤，防在家登录刷出假出勤。
+        cid = st.get("class_id")
+        dow = time.localtime().tm_wday
+        lesson = self._class_lesson_at(cid, dow, period)
+        if lesson is False and dow >= 5 and not self._class_has_lesson_today(cid, dow):
+            return False, "今天本班没有排课，不用签到"
 
         now_min = time.localtime().tm_hour * 60 + time.localtime().tm_min
         def _mins(v):

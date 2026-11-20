@@ -22419,6 +22419,10 @@ function curPeriodSeq() {
     const s = m(p.start_time), e = m(p.end_time);
     if (s >= 0 && e > s && now >= s && now <= e) return Number(p.seq || p.id || 1);
   }
+  /* 2.0.52：课间算「下一节的课前」（与后端 _current_period / _class_period_now
+     同一口径）。原来课间取上一节，学生签的却是下一节，老师在座位表上看不到。 */
+  const nxt = ps.find(p => m(p.start_time) > now);
+  if (nxt) return Number(nxt.seq || nxt.id || 1);
   const past = ps.filter(p => m(p.start_time) >= 0 && m(p.start_time) <= now);
   return Number((past.length ? past[past.length - 1] : ps[0]).seq || 1);
 }
@@ -23090,16 +23094,10 @@ function attBoardHtml(cls, date) {
      不再给手动切节次的入口 —— 手动选容易跟课表错开，还占一行控件。
      现在 attPeriod() 取 curPeriodSeq()（和服务端 _current_period 同一套算法），
      syncServerPeriod() 每 5 分钟跟服务端对一次表，两端记的一定是同一节。 */
-  const mineSeqs = classPeriodSeqs(cls, date);
-  /* 本班今天这一节没课（课间 / 放学后 / 调课）→ 吸附到最近一节有课的，
-     别让座位表停在「第 21 节」这种本班根本没课的时段。 */
-  if (mineSeqs.size && !state.attPeriodMan && !mineSeqs.has(Number(seq))) {
-    const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
-    const toM = t => { const a = String(t || '').split(':'); return (+a[0]) * 60 + (+a[1] || 0); };
-    const cands = allPs.filter(p => mineSeqs.has(Number(p.seq || p.id)));
-    const next = cands.find(p => toM(p.start_time) >= nowMin) || cands[cands.length - 1];
-    if (next) { seq = Number(next.seq || next.id); state.attPeriod = seq; state.attPeriodAuto = true; }
-  }
+  /* 2.0.52 起不再「吸附到本班有课的节次」：签到闸门已放宽到「今天有课就能签」，
+     座位表也得以时间为准。原来课表只排了个别节次时，一打开座位表就跳到
+     上午第 1 节，老师在给学生上晚自习第 13 节，屏幕却显示第 1 节 —— 签到、
+     考勤全记错节。现在一律按 curPeriodSeq()（与服务端同一套算法）走。 */
   attAutoSettle(cls, date, seq);            // 本节结束自动记旷课
   const st = attStatsOf(cls, date, seq);
   const f = state.ckFilter || '';
