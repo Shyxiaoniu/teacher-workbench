@@ -370,13 +370,27 @@ PET_IDS = ["cat", "dog", "rabbit", "penguin", "panda", "dino", "unicorn", "drago
            "duck", "bear"]
 COND = threading.Condition()
 STARTED = time.time()
-VERSION = "2.0.45"
+VERSION = "2.0.46"
 ONLINE_WINDOW = 300      # 5 分钟内活跃算在线
 # 可内联直出的附件类型（其余一律按下载处理，防止同源执行脚本）
 _INLINE_EXTS = {"png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "pdf",
                 "mp4", "webm", "ogg", "mp3", "wav", "m4a", "txt"}
 # 在线更新器（2026-11-04）：状态/下载/备份放数据目录；ROOT 即 app 代码目录
 UPD = Updater(DATA_DIR, VERSION, ROOT)
+
+# 存量配置清理（2026-11-20）：老版本前端把「默认更新源」预填进自定义源输入框，
+# 老师一保存就落了盘，于是配置里的 url 等于默认源 —— 程序把它当「老师指定
+# 单源」，多源回退失效，Gitee 一 403 就再也检查不了更新。
+# 这里把这类「等价默认源」的地址清成空（= 走默认多源），只改配置不动代码。
+try:
+    _upd_url = str((CFG.get("update") or {}).get("url") or "").strip()
+    if _upd_url:
+        from updater import _is_default_source as _is_dflt_upd
+        if _is_dflt_upd(_upd_url):
+            CFG["update"]["url"] = ""
+            A.save_config(CONFIG_PATH, CFG)
+except Exception:
+    pass
 
 
 def _update_auto_loop():
@@ -3768,6 +3782,53 @@ class Handler(LEG.Handler):
                         name="资料包-%s.zip" % stamp)
         return None
 
+    def _update_offline(self):
+        """离线安装包上传（2026-11-20）：服务端完全没有外网时的更新途径。
+
+        老师在能上网的电脑下载 dist/ 里的发行包 → U 盘/共享盘拷进内网 →
+        教师端「系统设置 → 软件更新 → 离线安装」上传。服务端只收 .zip，
+        换装、备份、自动回滚与在线更新走同一段逻辑（updater._install_zip），
+        区别只是完整性校验用 zip 自带的 CRC32 代替 manifest 里的 sha256。
+        """
+        if not self._is_teacher():
+            return self._json({"ok": False, "msg": "未登录"}, 401)
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except Exception:
+            length = 0
+        if length <= 0:
+            return self._json({"ok": False, "msg": "没有收到安装包内容"}, 400)
+        if length > 800 * 1024 * 1024:
+            return self._json({"ok": False, "msg": "安装包太大（上限 800MB）"}, 413)
+        # 文件名走自定义头：HTTP 头不能放非 ASCII，前端 encodeURIComponent 过、这里还原
+        name = ""
+        try:
+            name = urllib.parse.unquote(str(self.headers.get("X-WB-Filename") or ""))
+        except Exception:
+            name = ""
+        name = os.path.basename(name.replace("\\", "/").strip())[:120]
+        if not name.lower().endswith(".zip"):
+            return self._json({"ok": False, "msg": "只接受 .zip 格式的离线安装包"}, 400)
+        dst = os.path.join(DATA_DIR, "update", "offline-upload.zip")
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        remain = length
+        try:
+            with open(dst, "wb") as f:
+                while remain > 0:
+                    chunk = self.rfile.read(min(1 << 20, remain))
+                    if not chunk:
+                        break
+                    f.write(chunk)
+                    remain -= len(chunk)
+        except Exception as e:
+            return self._json({"ok": False, "msg": "接收安装包失败：%s" % e}, 500)
+        if remain > 0:
+            return self._json({"ok": False,
+                               "msg": "安装包上传不完整（差 %d 字节），请重试。" % remain}, 400)
+        r = UPD.install_local(dst, name)
+        STORE.audit("teacher", "update-offline", "%s %s" % (name, r.get("msg") or ""))
+        return self._json(r, 200 if r.get("ok") else 400)
+
     def _import_files(self):
         """接收课程资料包（zip），解压回课件库目录。"""
         if not self._is_teacher():
@@ -3861,6 +3922,10 @@ class Handler(LEG.Handler):
         # 课程资料包是 zip 二进制，必须在这里截住：下面 _read_json 会把它当 JSON 读坏
         if path == "/api/v2/admin/import-files":
             return self._import_files()
+        # 离线安装包同样是 17MB+ 的二进制：不能让它进 _read_json（会按 JSON 解析
+        # 并撞上体积上限），必须在最前面截住（2026-11-20）。
+        if path == "/api/v2/update/offline":
+            return self._update_offline()
         # 活动教学资料是 multipart 二进制，同理必须在 _read_json 之前截住
         if path == "/api/v2/teacher/activity/upload":
             return self._act_upload()
@@ -4078,6 +4143,11 @@ class Handler(LEG.Handler):
             # 填了非法值一律清空，防止填错地址导致更新失败。令牌依旧不收。
             _raw_url = str(body.get("url") or "").strip()
             _ok_url = _raw_url if re.match(r"^https?://\S+$", _raw_url, re.I) else ""
+            # 2026-11-20：老前端会把默认地址预填进「自定义源」再保存，落盘后
+            # 就成了「老师指定单源」，多源回退失效（Gitee 403 就没退路）。
+            # 存量配置里这类等价默认源的地址，保存时一律清成空 = 走默认多源。
+            if _ok_url and UPD._is_default_source(_ok_url):
+                _ok_url = ""
             u["url"] = _ok_url
             u.pop("token", None)
             if "auto" in body:

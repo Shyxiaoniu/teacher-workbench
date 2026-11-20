@@ -60,6 +60,15 @@ cd "$(dirname "$0")"
 exec ./app/启动教师端.command "$@"
 """
 
+# Linux（含无桌面的 Ubuntu Server）：解压后 `bash 启动工作台.sh`
+# 2026-11-20 补：之前包里只有 .bat 与 .command，Linux 用户得自己 cd 进 app 找脚本。
+STARTER_LINUX = """#!/bin/bash
+# 解压后执行： bash 启动工作台.sh
+# 想后台常驻 / 开机自启，见 README「四、部署 → 无外网服务器」里的 systemd 示例。
+cd "$(dirname "$0")" || exit 1
+exec ./app/启动教师端.sh "$@"
+"""
+
 NOTES = """# {name} · 发行说明
 
 - 版本：**{version}**
@@ -72,7 +81,7 @@ NOTES = """# {name} · 发行说明
 
 | 路径 | 内容 |
 |---|---|
-| `启动工作台.bat` / `.command` | 双击启动（Windows / macOS），参数原样传给 `app/launch.py` |
+| `启动工作台.bat` / `.command` / `.sh` | 启动（Windows 双击 / macOS 双击 / Linux 执行 `bash 启动工作台.sh`），参数原样传给 `app/launch.py` |
 | `app/` | 工作台主程序：服务端、教师端页面、学生端、打字练习、提交系统、图标、启动脚本（课堂活动已内嵌） |
 | `docker/` | Docker 部署用的入口脚本与 nginx 网关配置 |
 | `Dockerfile` / `docker-compose.yml` / `.env.example` | 容器化部署三件套 |
@@ -317,6 +326,9 @@ def main():
         z.writestr(_zipinfo(name + "/启动工作台.command", 0o100755),
                    STARTER_SH.encode("utf-8"))
 
+        z.writestr(_zipinfo(name + "/启动工作台.sh", 0o100755),
+                   STARTER_LINUX.encode("utf-8"))
+
         # Windows 上打包：NTFS 没有 Unix 执行位，必须显式补 create_system+权限，
         # 否则解压到 macOS 后 .command/.sh 全部不可执行——顶层启动器能双击，
         # 但它 exec 的 app/启动教师端.command 会报「没有权限」。
@@ -338,7 +350,7 @@ def main():
     print("版本 %s ｜ 日期 %s" % (version, args.date))
     print("包名 %s.zip" % name)
     print("文件 %d 个 ｜ 原始 %.1f MB ｜ 压缩后 %.1f MB"
-          % (len(files) + 3, total / 1024 / 1024,
+          % (len(files) + 4, total / 1024 / 1024,
              os.path.getsize(zip_path) / 1024 / 1024))
     print("输出 %s" % zip_path)
     tops = {}

@@ -34627,6 +34627,7 @@ const ACCT = { sec: null };
    ============================================================ */
 let UPD_ST = null;      // /update/status 最近一次返回
 let UPD_TIMER = null;   // 安装进度轮询
+let UPD_OFF_OPEN = false;  // 「离线安装」折叠块是否展开（重渲染要保住，否则传完就折回去）
 
 function _updFmtTime(ts) {
   if (!ts) return '还没检查过';
@@ -34898,11 +34899,41 @@ function updRender() {
   if (s.installed && s.installed.to_version) {
     h += `<div class="term-hint" style="margin-top:8px">上次更新：v${esc(s.installed.from_version)} → v${esc(s.installed.to_version)}（${_updFmtTime(s.installed.ts)}）</div>`;
   }
-  /* 更新源固定在官方 Gitee 仓库（2026-11-05）：自定义地址是更新失败的
-     头号原因，仓库又已公开、无需令牌，所以这块只留自动检查的开关与间隔。 */
+  /* 离线安装（2026-11-20）：服务器在纯内网、完全出不去外网时的更新途径。
+     不折叠在「自动检查设置」里 —— 这种环境下在线检查必然是红的，
+     老师第一眼要找的就是这块，藏起来只会让他在错误提示里打转。 */
+  h += `<details style="margin-top:12px" id="updOfflineBox"${UPD_OFF_OPEN ? ' open' : ''} ontoggle="UPD_OFF_OPEN=this.open">
+    <summary style="cursor:pointer;font-size:12.5px;color:var(--text-secondary)">离线安装（服务器连不上外网时用）</summary>
+    <div style="margin-top:8px">
+      <div class="term-hint" style="margin:0 0 8px">
+        在能上网的电脑下载发行包 <code>班级工作台&lt;版本&gt;-&lt;日期&gt;.zip</code>，
+        用 U 盘 / 内网共享拷到这台服务器，再在这里上传。上传后自动校验、备份，
+        装完照样要重启；装坏了可以用下面的「回滚」。
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <label class="btn btn-sm" style="flex:none;display:inline-flex;align-items:center;gap:6px;cursor:pointer;margin:0;position:relative">
+          选择安装包
+          <input type="file" id="updOfflineFile" accept=".zip,application/zip"
+            style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0"
+            onchange="updOfflinePick(this)">
+        </label>
+        <button class="btn btn-primary btn-sm" type="button" style="width:auto;flex:none"
+          onclick="updOfflineInstall()">上传并安装</button>
+        <span id="updOfflineMsg" class="dim" style="font-size:12.5px">未选择文件</span>
+      </div>
+      <div id="updOfflineBar" style="display:none;margin-top:8px">
+        <div style="height:8px;background:var(--border);border-radius:5px;overflow:hidden">
+          <div id="updOfflinePct" style="height:100%;width:3%;background:var(--brand-primary);border-radius:5px;transition:width .3s"></div>
+        </div>
+      </div>
+    </div>
+  </details>`;
+  /* 更新源：默认官方 Gitee + GitHub 镜像自动回退（2026-11-20）；
+     走内网镜像时在「自定义源」填镜像的 version.json 地址即可。
+     另外还有一条完全不走网络的「离线安装」通道，见上。 */
   const c = s.config || {};
   h += `<details style="margin-top:12px">
-    <summary style="cursor:pointer;font-size:12.5px;color:var(--text-secondary);list-style:none">▸ 自动检查设置</summary>
+    <summary style="cursor:pointer;font-size:12.5px;color:var(--text-secondary)">自动检查设置</summary>
     <div style="margin-top:8px;display:flex;flex-direction:column;gap:8px">
       <label class="hwp-row" style="margin:0"><span class="set-k" style="width:auto;flex:none">检查开关</span>
         <input type="checkbox" id="updAuto" ${c.auto ? 'checked' : ''}>
@@ -34911,10 +34942,10 @@ function updRender() {
         <input id="updInterval" class="fl-inp" type="number" min="1" max="720"
           style="width:90px;flex:none" value="${esc(c.interval_hours || 24)}"></label>
       <label class="hwp-row" style="margin:0;align-items:flex-start"><span class="set-k" style="width:auto;flex:none">自定义源</span>
-        <input id="updUrl" class="fl-inp" type="url" placeholder="留空 = 官方 Gitee 源；内网镜像可填 http://…/version.json"
+        <input id="updUrl" class="fl-inp" type="url" placeholder="留空 = 官方 Gitee 源（失败自动换 GitHub 镜像）；内网镜像可填 http://…/version.json"
           style="flex:1 1 160px" value="${esc(c.url || '')}"></label>
-      <div class="term-hint" style="margin-top:2px">默认更新源：官方 Gitee 仓库（https），无需配置。
-        学校网络 443 出不去 / 用内网镜像时，可填 http:// 地址；程序对更新包仍做 sha256 与版本校验。</div>
+      <div class="term-hint" style="margin-top:2px">默认更新源：官方 Gitee 仓库（https），被拒时自动换 GitHub 镜像，无需配置。
+        学校网络完全出不去时，可在上面填内网镜像的 http:// 地址；程序对更新包仍做 sha256 与版本校验。</div>
       <div><button class="btn btn-sm" type="button" style="width:auto" onclick="updSaveCfg()">保存设置</button></div>
     </div>
   </details>`;
@@ -34972,6 +35003,74 @@ async function updApply() {
   }
 }
 window.updApply = updApply;
+
+/** 选完文件把名字和大小写到按钮旁边 —— 原生 file 控件已经藏起来换成
+ *  工作台统一样式的按钮了，不回显一下老师会以为没选上。 */
+function updOfflinePick(inp) {
+  const f = inp && inp.files && inp.files[0];
+  const msg = document.getElementById('updOfflineMsg');
+  if (!msg) return;
+  msg.style.color = '';
+  if (!f) { msg.textContent = '未选择文件'; return; }
+  msg.textContent = `${f.name} · ${(f.size / 1048576).toFixed(1)} MB`;
+}
+window.updOfflinePick = updOfflinePick;
+
+/** 离线安装（2026-11-20）：服务器完全没有外网时的更新通道。
+ *  用 XHR 而不是 fetch —— fetch 拿不到上传进度，200MB 的包传几分钟
+ *  没有任何反馈，老师只会以为卡死了。传完服务端在后台换装，
+ *  接着交给 updPoll()，进度条和在线更新共用一套。 */
+async function updOfflineInstall() {
+  const inp = document.getElementById('updOfflineFile');
+  const f = inp && inp.files && inp.files[0];
+  if (!f) { toast('先选一个 .zip 发行包'); return; }
+  if (!/\.zip$/i.test(f.name)) { toast('只支持 .zip 格式的发行包'); return; }
+  const ok = await uiConfirm(
+    `上传并安装「${f.name}」？\n\n· 大小 ${(f.size / 1048576).toFixed(1)} MB，耗时取决于内网速度\n· 装完需要重启服务生效\n· 班级、学生、成绩等数据全部保留\n· 安装前自动备份，装坏了可以一键回滚`,
+    { title: '离线安装', okText: '上传并安装', danger: false });
+  if (!ok) return;
+  UPD_OFF_OPEN = true;
+  const box = document.getElementById('updOfflineBar');
+  const pct = document.getElementById('updOfflinePct');
+  const msg = document.getElementById('updOfflineMsg');
+  const setMsg = t => { if (msg) msg.textContent = t; };
+  if (box) box.style.display = '';
+  if (pct) pct.style.width = '3%';
+  setMsg('上传中 0%');
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', '/api/v2/update/offline');
+  xhr.setRequestHeader('Content-Type', 'application/zip');
+  /* HTTP 头不能带非 ASCII：前端编码，服务端 unquote 还原中文包名 */
+  xhr.setRequestHeader('X-WB-Filename', encodeURIComponent(f.name));
+  xhr.upload.onprogress = (e) => {
+    if (!e.lengthComputable) return;
+    const p = Math.min(100, Math.round(e.loaded * 100 / e.total));
+    if (pct) pct.style.width = Math.max(3, p) + '%';
+    setMsg(`上传中 ${p}%（${(e.loaded / 1048576).toFixed(1)} / ${(e.total / 1048576).toFixed(1)} MB）`);
+  };
+  xhr.onload = () => {
+    if (xhr.status === 401) { location.href = '/teacher/login'; return; }
+    let j = {};
+    try { j = JSON.parse(xhr.responseText || '{}'); } catch (e) {}
+    if (!j.ok) {
+      if (box) box.style.display = 'none';
+      setMsg('');
+      toast(j.msg || `上传失败（HTTP ${xhr.status}）`);
+      return;
+    }
+    if (pct) pct.style.width = '100%';
+    setMsg('上传完成，正在校验并换装…');
+    toast('安装包已上传，正在校验并换装…');
+    updPoll();                    /* 与在线更新共用的安装进度轮询 */
+  };
+  xhr.onerror = () => {
+    if (box) box.style.display = 'none';
+    setMsg('');
+    toast('上传失败：连接中断，请重试');
+  };
+  xhr.send(f);
+}
+window.updOfflineInstall = updOfflineInstall;
 
 /** 安装期间轮询进度，装完转成 restart_pending 提示重启 */
 function updPoll() {

@@ -34,6 +34,20 @@ CHUNK = 256 * 1024
 # 仓库已公开、也不需要访问令牌，固定这一处最省心。
 DEFAULT_MANIFEST_URL = "https://gitee.com/shyxiaoniu/teacher-workbench/raw/main/version.json"
 
+# 备用源（2026-11-20 加）：Gitee 的 raw 已改成 302 跳到 raw.giteeusercontent.com
+# 的带签名 CDN 链接，对非浏览器客户端会**间歇性**返回 403（防盗链/限流），
+# 表现为「检查更新失败：更新源拒绝访问（HTTP 403）」，过几分钟自己又好。
+# 单个源被拦就等于整个更新功能不可用，所以默认源按顺序回退：
+#   Gitee（国内直连快） → GitHub raw（内容同步，镜像兜底）
+# 两个仓库的内容由同一次 push 更新，manifest 与安装包都一致，可放心互为备份。
+MIRROR_MANIFEST_URLS = [
+    "https://raw.githubusercontent.com/Shyxiaoniu/teacher-workbench/main/version.json",
+]
+
+# 下载安装包时，这些 HTTP 状态码说明「这个源这次不给」，换下一个源再试；
+# 其余错误（超时/断网/证书）也换源，只有内容类错误才直接失败。
+_RETRY_STATUS = (403, 429, 404)
+
 # 最近一次连接的特别说明（如「跳过证书校验」）：check() 会把它附在返回里，
 # 让老师知道刚才那一下其实是降级完成的，不算错误。
 LAST_TLS_NOTE = ""
@@ -43,6 +57,39 @@ def _valid_manifest_url(u):
     """配置里填的自定义更新源：必须是完整 http(s) 地址，否则视为没配。"""
     u = str(u or "").strip()
     return u if re.match(r"^https?://\S+$", u, re.I) else ""
+
+
+def _source_name(u):
+    """更新源的简称，只用于提示文案（老师看得懂「Gitee 挂了」）。"""
+    try:
+        h = (urllib.parse.urlparse(str(u)).hostname or "").lower()
+    except Exception:
+        h = ""
+    if "gitee" in h:
+        return "Gitee"
+    if "github" in h or "githubusercontent" in h:
+        return "GitHub"
+    return h or "更新源"
+
+
+def _norm_url(u):
+    return str(u or "").strip().rstrip("/").lower()
+
+
+def _is_default_source(u):
+    """这个地址是不是「官方默认源本身」（含镜像）。
+
+    2026-11-20 踩到的坑：老版本前端把默认地址预填进「自定义源」输入框，
+    老师一保存就落进了配置 —— 于是 `url` 非空，程序把它当成「老师指定
+    单源」，多源回退形同虚设，Gitee 一 403 就彻底检查不了更新。
+    所以配置里存的是默认源等价地址时，一律按「没配」处理。
+    """
+    n = _norm_url(u)
+    if not n:
+        return False
+    if n == _norm_url(DEFAULT_MANIFEST_URL):
+        return True
+    return n in [_norm_url(x) for x in MIRROR_MANIFEST_URLS]
 
 
 class UpdateError(Exception):
@@ -208,21 +255,38 @@ class Updater:
                 os.remove(pending)
             except Exception:
                 pass
+            # 回执要落盘：只在内存里留着的话，下次重启就只剩一个 null，
+            # 老师回头查「上次更新装了什么版本」会一片空白（2026-11-20）。
+            self._save_state()
         shutil.rmtree(os.path.join(self.dir, "stage"), ignore_errors=True)
 
-    def _manifest_url(self, uc):
-        """更新源优先级（2026-11-17）：
-        ① 环境变量 WB_UPDATE_URL（容器/内网部署固定镜像源用）；
-        ② 配置里有效的 http(s) 自定义源 —— 内网 443 出不去时可指到
-           http:// 的镜像（以前一刀切清空，http 环境想更新只能干瞪眼）；
-        ③ 默认官方 Gitee 源。"""
+    def _manifest_urls(self, uc):
+        """要依次尝试的 manifest 地址列表（2026-11-20 多源回退）。
+
+        优先级：
+          ① 环境变量 WB_UPDATE_URL（容器/内网部署固定镜像源用）—— 只试它；
+          ② 配置里有效的 http(s) 自定义源 —— 只试它（老师自己指定的，
+             乱加备用源反而会装到不一致的版本）；
+          ③ 默认：官方 Gitee 源，失败再试 GitHub 镜像。
+        单个源返回 403 时不再直接判定失败，换下一个源；全部失败才报错。
+        """
         env = _valid_manifest_url(os.environ.get("WB_UPDATE_URL"))
         if env:
-            return env
+            return [env]
         cfg_url = _valid_manifest_url((uc or {}).get("url"))
-        if cfg_url:
-            return cfg_url
-        return DEFAULT_MANIFEST_URL
+        # 配置里存的若是默认源本身（老前端预填留下的），当成没配，走多源回退。
+        if cfg_url and not _is_default_source(cfg_url):
+            return [cfg_url]
+        out = [DEFAULT_MANIFEST_URL]
+        for u in MIRROR_MANIFEST_URLS:
+            if _valid_manifest_url(u) and u not in out:
+                out.append(u)
+        return out
+
+    def _manifest_url(self, uc):
+        """保留旧调用方的单值语义：列表里的第一个（主源）。"""
+        urls = self._manifest_urls(uc)
+        return urls[0] if urls else DEFAULT_MANIFEST_URL
 
     # ---------------- 检查更新 ----------------
     def check(self, uc):
@@ -233,19 +297,38 @@ class Updater:
                 LAST_TLS_NOTE = ""
                 self.state["phase"] = "checking"
                 self.state["last_error"] = ""
-                url = self._manifest_url(uc)
-                try:
-                    r = _fetch(url, CHECK_TIMEOUT, "检查更新")
+                urls = self._manifest_urls(uc)
+                raw = None
+                used_url = urls[0]
+                fails = []
+                for cand in urls:
                     try:
-                        raw = r.read().decode("utf-8", "replace")
-                    finally:
-                        r.close()
-                except UpdateError:
-                    raise
-                except urllib.error.HTTPError as e:
-                    raise UpdateError(_net_msg(e, "检查更新"))
-                except Exception as e:
-                    raise UpdateError(_net_msg(e, "检查更新"))
+                        r = _fetch(cand, CHECK_TIMEOUT, "检查更新")
+                        try:
+                            raw = r.read().decode("utf-8", "replace")
+                        finally:
+                            r.close()
+                        used_url = cand
+                        break
+                    except UpdateError as e:
+                        fails.append((cand, e, "升级源不可用"))
+                    except urllib.error.HTTPError as e:
+                        fails.append((cand, e, "HTTP %d" % e.code))
+                    except Exception as e:
+                        fails.append((cand, e, "连不上"))
+                if raw is None:
+                    # 所有源都失败：主源单独失败时报原本的中文提示（老文案不变），
+                    # 多源全挂时才列出每个源的简称与原因，免得老师只看到一句
+                    # 「更新源拒绝访问」却不知道 Gitee 抽风还是网络断了。
+                    if len(fails) == 1:
+                        raise UpdateError(_net_msg(fails[0][1], "检查更新"))
+                    brief = "；".join("%s %s" % (_source_name(u), tag)
+                                      for u, _e, tag in fails)
+                    raise UpdateError(
+                        "检查更新失败：%d 个更新源都没有响应（%s）。"
+                        "稍后重试；若长期如此，说明服务器外网访问被限制，"
+                        "可在「自定义源」里填学校内网镜像的 version.json 地址。"
+                        % (len(fails), brief))
                 try:
                     m = json.loads(raw)
                     if not isinstance(m, dict) or not m.get("version"):
@@ -254,13 +337,16 @@ class Updater:
                     raise UpdateError("更新源返回的内容不是有效的 version.json（缺 version 字段）。")
                 self.state["last_check"] = time.time()
                 self.state["manifest"] = m
+                # 记下「这次是从哪个源拿到的」：安装时下载安装包要拼同一个源的
+                # 目录（Gitee 与 GitHub 的下载地址完全不同），不能重新按主源算。
+                self.state["manifest_url"] = used_url
                 # 附加信息：把「检测到的版本」与「安装时要用哪个包」记在一起，
                 # 便于排查 404。只记录，不参与 has_update / phase 的判定 ——
                 # 检测行为保持原样。
                 try:
                     self.state["pkg"] = {
                         "zip": str(m.get("zip") or ""),
-                        "urls": self._zip_urls(m, url),
+                        "urls": self._all_zip_urls(m, used_url, uc),
                         "sha256": str(m.get("sha256") or ""),
                     }
                 except UpdateError as pe:
@@ -333,6 +419,24 @@ class Updater:
         """保留旧调用方的单值语义（pending.json / 状态里只用主候选）。"""
         return self._zip_urls(manifest, manifest_url)[0]
 
+    def _all_zip_urls(self, manifest, manifest_url, uc):
+        """安装包的全部候选地址：先当前生效源，再各备用源（2026-11-20）。
+
+        同一份包在两个仓库都有，主源 CDN 抽风（403/429/404）时换备用源。
+        只对「没有自定义源」的情况补备用地址 —— 老师指了内网镜像就只认它。
+        """
+        urls = self._zip_urls(manifest, manifest_url)
+        for alt in self._manifest_urls(uc):
+            if alt == manifest_url:
+                continue
+            try:
+                for u2 in self._zip_urls(manifest, alt):
+                    if u2 not in urls:
+                        urls.append(u2)
+            except UpdateError:
+                pass
+        return urls
+
     def apply(self, uc):
         """下载并安装（后台线程跑，进度走 self.state['progress']）。"""
         if self.state["phase"] in ("downloading", "installing"):
@@ -353,14 +457,17 @@ class Updater:
             if not r.get("ok"):
                 raise UpdateError(r.get("msg") or "检查更新失败")
             m = self.state.get("manifest") or {}
-            manifest_url = self._manifest_url(uc)
+            # 用 check() 实际成功过的那个源来拼下载地址：Gitee 与 GitHub 的
+            # 下载路径完全不同，按主源重算会把 GitHub 拿到的 manifest 拼成
+            # 一个不存在的 Gitee 地址。
+            manifest_url = self.state.get("manifest_url") or self._manifest_url(uc)
             if not is_newer(m.get("version"), self.version):
                 raise UpdateError("当前已是最新版本，无需更新。")
 
             # ---- 1. 下载 ----
             with self.lock:
                 self.state["phase"] = "downloading"
-            zip_urls = self._zip_urls(m, manifest_url)
+            zip_urls = self._all_zip_urls(m, manifest_url, uc)
             zip_url = zip_urls[0]
             dl = os.path.join(self.dir, "download.zip")
             self._set_prog("download", 0, "连接更新源…")
@@ -376,7 +483,7 @@ class Updater:
                     break
                 except urllib.error.HTTPError as e:
                     tried.append(cand)
-                    if e.code == 404 and cand != zip_urls[-1]:
+                    if e.code in _RETRY_STATUS and cand != zip_urls[-1]:
                         try:
                             e.close()
                         except Exception:
@@ -394,7 +501,6 @@ class Updater:
                     % (len(tried), "、".join(tried[-2:])))
             total = int(r.headers.get("Content-Length") or 0)
             done = 0
-            h = hashlib.sha256()
             try:
                 try:
                     with open(dl, "wb") as f:
@@ -403,7 +509,6 @@ class Updater:
                             if not chunk:
                                 break
                             f.write(chunk)
-                            h.update(chunk)
                             done += len(chunk)
                             pct = min(99, int(done * 100 / total)) if total else 0
                             self._set_prog("download", pct,
@@ -417,92 +522,11 @@ class Updater:
                 raise UpdateError(_net_msg(e, "下载安装包"))
             if total and done < total:
                 raise UpdateError("下载不完整（%d/%d 字节），请重试。" % (done, total))
-            want = str(m.get("sha256") or "").strip().lower()
-            if want and h.hexdigest() != want:
-                raise UpdateError("安装包校验失败（sha256 不符），文件可能损坏，请重试。")
 
-            # ---- 2. 暂存解压 + 结构校验 ----
-            with self.lock:
-                self.state["phase"] = "installing"
-            self._set_prog("install", 0, "解压安装包…")
-            stage = os.path.join(self.dir, "stage")
-            shutil.rmtree(stage, ignore_errors=True)
-            os.makedirs(stage, exist_ok=True)
-            try:
-                with zipfile_guard(dl, stage):
-                    pass
-            except Exception as e:
-                raise UpdateError("安装包解压失败：%s" % e)
-            # zip 第一层可能有包名目录（<名>/app/…），自动定位包里的 app/
-            stage_app = _find_app_dir(stage)
-            if not stage_app:
-                raise UpdateError("安装包结构不对（里面没有 app/server.py），不能安装。")
-            try:
-                with open(os.path.join(stage_app, "server.py"), "r", encoding="utf-8") as f:
-                    head = f.read(8192)
-                mv = re.search(r'^VERSION\s*=\s*["\']([^"\']+)["\']', head, re.M)
-                v_in_pkg = mv.group(1) if mv else ""
-            except Exception:
-                v_in_pkg = ""
-            if v_in_pkg != str(m.get("version")):
-                raise UpdateError("安装包版本（%s）与更新源版本（%s）不一致，拒装以防装错包。"
-                                  % (v_in_pkg or "未知", m.get("version")))
-
-            # ---- 3. 备份当前代码（app/data 保留原地，绝不搬动）----
-            self._set_prog("install", 60, "备份当前版本…")
-            bdir = os.path.join(self.dir, "backup-v%s-%d" % (self.version, int(time.time())))
-            os.makedirs(bdir, exist_ok=True)
-            keep = {"data", "__pycache__"}
-            moved = []
-            try:
-                for name in os.listdir(self.code_root):
-                    if name in keep:
-                        continue
-                    shutil.move(os.path.join(self.code_root, name),
-                                os.path.join(bdir, name))
-                    moved.append(name)
-                # 装新代码
-                self._set_prog("install", 80, "写入新版本…")
-                for name in os.listdir(stage_app):
-                    if name == "data":       # 包里的 data 只是占位说明，不覆盖真实数据
-                        continue
-                    shutil.move(os.path.join(stage_app, name),
-                                os.path.join(self.code_root, name))
-            except Exception as e:
-                # ---- 失败自动回滚 ----
-                self._set_prog("install", 0, "安装失败，正在回滚…")
-                try:
-                    for name in os.listdir(self.code_root):
-                        if name in keep:
-                            continue
-                        p = os.path.join(self.code_root, name)
-                        if os.path.isdir(p):
-                            shutil.rmtree(p, ignore_errors=True)
-                        else:
-                            try:
-                                os.remove(p)
-                            except Exception:
-                                pass
-                    for name in moved:
-                        shutil.move(os.path.join(bdir, name),
-                                    os.path.join(self.code_root, name))
-                    self._set_prog("install", 0, "已回滚到原版本")
-                except Exception:
-                    self._set_prog("install", 0, "自动回滚也失败了，请用手动回滚按钮或重新解压原安装包")
-                raise UpdateError("安装失败已回滚：%s" % e)
-
-            # ---- 4. 写重启标记，等 server 重启加载新代码 ----
-            with self.lock:
-                self.state["phase"] = "restart_pending"
-                self.state["backup"] = {"dir": bdir, "from_version": self.version,
-                                        "ts": int(time.time())}
-                self.state["msg"] = "已安装 v%s，重启服务后生效" % m.get("version")
-                self._save_state()
-            pending = {"from": self.version, "to": m.get("version"),
-                       "ts": int(time.time()), "zip": zip_url}
-            with open(os.path.join(self.dir, "pending.json"), "w", encoding="utf-8") as f:
-                json.dump(pending, f, ensure_ascii=False, indent=1)
-            self._set_prog("done", 100, "安装完成，重启服务后生效")
+            # ---- 2~4. 解压 → 校验 → 备份 → 换装 → 写重启标记 ----
+            # 统一走 _install_zip：离线安装（install_local）走同一段，
+            # 两条路的校验强度、备份与自动回滚行为完全一致。
+            self._install_zip(dl, m.get("version"), m.get("sha256"), zip_url)
             try:
                 os.remove(dl)
             except Exception:
@@ -519,6 +543,182 @@ class Updater:
                 self.state["last_error"] = "更新失败：%s" % e
                 self._save_state()
             self._set_prog("error", 0, "更新失败：%s" % e)
+
+    # ---------------- 换装（在线 / 离线共用）----------------
+    def _install_zip(self, dl, want_version="", want_sha="", src=""):
+        """把已落地的安装包换装：校验 → 解压 → 结构/版本校验 → 备份 → 替换 → 写重启标记。
+
+        在线更新（_apply）与离线安装（install_local）共用这一段，保证两条路的
+        校验强度、备份与自动回滚行为完全一致 —— 离线包不比在线包「更可信」，
+        只是来源不同（U 盘拷进来 vs 网上下的），该查的一样要查。
+
+        want_sha 为空 = 离线包（没有 manifest 可比，改用 zip 内部 CRC 兜底）。
+        返回包里的版本号，供调用方记审计。
+        """
+        # ---- 1. 完整性校验 ----
+        want = str(want_sha or "").strip().lower()
+        if want:
+            h = hashlib.sha256()
+            try:
+                with open(dl, "rb") as f:
+                    while True:
+                        chunk = f.read(CHUNK)
+                        if not chunk:
+                            break
+                        h.update(chunk)
+            except Exception as e:
+                raise UpdateError("读安装包失败：%s" % e)
+            if h.hexdigest() != want:
+                raise UpdateError("安装包校验失败（sha256 不符），文件可能损坏，请重试。")
+        else:
+            # 离线包没有 manifest 里的 sha256 可比：退一步用 zip 自带的 CRC32
+            # 逐个文件校验。能查出 U 盘/网盘拷贝造成的静默损坏，比什么都不查强。
+            try:
+                with _zipfile.ZipFile(dl) as z:
+                    bad = z.testzip()
+            except Exception as e:
+                raise UpdateError("这不是一个有效的 zip 安装包：%s" % e)
+            if bad:
+                raise UpdateError("安装包已损坏（%s 的文件校验和对不上），请重新拷贝一份再试。"
+                                  % bad)
+
+        # ---- 2. 暂存解压 + 结构校验 ----
+        with self.lock:
+            self.state["phase"] = "installing"
+        self._set_prog("install", 0, "解压安装包…")
+        stage = os.path.join(self.dir, "stage")
+        shutil.rmtree(stage, ignore_errors=True)
+        os.makedirs(stage, exist_ok=True)
+        try:
+            with zipfile_guard(dl, stage):
+                pass
+        except Exception as e:
+            raise UpdateError("安装包解压失败：%s" % e)
+        # zip 第一层可能有包名目录（<名>/app/…），自动定位包里的 app/
+        stage_app = _find_app_dir(stage)
+        if not stage_app:
+            raise UpdateError("安装包结构不对（里面没有 app/server.py），不能安装。")
+        v_in_pkg = ""
+        try:
+            # 必须读全文：VERSION 在 server.py 里位置很靠后（前面是模块文档与
+            # 一大段 import），只读前 8KB 会搜不到 —— 2026-11-20 离线安装实测
+            # 就栽在这里，报「读不到 VERSION」。全文 300KB 左右，一次读完不心疼。
+            with open(os.path.join(stage_app, "server.py"), "r",
+                      encoding="utf-8", errors="replace") as f:
+                py_src = f.read()
+            mv = re.search(r'^VERSION\s*=\s*["\']([^"\']+)["\']', py_src, re.M)
+            v_in_pkg = mv.group(1) if mv else ""
+        except Exception:
+            v_in_pkg = ""
+        if not v_in_pkg:
+            raise UpdateError("安装包里的 app/server.py 读不到 VERSION，无法确认版本，拒装。")
+        if want_version and v_in_pkg != str(want_version):
+            raise UpdateError("安装包版本（%s）与更新源版本（%s）不一致，拒装以防装错包。"
+                              % (v_in_pkg, want_version))
+
+        # ---- 3. 备份当前代码（app/data 保留原地，绝不搬动）----
+        self._set_prog("install", 60, "备份当前版本…")
+        bdir = os.path.join(self.dir, "backup-v%s-%d" % (self.version, int(time.time())))
+        os.makedirs(bdir, exist_ok=True)
+        keep = {"data", "__pycache__"}
+        moved = []
+        try:
+            for name in os.listdir(self.code_root):
+                if name in keep:
+                    continue
+                shutil.move(os.path.join(self.code_root, name),
+                            os.path.join(bdir, name))
+                moved.append(name)
+            # 装新代码
+            self._set_prog("install", 80, "写入新版本…")
+            for name in os.listdir(stage_app):
+                if name == "data":       # 包里的 data 只是占位说明，不覆盖真实数据
+                    continue
+                shutil.move(os.path.join(stage_app, name),
+                            os.path.join(self.code_root, name))
+        except Exception as e:
+            # ---- 失败自动回滚 ----
+            self._set_prog("install", 0, "安装失败，正在回滚…")
+            try:
+                for name in os.listdir(self.code_root):
+                    if name in keep:
+                        continue
+                    p = os.path.join(self.code_root, name)
+                    if os.path.isdir(p):
+                        shutil.rmtree(p, ignore_errors=True)
+                    else:
+                        try:
+                            os.remove(p)
+                        except Exception:
+                            pass
+                for name in moved:
+                    shutil.move(os.path.join(bdir, name),
+                                os.path.join(self.code_root, name))
+                self._set_prog("install", 0, "已回滚到原版本")
+            except Exception:
+                self._set_prog("install", 0, "自动回滚也失败了，请用手动回滚按钮或重新解压原安装包")
+            raise UpdateError("安装失败已回滚：%s" % e)
+
+        # ---- 4. 写重启标记，等 server 重启加载新代码 ----
+        with self.lock:
+            self.state["phase"] = "restart_pending"
+            self.state["backup"] = {"dir": bdir, "from_version": self.version,
+                                    "ts": int(time.time())}
+            self.state["msg"] = "已安装 v%s，重启服务后生效" % v_in_pkg
+            self._save_state()
+        pending = {"from": self.version, "to": v_in_pkg,
+                   "ts": int(time.time()), "zip": src or os.path.basename(dl)}
+        with open(os.path.join(self.dir, "pending.json"), "w", encoding="utf-8") as f:
+            json.dump(pending, f, ensure_ascii=False, indent=1)
+        self._set_prog("done", 100, "安装完成，重启服务后生效")
+        return v_in_pkg
+
+    # ---------------- 离线安装包（服务端没有外网时的正路）----------------
+    def install_local(self, zip_path, label=""):
+        """直接换装一个本地 zip：老师在能上网的电脑下载发行包，拷进内网再上传。
+
+        与在线更新走同一套换装逻辑（_install_zip），进度同样写
+        state['progress']，前端照旧轮询 /update/progress。
+        """
+        if self.state["phase"] in ("downloading", "installing"):
+            ts = self.state.get("progress_ts") or 0
+            if time.time() - ts < 900:
+                return {"ok": False, "msg": "正在下载安装中，请稍候"}
+        t = threading.Thread(target=self._install_local, args=(zip_path, label),
+                             daemon=True)
+        t.start()
+        return {"ok": True, "msg": "开始安装离线包"}
+
+    def _install_local(self, zip_path, label):
+        try:
+            with self.lock:
+                self.state["last_error"] = ""
+            self._set_prog("install", 2, "校验离线安装包…")
+            if not os.path.isfile(zip_path):
+                raise UpdateError("没收到安装包文件，请重新上传。")
+            v = self._install_zip(zip_path, "", "",
+                                  "offline:%s" % (label or os.path.basename(zip_path)))
+            # 离线包装完补一条最小 manifest：状态页要显示「现在是多少版本」，
+            # 否则前端还挂着上一次在线检查留下的旧「有新版本」。
+            with self.lock:
+                self.state["manifest"] = {"version": v, "date": "", "notes": [],
+                                          "zip": "", "sha256": "", "offline": True}
+                self.state["manifest_url"] = ""
+                self.state["pkg"] = {"zip": label or os.path.basename(zip_path),
+                                     "urls": [], "sha256": "", "offline": True}
+                self._save_state()
+        except UpdateError as e:
+            with self.lock:
+                self.state["phase"] = "failed"
+                self.state["last_error"] = str(e)
+                self._save_state()
+            self._set_prog("error", 0, str(e))
+        except Exception as e:
+            with self.lock:
+                self.state["phase"] = "failed"
+                self.state["last_error"] = "安装离线包失败：%s" % e
+                self._save_state()
+            self._set_prog("error", 0, "安装离线包失败：%s" % e)
 
     # ---------------- 回滚 ----------------
     def rollback(self):
@@ -585,7 +785,11 @@ class Updater:
                 "note": str(self.state.get("note") or ""),
                 "config": {
                     "url": str(uc.get("url") or ""),
-                    "effective_url": self._manifest_url(uc),
+                    # 实际生效的源：优先显示上一次检查真正成功的那一个，
+                    # 便于老师确认「现在走的是 Gitee 还是 GitHub 镜像」。
+                    "effective_url": (self.state.get("manifest_url")
+                                      or self._manifest_url(uc)),
+                    "mirrors": list(MIRROR_MANIFEST_URLS),
                     "auto": bool(uc.get("auto", True)),
                     "interval_hours": int(uc.get("interval_hours") or 24),
                     "default_url": DEFAULT_MANIFEST_URL,

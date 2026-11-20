@@ -3,7 +3,7 @@
 > 给班主任和任课老师用的一套**班级工作台**：教师端与学生端共用一个网页入口，
 > 数据全部存在自己的服务器上，不依赖任何第三方云服务。
 
-当前版本：**2.0.45**（版本号唯一代码源：`app/server.py` 的 `VERSION`）
+当前版本：**2.0.46**（版本号唯一代码源：`app/server.py` 的 `VERSION`）
 
 ```
 http://<服务器局域网 IP>:8080/        ← Docker 部署的入口；直接运行时是 :20020
@@ -238,11 +238,13 @@ http://<服务器局域网 IP>:8080/        ← Docker 部署的入口；直接�
 
 **共同部署前准备：** 学生设备与服务器同一局域网（机房关闭 AP 隔离）；服务器设固定 IP
 或 DHCP 保留；预留 20 GB 以上磁盘；防火墙放行对外端口；服务器不休眠。
+**整台机器出不去外网**（学校机房、内网服务器）时看「方式三」，那里有 Windows Server /
+Ubuntu Server / 离线 Docker 的完整步骤。
 
 ### 方式一：直接运行（免安装）
 
 1. 解压发行包到本地（路径尽量不含空格）；Windows 双击根目录 `启动工作台.bat`，
-   macOS 双击 `启动工作台.command`；
+   macOS 双击 `启动工作台.command`，Linux 执行 `bash 启动工作台.sh`；
 2. 浏览器打开 `http://127.0.0.1:20020/`；学生访问 `http://<这台电脑的局域网 IP>:20020/s/`。
 
 **不需要安装 Python**：包内 `runtime/win-x64/python/` 已带 Python 3.13.7 运行时，
@@ -274,6 +276,130 @@ docker compose up -d --build
 | 升级 | `docker compose up -d --build`（数据不丢） |
 | 停止（保留数据） | `docker compose down`（**别加 `-v`**，会删数据卷） |
 | 忘记教师密码 | `docker compose exec workbench python launch.py --reset-password` |
+
+### 方式三：无外网服务器（Windows Server / Ubuntu Server）
+
+机房和校园网里的服务器常常整台出不去外网 —— `pip` / `apt` / `docker pull` 全不可用。
+这套程序**运行时零第三方依赖**（纯 Python 标准库），所以离线部署不需要装任何包，
+唯一要做的是「把发行包送进去」：U 盘、内网共享、堡垒机上传、跳板机 `scp` 都行。
+只需要那一个 `班级工作台<版本>-<yyMMdd>.zip`（约 17MB）。
+
+#### Windows Server
+
+1. 解压到 `D:\班级工作台`（路径别带空格）。包内自带
+   `runtime\win-x64\python\python.exe`（Python 3.13.7 嵌入式），**不用装 Python**。
+2. 双击 `启动工作台.bat`。首次启动会在 20020 起服务并打开浏览器，
+   按提示设管理员账号（Server Core 没有桌面时手动打开 `http://127.0.0.1:20020/`）。
+3. **放行防火墙** —— Server 默认全拦，这是最容易漏的一步。管理员 PowerShell：
+
+```powershell
+New-NetFirewallRule -DisplayName "班级工作台 20020" -Direction Inbound `
+  -Protocol TCP -LocalPort 20020 -Action Allow -Profile Private,Domain
+```
+
+4. 学生访问 `http://<服务器内网 IP>:20020/s/`。
+
+**开机自启**（用任务计划程序，别用「启动」文件夹）：
+
+| 项 | 填什么 |
+|---|---|
+| 常规 | 选「不管用户是否登录都运行」，勾「使用最高权限运行」 |
+| 触发器 | 启动时，延迟 30 秒 |
+| 操作 | 程序 `D:\班级工作台\app\启动教师端.bat`，**起始于** `D:\班级工作台\app` |
+| 设置 | 勾「失败后按 1 分钟间隔重启」，取消「运行超过…则停止任务」 |
+
+> 「起始于」必须填 `app` 目录，否则相对路径找不到程序；选「只在用户登录时运行」的话，
+> 服务器重启后没人登录，服务起不来。
+
+#### Ubuntu Server
+
+Ubuntu 20.04+ 自带 `python3`，标准库够用，**不需要 apt 装任何东西**。
+
+1. 解压到 `/opt/workbench`：
+
+```bash
+sudo mkdir -p /opt/workbench
+unzip -q 班级工作台2.0.46-261120.zip -d /tmp/wb
+sudo cp -a /tmp/wb/班级工作台2.0.46-261120/. /opt/workbench/
+# 连 unzip 都没有？用自带的 python3 解：
+# python3 -c "import zipfile;zipfile.ZipFile('班级工作台2.0.46-261120.zip').extractall('/tmp/wb')"
+```
+
+2. 先前台试跑一次（Ctrl+C 停）：
+
+```bash
+cd /opt/workbench && bash 启动工作台.sh --no-browser --no-dialog
+```
+
+浏览器打开 `http://<服务器IP>:20020/` 设管理员账号；开了 ufw 的话放行
+`sudo ufw allow 20020/tcp`。
+
+3. 配成 systemd 服务（后台常驻 + 开机自启 + 崩了自动拉起）：
+
+```bash
+sudo useradd -r -s /usr/sbin/nologin workbench 2>/dev/null || true
+sudo chown -R workbench:workbench /opt/workbench
+
+sudo tee /etc/systemd/system/workbench.service >/dev/null <<'EOF'
+[Unit]
+Description=班级工作台 2.0
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=workbench
+WorkingDirectory=/opt/workbench/app
+ExecStart=/usr/bin/python3 /opt/workbench/app/launch.py --no-browser --no-dialog
+Restart=always
+RestartSec=3
+Environment=LANG=C.UTF-8
+Environment=PYTHONIOENCODING=utf-8
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable --now workbench
+sudo systemctl status workbench --no-pager     # 看是否 active (running)
+journalctl -u workbench -f                     # 跟着看日志
+```
+
+> `chown -R` 那行别漏 —— 服务账号写不了 `app/data` 会直接退出。
+> `--no-dialog` 关掉图形化报错弹窗：服务器没桌面，弹窗会把进程卡住。
+> 升级：把新包解压覆盖到 `/opt/workbench`（保留 `app/data`），
+> `sudo systemctl restart workbench`。
+
+#### 离线 Docker（服务器有 Docker，但拉不了镜像）
+
+```bash
+# ① 有网机器上构建并导出（含 gateway 用的 nginx）
+docker compose build
+docker save -o workbench-images.tar $(docker compose config --images)
+
+# ② 拷进服务器
+scp workbench-images.tar root@<server>:/root/
+
+# ③ 服务器上导入（compose 文件与 .env 也一起拷过去）
+docker load -i workbench-images.tar
+docker compose up -d --no-build
+```
+
+> `docker compose config --images` 会把 `workbench`、`gateway` 用到的镜像都列出来，
+> 一起 `save`；只导 workbench 会缺 nginx 网关。
+> `.env` 里的 `IMAGE_TAG` 必须和导出的 tag 一致，否则 `up` 会去找一个不存在的镜像。
+
+#### 怎么选
+
+| 手上有 | 建议 |
+|---|---|
+| 一台 Windows 机器当服务器、老师熟悉 Windows | 方式一 + 任务计划程序 |
+| 学校给的 Ubuntu 虚拟机 / 内网云主机 | 方式一 + systemd |
+| 已经有 Docker、想要一键升级与迁移 | 离线 Docker |
+
+> 三种方式装出来的数据格式完全一样，随时可以用
+> 设置 → 数据与备份 → 一键导出 / 一键恢复 搬家，**不要手工拷数据库文件**。
 
 ---
 
@@ -401,6 +527,17 @@ docker compose up -d --build
 
 ---
 
+## 2.0.46 更新要点
+
+- **服务器没有外网也能更新（离线安装）**：教师端「软件更新」新增一块「离线安装」，选一个发行包 zip 上传即可 —— 在能上网的电脑下载 → U 盘拷进来 → 上传，剩下的校验、解压、备份、换装、失败自动回滚全部和在线更新走同一段代码（`updater._install_zip`）。离线包没有 manifest，改用 zip 内部 CRC32 逐文件校验 + 包内 `app/server.py` 的 VERSION 两道把关，读不到版本号或结构不对一律拒装、当前代码一个文件不动。上限 800MB，17MB 的包在内网约 1 秒传完。
+- **修复「读不到版本号」导致装不上**：换装前要读包里的 `VERSION` 核对版本，原来只读 `server.py` 前 8KB —— 而 VERSION 在文件第 373 行，于是任何正规发行包都会被判「读不到 VERSION 拒装」。改成读全文。这条同时影响在线更新，是个一直没暴露的拦路虎。
+- **更新回执落盘**：`_bootstrap` 收尾时把「上次从哪个版本更新到哪个版本」写进 `state.json`，原来只留内存，重启一次就变成空，回头查不到装过什么。
+- **修复「更新源拒绝访问（HTTP 403）」**：Gitee 的 raw 已改成 302 跳到 `raw.giteeusercontent.com` 的签名 CDN，对非浏览器客户端会间歇返回 403（防盗链/限流）。现在默认按 **Gitee → GitHub 镜像** 顺序自动回退，一个被拒就换下一个，全挂才报错并分别点名是哪个源、什么原因。另外存量配置里「自定义源」若存的就是默认地址本身（老前端预填留下的），一律当「没配」处理 —— 否则多源回退形同虚设。
+- **新增内网镜像支持**：内网有一台能上外网的机器就能做更新源（一个静态目录 + `version.json` + `dist/` 包），其余机器在「自定义源」填 `http://<镜像机IP>:端口/version.json`，或用 `WB_UPDATE_URL` 环境变量（多台/Docker 用这个，优先级更高）。填了自定义源就只认它，不再偷加官方备用源。README 第十节补完整搭法与排查步骤。
+- **离线安装的选文件控件改成工作台样式**：原生 `<input type=file>` 那个灰色「选择文件 / 未选择文件」和整体风格不搭，现在换成与「检查更新」同款按钮 + 右侧文件名与体积回显，窄屏自动换行。
+- **发行包新增 `启动工作台.sh`**：原来只有 `.bat` 与 `.command`，Linux 用户得自己 `cd app` 找脚本。现在 Ubuntu 上解压后 `bash 启动工作台.sh` 即可。
+- **README 补「方式三：无外网服务器」**：Windows Server（防火墙放行 + 任务计划自启）、Ubuntu Server（systemd 服务单元，含无 `unzip` 时用 python3 解压的兜底）、离线 Docker（`docker save` / `load` + `up --no-build`）三套完整步骤。
+
 ## 2.0.45 更新要点
 
 - **每周重置范围写死**：明确「只有本周星光 `week.stars` 每周一归零」这一条，积分、宠物、宠物蛋、装扮/背景/特效/道具、累计总星、各关最好成绩**全部永久保留**。规则原文写进 `typing_store.py` 的 `week_key()` 注释当护栏，README 补「每周重置范围」小节，学生端排行榜副标题与教师端「清零本周星光榜」按钮旁都改成大白话说明。
@@ -497,6 +634,118 @@ python tools/make_release.py --out D:\dist   # 指定输出目录（默认 dist/
 > 「创建发行版」并上传 zip 才会有内容。在线更新走的是 `version.json`（manifest）+
 > raw 直链，不依赖 Releases 功能；想把 zip 同时挂到 Releases 也可以，把
 > `version.json` 的 `zip` 字段改成完整 URL 即可。
+
+### 服务器没有外网：离线安装（2.0.46 起）
+
+服务端只要能打开教师端页面，就能更新 —— 缺的只是「把包送进去」的通道。
+
+> ⚠️ **不要手动解压覆盖 `app/`**。手动覆盖会漏掉备份、回滚和版本校验；
+> Windows 上正在运行的文件还经常被锁，覆盖到一半失败就再也起不来。
+
+标准流程：
+
+1. **在能上网的电脑**下载发行包 —— 仓库 `dist/` 里的
+   `班级工作台<版本>-<yyMMdd>.zip`（Gitee / GitHub 都有），或用现成的下载链接。
+2. 用 U 盘 / 内网共享 / 任何文件传输方式，把 zip 弄到**能打开教师端网页的那台电脑**上。
+3. 教师端 → 系统设置 →「软件更新」→ 展开 **`▸ 离线安装（服务器连不上外网时用）`**
+4. 选择 zip →「上传并安装」。上传过程有百分比进度（17MB 的包在内网通常几秒），
+   传完服务端自动校验 → 解压 → 备份 → 换装。
+5. 点「**立即重启服务**」，重启后版本号生效。全新版本装坏了，用同一张卡片上的「回滚」。
+
+与在线更新的区别只有「包从哪来」：换装、备份、失败自动回滚、手动回滚，
+全部走同一段代码（`app/updater.py::_install_zip`）。所以能做的事一样：
+
+| 场景 | 支持 | 说明 |
+|---|---|---|
+| 新版覆盖旧版 | ✅ | 常规更新 |
+| 同版本重装 | ✅ | 文件被误改/缺失时用来修复 |
+| 降级到旧版 | ✅ | 上传旧版 zip 即可；装完记得核对版本号 |
+| 装坏了回滚 | ✅ | 更新卡片上的「回滚到 v…」，只回滚代码，不动数据 |
+
+**校验强度**：在线更新比对 `version.json` 的 sha256；离线包没有 manifest，
+改用两道 —— zip 内部 **CRC32 逐文件校验**（能挡住 U 盘/网盘拷贝出的静默损坏）
++ 包内 `app/server.py` 的 **VERSION**，再过一次结构校验（必须能找到 `app/server.py`）。
+读不到版本号、结构不对、CRC 对不上，一律拒装，当前代码一个文件都不动。
+
+上限 800MB（正常发行包约 17MB）。上传的包落在 `<数据目录>/update/offline-upload.zip`，
+下次上传直接覆盖，不累积。
+
+> **Docker 部署**：离线安装换的是容器内 `/app/app/` 下的代码，数据卷 `/app/data` 不动，
+> 所以当场能用。但**镜像 tag 没变** —— 下次 `docker compose up -d` 重建容器，
+> 代码会退回镜像里的版本。要长期固定，改 `.env` 的 `IMAGE_TAG` 并重新
+> `docker compose build && docker compose up -d`，别只靠离线安装。
+
+### 内网镜像（一台机器做源，全内网共用）
+
+内网里只要有一台机器能上外网（或能走代理），就可以把它做成**更新镜像**，
+其余机器照常点「检查更新 / 下载并安装」，不用每次拷 U 盘。
+
+镜像就是一个**静态文件目录**，相对结构必须和仓库一致：
+
+```
+mirror/                                  ← 任意 http 服务能访问到的目录
+├── version.json                          ← 从仓库根目录同步
+└── dist/
+    └── 班级工作台2.0.46-261120.zip        ← version.json 里 zip 指向的那个包
+```
+
+> `version.json` 的 `zip` 是**相对路径**（`dist/xxx.zip`），程序会把它拼到
+> **`version.json` 所在目录**后面。所以 version.json 在镜像根，包就必须在
+> `镜像根/dist/` 下 —— 相对位置错了会报「安装包不在更新源上」。
+> 不想保持这个结构，就把 `zip` 改成完整 URL。
+
+**搭起来（三选一）**
+
+A. 最省事，Python 一行命令（够临时用）
+
+```bash
+cd /path/to/mirror
+python3 -m http.server 8090      # Windows 上把 python3 换成 python
+# 内网机器访问 http://<镜像机IP>:8090/version.json 能看到 JSON 就成了
+```
+
+关掉终端就停，长期用建议挂成服务/计划任务。
+
+B. nginx（要长期跑用这个）
+
+```nginx
+server {
+    listen 8090;
+    root /path/to/mirror;
+    autoindex off;
+    location / { try_files $uri =404; }
+}
+```
+
+C. 群晖 / 威联通：Web Station 建个静态站点，根目录指到 `mirror/` 即可。
+
+**同步内容**（在镜像机上定时跑，或手动更新时跑）
+
+```bash
+cd /path/to/mirror
+curl -fL -o version.json \
+  https://gitee.com/shyxiaoniu/teacher-workbench/raw/main/version.json
+# 版本号从 version.json 读，包名按 班级工作台<版本>-<yyMMdd>.zip 拼
+```
+
+**客户端怎么指过去（二选一）**
+
+| 方式 | 适合 | 做法 |
+|---|---|---|
+| 教师端「自定义源」 | 单台、临时 | 系统设置 → 软件更新 → 自动检查设置 → 自定义源填 `http://<镜像机IP>:8090/version.json` |
+| 环境变量 `WB_UPDATE_URL` | 多台、长期、Docker | 启动前设 `WB_UPDATE_URL=http://<镜像机IP>:8090/version.json` |
+
+两者都配时**环境变量优先**。填了自定义源就**只认它**，不会再自动回退到
+Gitee / GitHub —— 这是故意的：老师指定了内网源，就不该偷偷从外网装另一份内容。
+
+- 支持 `http://`（不强制 https），内网没有证书也能用。
+- 包照旧做 sha256 与版本一致性校验，镜像里被塞了个错包会直接拒装。
+- 镜像只解决「检查 + 下载」。**镜像机自己也上不了外网时，回到上面的离线安装。**
+
+**排查三连**：镜像机上 `curl http://127.0.0.1:8090/version.json` →
+要更新的那台机器 `curl http://<镜像机IP>:8090/version.json` → 再点「检查更新」。
+第一步通第二步不通 = 防火墙/端口；两步都不通 = 服务没起或目录指错。
+
 
 ### 导入名单按钮吸底（2.0.31；截图工具已于 2.0.32 移除）
 
