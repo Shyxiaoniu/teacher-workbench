@@ -79,6 +79,8 @@ class Workspace(object):
             "quiz_files": os.path.join(d, "quiz_files"),
             # H5 网页设计草稿（2.0.39）：过程文件，独立 design.json
             "design": os.path.join(d, "design.json"),
+            # 像素画草稿（2.0.47）：同上，独立 pixel.json
+            "pixel": os.path.join(d, "pixel.json"),
             "submissions": os.path.normpath(sub),
             "courseware": os.path.normpath(cw),
         }

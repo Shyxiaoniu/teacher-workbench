@@ -24,12 +24,16 @@
                学生点一次入口卡才把「网页」页签加进导航（记在 localStorage）。 */
             designOn: false, designAdd: true, designSubmit: true, designAdded: false,
             designSeen: false,   /* 进来过没有：只影响卡片文案，不影响入口是否显示 */
+            /* 像素画（2.0.47）：与网页设计同一套判断（服务开着 + 允许使用） */
+            pixelOn: false, pixelAdd: true, pixelSubmit: true, pixelSeen: false,
             /* 测验/检测（2.0.38）：不进 sync 快照（试卷含答案），独立接口按会话班级下发 */
             quiz: { list: null, loading: false } };
   var WD = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
   /* 学生自己「添加」H5 网页设计页签的标记：老师开放 + 学生点过入口卡才为 1。
      换设备要重新添加一次，避免把入口强塞给还没准备用的同学。 */
   var DESIGN_ADD_KEY = 'wb-design-added';
+  /* 像素画同理（2.0.47）：只记「来过」，用来把按钮文案换成「继续画 ›」 */
+  var PIXEL_ADD_KEY = 'wb-pixel-seen';
 
   /* ---------------- 工具 ---------------- */
   function $(s) { return document.querySelector(s); }
@@ -199,11 +203,22 @@
     S.designAdded = !!(S.designOn && S.designAdd);
     try { S.designSeen = localStorage.getItem(DESIGN_ADD_KEY) === '1'; } catch (e) { S.designSeen = false; }
   }
+  /* 像素画（2.0.47）：字段与 design 一模一样，判断逻辑也照抄一份。
+     别把两者合并成一个「工具开关」——它们各自独立启停，老师今天只开像素画
+     不开网页是常见情况。 */
+  function applyPixelFlag(d) {
+    d = d || {};
+    S.pixelOn = !!d.enabled;
+    S.pixelAdd = d.add !== false;
+    S.pixelSubmit = d.submit !== false;
+    try { S.pixelSeen = localStorage.getItem(PIXEL_ADD_KEY) === '1'; } catch (e) { S.pixelSeen = false; }
+  }
   function refreshTyping() {
     api('/api/v2/auth/session').then(function (j) {
       if (j && j.ok) {
         S.typingOn = !!(j.typing && j.typing.enabled);
         applyDesignFlag(j.design);
+        applyPixelFlag(j.pixel);
         render();
       }
     }).catch(function () {});
@@ -467,6 +482,18 @@
         '<span class="tag hot">' + (S.designSeen ? '继续写 ›' : '去写 ›') + '</span></div>'
       : '';
 
+    /* 像素画入口卡（2.0.47）：与网页卡并列，老师开启就出现 */
+    var pixelHtml = pixelReady()
+      ? '<div class="card" data-pixel-go style="cursor:pointer;display:flex;align-items:center;gap:14px">' +
+        '<div style="font-size:32px;line-height:1">🟦</div>' +
+        '<div style="flex:1"><b style="font-size:15.5px">像素画</b>' +
+        '<div style="font-size:12.5px;color:var(--ink3);margin-top:3px">' +
+        (S.pixelSeen ? '接着画你的作品 · 做好一键交给老师'
+                     : '一格一格涂 · 画好一键交给老师') +
+        '</div></div>' +
+        '<span class="tag hot">' + (S.pixelSeen ? '继续画 ›' : '去画 ›') + '</span></div>'
+      : '';
+
     return '<div class="stat-grid">' +
       '<div class="stat"><div class="stat-num">' + tm.list.length + '<small>份</small></div>' +
       '<div class="stat-label">' + (tm.fresh ? '今日资料' : '最近资料') + '</div></div>' +
@@ -482,6 +509,7 @@
       ckHtml +
       typingHtml +
       designHtml +
+      pixelHtml +
       '<div class="cols2">' +
       '<div class="card"><h3>' + (tm.fresh ? '本课资料' : '最近下发的资料') +
         '<span class="more">点一下直接打开</span></h3>' + matsHtml + '</div>' +
@@ -625,9 +653,11 @@
     { id: 'typing', name: '打字', ic: '⌨️' },
     /* H5 网页（2.0.40 定名，原「设计」）：老师开放 + 学生自己添加后出现；
        点开在本页框架内打开设计器，不跳新标签页。 */
-    { id: 'design', name: '网页', ic: '🎨' }
+    { id: 'design', name: '网页', ic: '🎨' },
+    /* 像素画（2.0.47）：老师开放即出现，点开在站内 iframe 里画，不跳新标签 */
+    { id: 'pixel', name: '像素', ic: '🟦' }
   ];
-  var VIEWS = ['today', 'homework', 'courses', 'quiz', 'seat', 'typing', 'design'];
+  var VIEWS = ['today', 'homework', 'courses', 'quiz', 'seat', 'typing', 'design', 'pixel'];
   var TITLES = {
     today: ['今日', '签到 · 课堂学习单 · 要交的作业'],
     homework: ['我的作业', '全部作业与提交状态 · 点一条查看详情'],
@@ -635,7 +665,8 @@
     quiz: ['我的测验', '老师下发给本班的检测 · 点开作答，按设置显示答案与分数'],
     seat: ['我的座位', '座位表 · 讲台固定在上方 · 高亮你自己的位置'],
     typing: ['打字冒险岛', '闯关练打字 · 赢星星 · 孵宠物 · 上排行榜'],
-    design: ['我的网页', '左边写 HTML/CSS · 右边实时预览 · 点一次提交就交给老师']
+    design: ['我的网页', '左边写 HTML/CSS · 右边实时预览 · 点一次提交就交给老师'],
+    pixel: ['我的像素画', '一格一格涂 · 边画边存 · 画好一键交给老师']
   };
 
   function pendingCount() { return todoHomeworks().length; }
@@ -653,6 +684,10 @@
     /* 设计页：没添加过就先引导去今日页点「添加」，别给一块空白 */
     if (v === 'design' && !designReady()) {
       toast('先在「今日」页点一下「H5 网页」卡片，把它添加到导航');
+      v = 'today';
+    }
+    if (v === 'pixel' && !pixelReady()) {
+      toast('老师还没开启像素画，等开启后这里就能画了');
       v = 'today';
     }
     S.view = v;
@@ -688,6 +723,8 @@
     if (VIEWS.indexOf(S.view) < 0) S.view = 'today';
     /* 设计页没权限时不能停在那儿（老师刚关掉 / 还没添加） */
     if (S.view === 'design' && !designReady()) S.view = 'today';
+    /* 像素画同理（2.0.47）：老师一关，学生不能停在一块进不去的页面 */
+    if (S.view === 'pixel' && !pixelReady()) S.view = 'today';
     /* 打字页防「闪退」（2026-11-04 牛哥反馈）：打字页是 iframe 内嵌，
        render() 每次整体重画 #app 会把 iframe 连根拔掉重建——游戏整页重载、
        正在打的关直接跳回首页。SSE 推送 / 10 秒轮询 / 配置刷新都会触发
@@ -699,11 +736,15 @@
        这比打字页「跳首页」还严重。iframe 在就绝不重建。 */
     if (S.view === 'design' && designReady() &&
         document.querySelector('iframe[data-design-embed]')) return;
+    /* 像素画同理（2.0.47）：画到一半被重绘 = 画布重建、未存的笔画丢掉 */
+    if (S.view === 'pixel' && pixelReady() &&
+        document.querySelector('iframe[data-pixel-embed]')) return;
     /* 座位表走独立接口（整间教室的网格），首次进页面时拉一次；
        拿到数据后 loadSeatmap 自己再 render 一遍（2026-11-03）。 */
     if (S.view === 'seat' && !S.seatmap) loadSeatmap();
     var map = { today: vToday, homework: vHwAll, courses: vCourses,
-                quiz: vQuiz, seat: vSeat, typing: vTyping, design: vDesign };
+                quiz: vQuiz, seat: vSeat, typing: vTyping, design: vDesign,
+                pixel: vPixel };
     var t = TITLES[S.view] || TITLES.today;
     app.innerHTML =
       '<aside class="sidebar">' + sideHtml() + '</aside>' +
@@ -735,6 +776,9 @@
        自动放进导航，这里不再做「添加」动作。 */
     var dgo = document.querySelector('[data-design-go]');
     if (dgo) dgo.onclick = function () { openDesign(); };
+    /* 像素画入口卡（2.0.47）：同样点一下直接进画板 */
+    var pgo = document.querySelector('[data-pixel-go]');
+    if (pgo) pgo.onclick = function () { openPixel(); };
     /* 课堂活动入口（data-act / data-locked）已随按课表的旧模块下线
        （2026-11-04）：学生端不再有按课节的学习单入口，只留资料打开。 */
     // 资料页 / 今日「本课资料」：点开在线预览或一键打开
@@ -760,10 +804,13 @@
   /* 「网页」页签可用 = 老师开了服务 + 允许学生用。
      2.0.41 起不再看「学生自己添加过没有」—— 老师开启即自动出现。 */
   function designReady() { return !!(S.designOn && S.designAdd); }
+  /* 像素画可用（2.0.47）：同样是「服务开着 + 允许学生用」两个都满足 */
+  function pixelReady() { return !!(S.pixelOn && S.pixelAdd); }
   /** 导航项要不要显示（侧栏与底部 Tab 共用一套判断，别写两遍） */
   function navShown(n) {
     if (n.id === 'typing' && !S.typingOn) return false;
     if (n.id === 'design' && !designReady()) return false;
+    if (n.id === 'pixel' && !pixelReady()) return false;
     if (n.flag && S.flags[n.flag] === false) return false;
     return true;
   }
@@ -774,6 +821,12 @@
     S.designSeen = true;
     S.designAdded = true;
     go('design');
+  }
+  /** 从「今日」入口卡进像素画（2.0.47）：同样只记「来过」，页签由服务端开关决定 */
+  function openPixel() {
+    try { localStorage.setItem(PIXEL_ADD_KEY, '1'); } catch (e) {}
+    S.pixelSeen = true;
+    go('pixel');
   }
 
   /* ---------------- 图片素材（2.0.41） ----------------
@@ -865,6 +918,27 @@
     }
     return '<iframe data-design-embed="1" src="/design/student.html?embed=1" title="网页" ' +
       'style="width:100%;height:calc(100vh - 150px);min-height:520px;' +
+      'border:1.5px solid var(--line,#eee);border-radius:16px;background:var(--card,#FFFCF4);' +
+      'box-shadow:0 6px 20px rgba(60,30,10,.06)"></iframe>';
+  }
+
+  /* ---------------- 视图：像素画（2.0.47） ----------------
+     画板是独立单页（/pixel/student.html），放进 iframe 嵌在学生端框架里，
+     不跳新标签页；?embed=1 去掉底部留白。绘画、保存、提交都在 iframe 里完成，
+     外层只负责「给一块地方」——和网页设计完全同一套接法。 */
+  function vPixel() {
+    if (!S.pixelOn) {
+      return '<div class="card" style="text-align:center;padding:44px 20px">' +
+        '<div style="font-size:40px">🚧</div>' +
+        '<div style="font-weight:600;margin-top:8px">老师还没开启像素画</div>' +
+        '<div style="font-size:12.5px;color:var(--ink3);margin-top:4px">开启后这里就能一格一格画、交给老师</div></div>';
+    }
+    if (!S.pixelAdd) {
+      return '<div class="card">' + emptyBox('老师暂未开放',
+        '这一页还没对同学开放，等老师在教师端点一下开关') + '</div>';
+    }
+    return '<iframe data-pixel-embed="1" src="/pixel/student.html?embed=1" title="像素画" ' +
+      'style="width:100%;height:calc(100vh - 150px);min-height:560px;' +
       'border:1.5px solid var(--line,#eee);border-radius:16px;background:var(--card,#FFFCF4);' +
       'box-shadow:0 6px 20px rgba(60,30,10,.06)"></iframe>';
   }
@@ -1968,6 +2042,7 @@
       S.flags = j.modules || {};
       S.typingOn = !!(j.typing && j.typing.enabled);
       applyDesignFlag(j.design);
+      applyPixelFlag(j.pixel);
       S.rev = j.rev || 0;
       return pull(0, true).then(function () {
         document.body.innerHTML =

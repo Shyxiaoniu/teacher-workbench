@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-mode="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>像素画 · 班级工作台</title>
+<link rel="stylesheet" href="/design/design.css?v=2.0.47">
+<link rel="stylesheet" href="/pixel/pixel.css?v=2.0.47">
+</head>
+<body>
+<div class="px-app" id="app">
+
+  <!-- 顶部工具条：尺寸 / 网格 / 撤销重做 / 清空 / 保存 / 提交。
+       学生端页头已有标题，这里不重复大标题，只留一行功能与状态。 -->
+  <header class="ds-bar px-bar">
+    <button class="btn ghost sm" id="btnBack" hidden title="回到像素画设置页">‹ 返回设置</button>
+    <div class="ds-brand">
+      <span class="dot"></span>
+      <b>像素画</b>
+      <small id="brandSub">一格一格画 · 做好一键交给老师</small>
+    </div>
+    <div class="ds-actions">
+      <div class="seg" id="sizeSeg" title="画布尺寸：格子越少越好画，越多细节越足">
+        <button type="button" data-sz="16">16</button>
+        <button type="button" data-sz="24">24</button>
+        <button type="button" data-sz="32" class="on">32</button>
+        <button type="button" data-sz="48">48</button>
+        <button type="button" data-sz="64">64</button>
+      </div>
+      <button class="btn ghost sm" id="btnGrid" aria-pressed="true" title="显示或隐藏网格线">▦ 网格</button>
+      <button class="btn ghost sm" id="btnUndo" title="撤销（Ctrl+Z）">撤销</button>
+      <button class="btn ghost sm" id="btnRedo" title="重做（Ctrl+Y）">重做</button>
+      <button class="btn ghost sm" id="btnClear" title="清空整张画布">清空</button>
+      <button class="btn sm" id="btnSave" title="保存到服务器，换台电脑也能接着画（Ctrl+S）">保存草稿</button>
+      <button class="btn primary sm" id="btnSubmit" title="导出作品图并交给老师（Ctrl+Enter）">提交作品</button>
+    </div>
+  </header>
+
+  <div class="ds-intro" id="intro"></div>
+  <div class="px-demo" id="demoTip" hidden></div>
+
+  <div class="px-body">
+    <!-- 左：画布 -->
+    <section class="px-stage" id="stage">
+      <div class="px-holder">
+        <canvas id="cv" aria-label="像素画布"></canvas>
+      </div>
+      <div class="px-meta">
+        <span>画布 <b id="mSize">32×32</b></span>
+        <span>已画 <b id="mCells">0</b> 格</span>
+        <span class="sp"></span>
+        <span id="mSaved">未保存</span>
+      </div>
+    </section>
+
+    <!-- 右：工具与调色板 -->
+    <aside class="px-tools">
+      <div class="px-sec">
+        <div class="px-sec-h">工具</div>
+        <div class="px-tool-grid" id="tools">
+          <button type="button" class="px-tool on" data-tool="pen"><span class="ic">✏️</span>铅笔</button>
+          <button type="button" class="px-tool" data-tool="eraser"><span class="ic">🧽</span>橡皮</button>
+          <button type="button" class="px-tool" data-tool="fill"><span class="ic">🪣</span>填充</button>
+          <button type="button" class="px-tool" data-tool="pick"><span class="ic">💧</span>吸管</button>
+        </div>
+        <div class="px-brush">
+          <span>笔刷</span>
+          <span class="bs" id="brushBtns">
+            <button type="button" data-b="1" class="on">1</button>
+            <button type="button" data-b="2">2</button>
+            <button type="button" data-b="3">3</button>
+          </span>
+        </div>
+        <label class="px-chk"><input type="checkbox" id="ckMirror"> 左右镜像（画对称图形）</label>
+      </div>
+
+      <div class="px-sec">
+        <div class="px-sec-h">颜色</div>
+        <div class="px-cur-row">
+          <span class="px-cur" id="curSw"></span>
+          <code id="curHex">#2F2A26</code>
+          <input type="color" id="colorPick" value="#2f2a26" title="自己挑一个颜色">
+        </div>
+        <div class="px-swatches" id="swatches"></div>
+        <button class="btn ghost sm" id="btnAddColor" style="width:100%;margin-top:9px">＋ 加进调色板</button>
+      </div>
+
+      <div class="px-sec">
+        <div class="px-sec-h">作品名</div>
+        <input type="text" id="inpTitle" maxlength="40" placeholder="我的像素画">
+      </div>
+
+      <div class="px-sec px-tips">
+        <b>怎么画</b><br>
+        点一下画一格，按住拖动连着画。<br>
+        填充：一点就把同色的一整片换掉。<br>
+        吸管：点画布上任意一格取它的颜色。<br>
+        <kbd>Ctrl</kbd>+<kbd>Z</kbd> 撤销 · <kbd>Ctrl</kbd>+<kbd>S</kbd> 保存
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div class="ds-toast" id="toast"></div>
+<div id="busyBox"></div>
+
+<script src="/pixel/pixel.js?v=2.0.47"></script>
+</body>
+</html>

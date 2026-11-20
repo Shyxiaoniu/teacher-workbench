@@ -7499,8 +7499,9 @@ const NAV_GROUPS = [
   /* 打字（2026-11-05 牛哥要求）：从「教学」挪到「其他」——
      它更像练手小工具，和课堂发放/作业/成绩不是一类。
      路由 #typing 没变，旧书签照样能打开。
-     H5 网页设计（2.0.39）：同样放在「其他」，老师一键启停的小服务。 */
-  { name:'其他', items:['todos','tools','typing','design'] }      // 设置只保留顶栏右上角入口
+     H5 网页设计（2.0.39）：同样放在「其他」，老师一键启停的小服务。
+     像素画（2.0.47）：与网页设计同款，也是「其他」里的一键启停工具。 */
+  { name:'其他', items:['todos','tools','typing','design','pixel'] }      // 设置只保留顶栏右上角入口
 ];
 
 const NAV = [
@@ -7519,6 +7520,8 @@ const NAV = [
   /* 菜单名统一两字：功能入口叫「网页」（2.0.40 牛哥定名，原「设计」），
      页面内部才用「H5 网页设计」这个完整说法。 */
   { id:'design', name:'网页', icon:'code' },
+  /* 像素画（2.0.47）：菜单名两字「像素」，页面里才叫「像素画」 */
+  { id:'pixel',  name:'像素', icon:'grid' },
   { id:'classes', name:'班级', icon:'cap' },
   { id:'students', name:'学生', icon:'user' },
   { id:'todos',  name:'待办', icon:'pin' },
@@ -12176,6 +12179,23 @@ function renderContent(opts = {}) {  const nav = NAV.find(n => n.id === state.ro
           wrap.style.height = 'calc(100vh - 128px)';
           return;
         }
+        var h = Math.max(520, Math.min(3200, Number(ev.data.h) || 0));
+        wrap.style.height = h + 'px';
+      });
+    }
+  } else if (state.route === 'pixel') {
+    /* 像素画管理（2.0.47）：与网页设计同构的独立页面，iframe 内嵌复用教师会话。
+       同样「iframe 还在就不重建」——同步轮询重画会把老师刚点的开关冲掉。 */
+    if (!c.querySelector('iframe[data-pixel-admin]')) {
+      c.innerHTML = '<div id="pixelAdminWrap" style="height:calc(100vh - 128px);min-height:520px">' +
+        '<iframe data-pixel-admin src="/pixel/teacher.html" title="像素画管理" style="width:100%;height:100%;border:0"></iframe></div>';
+      /* 管理页内容比一屏长，它把自身高度 post 上来，这里同步容器高度 */
+      window.addEventListener('message', function (ev) {
+        if (!ev.data || ev.data.type !== 'wb-pixel-h') return;
+        var fr = c.querySelector('iframe[data-pixel-admin]');
+        if (!fr || ev.source !== fr.contentWindow) return;
+        var wrap = fr.parentNode;
+        if (!wrap) return;
         var h = Math.max(520, Math.min(3200, Number(ev.data.h) || 0));
         wrap.style.height = h + 'px';
       });
