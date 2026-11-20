@@ -1399,6 +1399,10 @@ body.seat-rsz-dragging .seat:hover { transform:none; box-shadow:none; }
   border:1px solid var(--border); color:var(--text-secondary); background:transparent; cursor:pointer; }
 .ck-board .ck-cfg-btn:hover { color:var(--brand-primary); border-color:var(--brand-primary); }
 .ck-board .ck-date { font-size:11.5px; color:var(--text-secondary); }
+/* 当前节次：纯文字标签，跟着课表走，不给人切换（2.0.50） */
+.ck-board .ck-now { font-size:12px; font-weight:700; color:var(--text-primary);
+  padding:2px 9px; border-radius:7px; background:var(--bg-page);
+  border:1px solid var(--border); white-space:nowrap; }
 .ck-board .ck-grow { flex:1 1 auto; }
 .ck-board .ck-row2 { display:flex; align-items:center; gap:7px; flex-wrap:wrap; margin-top:8px; }
 .ck-chip {
@@ -7465,9 +7469,8 @@ const state = {
   seatDate: '',
   ckFilter: '',         // 课堂签到：点统计标签后只看这一类（''=不筛选）
   attPeriod: null,      // 当前记录的第几节（null=按当前时间算）
-  attPeriodMan: false,  // 老师手动选过节次 → 服务端对表不再覆盖、也不自动吸附
+  attPeriodMan: false,  // 历史上手动选过节次（2.0.50 起去掉下拉框，恒为 false，保留判空用）
   attPeriodAuto: false, // 已按本班课表吸附过节次 → 同上
-  attPeriodAll: false,  // 签到下拉是否列出全天所有节次（代课 / 补签用）
   attSort: { key:'seat', dir:'asc' },  // 考勤名单排序 {key:name|seat|status|time, dir}
   // 座位排布配置
   seatRows: 7,          // 行数（默认 7 排）
@@ -22428,17 +22431,24 @@ window.attPeriod = attPeriod;
 /* 「现在第几节」以服务端时钟为准（2026-11-04 牛哥反馈：签到节数两端不一致）。
    老师这台机器的时钟若与 NAS 服务端有偏差，考勤页默认节次就会和学生端
    对不上 —— 启动后拉一次 /api/v2/teacher/now 校正，之后每 5 分钟对一次表。
-   老师在考勤页手动选过节次（state.attPeriodMan=true）后不再自动纠正。 */
+   2.0.50：去掉节次下拉后这里就是唯一的时间源，所以不能再被「已吸附」标记
+   永久挡住（不然页面挂着两节课，还停在上一节）；只有真的换了节次才重绘。 */
 function syncServerPeriod() {
   fetch('/api/v2/teacher/now', { credentials: 'same-origin' })
     .then(r => r.json())
     .then(j => {
       if (!j || !j.ok || !j.period) return;
-      if (state.attPeriodMan || state.attPeriodAuto) return;
-      if (Number(state.attPeriod) !== Number(j.period)) {
-        state.attPeriod = Number(j.period);
-        if (state.route === 'seats' || state.route === 'attendance') renderContent();
-      }
+      if (state.attPeriodMan) return;
+      const srv = Number(j.period);
+      /* 服务端没换节次就什么都别做 —— 否则座位表吸附到本班另一节后，
+         下次对表又「发现不一致」→ 重绘 → 再吸附，每 5 分钟把老师
+         正在写的备注清一次。 */
+      if (window.__srvSeq === srv) return;
+      window.__srvSeq = srv;
+      state.attPeriodAuto = false;          // 让座位表按新课表重新吸附
+      if (Number(state.attPeriod) === srv) return;
+      state.attPeriod = srv;
+      if (state.route === 'seats' || state.route === 'attendance') renderContent();
     })
     .catch(() => {});
 }
@@ -23076,46 +23086,28 @@ window.attListExport = attListExport;
 function attBoardHtml(cls, date) {
   let seq = attPeriod();
   const allPs = periodList();              // 今天这一套，已按 seq 去重
-  /* 只列本班今天有课的节次（2026-11-19）：课表排好了还让人选时间是多余的，
-     更要紧的是原来把「一周 7 天 × 24 节」全列出来，同一节重复 7 次。
-     代课 / 临时调课 / 补签时点「全部节次」放行。 */
+  /* 节次完全跟随课表（2.0.50 牛哥：「不要下拉框了」）。
+     不再给手动切节次的入口 —— 手动选容易跟课表错开，还占一行控件。
+     现在 attPeriod() 取 curPeriodSeq()（和服务端 _current_period 同一套算法），
+     syncServerPeriod() 每 5 分钟跟服务端对一次表，两端记的一定是同一节。 */
   const mineSeqs = classPeriodSeqs(cls, date);
-  /* 自动吸附到本班今天真正有课的那一节（老师没手动选过的时候）。
-     否则晚上打开座位表，默认落在「当前时间倒推的第 21 节」这种本班没课的时段，
-     下拉就得凭空多出一项、还得手动挑。 */
-  if (mineSeqs.size && !state.attPeriodMan && !state.attPeriodAll
-      && !mineSeqs.has(Number(seq))) {
+  /* 本班今天这一节没课（课间 / 放学后 / 调课）→ 吸附到最近一节有课的，
+     别让座位表停在「第 21 节」这种本班根本没课的时段。 */
+  if (mineSeqs.size && !state.attPeriodMan && !mineSeqs.has(Number(seq))) {
     const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
     const toM = t => { const a = String(t || '').split(':'); return (+a[0]) * 60 + (+a[1] || 0); };
     const cands = allPs.filter(p => mineSeqs.has(Number(p.seq || p.id)));
     const next = cands.find(p => toM(p.start_time) >= nowMin) || cands[cands.length - 1];
     if (next) { seq = Number(next.seq || next.id); state.attPeriod = seq; state.attPeriodAuto = true; }
   }
-  let ps = (mineSeqs.size && !state.attPeriodAll)
-    ? allPs.filter(p => mineSeqs.has(Number(p.seq || p.id)))
-    : allPs.slice();
-  /* 当前节次不在列表里（手动选过别的节 / 服务端判定的节）就补进去，
-     否则 select 会默默显示第一项，看着和实际记的节次不一致。 */
-  if (ps.length && !ps.some(p => Number(p.seq || p.id) === Number(seq))) {
-    const cur = allPs.find(p => Number(p.seq || p.id) === Number(seq));
-    if (cur) ps = ps.concat([cur]).sort((a, b) =>
-      (Number(a.seq) || 0) - (Number(b.seq) || 0));
-  }
   attAutoSettle(cls, date, seq);            // 本节结束自动记旷课
   const st = attStatsOf(cls, date, seq);
   const f = state.ckFilter || '';
-  const sel = ps.length ? `<select class="date-inp" style="padding:4px 6px"
-      onchange="state.attPeriod=Number(this.value);state.attPeriodMan=true;renderContent()">
-      ${ps.map(p => `<option value="${p.seq || p.id}" ${
-        Number(p.seq || p.id) === seq ? 'selected' : ''}>${
-        esc(p.label || ('第' + (p.seq || p.id) + '节'))}${
-        p.start_time ? ' ' + esc(p.start_time) : ''}</option>`).join('')}
-    </select>` : '';
-  const selAll = mineSeqs.size ? `<button class="ck-cfg-btn" type="button"
-      onclick="state.attPeriodAll=!state.attPeriodAll;renderContent()"
-      title="${state.attPeriodAll ? '只看本班今天课表里的节次'
-        : '今天本班课表只有 ' + [...mineSeqs].sort((a, b) => a - b).join('、') + ' 节有课；点这里看全部节次（代课、补签用）'}"
-      >${state.attPeriodAll ? '只看本班节次' : '全部节次'}</button>` : '';
+  const curP = allPs.find(p => Number(p.seq || p.id) === Number(seq));
+  const nowTime = curP && curP.start_time
+    ? ' ' + curP.start_time + (curP.end_time ? '-' + curP.end_time : '') : '';
+  const nowTag = `<span class="ck-now" title="${esc('按课表：' + periodLabel(seq) + nowTime
+      + '（跟着课表自动判定，不用手动选）')}">${esc(periodLabel(seq))}</span>`;
   const chip = code => {
     const n = Number(st[code]) || 0;
     if (!n) return '';
@@ -23145,9 +23137,7 @@ function attBoardHtml(cls, date) {
       ${window.checkinCfgTagHtml ? window.checkinCfgTagHtml(window.CHECKIN_CFG) : ''}
       <button class="ck-cfg-btn" type="button" onclick="goCheckinCfg()"
         title="去系统设置里开关签到 / 设手动时间">签到设置</button>
-      ${sel}
-      ${selAll}
-      <span class="ck-date">${esc(date)} · ${esc(periodLabel(seq))}</span>
+      ${nowTag}
       <span class="ck-grow"></span>
       ${state.route === 'seats' ? `<span class="ck-inline-tools">${clsPickerHtml()}${pageSearchHtml()}</span>` : ''}
       <button class="btn" style="width:auto;padding:4px 10px;font-size:12px"
