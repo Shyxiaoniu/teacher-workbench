@@ -205,6 +205,11 @@ html[data-mode="dark"] .tk-at{color:#B3AAF5}
 .ds-status b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ds-status #stChars,.ds-status #stSaved{flex:none}
 .ds-status b{color:var(--ink2);font-weight:600}
+/* 提交额度（2.0.53）：老师限了次数才出现，交满变红 */
+#stQuota{flex:none;color:var(--ink3);white-space:nowrap}
+#stQuota b{color:var(--brand,var(--ink));font-weight:700}
+#stQuota.ds-quota-full{color:#C4553B}
+#stQuota.ds-quota-full b{color:#C4553B}
 
 /* 右：预览区（与代码区各占一半，高度由父容器拉伸对齐） */
 /* 左右分隔条（2.0.40）：可拖动调宽度，双击恢复各半 */

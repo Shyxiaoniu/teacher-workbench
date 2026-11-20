@@ -237,18 +237,21 @@ def design_cfg():
     d.setdefault("course", "网页设计")
     d.setdefault("window", "网页设计作品")
     d.setdefault("intro", "")
+    # 每人最多提交几次（2.0.53）：0 = 不限。默认 1，和像素画同一套口径。
+    d.setdefault("max_submit", 1)
     return d
 
 
 def design_public_cfg():
-    """给前端的安全副本：开关 / 权限 / 课程 / 窗口 / 任务说明。"""
+    """给前端的安全副本：开关 / 权限 / 课程 / 窗口 / 任务说明 / 提交上限。"""
     d = design_cfg()
     return {"enabled": bool(d.get("enabled")),
             "allow_add": bool(d.get("allow_add")),
             "allow_submit": bool(d.get("allow_submit")),
             "course": str(d.get("course") or ""),
             "window": str(d.get("window") or ""),
-            "intro": str(d.get("intro") or "")}
+            "intro": str(d.get("intro") or ""),
+            "max_submit": _max_submit_of(d)}
 
 
 def design_task(course, create=False):
@@ -362,7 +365,53 @@ def pixel_cfg():
     d.setdefault("window", "像素画作品")
     d.setdefault("intro", "")
     d.setdefault("size", 32)
+    # 每人最多提交几次（2.0.53）：0 = 不限。默认 1 —— 一节课交两三次，
+    # 大屏和归档里全是同一个人的重复版本，白白拖慢列表。
+    d.setdefault("max_submit", 1)
     return d
+
+
+def _max_submit_of(d, default=1):
+    """每人最多提交几次，0 = 不限（网页设计 / 像素画共用，2.0.53）。
+
+    脏值（负数、字符串、None）一律夹到 0~20，缺字段用 default。
+    """
+    d = d if isinstance(d, dict) else {}
+    try:
+        n = int(d.get("max_submit"))
+    except Exception:
+        n = default
+    return max(0, min(n, 20))
+
+
+def _student_subs_of(task, no, name):
+    """某个收集任务下这名学生的全部提交（保持原顺序），用来算「已交几次」。
+
+    认人规则与 `_pixel_student_last` / 大屏的按人去重一致：有学号认学号，
+    没学号才退回姓名 —— 同名同姓的学生不会互相占额度。
+    """
+    if not task:
+        return []
+    try:
+        subs = ACT.submissions(task["task_id"]) or []
+    except Exception:
+        return []
+    no = str(no or "").strip()
+    name = str(name or "").strip()
+    out = []
+    for s in subs:
+        if not isinstance(s, dict):
+            continue
+        a = str(s.get("学号") or s.get("student_no") or "").strip()
+        b = str(s.get("姓名") or s.get("name") or "").strip()
+        if (no and a == no) or (not no and name and b == name):
+            out.append(s)
+    return out
+
+
+def _pixel_student_subs(course, no, name):
+    """像素画专用：先按课程找到收集任务，再数这个人的提交。"""
+    return _student_subs_of(pixel_task(course), no, name)
 
 
 def pixel_public_cfg():
@@ -381,6 +430,7 @@ def pixel_public_cfg():
             "window": str(d.get("window") or ""),
             "intro": str(d.get("intro") or ""),
             "size": size,
+            "max_submit": _max_submit_of(d),
             "sizes": list(PIXEL_SIZES)}
 
 
@@ -508,7 +558,7 @@ PET_IDS = ["cat", "dog", "rabbit", "penguin", "panda", "dino", "unicorn", "drago
            "duck", "bear"]
 COND = threading.Condition()
 STARTED = time.time()
-VERSION = "2.0.52"
+VERSION = "2.0.53"
 ONLINE_WINDOW = 300      # 5 分钟内活跃算在线
 # 可内联直出的附件类型（其余一律按下载处理，防止同源执行脚本）
 _INLINE_EXTS = {"png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "pdf",
@@ -3085,6 +3135,12 @@ class Handler(LEG.Handler):
                          "student_no": r.get("student_no", ""),
                          "class_name": self._class_name(r.get("class_id"))}
             out["draft"] = DESIGN.draft(uid)
+            # 已交几次 / 还能交几次（-1 = 老师没限次数），设计器据此提示与拦按钮
+            used_n = len(_student_subs_of(design_task(cfg["course"]),
+                                          r.get("student_no"), r.get("name")))
+            lim = _max_submit_of(cfg)
+            out["used"] = used_n
+            out["left"] = (max(0, lim - used_n) if lim > 0 else -1)
             out["last"] = ({"at": str(last.get("submitted_at") or ""),
                             "url": files[0].get("url") if files else "",
                             "name": files[0].get("name") if files else ""}
@@ -3170,6 +3226,11 @@ class Handler(LEG.Handler):
                          "student_no": r.get("student_no", ""),
                          "class_name": self._class_name(r.get("class_id"))}
             out["draft"] = PIXEL.draft(uid)
+            # 已交几次 / 还能交几次（-1 = 老师没限次数）：学生页据此提示与禁用按钮
+            used_n = len(_pixel_student_subs(cfg["course"], r.get("student_no"), r.get("name")))
+            lim = _max_submit_of(cfg)
+            out["used"] = used_n
+            out["left"] = (max(0, lim - used_n) if lim > 0 else -1)
             out["last"] = ({"at": str(last.get("submitted_at") or ""),
                             "url": files[0].get("url") if files else "",
                             "name": files[0].get("name") if files else ""}
@@ -4736,6 +4797,11 @@ class Handler(LEG.Handler):
                 d["window"] = w or d["course"]
             if "intro" in body:
                 d["intro"] = str(body.get("intro") or "")[:500]
+            if "max_submit" in body:
+                try:
+                    d["max_submit"] = max(0, min(int(body.get("max_submit") or 0), 20))
+                except Exception:
+                    d["max_submit"] = 1
             cfg_save()
             notify_cfg()
             STORE.audit("teacher", "design-config",
@@ -4797,6 +4863,15 @@ class Handler(LEG.Handler):
             who = {"学号": str(r.get("student_no") or ""),
                    "姓名": str(r.get("name") or ""),
                    "班级": self._class_name(r.get("class_id"))}
+            # 提交次数闸门（2.0.53）：和像素画同一套。一人交十几版，大屏作品墙
+            # 和归档目录全被同一个人占满，课堂浏览翻不动。0 = 不限。
+            limit = _max_submit_of(d)
+            used = len(_student_subs_of(t, who["学号"], who["姓名"]))
+            if limit > 0 and used >= limit:
+                return self._json({"ok": False, "used": used, "max_submit": limit,
+                                   "msg": ("老师设置了每人最多交 %d 版，你已经交了 %d 版。"
+                                           "想再交就先把上一版改好，或者找老师放开次数。"
+                                           % (limit, used))}, 409)
             # 按钮名就是大屏窗口名：设计提交在「上课」页单独占一个窗口，
             # 不会和学习单的其它窗口混在一起。
             fields = {"按钮": win, "作品": title, "类型": "H5 网页设计", "__kind": "file"}
@@ -4832,7 +4907,8 @@ class Handler(LEG.Handler):
                                "files": len(fs),
                                "archived": len((arc or {}).get("saved") or []),
                                "task": t["task_id"], "window": win,
-                               "course": course})
+                               "course": course,
+                               "used": used + 1, "max_submit": limit})
         # ---------------- 像素画（2.0.47） ----------------
         if path == "/api/v2/pixel/config":
             # 教师端一键启停 + 学生端权限 + 归档课程 + 大屏窗口 + 默认画布
@@ -4864,6 +4940,11 @@ class Handler(LEG.Handler):
                     sz = 0
                 if sz in PIXEL_SIZES:
                     d["size"] = sz
+            if "max_submit" in body:
+                try:
+                    d["max_submit"] = max(0, min(int(body.get("max_submit") or 0), 20))
+                except Exception:
+                    d["max_submit"] = 1
             cfg_save()
             notify_cfg()
             STORE.audit("teacher", "pixel-config",
@@ -4936,6 +5017,15 @@ class Handler(LEG.Handler):
             who = {"学号": str(r.get("student_no") or ""),
                    "姓名": str(r.get("name") or ""),
                    "班级": self._class_name(r.get("class_id"))}
+            # 提交次数闸门（2.0.53）：一人交五六版，大屏作品墙和归档目录全是
+            # 同一个人，列表越拖越长、课堂上也翻不动。0 = 不限。
+            limit = _max_submit_of(d)
+            used = len(_pixel_student_subs(course, who["学号"], who["姓名"]))
+            if limit > 0 and used >= limit:
+                return self._json({"ok": False, "used": used, "max_submit": limit,
+                                   "msg": ("老师设置了每人最多交 %d 版，你已经交了 %d 版。"
+                                           "想再交就先把上一版改好，或者找老师放开次数。"
+                                           % (limit, used))}, 409)
             proj = {"app": "班级工作台 · 像素画", "format": "wb-pixel", "v": 1,
                     "w": w, "h": h, "px": px, "pal": pal, "title": title,
                     "author": {"no": who["学号"], "name": who["姓名"], "class": who["班级"]}}
@@ -4975,7 +5065,8 @@ class Handler(LEG.Handler):
                                "files": len(fs),
                                "archived": len((arc or {}).get("saved") or []),
                                "task": t["task_id"], "window": win,
-                               "course": course, "w": w, "h": h})
+                               "course": course, "w": w, "h": h,
+                               "used": used + 1, "max_submit": limit})
         # ---------------- 打字冒险岛 ----------------
         if path == "/api/v2/typing/config":
             # 教师开放开关 + 年级词库选择（关掉后学生端入口实时消失）

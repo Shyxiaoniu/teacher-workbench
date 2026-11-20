@@ -191,11 +191,13 @@
   var S = {
     me: null, role: null, demo: false, practice: false,
     cfg: { enabled: false, allow_add: true, allow_submit: true,
-           course: '像素画', window: '像素画作品', intro: '', size: 32 },
+           course: '像素画', window: '像素画作品', intro: '', size: 32,
+           max_submit: 1 },
     w: 32, h: 32, cells: null, pal: [], cur: 0,
     tool: 'pen', brush: 1, mirror: false, grid: true,
     title: '', dirty: false, saving: false, submitting: false,
     lastSavedAt: 0, last: null, loaded: false, ref: null,
+    used: 0, left: -1,          // 已交几版 / 还能交几版（-1=不限，2.0.53）
     undo: [], redo: [], stroke: null, saveTimer: 0, rafId: 0
   };
 
@@ -584,6 +586,27 @@
     toast('作品图片已导出到下载文件夹', 'ok');
   }
 
+  /* 还能交几版：-1 = 老师没限次数（2.0.53） */
+  function submitLeft() {
+    var lim = Number(S.cfg.max_submit || 0);
+    if (!(lim > 0)) return -1;
+    return Math.max(0, lim - Number(S.used || 0));
+  }
+
+  /* 画布下方那行额度提示：老师限了次数才出现，交满变红 */
+  function paintQuota() {
+    var wrap = $('#mQuotaWrap');
+    if (!wrap) return;
+    var lim = Number(S.cfg.max_submit || 0);
+    if (S.practice || S.demo || lim <= 0) { wrap.hidden = true; return; }
+    var left = submitLeft();
+    wrap.hidden = false;
+    wrap.className = left > 0 ? '' : 'px-quota-full';
+    wrap.innerHTML = left > 0
+      ? '还能交 <b>' + left + '</b> / ' + lim + ' 版'
+      : '<b>已交满 ' + lim + ' 版</b>';
+  }
+
   function submitWork() {
     if (S.submitting) return;
     if (S.practice) { downloadPng(); return; }
@@ -592,6 +615,11 @@
     if (!S.cfg.enabled) { toast('老师还没有开启像素画', 'err'); return; }
     if (!S.cfg.allow_submit) {
       toast('老师暂未开放提交，先自己画、保存草稿', 'err');
+      return;
+    }
+    // 次数用完了就别白转一圈：本地先拦，服务端还会再拦一道
+    if (submitLeft() === 0) {
+      toast('老师设置了每人最多交 ' + Number(S.cfg.max_submit) + ' 版，你已经交满了', 'err');
       return;
     }
     if (!filledCount()) { toast('画布还是空的，先画几笔再交', 'err'); return; }
@@ -617,6 +645,9 @@
         if (!j.ok) throw new Error(j.msg || '提交失败');
         S.last = { at: j.at, url: j.url };
         S.dirty = false;
+        // 服务端回过 used 就按它算；没回就本地 +1（限额只在本地拦，别让计数跑偏）
+        S.used = (typeof j.used === 'number') ? j.used : (Number(S.used || 0) + 1);
+        paintQuota();
         setSavedText('已提交 ' + hhmm(), 'ok');
         busy('');
         receipt(j, png);
@@ -632,20 +663,28 @@
 
   function receipt(j, png) {
     var box = $('#busyBox');
+    var left = submitLeft();
+    var lim = Number(S.cfg.max_submit || 0);
+    var quota = (lim > 0)
+      ? '<br>' + (left > 0
+          ? '还能交 <b>' + left + '</b> 版（每人最多 ' + lim + ' 版）'
+          : '<b>这已经是最后一版了</b>（每人最多 ' + lim + ' 版）')
+      : '';
     box.innerHTML = '<div class="ds-receipt"><div class="box">' +
       '<div class="big">🎉</div>' +
       '<h3>作品已提交</h3>' +
       '<p>' + esc((S.me && S.me.name) || '') + ' · ' + esc(j.at || '') + '<br>' +
       '已归档到「' + esc(j.course || S.cfg.course) + '」' +
       (j.archived ? '（' + j.archived + ' 个文件）' : '') + '<br>' +
-      '老师在大屏选「' + esc(j.course || S.cfg.course) + '」就能看到你的作品</p>' +
+      '老师在大屏选「' + esc(j.course || S.cfg.course) + '」就能看到你的作品' +
+      quota + '</p>' +
       '<img src="' + png + '" alt="作品预览">' +
       '<div class="row">' +
       '<button class="btn" id="rcClose">继续修改</button>' +
-      '<button class="btn primary" id="rcAgain">再交一版</button>' +
+      (left === 0 ? '' : '<button class="btn primary" id="rcAgain">再交一版</button>') +
       '</div></div></div>';
     $('#rcClose').onclick = function () { box.innerHTML = ''; };
-    $('#rcAgain').onclick = function () { box.innerHTML = ''; submitWork(); };
+    if ($('#rcAgain')) $('#rcAgain').onclick = function () { box.innerHTML = ''; submitWork(); };
   }
 
   /* ================= 调色板 ================= */
@@ -1063,6 +1102,8 @@
         S.me = j.me || null;
         S.demo = !j.role || (j.role === 'teacher' && !j.practice);
         S.last = j.last || null;
+        S.used = (typeof j.used === 'number') ? j.used : 0;
+        S.left = (typeof j.left === 'number') ? j.left : -1;
 
         var d = j.draft || {};
         var size = S.cfg.size || 32;
@@ -1089,6 +1130,7 @@
         paintDemo();
         layout();
         paintSwatches();
+        paintQuota();
         if (d.updated) setSavedText('已保存 ' + hhmmFrom(d.updated), 'ok');
         else if (S.last) setSavedText('上次提交 ' + String(S.last.at || '').slice(5, 16), '');
         else setSavedText('未保存');

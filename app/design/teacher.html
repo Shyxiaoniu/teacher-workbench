@@ -28,6 +28,9 @@
               单独拷出去也认得出是谁的。</li>
             <li><b>学生做作品</b>：左写 HTML/CSS、右看效果；「保存草稿」换台电脑还能接着写。</li>
             <li><b>看作品</b>：「大屏」页选同一课程，学生作品墙里就是截图。</li>
+            <li><b>限制提交次数</b>：默认 <b>每人只能交 1 版</b>，防止一个人反复交把作品墙和
+              归档目录塞满。要多交几版就改成 2、3…，填 <b>0</b> 表示不限。学生编辑器底部会
+              显示「还能交 N 版」，交满后提交按钮直接拦住（服务端也会再拦一道）。</li>
           </ol>
           <p><b>先自己练</b>：点「✏ 进入网页练习」，进度（代码 / 显示方式 / 预览宽度）自动保存，
             下次接着来；写好了「导出图片」可当课件示例。</p>
@@ -80,6 +83,11 @@
         <input type="text" id="inpWindow" placeholder="例如：网页设计作品">
       </div>
       <div class="fld">
+        <span>每人最多提交次数（0 = 不限）</span>
+        <input type="number" id="inpMax" min="0" max="20" step="1" placeholder="1"
+               title="一个人最多能交几版。设 1 就只收一版，学生编辑器底部会显示「还能交 N 版」，交满后按钮拦住">
+      </div>
+      <div class="fld">
         <span>任务说明（显示在学生编辑器顶部）</span>
         <textarea id="inpIntro" maxlength="500" placeholder="例如：做一个介绍自己的网页，至少包含标题、一段文字和三个卡片。"></textarea>
       </div>
@@ -125,7 +133,8 @@
   'use strict';
   var $ = function (s) { return document.querySelector(s); };
   var CFG = { enabled: false, allow_add: true, allow_submit: true,
-              course: '网页设计', window: '网页设计作品', intro: '' };
+              course: '网页设计', window: '网页设计作品', intro: '',
+              max_submit: 1 };
   var STAT = null;
 
   function esc(s) {
@@ -201,6 +210,7 @@
     $('#inpCourse').value = CFG.course || '';
     $('#inpWindow').value = CFG.window || '';
     $('#inpIntro').value = CFG.intro || '';
+    $('#inpMax').value = String(CFG.max_submit == null ? 1 : CFG.max_submit);
     $('#btnDash').disabled = false;
     $('#dashMsg').textContent = CFG.enabled
       ? '大屏上方课程选「' + (CFG.course || '网页设计') + '」'
@@ -234,6 +244,7 @@
     if (qm) {
       qm.innerHTML = '服务：<b>' + (CFG.enabled ? '运行中' : '已关闭') + '</b><br>' +
         '归档课程：<b>' + esc(CFG.course || '—') + '</b><br>' +
+        '提交上限：<b>' + (Number(CFG.max_submit) > 0 ? '每人 ' + CFG.max_submit + ' 版' : '不限') + '</b><br>' +
         '已提交：<b>' + (s.people || 0) + '</b> 人';
     }
   }
@@ -262,6 +273,7 @@
       course: $('#inpCourse').value.trim(),
       window: $('#inpWindow').value.trim(),
       intro: $('#inpIntro').value,
+      max_submit: Math.max(0, Math.min(parseInt($('#inpMax').value, 10) || 0, 20)),
       allow_add: $('#swAdd').classList.contains('on'),
       allow_submit: $('#swSubmit').classList.contains('on')
     }, extra || {});

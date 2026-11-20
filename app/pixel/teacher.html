@@ -29,6 +29,9 @@
               画板自带 <b>8 个 16×16 模板</b>（爱心、笑脸、小房子…），学生可以「照着画」练手感，
               也可以「载入」到画布上再改。</li>
             <li><b>看作品</b>：这里直接出缩略图，点一下看大图；「大屏」页选同一课程也能看作品墙。</li>
+            <li><b>限制提交次数</b>：默认 <b>每人只能交 1 版</b>，防止一个人反复交把作品墙和归档目录塞满。
+              想让学生多交几版就改成 2、3…，填 <b>0</b> 表示不限。学生画板上会显示「还能交 N 版」，
+              交满后提交按钮直接拦住（服务端也会再拦一道，改前端也绕不过）。</li>
           </ol>
           <p><b>先自己试</b>：点「✏ 进入像素画练习」，随便画，进度自动保存；画好可「导出图片」当课件示例。</p>
           <p><b>交上来的是什么</b>：一张 PNG 作品图 + 一份工程文件（.json，含每个像素，
@@ -90,6 +93,11 @@
         </select>
       </div>
       <div class="fld">
+        <span>每人最多提交次数（0 = 不限）</span>
+        <input type="number" id="inpMax" min="0" max="20" step="1"
+               placeholder="1" title="一个人最多能交几版。设 1 就只收一版，交给学生的画板会显示「还能交 N 版」，交满后按钮拦住">
+      </div>
+      <div class="fld">
         <span>任务说明（显示在画板顶部）</span>
         <textarea id="inpIntro" maxlength="500" placeholder="例如：画一个你设计的班徽，用 32×32，至少 4 种颜色。"></textarea>
       </div>
@@ -135,7 +143,8 @@
   'use strict';
   var $ = function (s) { return document.querySelector(s); };
   var CFG = { enabled: false, allow_add: true, allow_submit: true,
-              course: '像素画', window: '像素画作品', intro: '', size: 32 };
+              course: '像素画', window: '像素画作品', intro: '', size: 32,
+              max_submit: 1 };
   var STAT = null;
 
   function esc(s) {
@@ -212,6 +221,7 @@
     $('#inpWindow').value = CFG.window || '';
     $('#inpIntro').value = CFG.intro || '';
     $('#inpSize').value = String(CFG.size || 32);
+    $('#inpMax').value = String(CFG.max_submit == null ? 1 : CFG.max_submit);
     $('#dashMsg').textContent = CFG.enabled
       ? '大屏上方课程选「' + (CFG.course || '像素画') + '」'
       : '';
@@ -253,6 +263,7 @@
       qm.innerHTML = '服务：<b>' + (CFG.enabled ? '运行中' : '已关闭') + '</b><br>' +
         '归档课程：<b>' + esc(CFG.course || '—') + '</b><br>' +
         '默认画布：<b>' + (CFG.size || 32) + '×' + (CFG.size || 32) + '</b><br>' +
+        '提交上限：<b>' + (Number(CFG.max_submit) > 0 ? '每人 ' + CFG.max_submit + ' 版' : '不限') + '</b><br>' +
         '已提交：<b>' + (s.people || 0) + '</b> 人';
     }
   }
@@ -303,6 +314,7 @@
       window: $('#inpWindow').value.trim(),
       intro: $('#inpIntro').value,
       size: parseInt($('#inpSize').value, 10) || 32,
+      max_submit: Math.max(0, Math.min(parseInt($('#inpMax').value, 10) || 0, 20)),
       allow_add: $('#swAdd').classList.contains('on'),
       allow_submit: $('#swSubmit').classList.contains('on')
     }, extra || {});

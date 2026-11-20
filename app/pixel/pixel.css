@@ -45,6 +45,11 @@ html[data-mode="dark"] #cv{box-shadow:0 6px 18px rgba(0,0,0,.45)}
 .px-meta .sp{flex:1}
 .px-meta .ok{color:var(--ok)}
 .px-meta .err{color:var(--err)}
+/* 提交额度（2.0.53）：老师限了次数才出现 */
+#mQuotaWrap{color:var(--ink3);white-space:nowrap}
+#mQuotaWrap b{color:var(--brand,var(--ink));font-weight:700}
+#mQuotaWrap.px-quota-full{color:#C4553B}
+#mQuotaWrap.px-quota-full b{color:#C4553B}
 
 /* ---------------- 右：工具面板 ---------------- */
 .px-tools{

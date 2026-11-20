@@ -38177,6 +38177,13 @@ function cwPaintWorks(rows) {
   const tabs = document.getElementById('actWorkTabs');
   const views = document.getElementById('actWorkViews');
   if (!box) return;
+  /* 2.0.53（牛哥反馈「学生一提交就跳回第一张，没法好好看」）：
+     列表按提交时间倒序，新作品插在最前面，而大图视图记的是「第几个」这种数字下标 ——
+     数据一刷新，同一个下标指的就变成了别的作品，看着就像画面自己往回退，连交几次
+     就退到第一张。这里在换数据之前按 URL 记住「正在看的是哪一张」，重绘后重新定位。 */
+  const keepUrl = (cwWorkView === 'stage' && box.childElementCount > 0)
+    ? ((cwFilteredWorks()[cwStageIdx] || {}).url || '') : '';
+  const keepTop = rows !== undefined ? cwScrollTopOf(box) : 0;
   // 传 rows = 重新采集（初次进入 / 轮询刷新）；不传 = 只按当前数据重排（切视图/排序/搜索）
   if (rows !== undefined) cwWorkList = cwCollectWorks(rows);
 
@@ -38221,6 +38228,11 @@ function cwPaintWorks(rows) {
       : '还没有学生提交文件作品。学生用「学生提交」页上传后，这里会自动出现。') + '</div>';
     return;
   }
+  // 还在看的那张就按 URL 找回来（新提交插到前面也不影响当前这一张）
+  if (keepUrl) {
+    const back = list.findIndex(w => w.url === keepUrl);
+    if (back >= 0) cwStageIdx = back;
+  }
   if (cwStageIdx >= list.length) cwStageIdx = 0;
   if (cwWorkView === 'list') box.innerHTML = cwWorkListHtml(list);
   else if (cwWorkView === 'stage') box.innerHTML = cwStageHtml(list);
@@ -38242,6 +38254,20 @@ function cwPaintWorks(rows) {
         + list.map((w, i) => cwWorkCardHtml(w, i)).join('') + '</div>';
     }
   }
+  // 缩略图墙/网格/列表重绘后把滚动位置放回去，别把正在往下看的人弹回顶部
+  if (keepTop > 0) cwScrollTopOf(box, keepTop);
+}
+
+/* 重绘作品区时保住滚动位置：找箱子上溯第一个能滚的祖先，没有就用页面本身 */
+function cwScrollTopOf(box, set) {
+  let host = null;
+  for (let p = box && box.parentElement; p && p !== document.body; p = p.parentElement) {
+    const oy = getComputedStyle(p).overflowY;
+    if ((oy === 'auto' || oy === 'scroll') && p.scrollHeight > p.clientHeight + 4) { host = p; break; }
+  }
+  if (set == null) return host ? host.scrollTop : (window.pageYOffset || 0);
+  if (host) host.scrollTop = set;
+  else window.scrollTo(window.pageXOffset || 0, set);
 }
 
 /** 分组头里的「只看此人」：把关键词填进搜索框，等于按学生筛选 */

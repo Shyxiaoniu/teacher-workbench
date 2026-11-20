@@ -25,8 +25,10 @@
 
   var S = {
     me: null, role: null, cfg: { enabled: false, allow_add: true, allow_submit: true,
-                                 course: '网页设计', window: '网页设计作品', intro: '' },
+                                 course: '网页设计', window: '网页设计作品', intro: '',
+                                 max_submit: 1 },
     draft: null, last: null,
+    used: 0,        // 已交几版（2.0.53：老师可设每人最多交几次）
     tab: 'html', width: 900, height: 900, scale: 1, contentHeight: 900,
     split: 0.5,   /* 左右分栏比例（代码区占多少），可拖分隔条调整 */
     /* mode（2.0.40）：代码区显示方式，hl=关键词高亮 / plain=普通文本 */
@@ -1549,12 +1551,38 @@
   }
 
   /* ---------------- 提交 ---------------- */
+  /* 还能交几版：-1 = 老师没限次数（2.0.53，与像素画同一套口径） */
+  function submitLeft() {
+    var lim = Number(S.cfg.max_submit || 0);
+    if (!(lim > 0)) return -1;
+    return Math.max(0, lim - Number(S.used || 0));
+  }
+
+  /* 代码区底部状态条上的额度提示：老师限了次数才出现，交满变红 */
+  function paintQuota() {
+    var el = $('#stQuota');
+    if (!el) return;
+    var lim = Number(S.cfg.max_submit || 0);
+    if (S.practice || S.demo || lim <= 0) { el.hidden = true; return; }
+    var left = submitLeft();
+    el.hidden = false;
+    el.className = left > 0 ? '' : 'ds-quota-full';
+    el.innerHTML = left > 0
+      ? '还能交 <b>' + left + '</b> / ' + lim + ' 版'
+      : '<b>已交满 ' + lim + ' 版</b>';
+  }
+
   async function submitWork() {
     if (S.submitting) return;
     if (S.demo) { toast('演示模式不能提交，请从学生端进入', 'err'); return; }
     if (S.role !== 'student') { toast('只有学生能提交作品', 'err'); return; }
     if (!S.cfg.enabled) { toast('老师还没有开启网页', 'err'); return; }
     if (!S.cfg.allow_submit) { toast('老师暂未开放提交，先保存草稿留着自己看', 'err'); return; }
+    // 次数用完了就别走截图那一大圈：本地先拦，服务端还会再拦一道
+    if (submitLeft() === 0) {
+      toast('老师设置了每人最多交 ' + Number(S.cfg.max_submit) + ' 版，你已经交满了', 'err');
+      return;
+    }
     if (!edHtml.value.trim()) { toast('HTML 区还是空的，先写点内容吧', 'err'); return; }
 
     S.submitting = true;
@@ -1581,6 +1609,9 @@
       });
       if (!j.ok) throw new Error(j.msg || '提交失败');
       S.last = { at: j.at, url: j.url };
+      // 服务端回过 used 就按它算，否则本地 +1
+      S.used = (typeof j.used === 'number') ? j.used : (Number(S.used || 0) + 1);
+      paintQuota();
       S.lastSavedAt = Math.floor(Date.now() / 1000);
       setDirty(false);
       busy('');
@@ -1596,20 +1627,28 @@
 
   function receipt(j, png) {
     var box = $('#busyBox');
+    var left = submitLeft();
+    var lim = Number(S.cfg.max_submit || 0);
+    var quota = (lim > 0)
+      ? '<br>' + (left > 0
+          ? '还能交 <b>' + left + '</b> 版（每人最多 ' + lim + ' 版）'
+          : '<b>这已经是最后一版了</b>（每人最多 ' + lim + ' 版）')
+      : '';
     box.innerHTML = '<div class="ds-receipt"><div class="box">' +
       '<div class="big">🎉</div>' +
       '<h3>作品已提交</h3>' +
       '<p>' + esc((S.me && S.me.name) || '') + ' · ' + esc(j.at || '') + '<br>' +
       '已保存为图片并归档到「' + esc(j.course || S.cfg.course) + '」' +
       (j.archived ? '（' + j.archived + ' 个文件）' : '') + '<br>' +
-      '老师在大屏选「' + esc(j.course || S.cfg.course) + '」就能看到你的作品</p>' +
+      '老师在大屏选「' + esc(j.course || S.cfg.course) + '」就能看到你的作品' +
+      quota + '</p>' +
       '<img src="' + png + '" alt="作品预览">' +
       '<div class="row">' +
       '<button class="btn" id="rcClose">继续修改</button>' +
-      '<button class="btn primary" id="rcAgain">再交一版</button>' +
+      (left === 0 ? '' : '<button class="btn primary" id="rcAgain">再交一版</button>') +
       '</div></div></div>';
     $('#rcClose').onclick = function () { box.innerHTML = ''; };
-    $('#rcAgain').onclick = function () { box.innerHTML = ''; submitWork(); };
+    if ($('#rcAgain')) $('#rcAgain').onclick = function () { box.innerHTML = ''; submitWork(); };
   }
 
   /* ---------------- 教师练习：导出图片 ----------------
@@ -1732,6 +1771,7 @@
         S.me = j.me || null;
         S.draft = j.draft || null;
         S.last = j.last || null;
+        S.used = (typeof j.used === 'number') ? j.used : 0;   // 已交几版（2.0.53）
         var d = j.draft || {};
         if ((d.html || '').trim() || (d.css || '').trim()) {
           edHtml.value = docOf(d.html, d.css);
@@ -1747,6 +1787,7 @@
         /* 草稿里带了保存时间：恢复后状态栏直接显示「已保存 HH:MM」，
            而不是「未保存」——学生/老师看到会有「我上次白写了」的错觉。 */
         if (d.updated) S.lastSavedAt = Number(d.updated) || 0;
+        paintQuota();
         if (S.practice) {
           toast('练习模式：改完自动保存，下次进来接着写');
         } else if (!S.cfg.enabled) {
