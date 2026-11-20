@@ -287,6 +287,33 @@ body {
   min-width:0;
 }
 
+/* ---------- 侧栏二级菜单（2.0.48）：工具 → 打字 / 网页 / 像素 ----------
+   一级项右侧一个小三角，点它展开/收起；点行本身照旧跳转并顺手展开。
+   缩进 + 略小一号字，看得出从属关系，但不做成缩略图式的「抽屉套抽屉」。 */
+.side-item.has-sub { padding-right:9px; }
+.nav-fold {
+  flex:none; width:22px; height:22px; margin-left:auto;
+  display:inline-flex; align-items:center; justify-content:center;
+  border-radius:6px; color:var(--text-secondary); opacity:.62;
+  cursor:pointer; -webkit-tap-highlight-color:transparent;
+  transition:transform .2s var(--ease-out, ease), opacity .16s ease,
+             background .16s ease;
+}
+.nav-fold::before {
+  content:''; display:block; width:0; height:0;
+  border-left:5px solid currentColor;
+  border-top:4.5px solid transparent; border-bottom:4.5px solid transparent;
+}
+.nav-fold:hover { opacity:1; background:var(--brand-soft); }
+.side-item.sub-open .nav-fold { transform:rotate(90deg); opacity:.85; }
+.nav-sub { display:block; }
+.nav-sub[hidden] { display:none; }
+.nav-sub .side-item { padding-left:37px; font-size:13.5px; }
+.nav-sub .side-item:hover { padding-left:43px; }
+.nav-sub .side-item.active { padding-left:43px; }
+.nav-sub .side-ico { width:22px; height:22px; min-width:22px; flex:0 0 22px; }
+.nav-sub .side-item.active::before { top:8px; bottom:8px; }
+
 /* ---------- 侧边栏问候语 ----------
    常驻在「班级工作台」标题下方，切换页面时在此滑动更新。 */
 
@@ -7498,10 +7525,11 @@ const NAV_GROUPS = [
   { name:'班务', items:['classes','students'] },
   /* 打字（2026-11-05 牛哥要求）：从「教学」挪到「其他」——
      它更像练手小工具，和课堂发放/作业/成绩不是一类。
-     路由 #typing 没变，旧书签照样能打开。
-     H5 网页设计（2.0.39）：同样放在「其他」，老师一键启停的小服务。
-     像素画（2.0.47）：与网页设计同款，也是「其他」里的一键启停工具。 */
-  { name:'其他', items:['todos','tools','typing','design','pixel'] }      // 设置只保留顶栏右上角入口
+     H5 网页设计（2.0.39）/ 像素画（2.0.47）：同样是老师一键启停的小服务。
+     2.0.48（牛哥要求）：打字 / 网页 / 像素 收进「工具」的二级菜单 ——
+     侧栏 15 项、可视高度只有 ~460px，「其他」组被迫滚动才能看全。
+     路由 #typing / #design / #pixel 都没变，旧书签照样能打开。 */
+  { name:'其他', items:['todos','tools'] }      // 设置只保留顶栏右上角入口
 ];
 
 const NAV = [
@@ -7525,9 +7553,56 @@ const NAV = [
   { id:'classes', name:'班级', icon:'cap' },
   { id:'students', name:'学生', icon:'user' },
   { id:'todos',  name:'待办', icon:'pin' },
-  { id:'tools',  name:'工具', icon:'tool' },
+  /* 工具页本身是「教室常用小工具」，打字 / 网页 / 像素 挂在它下面当二级菜单。
+     sub 里的项仍在 NAV 里（标题、图标、路由都要用），只是不出现在分组 items 中。 */
+  { id:'tools',  name:'工具', icon:'tool', sub:['typing','design','pixel'] },
   { id:'settings', name:'设置', icon:'gear' }
 ];
+
+/* ---------------- 侧栏二级菜单（2.0.48） ----------------
+   折叠状态存 localStorage；当前停留的页面若在某个子菜单里就强制展开 ——
+   否则高亮项藏在收起的盒子里，看着像「点了没反应」。 */
+const NAV_FOLD_KEY = 'wb-nav-fold';
+function navFoldMap() {
+  try {
+    const v = JSON.parse(LS.get(NAV_FOLD_KEY) || '{}');
+    return (v && typeof v === 'object') ? v : {};
+  } catch (e) { return {}; }
+}
+/** 当前路由（壳渲染早期 state 可能还没建好，兜一层） */
+function navRouteNow() {
+  try { return state.route || ''; } catch (e) { return ''; }
+}
+/** 某个父项的子菜单该不该展开 */
+function navSubOpen(id) {
+  const n = NAV.find(x => x.id === id);
+  if (!n || !n.sub) return false;
+  if (n.sub.indexOf(navRouteNow()) >= 0) return true;
+  return !!navFoldMap()[id];
+}
+/** 展开 / 收起（只动 DOM 不重绘侧栏，避免丢滚动位置） */
+function navToggleSub(id) {
+  const box = document.querySelector('.nav-sub[data-sub="' + id + '"]');
+  const row = document.querySelector('.side-item[data-route="' + id + '"]');
+  if (!box || !row) return;
+  const open = box.hidden;          // 原本收起 → 这次是展开
+  box.hidden = !open;
+  row.classList.toggle('sub-open', open);
+  const m = navFoldMap();
+  m[id] = open;
+  try { LS.set(NAV_FOLD_KEY, JSON.stringify(m)); } catch (e) {}
+}
+/** 切到子菜单里的页面时，把父项撑开让高亮可见 */
+function navRevealSub(route) {
+  NAV.forEach(n => {
+    if (!n.sub || n.sub.indexOf(route) < 0) return;
+    const box = document.querySelector('.nav-sub[data-sub="' + n.id + '"]');
+    const row = document.querySelector('.side-item[data-route="' + n.id + '"]');
+    if (!box || !row) return;
+    box.hidden = false;
+    row.classList.add('sub-open');
+  });
+}
 
 /* 旧路由 → 新去处：旧书签 / 页内旧链接进来直接落到整合后的页面。
    进度 / 值日 / 分组 / 德育 同时会把班级页的页签预选到对应位置。 */
@@ -11377,12 +11452,30 @@ async function goToApp(returnTo) {
             ${g.items.map(id => {
               const n = NAV.find(x=>x.id===id);
               if (!n) return '';
-              const ic = icon(n.icon, 15);
               const cc = ICON_C[n.icon] || ['#F0EFE9','#5F6E68','#4A5751'];
-              return `<div class="side-item" data-route="${n.id}"
-                         data-ibg="${cc[0]}" data-iact="${cc[2]}">
-                <span class="side-ico" style="background:${cc[0]}">${ic}</span>
-                <span>${n.name}</span></div>`;
+              const hasSub = !!(n.sub && n.sub.length);
+              const open = hasSub && navSubOpen(n.id);
+              /* 折叠箭头用 <i> 不用 <span>：`.side-item > span:last-child`
+                 是「图标后的文字」那条省略号规则，多个 span 会认错。 */
+              const row = `<div class="side-item${hasSub?' has-sub':''}${open?' sub-open':''}"
+                         data-route="${n.id}" data-ibg="${cc[0]}" data-iact="${cc[2]}">
+                <span class="side-ico" style="background:${cc[0]}">${icon(n.icon, 15)}</span>
+                <span>${n.name}</span>
+                ${hasSub ? `<i class="nav-fold" data-fold="${n.id}" role="button"
+                  aria-label="展开或收起${n.name}的子菜单" title="展开 / 收起"></i>` : ''}
+              </div>`;
+              if (!hasSub) return row;
+              return row + `<div class="nav-sub" data-sub="${n.id}"${open ? '' : ' hidden'}>
+                ${n.sub.map(sid => {
+                  const s = NAV.find(x=>x.id===sid);
+                  if (!s) return '';
+                  const sc = ICON_C[s.icon] || ['#F0EFE9','#5F6E68','#4A5751'];
+                  return `<div class="side-item" data-route="${s.id}"
+                             data-ibg="${sc[0]}" data-iact="${sc[2]}">
+                    <span class="side-ico" style="background:${sc[0]}">${icon(s.icon, 14)}</span>
+                    <span>${s.name}</span></div>`;
+                }).join('')}
+              </div>`;
             }).join('')}
           </div>`).join('')}
       </nav>
@@ -11442,8 +11535,21 @@ async function goToApp(returnTo) {
   syncSidebarHeight();
 
   $$('.side-item').forEach(el => {
-    el.onclick = () => {
+    el.onclick = (ev) => {
+      /* 折叠箭头自己吃掉点击：只切子菜单，不跳转、不收起抽屉 */
+      const fold = ev.target && ev.target.closest ? ev.target.closest('.nav-fold') : null;
+      if (fold) {
+        ev.stopPropagation();
+        navToggleSub(fold.dataset.fold);
+        return;
+      }
       window.__maskOff = false;
+      /* 带子菜单的父项：跳过去的同时顺手展开，不然进去看不到自己点的哪一项 */
+      const n = NAV.find(x => x.id === el.dataset.route);
+      if (n && n.sub) {
+        const box = document.querySelector('.nav-sub[data-sub="' + n.id + '"]');
+        if (box && box.hidden) navToggleSub(n.id);
+      }
       location.hash = el.dataset.route;
       closeSidebar();          // 手机上点完导航就收起抽屉
     };
@@ -12096,6 +12202,8 @@ function renderPage() {
     const ico = el.querySelector('.side-ico');
     if (ico) ico.style.background = on ? (el.dataset.iact || '#0F6E56') : (el.dataset.ibg || '#F0EFE9');
   });
+  /* 停在二级菜单里的页面时，父项必须撑开 —— 高亮项不能藏在收起的盒子里 */
+  navRevealSub(state.route);
   /* 启动中（解锁后 loadClasses 还没回来）：只记下目标页，不渲染——
      这时数据还没装载，抢跑渲染会得到一闪而过的空白页（2026-10-31 实测复现）。
      goToApp 结尾会统一 renderPage() 补上。 */
