@@ -16,6 +16,10 @@ import json
 import os
 import time
 import threading
+try:
+    import studio_data as SD          # 学生设计作品（宠物/蛋/主题）
+except Exception:
+    SD = None
 
 # 星级规则（与 app/typing/typing-data.js 的 STAR_RULE 保持一致）
 # 7=数字小键盘、8=中英混排：2026-11-02 新增的两个篇章，缺了它们
@@ -88,7 +92,7 @@ BG_PRICE = {
 # 特效是全店最贵的奢侈品，攒 2000 分要打很久。
 EFFECT_PRICE = {
     "sparkle": 200, "bubbles": 400, "hearts": 650,
-    "snow": 900, "rainbow": 1400, "aurora": 2000,
+    "snow": 900, "aurora": 2000,
 }
 
 # 用积分直接兑一颗宠物蛋（2026-11-19 新增，与 typing-data.js 的 EGG_PRICE 一致）。
@@ -103,11 +107,15 @@ DEFAULT_RECORD = {
     "best": {},            # levelKey -> {wpm, acc, stars, ts}
     "stars": 0,            # 累计星数（经验）
     "week": {"k": "", "stars": 0},
-    "pets": [],            # 已拥有宠物 id
+    "pets": [],            # 已拥有宠物 id（系统自带 SVG 宠物）
+    "studio_pets": [],     # 已拥有的学生设计宠物 id（sd_ 前缀，PNG 出战）
+    "studio_themes": [],   # 已拥有的学生设计界面主题 id（只能积分兑换）
+    "studio_free_used": 0, # 已用掉的学生作品蛋免费孵化次数（2.0.68，按账号永久记录）
     "decos": [],           # 已解锁装扮 id
     "eggs": 0,             # 待孵化宠物蛋
     "egg_keys": [],        # 已经掉过蛋的关卡（levelKey），一关只掉一颗、成绩提升可补掉
-    "equip": {"pet": "", "decos": [], "bg": "", "fx": ""},
+    "equip": {"pet": "", "studio_pet": "", "studio_theme": "",
+              "decos": [], "bg": "", "fx": ""},
     "pts": 0,              # 统一积分：闯关 / 教师发放获得，全店通用
     "bgs": [],             # 已拥有牧场背景 id
     "effects": [],         # 已拥有特效 id
@@ -181,12 +189,20 @@ def clean_equip(eq):
 def _equip_for_lb(stu):
     """排行榜用的阵容：没手动选过出战宠物时，默认用已拥有的第一只，
     这样「孵出来了但忘了点出战」的同学在榜上也看得见自己的宠物，
-    而不是清一色 🐾 爪印。"""
+    而不是清一色 🐾 爪印。
+
+    2.0.65：学生作品宠物出战时也要把 studio_pet 带进榜单，否则榜上
+    只剩爪印；bg/fx 走 clean_equip 的四字段，作品宠物同样吃这套装扮。"""
     eq = clean_equip(stu.get("equip"))
-    if not eq["pet"]:
+    sp = str((stu.get("equip") or {}).get("studio_pet") or "")
+    if sp:
+        eq["studio_pet"] = sp
+        eq["pet"] = ""
+        eq["decos"] = []
+    elif not eq["pet"]:
         pets = stu.get("pets") or []
         eq["pet"] = str(pets[0]) if pets else ""
-    if not eq["pet"]:
+    if not eq["pet"] and not sp:
         eq["decos"] = []
     return eq
 
@@ -326,6 +342,31 @@ class TypingStore:
             else:
                 self.data.pop("coin_log", None)
             migrated = True
+        # 2026-11-21 学生设计作品：老档案补 studio_pets / studio_themes 和出战槽。
+        # 只补空字段，不动原有宠物 / 积分 / 装扮。
+        for stu in self.data["students"].values():
+            if not isinstance(stu, dict):
+                continue
+            touched = False
+            for f in ("studio_pets", "studio_themes"):
+                if not isinstance(stu.get(f), list):
+                    stu[f] = []
+                    touched = True
+            try:
+                used = int(stu.get("studio_free_used", 0))
+            except (TypeError, ValueError):
+                used = 0
+            if used < 0 or stu.get("studio_free_used") != used:
+                stu["studio_free_used"] = max(0, used)
+                touched = True
+            eq = stu.get("equip")
+            if isinstance(eq, dict):
+                for f in ("studio_pet", "studio_theme"):
+                    if f not in eq:
+                        eq[f] = ""
+                        touched = True
+            if touched:
+                migrated = True
         if migrated:
             try:
                 self._save()
@@ -449,6 +490,9 @@ class TypingStore:
     def summary(self, stu):
         return {"stars": stu.get("stars", 0), "week_stars": stu["week"].get("stars", 0),
                 "pets": stu.get("pets", []), "decos": stu.get("decos", []),
+                "studio_pets": stu.get("studio_pets", []),
+                "studio_themes": stu.get("studio_themes", []),
+                "studio_free_used": int(stu.get("studio_free_used") or 0),
                 "eggs": stu.get("eggs", 0), "equip": stu.get("equip", {}),
                 "pts": stu.get("pts", 0),
                 "bgs": stu.get("bgs", []), "effects": stu.get("effects", []),
@@ -467,37 +511,80 @@ class TypingStore:
             return {k: v["stars"] for k, v in stu.get("best", {}).items()}
 
     # ---------------- 宠物与装扮 ----------------
-    def claim_egg(self, uid, pet_ids):
-        """孵蛋：从还没有的宠物里随机（按种子确定性）挑一只"""
+    def claim_egg(self, uid, pet_ids, studio_ids=None):
+        """孵蛋：普通宠物 + 学生设计宠物一起抽，但学生作品权重极低（彩蛋）。
+
+        普通宠物 NORMAL_PET_WEIGHT=20 / 只，学生作品 STUDIO_PET_WEIGHT=1 / 只，
+        22 只普通 + 14 只作品 ≈ 3% 概率孵出学生作品 —— 符合「最低概率获得」。
+        抽中学生作品时写进 studio_pets，抽中普通宠物写进 pets，两套图鉴互不污染。
+        全部集齐才折算 50 积分。
+        """
         if not pet_ids:
             return {"ok": False, "msg": "宠物图鉴为空"}
+        nw = getattr(SD, "NORMAL_PET_WEIGHT", 20) if SD else 20
+        sw = getattr(SD, "STUDIO_PET_WEIGHT", 1) if SD else 1
+        studio_ids = studio_ids or []
         with self.lock:
             stu = self._stu(uid)
             if stu.get("eggs", 0) <= 0:
                 return {"ok": False, "msg": "还没有宠物蛋，去闯 BOSS 关赢一颗吧！"}
-            unowned = [p for p in pet_ids if p not in stu["pets"]]
+            owned_normal = set(stu.get("pets") or [])
+            owned_studio = set(stu.get("studio_pets") or [])
+            unowned = [p for p in pet_ids if p not in owned_normal]
+            unowned_studio = [p for p in studio_ids if p not in owned_studio]
             stu["eggs"] -= 1
-            if not unowned:
+            if not unowned and not unowned_studio:
                 stu["pts"] = stu.get("pts", 0) + 50
                 self._save()
-                return {"ok": True, "pet": None, "pts": 50,
+                return {"ok": True, "pet": None, "studio": False, "pts": 50,
                         "msg": "图鉴已集齐！蛋化作 50 积分落入囊中"}
-            seed = int(time.time() * 1000) % len(unowned)
-            pet = unowned[seed]
-            stu["pets"].append(pet)
-            if not stu["equip"].get("pet"):
-                stu["equip"]["pet"] = pet
+            # 加权抽签：普通 Cys 权重 nw，学生作品权重 sw。用毫秒时间戳做种子打散。
+            pool = [(p, False, nw) for p in unowned] + \
+                   [(p, True, sw) for p in unowned_studio]
+            total = sum(w for _, _, w in pool)
+            seed = int(time.time() * 1000)
+            pick = seed % total if total > 0 else 0
+            pet, is_studio, _ = pool[0]
+            acc = 0
+            for p, s, w in pool:
+                acc += w
+                if pick < acc:
+                    pet, is_studio = p, s
+                    break
+            if is_studio:
+                stu.setdefault("studio_pets", []).append(pet)
+                if not stu["equip"].get("pet") and not stu["equip"].get("studio_pet"):
+                    stu["equip"]["studio_pet"] = pet
+            else:
+                stu.setdefault("pets", []).append(pet)
+                if not stu["equip"].get("pet") and not stu["equip"].get("studio_pet"):
+                    stu["equip"]["pet"] = pet
             self._save()
-            return {"ok": True, "pet": pet, "stu": self.summary(stu)}
+            return {"ok": True, "pet": pet, "studio": is_studio, "stu": self.summary(stu)}
 
-    def equip(self, uid, pet, decos, bg=None, fx=None):
+    def equip(self, uid, pet, decos, bg=None, fx=None,
+              studio_pet=None, studio_theme=None):
         """装备出战阵容：pet + 装扮（部位互斥）+ 牧场背景 bg + 出战特效 fx。
         bg / fx 只允许穿「衣柜里已有的」；传 None 表示这一项保持不变，
-        传 '' 表示取下来（背景回到默认草地 / 特效关闭）。"""
+        传 '' 表示取下来（背景回到默认草地 / 特效关闭）。
+        学生作品宠物 / 主题走独立字段，且 pet 与 studio_pet 只能选一个出战。"""
         with self.lock:
             stu = self._stu(uid)
             if pet and pet not in stu["pets"]:
                 return {"ok": False, "msg": "还没有这只宠物"}
+            if studio_pet and studio_pet not in stu.get("studio_pets", []):
+                return {"ok": False, "msg": "还没有这只学生作品宠物"}
+            if studio_theme and studio_theme not in stu.get("studio_themes", []):
+                return {"ok": False, "msg": "还没有兑换这个界面主题"}
+            # 2.0.63：作品宠物「收回」时若前端没指定系统宠物，自动回到已拥有的
+            # 第一只（默认宠物），顶栏和牧场不会出现空爪印。
+            if studio_pet is not None and not studio_pet and not pet:
+                pet = (stu.get("pets") or [None])[0] or ""
+            # 出战位二选一：选了学生作品宠物就把系统宠物的出战位清空，反之亦然
+            if studio_pet:
+                pet = ""
+            elif pet:
+                studio_pet = ""
             ds = [d for d in (decos or []) if d in stu["decos"]]
             # 还没有任何宠物时，装扮无处可穿：直接清空。
             # 以前这里不判断，学生没孵化过宠物却能"已装备墨镜和皇冠"，
@@ -520,9 +607,16 @@ class TypingStore:
                         bad = True
                 if not bad:
                     kept.append(d)
-            ep = stu.get("equip") or {"pet": "", "decos": [], "bg": "", "fx": ""}
+            ep = stu.get("equip") or {}
             ep = {"pet": pet or "", "decos": kept,
-                  "bg": ep.get("bg", ""), "fx": ep.get("fx", "")}
+                  "bg": ep.get("bg", ""), "fx": ep.get("fx", ""),
+                  "studio_pet": ep.get("studio_pet", ""),
+                  "studio_theme": ep.get("studio_theme", "")}
+            # None=保持；''=取下；非空=换上
+            if studio_pet is not None:
+                ep["studio_pet"] = str(studio_pet)
+            if studio_theme is not None:
+                ep["studio_theme"] = str(studio_theme)
             if bg is not None:
                 if bg and bg not in stu.get("bgs", []):
                     return {"ok": False, "msg": "还没有这个背景"}
@@ -645,6 +739,98 @@ class TypingStore:
             self._save()
             return {"ok": True, "stu": self.summary(stu), "eggs": stu["eggs"],
                     "price": EGG_PRICE}
+
+    # ---------------- 学生设计作品兑换（最高档积分） ----------------
+    def buy_studio(self, uid, work_id):
+        """用积分兑换**界面主题**。
+
+        2.0.56 起作品宠物不再支持直兑：即使客户端伪造 id 走这里，也会被拒。
+        唯一合法入口是 buy_studio_egg(uid, egg_id) —— 先兑蛋，蛋里出宠物。
+        """
+        if not SD or work_id not in SD.BY_ID:
+            return {"ok": False, "msg": "没有这个学生作品"}
+        work = SD.BY_ID[work_id]
+        if work["kind"] != "theme":
+            return {"ok": False, "msg": "作品宠物不能直接兑换，请兑换对应的宠物蛋"}
+        price = SD.STUDIO_THEME_PRICE
+        with self.lock:
+            stu = self._stu(uid)
+            owned = stu.setdefault("studio_themes", [])
+            if work_id in owned:
+                return {"ok": False, "msg": "这个主题已经兑换过了"}
+            err = self._spend_pts(stu, price)
+            if err:
+                return {"ok": False, "msg": err}
+            owned.append(work_id)
+            ep = stu.get("equip") or {}
+            ep["studio_theme"] = work_id
+            stu["equip"] = ep
+            stu["updated"] = int(time.time())
+            self._save()
+            return {"ok": True, "stu": self.summary(stu), "id": work_id,
+                    "kind": "theme", "price": price}
+
+    def buy_studio_egg(self, uid, egg_id, free_quota=1):
+        """兑换学生设计作品蛋 —— 作品宠物的唯一合法兑换入口。
+
+        · 指定蛋 → 拆出对应作品宠物；「随机蛋」在未拥有的作品里随机抽一只；
+        · 2.0.68：每个账号先扣免费孵化额度（默认学生 1 次），用完后才按
+          STUDIO_EGG_PRICE 扣积分；用过几次写在档案 studio_free_used 里，
+          教师改额度不会重置历史用量；
+        · 已拥有的宠物不能重复兑换；抽中即写 studio_pets 并自动出战；
+        · 这里**不增加普通宠物蛋 eggs 计数**：作品蛋是一次性兑换券，
+          不走 claim_egg 的普通图鉴抽签池，避免两套图鉴互相污染。
+        """
+        if not SD or egg_id not in SD.EGG_BY_ID:
+            return {"ok": False, "msg": "没有这枚作品蛋"}
+        egg = SD.EGG_BY_ID[egg_id]
+        with self.lock:
+            stu = self._stu(uid)
+            owned = set(stu.get("studio_pets") or [])
+            if egg.get("pet"):
+                pet = egg["pet"]
+                if pet not in SD.BY_ID or SD.BY_ID[pet]["kind"] != "pet":
+                    return {"ok": False, "msg": "这枚蛋对应的作品不存在"}
+                if pet in owned:
+                    return {"ok": False, "msg": "这只宠物已经拥有，不用再兑蛋啦"}
+            else:
+                pool = [p for p in SD.PET_IDS if p not in owned]
+                if not pool:
+                    return {"ok": False, "msg": "作品宠物已经集齐，不用再兑蛋啦"}
+                pet = pool[int(time.time() * 1000) % len(pool)]
+            try:
+                quota = max(0, int(free_quota))
+            except (TypeError, ValueError):
+                quota = 1
+            try:
+                used = max(0, int(stu.get("studio_free_used") or 0))
+            except (TypeError, ValueError):
+                used = 0
+            free = used < quota
+            if free:
+                stu["studio_free_used"] = used + 1
+                charged = 0
+            else:
+                err = self._spend_pts(stu, SD.STUDIO_EGG_PRICE)
+                if err:
+                    return {"ok": False, "msg": err, "freeLeft": 0,
+                            "freeUsed": used, "freeQuota": quota}
+                charged = SD.STUDIO_EGG_PRICE
+            stu.setdefault("studio_pets", []).append(pet)
+            ep = stu.get("equip") or {}
+            ep["studio_pet"] = pet
+            ep["pet"] = ""           # 普通宠物 / 作品宠物出战位二选一
+            stu["equip"] = ep
+            stu["updated"] = int(time.time())
+            self._save()
+            work = SD.BY_ID[pet]
+            return {"ok": True, "stu": self.summary(stu), "id": pet,
+                    "egg": egg_id, "kind": "pet", "price": SD.STUDIO_EGG_PRICE,
+                    "free": free, "charged": charged,
+                    "freeUsed": used + 1 if free else used,
+                    "freeQuota": quota,
+                    "freeLeft": max(0, quota - (used + 1 if free else used)),
+                    "petName": work["name"]}
 
     def use_item(self, uid, item_id):
         """消耗一个道具（进入关卡时用）。道具只影响本关，不写进档案。"""

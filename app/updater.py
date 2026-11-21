@@ -352,14 +352,25 @@ class Updater:
                 except UpdateError as pe:
                     self.state["pkg"] = {"zip": "", "urls": [],
                                          "sha256": "", "error": str(pe)}
-                if is_newer(m.get("version"), self.version):
+                rv, lv = vtuple(m.get("version")), vtuple(self.version)
+                if rv > lv:
                     self.state["phase"] = "available"
                     self.state["msg"] = "发现新版本 v%s" % m.get("version")
-                    r = {"ok": True, "has_update": True, "manifest": m}
-                else:
+                    r = {"ok": True, "has_update": True, "manifest": m,
+                         "local_version": self.version, "relation": "remote_newer"}
+                elif rv == lv:
                     self.state["phase"] = "idle"
                     self.state["msg"] = "已是最新版本"
-                    r = {"ok": True, "has_update": False, "manifest": m}
+                    r = {"ok": True, "has_update": False, "manifest": m,
+                         "local_version": self.version, "relation": "same"}
+                else:
+                    # 本机比更新源新（常见于本地修了补丁、更新源还没发版）：
+                    # 不能说成「已是最新版本 v旧号」，那会让人以为更新倒退了。
+                    self.state["phase"] = "idle"
+                    self.state["msg"] = ("本机 v%s 高于更新源 v%s（更新源未同步）"
+                                         % (self.version, m.get("version")))
+                    r = {"ok": True, "has_update": False, "manifest": m,
+                         "local_version": self.version, "relation": "local_newer"}
                 if LAST_TLS_NOTE:
                     self.state["note"] = LAST_TLS_NOTE
                     r["note"] = LAST_TLS_NOTE
@@ -461,6 +472,9 @@ class Updater:
             # 下载路径完全不同，按主源重算会把 GitHub 拿到的 manifest 拼成
             # 一个不存在的 Gitee 地址。
             manifest_url = self.state.get("manifest_url") or self._manifest_url(uc)
+            if r.get("relation") == "local_newer":
+                raise UpdateError("本机 v%s 高于更新源 v%s，更新源未同步，无需（也不会）降级。"
+                                  % (self.version, m.get("version")))
             if not is_newer(m.get("version"), self.version):
                 raise UpdateError("当前已是最新版本，无需更新。")
 

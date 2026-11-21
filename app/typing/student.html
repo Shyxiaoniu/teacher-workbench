@@ -7,14 +7,19 @@
 <meta name="theme-color" content="#B45B33">
 <!-- 宠物小像（背景 + 特效）与教师端排行榜共用同一份样式，避免两边长相不一致 -->
 <link rel="stylesheet" href="/typing/pet-ui.css?v=20261105">
+<link rel="stylesheet" href="/typing/studio-ui.css?v=2.0.76">
 <script>
-/* 主题：与主站共用同一个存储键 wb-smode。
-   放在 <head> 里同步执行 —— 首屏就是对的颜色，不会先亮一下再切暗
-   （暗色主题最刺眼的就是这一下白闪）。 */
+/* 主题：完全跟随学生端外壳的设置（wb-smode 明暗 + wb-stheme 护眼皮肤）。
+   2.0.56 去掉打字页自己的夜色按钮，老师/学生在侧栏账号卡里换主题即可。
+   放在 <head> 里同步执行 —— 首屏就是对的颜色，不会先亮一下再切暗。 */
 (function () {
   try {
     if (localStorage.getItem('wb-smode') === 'dark') {
       document.documentElement.setAttribute('data-mode', 'dark');
+    }
+    var th = localStorage.getItem('wb-stheme') || '';
+    if (th === 'green' || th === 'paper' || th === 'blue') {
+      document.documentElement.setAttribute('data-theme', th);
     }
   } catch (e) {}
 })();
@@ -90,6 +95,53 @@ html[data-mode="dark"]{
   --f-ri:#1D2B20; --f-ri-bd:rgba(62,158,91,.40);
   --f-th:#26221E; --f-th-bd:rgba(200,190,178,.24);
 }
+/* 护眼皮肤：与学生端外壳同一套 wb-stheme，四套配色各自有明暗版。
+   只换颜色令牌，布局、键位、交互一律不动。默认不写 data-theme = 暖陶。 */
+html[data-theme="green"]{
+  --brand:#4E7D5A; --brand2:#5F9170; --bg:#EDF3EA; --card:#FBFDF8;
+  --line:rgba(78,125,90,.20); --ink:#2F3A31; --ink2:#6E7E72; --ink3:#8C9A8F;
+  --surface:#FFFFFF; --paper:#F4F8F1; --key:#F7FAF4; --key-bd:#D9E7DA; --key-ink:#5C6F60;
+  --brand-soft:#E3EFE4; --sun-bg:#F5EEDC; --sun-line:#C6A05A; --sun-ink:#6B551F;
+  --shadow:rgba(50,80,55,.09); --zone-on:rgba(78,125,90,.07)
+}
+html[data-mode="dark"][data-theme="green"]{
+  --brand:#8DBE9A; --brand2:#A6D1B1; --bg:#101713; --card:#18211B;
+  --line:rgba(141,190,154,.22); --ink:#E4EFE6; --ink2:#A9BDAD; --ink3:#8FA394;
+  --surface:#1E2A22; --paper:#111A15; --key:#1C2620; --key-bd:rgba(141,190,154,.20);
+  --key-ink:#C6D6C8; --brand-soft:rgba(141,190,154,.16);
+  --sun-bg:rgba(198,160,90,.14); --sun-line:rgba(198,160,90,.42); --sun-ink:#D8BE86;
+  --shadow:rgba(0,0,0,.45); --zone-on:rgba(141,190,154,.09)
+}
+html[data-theme="paper"]{
+  --brand:#8A6A32; --brand2:#A07E42; --bg:#F4EEDC; --card:#FDFAF0;
+  --line:rgba(138,106,50,.20); --ink:#3A3327; --ink2:#7C7261; --ink3:#938872;
+  --surface:#FFFDF6; --paper:#F8F1DE; --key:#FAF4E5; --key-bd:#E4D8BC; --key-ink:#6C6353;
+  --brand-soft:#F1E7CE; --sun-bg:#F6EAD2; --sun-line:#D6A756; --sun-ink:#7A5C22;
+  --shadow:rgba(90,70,30,.09); --zone-on:rgba(138,106,50,.07)
+}
+html[data-mode="dark"][data-theme="paper"]{
+  --brand:#D6B578; --brand2:#E6C994; --bg:#17130D; --card:#221C14;
+  --line:rgba(214,181,120,.22); --ink:#F0E8D8; --ink2:#C3B49B; --ink3:#A99B84;
+  --surface:#2A2319; --paper:#1B160F; --key:#241D14; --key-bd:rgba(214,181,120,.20);
+  --key-ink:#DCCDB3; --brand-soft:rgba(214,181,120,.16);
+  --sun-bg:rgba(214,181,120,.14); --sun-line:rgba(214,181,120,.42); --sun-ink:#E6C994;
+  --shadow:rgba(0,0,0,.45); --zone-on:rgba(214,181,120,.09)
+}
+html[data-theme="blue"]{
+  --brand:#3F6E86; --brand2:#4F8299; --bg:#EDF2F5; --card:#FAFCFD;
+  --line:rgba(63,110,134,.20); --ink:#28343B; --ink2:#66787F; --ink3:#8497A0;
+  --surface:#FFFFFF; --paper:#F1F6F8; --key:#F6FAFB; --key-bd:#D6E4EA; --key-ink:#5B6E76;
+  --brand-soft:#E2EDF1; --sun-bg:#F5EEDD; --sun-line:#C09A5E; --sun-ink:#6B5527;
+  --shadow:rgba(35,70,90,.09); --zone-on:rgba(63,110,134,.07)
+}
+html[data-mode="dark"][data-theme="blue"]{
+  --brand:#8CB4C6; --brand2:#A5C8D8; --bg:#0D1417; --card:#162025;
+  --line:rgba(140,180,198,.22); --ink:#E3EDF1; --ink2:#A7BAC2; --ink3:#8CA0A8;
+  --surface:#1D2A30; --paper:#111B1F; --key:#17232A; --key-bd:rgba(140,180,198,.20);
+  --key-ink:#C3D5DC; --brand-soft:rgba(140,180,198,.16);
+  --sun-bg:rgba(192,154,94,.14); --sun-line:rgba(192,154,94,.42); --sun-ink:#D3B784;
+  --shadow:rgba(0,0,0,.45); --zone-on:rgba(140,180,198,.09)
+}
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
 body{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:
@@ -153,6 +205,46 @@ body.embed .stick-top{margin:-20px -4px 0;padding:20px 4px 6px}
   border:1px solid var(--line);
   box-shadow:inset 0 1px 0 var(--surface),0 1px 3px var(--shadow)}
 .pet-mini svg{width:100%;height:100%}
+/* 学生作品宠物（PNG）小像：顶栏 / 牧场舞台 / 牧场卡片。
+   .sd-stack 必须是正方形，翅膀/尾巴的遮罩坐标按正方形舞台算的，
+   拉成长方形会让局部动作的位置偏掉。 */
+.pet-mini .sd-stack{width:100%;height:100%}
+.stage-studio{display:block;width:194px;height:194px;position:relative}
+.stage-studio .sd-stack{width:100%;height:100%}
+.pet-card .sd-card-stack{height:100%;aspect-ratio:1/1;width:auto;max-width:100%}
+.sd-pet-grid{margin-bottom:6px}
+/* 学生作品宠物的原创标识 + 设计者（2.0.59）
+   牧场里作品宠物和系统宠物混在一排，只靠「长得不一样」分不清哪些是同学画的，
+   所以给卡片加一枚原创角标，左侧大图下面写清设计者是谁。 */
+.sd-origin{background:var(--surface);border:1px solid var(--line);border-radius:12px;
+  padding:9px 11px;margin:2px 0 8px;text-align:left}
+.sd-origin-head{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:7px}
+.sd-origin-badge{font-size:11px;font-weight:800;letter-spacing:.02em;
+  color:#8a5a13;background:linear-gradient(135deg,#ffe6b8,#ffd08a);
+  border-radius:999px;padding:3px 9px;box-shadow:0 1px 0 rgba(255,255,255,.6) inset}
+/* 2.0.66：夜色下浅金底 + 深棕字太挤，换成暗金底 + 亮金字 */
+html[data-mode="dark"] .sd-origin-badge{
+  color:#F0C868;background:linear-gradient(135deg,rgba(227,188,119,.28),rgba(227,188,119,.14));
+  box-shadow:none}
+.sd-origin-series{font-size:11px;color:var(--ink3)}
+.sd-maker{display:flex;align-items:center;gap:8px;min-width:0}
+.sd-maker-face{flex:none;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;
+  font-size:13px;font-weight:800;color:#fff;background:linear-gradient(135deg,#f3a76a,#e0824a)}
+.sd-maker-txt{display:flex;flex-direction:column;min-width:0;line-height:1.25}
+.sd-maker-txt b{font-size:12.5px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sd-maker-txt small{font-size:11px;color:var(--ink3)}
+.sd-maker-quote{font-size:11.5px;color:var(--ink2);line-height:1.5;margin-top:6px;
+  padding-left:8px;border-left:2px solid var(--line-2)}
+.sd-origin-tip{font-size:10.5px;color:var(--ink3);margin-top:6px}
+/* 作品宠物卡片上的原创角标 */
+.pet-card{position:relative}
+.sd-origin-pin{position:absolute;top:4px;left:4px;z-index:3;font-size:9.5px;font-weight:800;
+  color:#8a5a13;background:linear-gradient(135deg,#ffe6b8,#ffd08a);border-radius:999px;
+  padding:2px 6px;line-height:1.2;pointer-events:none}
+html[data-mode="dark"] .sd-origin-pin{
+  color:#F0C868;background:linear-gradient(135deg,rgba(227,188,119,.28),rgba(227,188,119,.14))}
+.sd-card-maker{display:block;font-size:10.5px;color:var(--ink3);margin-top:1px;
+  max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tabs{display:flex;gap:6px;margin:14px 0 0}
 .tabs button{padding:9px 18px;border-radius:12px;font-size:14.5px;font-weight:600;color:var(--ink2);
   background:var(--surface);border:1.5px solid var(--line)}
@@ -589,12 +681,7 @@ body.embed .play-wrap{min-height:calc(100vh - 20px)}
 .hands .hgrp{font-size:9.5px;font-weight:700;fill:var(--ink3);letter-spacing:1.5px}
 .hands .hgrp.on{fill:var(--brand)}
 
-/* 主题切换按钮：与主站同一个存储键（wb-smode），顶栏右侧一枚小圆钮 */
-.mode-btn{width:34px;height:34px;border-radius:12px;border:1.5px solid var(--line);
-  background:var(--surface);color:var(--ink2);font-size:15px;line-height:1;
-  display:inline-flex;align-items:center;justify-content:center;cursor:pointer;
-  transition:border-color .15s,color .15s,transform .12s}
-.mode-btn:hover{border-color:var(--brand);color:var(--brand);transform:translateY(-1px)}
+/* 2.0.56：打字页不再放独立夜色按钮，明暗 / 护眼皮肤全部跟随学生端外壳设置。 */
 
 /* 学生端内嵌模式：收窄边距，融入外层页面框架 */
 body.embed{background:var(--bg)}
@@ -681,6 +768,9 @@ body.embed .credit{display:none}
 .stage-glow{position:absolute;left:50%;top:6%;width:86%;height:66%;transform:translateX(-50%);
   border-radius:50%;pointer-events:none;
   background:radial-gradient(52% 52% at 50% 34%,rgba(255,250,232,.95),rgba(255,240,214,0) 74%)}
+/* 星夜 / 太空本身够亮，暖色顶光再盖上去会糊成一团白，压暗让星星和星云露出来 */
+.ranch-side .stage-box[data-bg="night"] .stage-glow,
+.ranch-side .stage-box[data-bg="space"] .stage-glow{opacity:.32}
 /* 台面反光：底部一道柔和高光，强化"平面 vs 立面"的转折 */
 .ranch-side .stage-box::after{content:'';position:absolute;left:12%;right:12%;bottom:2px;height:22px;
   border-radius:50%;pointer-events:none;
@@ -710,9 +800,6 @@ body.embed .credit{display:none}
   animation:fxBubble 4.2s ease-in infinite}
 .fx-hearts .p{font-size:14px;animation:fxHeart 3.6s ease-in-out infinite}
 .fx-snow .p{font-size:12px;animation:fxSnow 5.2s linear infinite}
-.fx-rainbow::before{content:'';position:absolute;left:50%;top:14px;width:132px;height:40px;transform:translateX(-50%);
-  border-radius:50%;background:conic-gradient(#FF6B6B,#FFB35C,#FFE066,#7BE382,#5CC9FF,#B28DFF,#FF6B6B);
-  filter:blur(4px) saturate(1.2);opacity:.8;animation:fxHue 3.4s linear infinite}
 .fx-aurora::before{content:'';position:absolute;inset:-24%;opacity:.55;filter:blur(22px);
   background:linear-gradient(115deg,#63E6BE 0%,transparent 34%,#7FA7FF 55%,transparent 72%,#B78CFF 100%);
   background-size:220% 100%;animation:fxAurora 8s ease-in-out infinite alternate}
@@ -727,8 +814,89 @@ body.embed .credit{display:none}
 @keyframes fxHue{0%{filter:blur(4px) saturate(1.2) hue-rotate(0)}
   100%{filter:blur(4px) saturate(1.2) hue-rotate(360deg)}}
 @keyframes fxAurora{0%{background-position:0% 0}100%{background-position:100% 0}}
+/* ---- 2.0.65 动态牧场背景 ----
+   底色仍是 TD.BACKGROUNDS.css，这一层只叠「会动的东西」：暖光球、云、浪、
+   星、流星、星云。全部 CSS / 零图片，学生作品宠物和系统宠物都站在同一层上。
+   mini 版给小像和商店预览用，粒子少一半、模糊收小，44px 头像也不糊。 */
+.bglive{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden;border-radius:inherit}
+.bglive i{position:absolute;display:block;left:var(--x);top:var(--y);opacity:0;
+  animation-delay:var(--d);will-change:transform,opacity}
+.bglive::before,.bglive::after{content:'';position:absolute;pointer-events:none}
+/* 默认暖光台：缓缓扫过的柔光 + 漂浮光球（默认背景也要够闪） */
+.bglive.bg-warm::before{inset:-46%;opacity:.6;filter:blur(30px);
+  background:conic-gradient(from 0deg,transparent 0 16%,rgba(255,206,146,.55) 29%,
+    transparent 44% 68%,rgba(255,236,198,.5) 82%,transparent 96%);
+  animation:bglSpin 26s linear infinite}
+.bglive.bg-warm i{width:26px;height:26px;border-radius:50%;
+  background:radial-gradient(circle at 34% 30%,rgba(255,255,255,.95),
+    rgba(255,222,170,.6) 54%,rgba(255,222,170,0) 74%);
+  animation:bglOrb 7s ease-in-out infinite}
+/* 草原：横着飘的云 + 底部轻轻摇的草浪 */
+.bglive.bg-meadow i{width:74px;height:22px;border-radius:50%;filter:blur(1px);
+  background:radial-gradient(ellipse at 50% 50%,rgba(255,255,255,.9),rgba(255,255,255,.12) 68%,transparent 75%);
+  animation:bglDrift 17s ease-in-out infinite}
+.bglive.bg-meadow::after{left:-10%;right:-10%;bottom:-10px;height:42px;opacity:.85;
+  background:radial-gradient(ellipse at 50% 100%,rgba(86,182,80,.45),transparent 72%);
+  animation:bglSway 6s ease-in-out infinite alternate}
+/* 沙滩：一层往左推的波纹 + 阳光碎点 */
+.bglive.bg-beach::before{left:-25%;right:-25%;bottom:-18%;height:72%;opacity:.7;
+  background:repeating-radial-gradient(ellipse at 50% 100%,rgba(255,255,255,.5) 0 2px,transparent 3px 16px);
+  transform:rotate(-3deg);animation:bglWave 7s linear infinite}
+.bglive.bg-beach i{width:8px;height:8px;border-radius:50%;background:#FFF6C9;
+  box-shadow:0 0 12px 4px rgba(255,240,170,.8);animation:bglTwinkle 3.2s ease-in-out infinite}
+/* 萤火星夜：星星闪 + 隔一会儿划一颗流星 */
+.bglive.bg-night i{width:3px;height:3px;border-radius:50%;background:#fff;
+  box-shadow:0 0 8px 2px rgba(206,235,255,.9);animation:bglTwinkle 3.6s ease-in-out infinite}
+.bglive.bg-night::after{left:-22%;top:-8%;width:58%;height:2px;opacity:0;
+  background:linear-gradient(90deg,transparent,#fff,transparent);filter:drop-shadow(0 0 4px #fff);
+  transform:rotate(-26deg);animation:bglMeteor 9s ease-in infinite}
+/* 糖果城堡：旋转的糖霜光环 + 飘浮糖球 */
+.bglive.bg-candy::before{left:50%;top:50%;width:86%;aspect-ratio:1;border-radius:50%;opacity:.55;
+  transform:translate(-50%,-50%);
+  background:conic-gradient(from 0deg,#FF8FC7,#FFE08A,#8FE3FF,#C6A5FF,#FF8FC7);
+  -webkit-mask:radial-gradient(circle,transparent 53%,#000 57% 73%,transparent 77%);
+  mask:radial-gradient(circle,transparent 53%,#000 57% 73%,transparent 77%);
+  filter:blur(5px);animation:bglSpinRing 22s linear infinite}
+.bglive.bg-candy i{width:17px;height:17px;border-radius:50%;
+  background:radial-gradient(circle at 32% 28%,#fff,rgba(255,158,210,.8) 58%,rgba(255,158,210,0) 74%);
+  animation:bglFloat 8s ease-in-out infinite}
+/* 太空漫游：慢转星云 + 密星 + 偶尔一道流星 */
+.bglive.bg-space::before{inset:-48%;opacity:.8;filter:blur(36px);
+  background:conic-gradient(from 30deg,transparent 0 8%,rgba(126,96,255,.52) 21%,
+    transparent 35%,rgba(64,204,255,.4) 53%,transparent 67%,rgba(255,106,220,.34) 83%,transparent 95%);
+  animation:bglSpin 32s linear infinite}
+.bglive.bg-space i{width:2.5px;height:2.5px;border-radius:50%;background:#fff;
+  box-shadow:0 0 7px 2px rgba(190,220,255,.85);animation:bglTwinkle 4.2s ease-in-out infinite}
+.bglive.bg-space::after{left:-25%;top:12%;width:52%;height:2px;opacity:0;
+  background:linear-gradient(90deg,transparent,#BFE9FF,transparent);filter:drop-shadow(0 0 5px #8FD8FF);
+  transform:rotate(-30deg);animation:bglMeteor 11s ease-in infinite}
+/* 小像/预览专用：粒子和光晕都缩一号，别把宠物盖住 */
+.bglive-mini::before,.bglive-mini::after{filter:blur(8px);opacity:.5}
+.bglive-mini.bg-warm i{width:11px;height:11px}
+.bglive-mini.bg-meadow i{width:26px;height:8px}
+.bglive-mini.bg-beach i{width:4px;height:4px;box-shadow:0 0 5px 2px rgba(255,240,170,.7)}
+.bglive-mini.bg-night i,.bglive-mini.bg-space i{width:2px;height:2px;box-shadow:0 0 4px 1px #fff}
+.bglive-mini.bg-candy i{width:7px;height:7px}
+.bglive-mini.bg-meadow::after{height:12px}
+@keyframes bglSpin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+@keyframes bglSpinRing{from{transform:translate(-50%,-50%) rotate(0)}
+  to{transform:translate(-50%,-50%) rotate(360deg)}}
+@keyframes bglOrb{0%,100%{opacity:0;transform:translateY(8px) scale(.8)}
+  45%,65%{opacity:.9;transform:translateY(-14px) scale(1.1)}}
+@keyframes bglDrift{0%{opacity:0;transform:translateX(-70px)}
+  30%,70%{opacity:.85}100%{opacity:0;transform:translateX(70px)}}
+@keyframes bglSway{from{transform:translateX(-8px) scaleY(.9)}to{transform:translateX(8px) scaleY(1.1)}}
+@keyframes bglWave{from{transform:translateX(0) rotate(-3deg)}to{transform:translateX(-46px) rotate(-3deg)}}
+@keyframes bglTwinkle{0%,100%{opacity:.15;transform:scale(.7)}50%{opacity:1;transform:scale(1.1)}}
+@keyframes bglFloat{0%,100%{opacity:.1;transform:translateY(10px) scale(.8)}
+  45%,65%{opacity:.9;transform:translateY(-12px) scale(1.05)}}
+@keyframes bglMeteor{0%,72%{opacity:0;transform:translate(-90px,-40px) rotate(-26deg)}
+  78%{opacity:1}100%{opacity:0;transform:translate(180px,100px) rotate(-26deg)}}
+@media (prefers-reduced-motion:reduce){
+  .bglive,.bglive::before,.bglive::after,.bglive i{animation:none!important;opacity:.38}
+}
 /* 背景商店预览小图 + 卡片选中态 */
-.bg-prev{height:56px;border-radius:10px;border:1px solid rgba(200,160,120,.25);margin-bottom:8px}
+.bg-prev{position:relative;overflow:hidden;height:56px;border-radius:10px;border:1px solid rgba(200,160,120,.25);margin-bottom:8px}
 .is-card.on{outline:2px solid var(--brand);outline-offset:1px}
 @keyframes p3FadeIn{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:scale(1)}}
 @keyframes p3PopIn{0%{opacity:0;transform:scale(.7) translateY(12px)}
@@ -813,6 +981,11 @@ body.embed .credit{display:none}
   border-radius:999px;padding:2px 8px;
   background:linear-gradient(135deg,#FFDA85,#E09A2E);
   box-shadow:0 2px 5px rgba(200,140,40,.35),inset 0 1px 0 rgba(255,255,255,.7)}
+/* 2.0.68：宠物卡上的「设为头像」小按钮。学生端 .btn 默认 width:100%，这里必须盖掉。 */
+.pet-card>.pet-av{position:absolute;left:6px;top:6px;z-index:3;width:auto;flex:none;
+  padding:2px 7px;border-radius:999px;font-size:10.5px;line-height:1.5;white-space:nowrap;
+  color:#7A4A1E;background:rgba(255,246,228,.92);border:1px solid rgba(210,160,90,.45)}
+.pet-card>.pet-av:hover{background:#FFE4B8;color:#5A3410}
 .pet-card.lock .ph{font-size:40px;line-height:104px;color:#D8CFC5}
 .title-bar{margin-top:10px;display:flex;align-items:center;gap:8px;justify-content:center;flex-wrap:wrap}
 .title-chip{background:#F1EDFB;color:var(--purple);border-radius:999px;padding:5px 13px;font-size:13px;font-weight:700}
@@ -1281,6 +1454,18 @@ html[data-mode="dark"] .stage-nav{background:rgba(44,34,27,.92);border-color:var
   box-shadow:0 2px 7px rgba(0,0,0,.4)}
 html[data-mode="dark"] .stage-nav:hover{background:var(--surface)}
 html[data-mode="dark"] .stage-empty,html[data-mode="dark"] .pet-card.lock .ph{color:var(--ink3)}
+/* 夜色下宠物名字单独提亮：卡片和牧场标题原来是继承色，
+   在深色底上发灰发暗，牛哥反馈「看不清宠物叫什么」。 */
+html[data-mode="dark"] .pet-card b,
+html[data-mode="dark"] .ranch-side h3,
+html[data-mode="dark"] .sd-maker-txt b{
+  color:#FFF6EA;text-shadow:0 1px 3px rgba(0,0,0,.85);
+}
+html[data-mode="dark"] .pet-card .sd-card-maker,
+html[data-mode="dark"] .sd-origin-series,
+html[data-mode="dark"] .sd-maker-txt small{color:#E6D0BA}
+html[data-mode="dark"] .pet-card.lock b{color:#BCA98F;text-shadow:none}
+html[data-mode="dark"] .ranch-side .mood{color:#DCC6B3}
 html[data-mode="dark"] .pet-card{background:linear-gradient(170deg,var(--surface),var(--paper));
   border-color:var(--line);box-shadow:0 2px 4px rgba(0,0,0,.30),inset 0 1px 0 rgba(255,255,255,.04)}
 html[data-mode="dark"] .pet-card:hover{box-shadow:0 10px 20px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.05)}
@@ -1471,13 +1656,22 @@ html[data-mode="dark"] .egg-buy{border-top-color:rgba(214,178,90,.3)}
 html[data-mode="dark"] .eggget{box-shadow:0 30px 70px rgba(0,0,0,.62),inset 0 1px 0 rgba(255,255,255,.05)}
 html[data-mode="dark"] .egx-kicker,
 html[data-mode="dark"] .egg-kind-chip{background:var(--surface);color:var(--ink2);border-color:var(--line)}
+/* ---- 全站统一弹窗（app/student/ui-dialog.js）视口居中 ----
+   与像素画一致：确认 / 成功 / 失败提示都固定在 iframe 视口中间，
+   不再沉到页面底部被滚动位置挡住。 */
+.wbd-mask{position:fixed!important;inset:0!important;
+  display:flex!important;align-items:center!important;justify-content:center!important}
+.wbd-card{max-height:86vh;overflow-y:auto}
+.wbd-toast-wrap{left:50%!important;top:50%!important;bottom:auto!important;
+  transform:translate(-50%,-50%)!important}
 </style>
 </head>
 <body>
 <div id="app"><div style="text-align:center;padding:80px 0;color:var(--ink3)">正在登上打字冒险岛…</div></div>
 <script src="/student/ui-dialog.js?v=20261102"></script>
 <script src="/typing/pinyin.js?v=20261102w"></script>
-<script src="/typing/typing-data.js?v=20261119"></script>
+<script src="/typing/typing-data.js?v=20261121b"></script>
+<script src="/typing/studio-ui.js?v=2.0.76b"></script>
 <script src="/typing/articles.js?v=20261103a"></script>
 <script src="/typing/levels.js?v=20261102x"></script>
 <script>
@@ -1514,30 +1708,53 @@ function saveArtCat(c) {
 }
 
 /* ---------------- 基础 ---------------- */
-/* 主题：与主站共用 wb-smode。'light' / 'dark'，缺省浅色（与主站一致，
-   不跟系统 —— 机房系统开深色时学生端不该整页变暗）。 */
+/* 主题：完全跟随学生端外壳。外壳在左下角账号卡里切明暗（wb-smode）和
+   护眼皮肤（wb-stheme），打字页这里只读不写——不再单独放夜色按钮。 */
 var MODE_KEY = 'wb-smode';
+var THEME_KEY = 'wb-stheme';
+var THEMES = ['green', 'paper', 'blue'];
+var EXT_THEME = null;   // 教师端外壳主动推来的主题 {mode,hue}，优先于本机 student 键
 function themeIsDark() {
+  if (EXT_THEME) return EXT_THEME.mode === 'dark';
   try { return localStorage.getItem(MODE_KEY) === 'dark'; } catch (e) { return false; }
 }
 function applyTheme() {
   var dark = themeIsDark();
-  document.documentElement.setAttribute('data-mode', dark ? 'dark' : 'light');
-  var mb = document.getElementById('modeBtn');
-  if (mb) {
-    mb.textContent = dark ? '☀' : '🌙';
-    mb.title = dark ? '切回浅色' : '切到夜间';
+  var root = document.documentElement;
+  root.setAttribute('data-mode', dark ? 'dark' : 'light');
+  var th = '';
+  if (EXT_THEME) {
+    var hueMap = { forest: 'green', mist: 'blue', sky: 'blue', deep: 'blue',
+                   sunset: '', neutral: '' };
+    th = hueMap[EXT_THEME.hue] || '';
+  } else {
+    try { th = localStorage.getItem(THEME_KEY) || ''; } catch (e) {}
   }
+  if (THEMES.indexOf(th) >= 0) root.setAttribute('data-theme', th);
+  else root.removeAttribute('data-theme');
   var meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute('content', dark ? '#191210' : '#B45B33');
+  if (meta) {
+    if (dark) {
+      meta.setAttribute('content', th === 'green' ? '#101713' : th === 'paper' ? '#17130D'
+        : th === 'blue' ? '#0D1417' : '#191210');
+    } else {
+      meta.setAttribute('content', th === 'green' ? '#EDF3EA' : th === 'paper' ? '#F4EEDC'
+        : th === 'blue' ? '#EDF2F5' : '#B45B33');
+    }
+  }
 }
-function toggleTheme() {
-  try { localStorage.setItem(MODE_KEY, themeIsDark() ? 'light' : 'dark'); } catch (e) {}
-  applyTheme();
-}
-/* 学生端里切了主题，打字页开着的时候也跟着变（同一 origin 的 storage 事件） */
+/* 外壳在同一 origin 改 localStorage →  iframe 立刻收 storage 事件；
+   外壳另外也会主动 postMessage 一次，双保险（切主题时不用来回刷新）。 */
 window.addEventListener('storage', function (e) {
-  if (!e || !e.key || e.key === MODE_KEY) applyTheme();
+  if (!e || !e.key || e.key === MODE_KEY || e.key === THEME_KEY) applyTheme();
+});
+window.addEventListener('message', function (e) {
+  if (e && e.data && e.data.type === 'wb-theme') {
+    // 学生端外壳只推类型不带参数 → 回到 wb-smode/wb-stheme；
+    // 教师端外壳带 mode/hue → 直接用教师这套（课堂展示跟教师机一致）。
+    EXT_THEME = (typeof e.data.mode === 'string') ? e.data : null;
+    applyTheme();
+  }
 });
 
 function esc(s) {
@@ -1622,7 +1839,7 @@ function boot() {
   if (qs.get('embed') === '1') document.body.classList.add('embed');
   /* ?view=ranch|map|lb：直接落到某个页签（2026-11-17，验收截图用；学生正常入口不受影响） */
   var _qv = (qs.get('view') || '').toLowerCase();
-  if (_qv === 'ranch' || _qv === 'lb') S.view = _qv;
+  if (_qv === 'ranch' || _qv === 'lb' || _qv === 'studio') S.view = _qv;
   api('/api/v2/typing/config').then(function (cfg) {
     if (cfg && cfg.ok) S.config = { enabled: !!cfg.enabled, grades: cfg.grades || [] };
     return api('/api/v2/typing/me');
@@ -1644,8 +1861,12 @@ function boot() {
       if (me && me.role === 'teacher') {
         /* 教师练习模式（2026-11-03）：老师用同一张地图练手，
            成绩默认只存本机；想跟学生比，可在页顶开关「计入班级排行榜」。
-           开关与班级选择记在本机，下次打开保持。 */
+           开关与班级选择记在本机，下次打开保持。
+           2.0.68：不再发 10000 积分。老师默认有 2 次学生作品蛋免费孵化
+           （额度由教师端设置下发），演示兑换不再靠虚构积分撑场面。 */
         S.role = 'teacher';
+        S.progress.pts = 0;
+        demoSave();
         try {
           var tlb = JSON.parse(localStorage.getItem('wb-typing-teacher-lb') || '{}');
           S.teacherLb = { on: !!tlb.on, class_id: tlb.class_id || '' };
@@ -1679,7 +1900,7 @@ function boot() {
       S.map.stage = rp.stage;
       S.map.chapter = rp.chapter;
     }
-    if (sc && ['map', 'lb', 'ranch'].indexOf(sc) >= 0) S.view = sc;
+    if (sc && ['map', 'lb', 'ranch', 'studio'].indexOf(sc) >= 0) S.view = sc;
     if (qs.get('screen') === 'play' || qs.get('play') === '1') {
       var st = parseInt(qs.get('stage') || '1', 10);
       var ch = parseInt(qs.get('chapter') || '1', 10);
@@ -1688,6 +1909,14 @@ function boot() {
       return;
     }
     render();
+    /* 学生创意馆：拉作品清单（含教师改的设计者信息），拿到后应用主题皮肤。
+       未登录 / 演示模式接口返回 401，忽略即可，前端用内置兜底清单展示。 */
+    api('/api/v2/studio/works').then(function (d) {
+      if (d && d.ok && window.StudioUI) {
+        StudioUI.onGotStudio(d);
+        if (S.view === 'studio') render();
+      }
+    }).catch(function () {});
     /* ?egg=<篇章号>：验收截图入口（只在未登录的演示模式生效；学生真实会话与
        教师练习模式都忽略它）。走的是正式链路：EGG_PEND → eggFlushPending → eggGetModal。 */
     if (S.demo && S.role !== 'teacher') {
@@ -1705,6 +1934,176 @@ function boot() {
 function demoSave() {
   if (!S.demo) return;
   try { localStorage.setItem('wb-typing-demo', JSON.stringify(S.progress)); } catch (e) {}
+}
+
+/* ---------------- 宠物设为账号头像（2.0.68 / 2.0.70 带场景特效） ----------------
+   与像素画头像共用 /api/v2/avatar：学生写 students.avatar，教师写账号 avatar，
+   随 config/tables / account 备份一起导入导出，换设备登录 still 在。
+   2.0.70：头像 = 牧场当前背景（渐变 + 光影层）+ 出战特效 + 宠物本体，
+   静态复刻 CSS 动画的一帧。牧场里长什么样，头像就长什么样。 */
+function avatarGradient(g, css, S) {
+  /* 把 TD.BACKGROUNDS 的 CSS 渐变翻译成 canvas 渐变。
+     只处理 linear-gradient / radial-gradient 的色标，够这 6 套背景用。 */
+  g.clearRect(0, 0, S, S);
+  var m = /^\s*(linear|radial)-gradient\((.*)\)\s*$/.exec(css || '');
+  if (!m) { g.fillStyle = '#f6ead9'; g.fillRect(0, 0, S, S); return; }
+  var body = m[2], parts = [], depth = 0, cur = '';
+  for (var i = 0; i < body.length; i++) {
+    var c = body.charAt(i);
+    if (c === '(') depth++;
+    else if (c === ')') depth--;
+    if (c === ',' && depth === 0) { parts.push(cur.trim()); cur = ''; }
+    else cur += c;
+  }
+  if (cur.trim()) parts.push(cur.trim());
+  var stops = [], head = '';
+  parts.forEach(function (p) {
+    var sm = /^(.*?)\s+(\d+(?:\.\d+)?)%$/.exec(p);
+    if (sm && /^(#|rgba?\(|transparent)/i.test(sm[1].trim()))
+      stops.push([parseFloat(sm[2]) / 100, sm[1].trim()]);
+    else if (!head) head = p;
+  });
+  if (!stops.length) { g.fillStyle = '#f6ead9'; g.fillRect(0, 0, S, S); return; }
+  var grad;
+  if (m[1] === 'radial') {
+    var at = /at\s+([\d.]+)%\s+([\d.]+)%/i.exec(head);
+    var cx = at ? parseFloat(at[1]) / 100 * S : S / 2;
+    var cy = at ? parseFloat(at[2]) / 100 * S : S / 2;
+    grad = g.createRadialGradient(cx, cy, 0, cx, cy, S * 1.05);
+  } else {
+    var deg = parseFloat(head) || 180;
+    var rad = deg * Math.PI / 180;
+    var dx = Math.sin(rad), dy = -Math.cos(rad);
+    grad = g.createLinearGradient(S / 2 - dx * S / 2, S / 2 - dy * S / 2,
+                                  S / 2 + dx * S / 2, S / 2 + dy * S / 2);
+  }
+  stops.forEach(function (s) { try { grad.addColorStop(s[0], s[1]); } catch (e) {} });
+  g.fillStyle = grad; g.fillRect(0, 0, S, S);
+}
+function avatarGlow(g, key, S) {
+  /* 静态复刻 .bglive 的一帧：光球 / 云 / 星 / 极光，按 mini 版缩放。 */
+  var rnd = function (n) { return ((n * 37) % 86 + 7) / 100 * S; };
+  var dot = function (x, y, r, fill) {
+    var rg = g.createRadialGradient(x, y, 0, x, y, r);
+    rg.addColorStop(0, fill); rg.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = rg; g.beginPath(); g.arc(x, y, r, 0, 6.284); g.fill();
+  };
+  g.save();
+  if (key === 'warm') {
+    for (var i = 0; i < 4; i++)
+      dot(rnd(i + 3), rnd(i + 11), S * 0.11, 'rgba(255,214,150,.75)');
+  } else if (key === 'meadow') {
+    for (var i2 = 0; i2 < 3; i2++) {
+      g.fillStyle = 'rgba(255,255,255,.6)'; g.beginPath();
+      g.ellipse(rnd(i2 + 5), rnd(i2 + 9), S * 0.17, S * 0.05, 0, 0, 6.284); g.fill();
+    }
+  } else if (key === 'beach') {
+    for (var i3 = 0; i3 < 5; i3++) dot(rnd(i3 + 2), rnd(i3 + 7), S * 0.045, 'rgba(255,246,185,.9)');
+  } else if (key === 'night' || key === 'space') {
+    for (var i4 = 0; i4 < (key === 'space' ? 12 : 8); i4++) {
+      g.fillStyle = 'rgba(255,255,255,' + (0.55 + (i4 % 3) * 0.15) + ')';
+      g.beginPath(); g.arc(rnd(i4 + 1), rnd(i4 + 6), S * 0.007, 0, 6.284); g.fill();
+    }
+  } else if (key === 'candy') {
+    var cols = ['#FF8FC7', '#FFE08A', '#8FE3FF', '#C6A5FF'];
+    g.lineWidth = S * 0.035;
+    for (var i5 = 0; i5 < cols.length; i5++) {
+      g.strokeStyle = cols[i5]; g.beginPath();
+      g.arc(S / 2, S / 2, S * 0.36, i5 * 1.57 + 0.1, i5 * 1.57 + 1.3); g.stroke();
+    }
+  }
+  g.restore();
+}
+function avatarFx(g, fx, S) {
+  /* 静态复刻出战特效的一帧：星 / 泡 / 心 / 雪 / 极光。 */
+  if (!fx) return;
+  g.save();
+  if (fx === 'aurora') {
+    var ag = g.createLinearGradient(0, 0, S, S);
+    ag.addColorStop(0, 'rgba(99,230,190,.5)'); ag.addColorStop(.5, 'rgba(127,167,255,.45)');
+    ag.addColorStop(1, 'rgba(183,140,255,.5)');
+    g.fillStyle = ag; g.fillRect(0, 0, S, S);
+  } else {
+    var n = fx === 'bubbles' ? 4 : (fx === 'snow' ? 5 : (fx === 'hearts' ? 3 : 5));
+    var marks = { sparkle: '✦', bubbles: '', hearts: '♥', snow: '❄' };
+    g.font = Math.round(S * (fx === 'snow' ? 0.045 : 0.06)) + 'px sans-serif';
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    for (var i = 0; i < n; i++) {
+      var x = (10 + i * 19) / 100 * S, y = (14 + ((i * 29) % 62)) / 100 * S;
+      if (fx === 'bubbles') {
+        g.strokeStyle = 'rgba(150,205,255,.8)'; g.lineWidth = 1.5;
+        var br = S * 0.04;
+        g.beginPath(); g.arc(x, y, br, 0, 6.284); g.stroke();
+      } else {
+        g.fillStyle = fx === 'hearts' ? 'rgba(255,90,140,.9)'
+          : (fx === 'sparkle' ? 'rgba(255,226,120,.95)' : 'rgba(255,255,255,.9)');
+        g.fillText(marks[fx] || '✦', x, y);
+      }
+    }
+  }
+  g.restore();
+}
+function petAvatarPng(kind, id) {
+  return new Promise(function (resolve, reject) {
+    var cv = document.createElement('canvas');
+    cv.width = cv.height = 256;
+    var g = cv.getContext('2d');
+    /* 牧场当前场景：背景渐变 + 光影 + 特效 + 宠物本体 */
+    var ranch = S.ranch || {};
+    var bg = (typeof TD !== 'undefined' && TD.bgById) ? TD.bgById(ranch.bg || '') : null;
+    avatarGradient(g, bg && bg.css, 256);
+    avatarGlow(g, ranch.bg || 'warm', 256);
+    avatarFx(g, ranch.fx, 256);
+    var img = new Image();
+    img.onload = function () {
+      try {
+        var iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
+        var scale = Math.min(224 / iw, 224 / ih);
+        var w = Math.round(iw * scale), h = Math.round(ih * scale);
+        g.drawImage(img, Math.round((256 - w) / 2), Math.round((256 - h) / 2 + 6), w, h);
+        resolve(cv.toDataURL('image/png'));
+      } catch (e) { reject(e); }
+    };
+    img.onerror = function () { reject(new Error('图片加载失败')); };
+    if (kind === 'studio') {
+      var w = (typeof studioWorkById === 'function') ? studioWorkById(id) : null;
+      if (!w || !w.img) { reject(new Error('没有这只作品宠物')); return; }
+      img.src = w.img;
+    } else {
+      var svg = TD.petSvg(id, [], {});
+      if (!svg) { reject(new Error('没有这只宠物')); return; }
+      /* SVG 必须显式给宽高，否则浏览器当 data:image 加载时没有固有尺寸 */
+      svg = svg.replace('<svg ', '<svg width="256" height="256" ');
+      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    }
+  });
+}
+function setPetAvatar(kind, id, name) {
+  /* 教师课堂展示是**教师登录态下的预览**：S.demo 只是成绩不写学生档案，
+     会话仍是教师，/api/v2/avatar 会写当前教师账号头像，不该拦。
+     只有真正未登录的本地演示才提示登录。 */
+  if (S.demo && S.role !== 'teacher' && (!S.me || String(S.me.id) === 'demo')) {
+    uiToast('请先登录账号，再把宠物设为头像', 'warn');
+    return;
+  }
+  uiConfirm({ title: '设为账号头像',
+    message: '把「' + (name || '这只宠物') + '」设为你的账号头像？\n头像会保存到服务器，跟着数据一起导入导出。',
+    confirmText: '设为头像', cancelText: '再想想' }).then(function (ok) {
+    if (!ok) return;
+    petAvatarPng(kind, id).then(function (png) {
+      return api('/api/v2/avatar', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ png: png })
+      });
+    }).then(function (j) {
+      if (!j || !j.ok) { uiToast((j && j.msg) || '保存失败', 'warn'); return; }
+      try {
+        if (window.parent && window.parent !== window)
+          window.parent.postMessage({ type: 'wb-avatar-changed', avatar: j.avatar || '' }, '*');
+      } catch (e) {}
+      uiToast('已把「' + (name || '宠物') + '」设为头像', 'ok');
+    }).catch(function () { uiToast('头像保存失败，请重试', 'warn'); });
+  });
 }
 
 /* ---------------- 解锁规则 ---------------- */
@@ -1760,17 +2159,61 @@ function resumePos() {
 }
 
 /* 从服务端 equip 恢复牧场本地状态（宠物 / 装扮 / 背景 / 特效，2026-11-05）：
-   旧档案 equip 里没有 bg/fx 字段，这里统一兜底成 ''。 */
+   旧档案 equip 里没有 bg/fx 字段，这里统一兜底成 ''。
+   2.0.58：补上 studio_pet / studio_theme —— 以前这两个字段被丢掉，
+   学生作品宠物明明出战成功，牧场和顶栏却永远是空的，看着就是「点了没反应」。 */
 function ranchFromEquip(equip) {
   var e = equip || {};
-  return { pet: e.pet || '', decos: e.decos || [], bg: e.bg || '', fx: e.fx || '' };
+  return { pet: e.pet || '', decos: e.decos || [], bg: e.bg || '', fx: e.fx || '',
+           studio_pet: e.studio_pet || '', studio_theme: e.studio_theme || '' };
+}
+/* 顶栏 / 练习条的系统宠物取默认兜底：老档案可能 pet 为空但明明有宠物，
+   作品宠物收回后也应自动显示第一只已拥有的宠物，而不是空爪印。 */
+function shownPetId() {
+  if (S.ranch && S.ranch.pet) return S.ranch.pet;
+  var ps = (S.progress && S.progress.pets) || [];
+  return ps.length ? ps[0] : '';
+}
+
+/* 学生作品宠物：S.studio 里按 id 取一只（没加载到就返回 null） */
+function studioWorkById(id) {
+  var ws = (S.studio && S.studio.works) || [];
+  for (var i = 0; i < ws.length; i++) if (ws[i].id === id) return ws[i];
+  return null;
+}
+/* 作品宠物的图层组：底图 + 翅膀/尾巴等局部动作 + 眨眼层，交给 studio-ui 统一生成 */
+function studioPetMedia(w) {
+  if (!w) return '';
+  if (window.StudioUI && StudioUI.petMedia) return StudioUI.petMedia(w);
+  return '<img class="sd-base" src="' + esc(w.img) + '" alt="' + esc(w.name) + '">';
+}
+/* 顶栏小像 / 牧场舞台共用：套一层 .sd-stack 才有身体动作 */
+function studioPetStack(w, cls) {
+  if (!w) return '';
+  return '<span class="' + (cls || '') + ' sd-stack ' + (w.motion || '') + '" ' +
+    'style="animation-duration:' + (w.dur || 3.4) + 's">' + studioPetMedia(w) + '</span>';
+}
+/* 2.0.65：作品宠物小像也要带牧场背景与出战特效 —— 以前这里只塞一张 PNG，
+   系统宠物有背景有粒子，同学设计的宠物却「裸奔」，看着就像作品不能用装扮。
+   bgId/fxId 可以来自自己的 S.ranch，也可以来自榜单那一行（别人的出战配置）。 */
+function studioPetTile(w, cls, bgId, fxId, title) {
+  if (!w) return '';
+  var bg = bgId ? TD.bgById(bgId) : null;
+  var st = (bg && bg.id) ? ' style="background:' + bg.css + '"' : '';
+  return '<span class="' + (cls || 'pet-mini') + ' pet-tile sd-mini" title="' +
+    esc(title || w.name) + '"' + st + '>' +
+    (bg ? TD.bgLive(bg.id, true) : '') + (fxId ? TD.fxMini(fxId) : '') +
+    studioPetStack(w, 'sd-mini-stack') + '</span>';
 }
 
 /** 顶栏头像的悬停说明：一眼看清「这是哪个伙伴 + 什么背景 + 什么特效」 */
 function petTitleText() {
   var bits = [];
-  var p = S.ranch.pet ? TD.petById(S.ranch.pet) : null;
-  bits.push(p ? '出战宠物：' + p.name : '还没有出战宠物');
+  var sw = S.ranch.studio_pet ? studioWorkById(S.ranch.studio_pet) : null;
+  var pid = shownPetId();
+  var p = pid ? TD.petById(pid) : null;
+  bits.push(sw ? '出战宠物：' + sw.name
+               : (p ? '出战宠物：' + p.name : '还没有出战宠物'));
   var bg = S.ranch.bg ? TD.bgById(S.ranch.bg) : null;
   if (bg && bg.id) bits.push('背景：' + bg.name);
   var fx = S.ranch.fx ? TD.effectById(S.ranch.fx) : null;
@@ -1804,6 +2247,10 @@ function refreshPts() {
 
 /* ---------------- 渲染框架 ---------------- */
 function render() {
+  /* 顶栏 / 牧场 / 榜单的「出战位」必须只看一份数据。以前创意馆点出战
+     改了 S.progress.equip，却可能留着旧的 S.ranch，顶栏小像就不跟着换。
+     每次渲染前从权威 equip 重建，避免任何调用路径漏同步。 */
+  if (S.progress && S.progress.equip) S.ranch = ranchFromEquip(S.progress.equip);
   /* 原位重绘（2026-11-17 牛哥反馈）：点一个装扮 / 换宠物走的都是整页 render()，
      重建后 #view 和牧场左右两栏的 scrollTop 全部归零 —— 衣柜滚到一半点个眼镜
      就跳回装饰最上面。同一视图内重绘先记位置，渲染完按像素还原；
@@ -1817,10 +2264,14 @@ function render() {
   } : null;
   S.__lastView = S.view;
   var st = TD.titleFor(S.progress.stars || 0);
-  /* 顶栏头像跟牧场同源：背景 + 特效 + 装扮一起带出来（2026-11-05） */
-  var petMini = TD.petTile({ pet: S.ranch.pet, decos: S.ranch.decos,
-                             bg: S.ranch.bg, fx: S.ranch.fx, cls: 'pet-mini',
-                             title: petTitleText() });
+  /* 顶栏头像跟牧场同源：背景 + 特效 + 装扮一起带出来（2026-11-05）
+     2.0.58：出战的是学生作品宠物时，头像换 PNG 小像（自带动作）。 */
+  var swMini = S.ranch.studio_pet ? studioWorkById(S.ranch.studio_pet) : null;
+  var petMini = swMini
+    ? studioPetTile(swMini, 'pet-mini', S.ranch.bg, S.ranch.fx, petTitleText())
+    : TD.petTile({ pet: shownPetId(), decos: S.ranch.decos,
+                   bg: S.ranch.bg, fx: S.ranch.fx, cls: 'pet-mini',
+                   title: petTitleText() });
   var enrolled = !(S.role === 'student' && !S.config.enabled);
   var html =
     '<div class="stick-top">' +
@@ -1833,8 +2284,6 @@ function render() {
           (S.progress.eggs ? '<span class="chip b">🥚 ×' + S.progress.eggs + '</span>' : '') +
           /* 头像 title：悬停能看到当前背景/特效名，老师问「你那个光环哪来的」好回答 */
           petMini +
-          '<button class="mode-btn" id="modeBtn" type="button" title="切换浅色 / 夜间">'
-            + (themeIsDark() ? '☀' : '🌙') + '</button>' +
         '</div>' +
       '</div>' +
     '</div>' +
@@ -1870,6 +2319,7 @@ function render() {
       (enrolled
         ? '<div class="tabs">' +
             tabBtn('map', '🗺 冒险地图') + tabBtn('lb', '🏆 排行榜') + tabBtn('ranch', '🐾 宠物牧场') +
+            tabBtn('studio', '🎨 创意宠物') +
           '</div>'
         : '') +
     (enrolled ? '' :
@@ -1886,10 +2336,13 @@ function render() {
   if (!v) return;
   /* 牧场用独立滚动容器（2026-11-05）：内容比一屏长得多，跟着整页滚会把
      左边宠物详情顶出屏幕。先定 class 再塞内容，最后按当前视口算高度。 */
-  var scrollable = (S.view === 'ranch');
+  var scrollable = (S.view === 'ranch' || S.view === 'studio');
   v.classList.toggle('view-scroll', scrollable);
   if (S.view === 'map') v.innerHTML = viewMap();
   else if (S.view === 'lb') { v.innerHTML = viewLb(); loadLb(); }
+  else if (S.view === 'studio') {
+    v.innerHTML = (window.StudioUI && StudioUI.view) ? StudioUI.view() : '<p>创意馆加载中…</p>';
+  }
   else v.innerHTML = viewRanch();
   bindView();
   if (scrollable) {
@@ -1940,11 +2393,15 @@ function tabBtn(id, name) {
 }
 function bindView() {
   document.querySelectorAll('[data-tab]').forEach(function (b) {
-    b.onclick = function () { S.view = b.getAttribute('data-tab'); render(); };
+    b.onclick = function () {
+      S.view = b.getAttribute('data-tab');
+      if (S.view === 'studio' && window.StudioUI && StudioUI.reload) StudioUI.reload();
+      render();
+    };
   });
-  /* 顶栏主题钮：切完只改 CSS 变量，不需要重绘整个页面 */
-  var mb = document.getElementById('modeBtn');
-  if (mb) mb.onclick = toggleTheme;
+  /* 主题钮已移除：明暗与护眼皮肤由学生端外壳统一控制，这里只监听变化。 */
+  /* 学生创意馆：兑换 / 出战 / 换肤按钮（仅在该视图下存在） */
+  if (S.view === 'studio' && window.StudioUI && StudioUI.bind) StudioUI.bind();
   document.querySelectorAll('[data-lv]').forEach(function (b) {
     b.onclick = function () {
       var p = b.getAttribute('data-lv').split(',');
@@ -2839,7 +3296,7 @@ function paintArt() {
 }
 function renderPlay() {
   var P = S.play, L = P.L, stage = TD.stageById(L.stage) || TD.STAGES[0];
-  var petHtml = TD.petTile({ pet: S.ranch.pet, decos: S.ranch.decos,
+  var petHtml = TD.petTile({ pet: shownPetId(), decos: S.ranch.decos,
                              bg: S.ranch.bg, fx: S.ranch.fx, cls: 'pet-mini' });
   var body = '';
   if (L.type === 'keys') {
@@ -3451,7 +3908,7 @@ function bindPlay() {
               连续多字上屏时，错字只保留最后一个显示（前面的被顶掉）。 */
       var delta = v.slice(pre);
       if (P.errChar && delta.charAt(0) === P.errChar) delta = delta.slice(1);
-      if (!delta.length) { P.errChar = null; return; }   /* 旧错字被退格删掉 */
+      if (!delta.length) { P.errChar = null; paintText(false); paintEcho(); return; }   /* 旧错字被退格删掉：同步重画，撤掉回显层红色错字 */
       var k = 0, err = P.errChar;
       while (k < delta.length) {
         var c = delta.charAt(k);
@@ -3867,7 +4324,7 @@ function loadLb() {
       return { name: n, value: v, pet: pets[i], decos: i === 0 ? ['crown'] : (i === 2 ? ['bow'] : []), me: n === S.me.name };
     });
     rows.push({ name: S.me.name, value: scope === 'speed' ? 33.6 : (scope === 'week' ? S.progress.week_stars || 0 : S.progress.stars || 0),
-      pet: S.ranch.pet, decos: S.ranch.decos, bg: S.ranch.bg, fx: S.ranch.fx, me: true });
+      pet: shownPetId(), decos: S.ranch.decos, bg: S.ranch.bg, fx: S.ranch.fx, me: true });
     rows.sort(function (a, b) { return b.value - a.value; });
     S.lb.rows = rows; S.lb.class_name = S.me.class_name;
     paintLb();
@@ -3906,8 +4363,12 @@ function paintLb() {
   box.innerHTML = S.lb.rows.map(function (r, i) {
     var rankCls = i === 0 ? 'r1' : i === 1 ? 'r2' : i === 2 ? 'r3' : '';
     var medal = i < 3 ? ['🥇', '🥈', '🥉'][i] : (i + 1);
-    /* 榜上每一行的小像都带背景与特效 —— 和牧场里看到的是同一副样子（2026-11-05） */
-    var tile = TD.petTile({ pet: r.pet, decos: r.decos, bg: r.bg, fx: r.fx, cls: 'lb-pet' });
+    /* 榜上每一行的小像都带背景与特效 —— 和牧场里看到的是同一副样子（2026-11-05）
+       2.0.65：作品宠物出战的那一行也走作品小像，否则榜上清一色 🐾 爪印。 */
+    var sw = r.studio_pet && String(r.studio_pet).indexOf('sd_') === 0
+      ? studioWorkById(r.studio_pet) : null;
+    var tile = sw ? studioPetTile(sw, 'lb-pet', r.bg, r.fx, r.name)
+      : TD.petTile({ pet: r.pet, decos: r.decos, bg: r.bg, fx: r.fx, cls: 'lb-pet' });
     return '<div class="lb-row' + (r.me ? ' me' : '') + '">' +
       '<span class="lb-rank ' + rankCls + '">' + medal + '</span>' +
       tile +
@@ -4206,12 +4667,47 @@ function eggBuyRow() {
     '</div>';
 }
 
+/* 学生作品宠物的「出身说明」（2.0.59）：原创标识 + 设计者。
+   牛哥要求：作品宠物不穿牧场默认装扮（保持自带造型），但要让看的人一眼知道
+   这只不是系统宠物，而是同学画的，并且能看到是谁画的。 */
+function sdOriginBox(w, size) {
+  var d = w.designer || {};
+  var maker = String(d.name || '').trim();
+  var cls = String(d.cls || '').trim();
+  var school = String(d.school || '').trim();
+  var intro = String(d.intro || '').trim();
+  /* 2026-11-21 牛哥定：牧场里显示的是「宠物自己的名字」，不是设计者署名。
+     出战的作品宠物就跟系统宠物一样，一眼看到它叫什么；设计者只作次要补充。 */
+  var petName = String(w.name || '').trim() || '未命名作品';
+  var initial = petName.slice(0, 1);
+  return '<div class="sd-origin' + (size === 'big' ? ' big' : '') + '">' +
+    '<div class="sd-origin-head">' +
+      '<span class="sd-origin-badge">✦ 学生作品</span>' +
+      (w.series ? '<span class="sd-origin-series">' + esc(w.series) + '</span>' : '') +
+    '</div>' +
+    '<div class="sd-maker">' +
+      '<span class="sd-maker-face">' + esc(initial) + '</span>' +
+      '<span class="sd-maker-txt">' +
+        '<b>' + esc(petName) + '</b>' +
+        '<small>' + (maker ? esc(maker) + ' 设计' +
+                        ((school || cls) ? ' · ' + [school, cls].filter(Boolean).map(esc).join(' · ') : '')
+                           : '创意馆投稿作品') + '</small>' +
+      '</span>' +
+    '</div>' +
+    (intro ? '<div class="sd-maker-quote">「' + esc(intro) + '」</div>' : '') +
+    '<div class="sd-origin-tip">自带动作与光效，不穿戴牧场装扮</div>' +
+  '</div>';
+}
+
 function viewRanch() {
   var pr = S.progress;
-  var curPet = S.ranch.pet || (pr.pets && pr.pets[0]) || '';
+  /* 出战位二选一：学生作品宠物（PNG）或系统宠物（SVG） */
+  var curStudio = S.ranch.studio_pet ? studioWorkById(S.ranch.studio_pet) : null;
+  var curPet = S.ranch.pet || (curStudio ? '' : ((pr.pets && pr.pets[0]) || ''));
   var curDecos = S.ranch.decos || [];
   var pet = curPet ? TD.petById(curPet) : null;
   var owned = pr.pets || [];
+  var sOwned = pr.studio_pets || [];
   /* 牧场里那颗蛋按「最近拿到的那颗」画材质（2026-11-19）：
      已经孵掉的旧蛋不追述品种，蛋没了就回到默认晨光蛋。 */
   var ek = eggLatest();
@@ -4222,22 +4718,29 @@ function viewRanch() {
     '<div class="ranch-side">' +
       '<h3>🏪 我的牧场</h3>' +
       '<div class="stage-box' + (S.petSwap ? ' swapin' : '') + '" id="stageBox" ' +
+        'data-bg="' + esc(S.ranch.bg || '') + '" ' +
         (bgCss ? 'style="background:' + bgCss + '" ' : '') +
         'title="' + (owned.length > 1 ? '点一下换下一只伙伴' : '再去赢一颗宠物蛋，就能解锁更多伙伴') + '">' +
+        /* 2.0.65：底色 + 会动的光影分两层 —— 动态层对系统宠物和作品宠物一视同仁 */
+        TD.bgLive(S.ranch.bg, false) +
         fxLayer(S.ranch.fx) +
         '<span class="stage-glow"></span>' +
         '<div class="stage-pet">' +
-          ((pet && TD.petSvg(pet, curDecos, { act: 1 })) || '<div class="stage-empty">🐾</div>') +
+          (curStudio
+            ? '<span class="stage-studio">' + studioPetStack(curStudio, 'sd-stage-stack') + '</span>'
+            : ((pet && TD.petSvg(pet, curDecos, { act: 1 })) || '<div class="stage-empty">🐾</div>')) +
         '</div>' +
-        (owned.length > 1
+        ((owned.length + sOwned.length) > 1
           ? '<button class="stage-nav prev" data-petnav="-1" aria-label="上一只宠物">‹</button>' +
             '<button class="stage-nav next" data-petnav="1" aria-label="下一只宠物">›</button>'
           : '') +
       '</div>' +
       /* 2026-11-07：以前标题优先取 TD.PET_DEFAULT_NAME（恒为「小豆丁」），
          所以换来换去所有宠物都叫小豆丁。改成宠物自己的品种名优先，默认名只兜底。 */
-      '<h3>' + (pet ? esc(pet.name || TD.PET_DEFAULT_NAME) : '还没有出战宠物') + '</h3>' +
-      '<div class="mood">' + (pet ? esc(pet.mood) : '先去闯一关 BOSS，赢一颗宠物蛋吧！') + '</div>' +
+      '<h3>' + (curStudio ? esc(curStudio.name)
+                          : (pet ? esc(pet.name || TD.PET_DEFAULT_NAME) : '还没有出战宠物')) + '</h3>' +
+      '<div class="mood">' + (curStudio ? esc(curStudio.mood || '')
+                                       : (pet ? esc(pet.mood) : '先去闯一关 BOSS，赢一颗宠物蛋吧！')) + '</div>' +
       '<div class="title-bar"><span class="title-chip">' + esc(TD.titleFor(pr.stars || 0).name) + '</span>' +
         '<span class="next-title">下一称号：' +
         (TD.nextTitle(pr.stars || 0) ? TD.nextTitle(pr.stars || 0).name + '（' + TD.nextTitle(pr.stars || 0).need + ' 星）' : '已到顶！') +
@@ -4245,7 +4748,9 @@ function viewRanch() {
       /* 装扮是"穿在宠物身上"的，没有宠物就没有可打扮的对象。
          2026-11-02 修：以前这里无条件显示「已装备」，学生明明还没有伙伴，
          却看到自己戴着墨镜和皇冠 —— 逻辑对不上，孩子会以为点错了。 */
-      (pet
+      (curStudio
+        ? sdOriginBox(curStudio, 'big')
+        : (pet
         ? '<div class="equip-line">👗 已装备　' +
             (curDecos.length
               ? curDecos.map(function (d) {
@@ -4256,7 +4761,7 @@ function viewRanch() {
           '</div>' +
           '<div class="equip-hint">每个部位只能穿一件；「整套」会盖住上衣和下衣。</div>'
         : '<div class="equip-empty">🐾 还没有伙伴可打扮' +
-          '<span>先去 BOSS 关赢一颗宠物蛋，孵出小伙伴就能试衣服了</span></div>') +
+          '<span>先去 BOSS 关赢一颗宠物蛋，孵出小伙伴就能试衣服了</span></div>')) +
       '<div class="equip-line" style="margin-top:8px">🖼 ' + esc(TD.bgById(S.ranch.bg).name) +
         '　·　✨ ' + ((S.ranch.fx && TD.effectById(S.ranch.fx)) ? TD.effectById(S.ranch.fx).name : '无特效') + '</div>' +
       (pr.eggs > 0
@@ -4275,16 +4780,38 @@ function viewRanch() {
     var owned = (pr.pets || []).indexOf(p.id) >= 0;
     var on = p.id === curPet;
     if (owned) {
-      return '<button class="pet-card' + (on ? ' on' : '') + '" data-pet="' + p.id + '">' +
+      return '<div class="pet-card' + (on ? ' on' : '') + '" data-pet="' + p.id +
+        '" role="button" tabindex="0">' +
         (on ? '<span class="eq">出战</span>' : '') +
+        '<button type="button" class="pet-av" data-petav="' + p.id + '" ' +
+          'title="把「' + esc(p.name) + '」设为账号头像">🖼 头像</button>' +
         '<span class="pet-stage">' + TD.petSvg(p, on ? curDecos : []) + '</span>' +
-        '<b>' + esc(p.name) + '</b></button>';
+        '<b>' + esc(p.name) + '</b></div>';
     }
     return '<div class="pet-card lock"><div class="ph">❓</div><b>???<div class="lock-tip">孵蛋解锁</div></b></div>';
   }).join('') + '</div>' +
     '<div class="ranch-tip">💡 点击伙伴即可切换出战；点牧场大图也能轮换，装扮会跟着它出现在练习页和排行榜上。</div>';
+  /* 学生作品宠物：单独一排，点一下换成它出战（PNG + 专属动作） */
+  var studioGrid = sOwned.length
+    ? '<div class="pet-grid sd-pet-grid">' + sOwned.map(function (id) {
+        var w = studioWorkById(id);
+        if (!w) return '';
+        var on = S.ranch.studio_pet === id;
+        return '<div class="pet-card studio' + (on ? ' on' : '') + '" data-spet="' + esc(id) +
+          '" role="button" tabindex="0">' +
+          (on ? '<span class="eq">出战</span>' : '') +
+          '<span class="sd-origin-pin" title="学生原创作品">✦ 原创</span>' +
+          '<button type="button" class="pet-av" data-spetav="' + esc(id) + '" ' +
+            'title="把「' + esc(w.name) + '」设为账号头像">🖼 头像</button>' +
+          '<span class="pet-stage">' + studioPetStack(w, 'sd-card-stack') + '</span>' +
+          '<b>' + esc(w.name) + '</b>' +
+          '<small class="sd-card-maker">' + esc(w.series || (String((w.designer || {}).name || ''))) + '</small>' +
+          '</div>';
+      }).join('') + '</div>' +
+      '<div class="ranch-tip">🎨 学生作品宠物自带动作与光效，不穿戴牧场装扮；点一下就能换它出战。</div>'
+    : '';
   /* 右栏（伙伴网格 + 衣柜 + 三个商店）：与左栏各自独立滚动，见 .ranch-main 样式 */
-  return '<div class="ranch-grid">' + side + '<div class="ranch-main">' + grid +
+  return '<div class="ranch-grid">' + side + '<div class="ranch-main">' + studioGrid + grid +
     (pet ? wardrobe() : '') + itemShopBox() + bgShopBox() + fxShopBox() + '</div></div>';
 }
 
@@ -4370,7 +4897,7 @@ function bgShopBox() {
       var has = owned.indexOf(b.id) >= 0;
       var on = b.id === cur;
       return '<div class="is-card' + (on ? ' on' : '') + '">' +
-        '<div class="bg-prev" style="background:' + b.css + '"></div>' +
+        '<div class="bg-prev" style="background:' + b.css + '">' + TD.bgLive(b.id, true) + '</div>' +
         '<div class="ic-top"><b>' + esc(b.name) + '</b></div>' +
         (has
           ? '<button class="btn sm" data-bgsel="' + esc(b.id) + '"' + (on ? ' disabled' : '') + '>' +
@@ -4528,9 +5055,42 @@ function bindRanch() {
   document.querySelectorAll('[data-pet]').forEach(function (b) {
     b.onclick = function () {
       S.ranch.pet = b.getAttribute('data-pet');
+      S.ranch.studio_pet = '';          /* 出战位二选一：换系统宠物就收起作品宠物 */
       S.petSwap = 1;
       saveEquip();
       render();
+    };
+    /* 2.0.68：卡片改成 div 后补回键盘操作（原来 button 天生支持） */
+    b.onkeydown = function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); b.click(); }
+    };
+  });
+  /* 学生作品宠物：点卡片直接出战（和后端 equip 的 studio_pet 字段对应） */
+  document.querySelectorAll('[data-spet]').forEach(function (b) {
+    b.onclick = function () {
+      S.ranch.studio_pet = b.getAttribute('data-spet');
+      S.ranch.pet = '';
+      S.petSwap = 1;
+      saveEquip();
+      render();
+    };
+    b.onkeydown = function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); b.click(); }
+    };
+  });
+  /* 2.0.68：两只宠物卡都能一键设账号头像，落服务端、随数据导入导出 */
+  document.querySelectorAll('[data-petav]').forEach(function (b) {
+    b.onclick = function (ev) {
+      ev.stopPropagation();
+      var id = b.getAttribute('data-petav'), p = TD.petById(id);
+      setPetAvatar('system', id, p && p.name);
+    };
+  });
+  document.querySelectorAll('[data-spetav]').forEach(function (b) {
+    b.onclick = function (ev) {
+      ev.stopPropagation();
+      var id = b.getAttribute('data-spetav'), w = studioWorkById(id);
+      setPetAvatar('studio', id, w && w.name);
     };
   });
   document.querySelectorAll('[data-deco]').forEach(function (b) {
@@ -4668,9 +5228,11 @@ function bindRanch() {
   if (ebb) ebb.onclick = function () { eggBuy(ebb); };
 }
 function saveEquip() {
+  var sp = S.ranch.studio_pet || '';
   if (S.demo) {
     S.progress.equip = { pet: S.ranch.pet, decos: S.ranch.decos.slice(),
-                         bg: S.ranch.bg || '', fx: S.ranch.fx || '' };
+                         bg: S.ranch.bg || '', fx: S.ranch.fx || '',
+                         studio_pet: sp };
     demoSave();
     /* 教师练习模式：老师换装不上榜也要让班级排行榜那行跟着变，
        否则榜上永远是上次练习时穿的那身（2026-11-05） */
@@ -4687,7 +5249,8 @@ function saveEquip() {
   api('/api/v2/typing/equip', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ pet: S.ranch.pet, decos: S.ranch.decos,
-                           bg: S.ranch.bg || '', fx: S.ranch.fx || '' })
+                           bg: S.ranch.bg || '', fx: S.ranch.fx || '',
+                           studio_pet: sp })
   });
 }
 
@@ -4695,6 +5258,22 @@ function saveEquip() {
    结算 / 道具），250ms 内顶栏数字必然跟上，而且只改数字、不重绘页面 ——
    练习中整页重绘会把正在打的关卡冲掉，这条铁律不能破。 */
 setInterval(refreshPts, 250);
+/* studio-ui.js（学生创意馆）是独立脚本，依赖本 IIFE 里的 S/api/esc/render 等；
+   这些原本只是 IIFE 局部变量，外部脚本的 window.S/window.api 全部落空 →
+   设计者信息永远停在内置「待教师填写」、兑换点击抛 ReferenceError。
+   这里按 studio-ui.js 头部声明的依赖逐个挂到 window（引用同一对象/函数，不复制）。 */
+window.S = S;
+window.api = api;
+window.esc = esc;
+window.uiToast = uiToast;
+window.uiConfirm = uiConfirm;
+window.uiAlert = uiAlert;
+window.render = render;
+window.refreshPts = refreshPts;
+if (typeof demoSave === 'function') window.demoSave = demoSave;
+if (typeof setPetAvatar === 'function') window.setPetAvatar = setPetAvatar;
+if (typeof ranchFromEquip === 'function') window.ranchFromEquip = ranchFromEquip;
+if (typeof applyTheme === 'function') window.applyTheme = applyTheme;
 boot();
 })();
 </script>

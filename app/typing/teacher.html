@@ -6,11 +6,90 @@
 <title>打字练习管理 · 班级工作台</title>
 <!-- 与学生端共用：排行榜小像里的背景与特效 -->
 <link rel="stylesheet" href="/typing/pet-ui.css?v=20261105">
+<script>
+/* 2.0.55：教师练字页跟随工作台主主题（wb-theme / wb-mode，同源共享）。
+   放在 head 同步执行，首屏就是对的底色，不会先白闪一下再切暗；
+   同窗口或 iframe 里切主题时，storage 事件会再次同步，无需刷新。 */
+(function () {
+  function read() {
+    try {
+      var mode = localStorage.getItem('wb-mode') || 'light';
+      var hue = localStorage.getItem('wb-theme') || 'forest';
+      if (mode === 'auto') {
+        mode = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+      }
+      var root = document.documentElement;
+      root.setAttribute('data-theme', hue);
+      root.setAttribute('data-mode', mode);
+      /* 2.0.73：把这层练字页的主题推给课堂展示 iframe。
+         学生打字页读的是 wb-smode/wb-stheme（另一套键），扫不到教师端的
+         wb-mode/wb-theme；不主动 postMessage 就会「深底深字」看不清。 */
+      pushToPlay(mode, hue);
+    } catch (e) {}
+  }
+  /* 推给所有课堂展示 iframe（enterPlay 动态创建，故按选择器现查） */
+  function pushToPlay(mode, hue) {
+    try {
+      document.querySelectorAll('.play-view iframe').forEach(function (f) {
+        if (f.contentWindow) f.contentWindow.postMessage(
+          { type: 'wb-theme', mode: mode, hue: hue }, '*');
+      });
+    } catch (e) {}
+  }
+  window.wbPushPlayTheme = pushToPlay;
+  read();
+  window.addEventListener('storage', function (e) {
+    if (e && (e.key === 'wb-mode' || e.key === 'wb-theme')) read();
+  });
+})();
+</script>
 <style>
 :root{
   --brand:#F4632E; --brand2:#FF8A4C; --ink:#2B2B33; --ink2:#5C5C68; --ink3:#9A9AA6;
   --bg:#FFF7F0; --card:#fff; --line:#F0E3D8; --ok:#3E9E5B; --warn:#E0A93C; --purple:#8E6FD8;
+  --surface:#fff; --paper:#FBF5E9; --brand-soft:#F6E7D6;
 }
+/* 夜间：与学生打字页同一套暖黑令牌，背景 / 文字 / 卡片 / 输入框全部换值 */
+html[data-mode="dark"]{
+  --brand:#E4926C; --brand2:#F0B392; --ink:#F5EBE4; --ink2:#C9B6A8; --ink3:#A2917F;
+  --bg:#191210; --card:#241B15; --line:rgba(226,150,112,.22);
+  --ok:#5FBF7E; --warn:#E3BC77; --purple:#B39CF0;
+  --surface:#2C221B; --paper:#1E1611; --brand-soft:rgba(228,146,108,.16);
+}
+/* 组件里写死的白底在夜色下逐条收口，避免出现刺眼白块 */
+html[data-mode="dark"] body{background:var(--bg);color:var(--ink)}
+html[data-mode="dark"] .btn.ghost,
+html[data-mode="dark"] select,
+html[data-mode="dark"] input[type=text],
+html[data-mode="dark"] input[type=number],
+html[data-mode="dark"] .sd-item input,
+html[data-mode="dark"] .tabs button{background:var(--surface);color:var(--ink);border-color:var(--line)}
+html[data-mode="dark"] .state-pill.off,
+html[data-mode="dark"] .cl-time{background:var(--surface);color:var(--ink3)}
+html[data-mode="dark"] .gchip,
+html[data-mode="dark"] .stat,
+html[data-mode="dark"] .lb-row.me,
+html[data-mode="dark"] .lb-idx,
+html[data-mode="dark"] .play-bar,
+html[data-mode="dark"] .play-bar input,
+html[data-mode="dark"] .tag,
+html[data-mode="dark"] .pts-chip,
+html[data-mode="dark"] .sd-item,
+html[data-mode="dark"] .sd-item input{background:var(--surface);color:var(--ink)}
+html[data-mode="dark"] .gchip.on,
+html[data-mode="dark"] .tabs button.on{background:var(--brand-soft);color:var(--brand)}
+html[data-mode="dark"] .state-pill.on{background:rgba(95,191,126,.16);color:var(--ok)}
+html[data-mode="dark"] .demo-bar{background:rgba(227,188,119,.13);border-color:rgba(227,188,119,.4);color:var(--warn)}
+html[data-mode="dark"] .card{box-shadow:none}
+/* 2.0.66：品牌色在夜间提亮，实心按钮/奖牌上的白字换成深色墨字 */
+html[data-mode="dark"] .btn:not(.ghost){color:#2A1B14}
+html[data-mode="dark"] .lb-rank{background:var(--surface);color:var(--ink2)}
+html[data-mode="dark"] .lb-rank.r1,
+html[data-mode="dark"] .lb-rank.r2,
+html[data-mode="dark"] .lb-rank.r3{color:#25190F}
+/* 开关轨道：未开时深灰，开时沿用绿色 */
+html[data-mode="dark"] .sw{background:#4A3C33}
+html[data-mode="dark"] .sw.on{background:linear-gradient(135deg,var(--ok),#63C57F)}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:
   radial-gradient(1000px 400px at 90% -10%, #FFE8D9 0%, transparent 60%), var(--bg);
@@ -67,11 +146,29 @@ select{font-family:inherit;font-size:14px;padding:8px 12px;border:1.5px solid va
 .tabs{display:flex;gap:6px;margin:10px 0}
 .tabs button{padding:6px 14px;border-radius:10px;font-size:13px;font-weight:600;background:#fff;border:1.5px solid var(--line);color:var(--ink2)}
 .tabs button.on{background:#FFF1E8;border-color:var(--brand);color:var(--brand)}
+/* 主功能区一排 tab：基础设置 / 积分管理 / 排行榜 / 创意馆，点击切换内容，减少滚动 */
+.mtabs{display:flex;gap:8px;margin:14px 0 4px;flex-wrap:wrap;border-bottom:1.5px solid var(--line);padding-bottom:0}
+.mtabs button{padding:10px 18px;border:1.5px solid transparent;border-bottom:none;border-radius:11px 11px 0 0;
+  font-size:14px;font-weight:700;background:transparent;color:var(--ink2);cursor:pointer;position:relative;top:1px}
+.mtabs button:hover{background:var(--brand-soft);color:var(--brand)}
+.mtabs button.on{background:var(--card);border-color:var(--line);color:var(--brand)}
+.mtabs button.on:after{content:'';position:absolute;left:0;right:0;bottom:-1.5px;height:2px;background:var(--card)}
+.mpane{display:none}
+.mpane.on{display:block}
+html[data-mode="dark"] .mtabs button{color:var(--ink2)}
+html[data-mode="dark"] .mtabs button.on{background:var(--surface);color:var(--brand)}
 .demo-bar{background:#FFF8E2;border:1.5px dashed #E8C96A;color:#8A6A1C;border-radius:12px;
   padding:10px 14px;font-size:13.5px;margin-bottom:14px}
-.toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%);background:#2B2B33;color:#fff;
-  padding:10px 22px;border-radius:12px;font-size:14px;opacity:0;transition:opacity .25s;pointer-events:none;z-index:99}
-.toast.show{opacity:.95}
+/* 2.0.76：保存/失败等提示统一视口居中 —— 原来 bottom:26px 在教师端 iframe
+   里落在可视区下缘，滚到创意馆面板时提示在屏幕外，看着像「点了没反应」。
+   视觉跟随工作台主题：用本页主题令牌（浅/夜两套都有），不再写死黑底。 */
+.toast{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+  background:var(--card);color:var(--ink);border:1.5px solid var(--brand);
+  padding:15px 26px;border-radius:14px;font-size:14.5px;font-weight:600;
+  opacity:0;transition:opacity .25s;pointer-events:none;
+  z-index:9999;max-width:min(560px,86vw);text-align:center;line-height:1.6;
+  box-shadow:0 12px 40px rgba(43,43,51,.22)}
+.toast.show{opacity:1}
 .off-box{text-align:center;padding:70px 30px;color:var(--ink2)}
 .off-box .big{font-size:46px;margin-bottom:10px}
 /* 教师练习视图：在管理面板内嵌游戏页，不再新开标签页跳出去 */
@@ -132,19 +229,51 @@ input::placeholder{color:var(--ink3)}
   padding:2px 9px;border-radius:8px;border:1px solid var(--line);background:#FFFBF7;
   color:var(--ink2);font-size:11.5px}
 .cl-empty{color:var(--ink3);font-size:12.5px;padding:4px 2px}
+/* 学生作品 · 设计者信息编辑 */
+.sd-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px;margin-top:10px}
+/* 2.0.74：学校名设置行（创意馆面板顶部），和系统设置解耦 */
+.sd-school-row{display:flex;align-items:center;gap:8px;margin-top:12px;padding:10px 12px;
+  border:1.5px solid var(--line);border-radius:11px;background:#FFFBF7}
+.sd-school-row label{font-size:12.5px;font-weight:600;color:var(--ink);flex:none;white-space:nowrap}
+.sd-school-row input{flex:1;min-width:0;font-family:inherit;font-size:13px;height:34px;
+  padding:3px 10px;border:1.5px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
+html[data-mode="dark"] .sd-school-row{background:var(--surface)}
+html[data-mode="dark"] .sd-school-row input{background:var(--paper);color:var(--ink);border-color:var(--line)}
+.sd-item{border:1px solid var(--line);border-radius:13px;padding:9px 11px;background:#FFFBF7}
+.sd-item .sd-h{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.sd-item .sd-thumb{width:30px;height:30px;border-radius:8px;object-fit:contain;flex:none;
+  background:#fff;border:1px solid var(--line)}
+.sd-item .sd-title{font-size:13px;font-weight:700;color:var(--ink)}
+.sd-item .sd-kind{font-size:10.5px;padding:2px 7px;border-radius:999px;background:#FFF0E4;color:var(--brand)}
+.sd-item .sd-kind.theme{background:#EEEAFB;color:var(--purple)}
+/* 班级 + 设计者同一行：班级窄一点（支持手填自定义），设计者占剩下的 */
+.sd-f2{display:flex;gap:8px;margin-top:5px}
+.sd-f2 .sd-f{flex:1;min-width:0;margin-top:0}
+.sd-f2 .sd-f.cls{flex:none;width:128px}
+.sd-item .sd-f{display:flex;align-items:center;gap:6px;margin-top:5px}
+.sd-item .sd-f label{font-size:11.5px;color:var(--ink3);flex:none;white-space:nowrap;width:auto}
+.sd-item input,.sd-item select{flex:1;min-width:0;font-family:inherit;font-size:12px;
+  height:30px;padding:3px 8px;border:1.5px solid var(--line);border-radius:8px;
+  background:#fff;color:var(--ink)}
+.sd-item select{cursor:pointer}
+/* 说明压成一行，别占两行把卡片顶高 */
+#studioCardWrap .hint{font-size:12px;line-height:1.6;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+@media (max-width:900px){#studioCardWrap .hint{white-space:normal}}
+.sd-save{margin-top:12px}
 </style>
 </head>
 <body>
 <div id="app"><div style="text-align:center;padding:80px 0;color:#B9AFA4">正在加载打字练习管理面板…</div></div>
 <div class="toast" id="toast"></div>
-<script src="/typing/typing-data.js?v=20261119"></script>
+<script src="/typing/typing-data.js?v=20261121b"></script>
 <script>
 (function () {
 'use strict';
 var $ = function (s) { return document.querySelector(s); };
 var app = $('#app');
 var S = { demo: false, enabled: false, grades: [], classes: [], lbClass: '', scope: 'week', rows: [], lbName: '',
-  ptsCls: '', ptsStu: '', ptsData: null };
+  ptsCls: '', ptsStu: '', ptsData: null, studio: null, tab: 'basic', school: '' };
 
 function esc(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -155,10 +284,11 @@ function api(url, opts) {
   return fetch(url, Object.assign({ credentials: 'same-origin' }, opts || {}))
     .then(function (r) { return r.json().catch(function () { return {}; }); });
 }
-function toast(msg) {
+function toast(msg, ms) {
   var t = $('#toast');
   t.textContent = msg; t.classList.add('show');
-  setTimeout(function () { t.classList.remove('show'); }, 1800);
+  clearTimeout(toast._t);
+  toast._t = setTimeout(function () { t.classList.remove('show'); }, ms || 1800);
 }
 var DEMO_CLASSES = [
   { id: '1', name: '三年(1)班', students: 42, joined: 38, levels: 216, stars: 412, best_wpm: 52 },
@@ -187,9 +317,15 @@ function boot() {
       S.lbClass = DEMO_CLASSES[0].id;
       S.ptsCls = DEMO_CLASSES[0].id;
     }
-    render();
-    loadLb();
-    loadPoints();
+    // 学校名称（作品署名用）与作品清单一起拉齐再渲染，两边都在创意馆面板里设
+    Promise.all([
+      api('/api/v2/school').catch(function () { return null; }),
+      api('/api/v2/studio/works').catch(function () { return null; })
+    ]).then(function (rs) {
+      if (rs[0] && rs[0].ok) S.school = rs[0].school || '';
+      if (rs[1] && rs[1].ok) S.studio = rs[1].studio;
+      render(); loadLb(); loadPoints();
+    });
   }).catch(function () { S.demo = true; render(); });
 }
 
@@ -223,6 +359,14 @@ function body() {
     '<span style="margin-left:auto"></span>' +
     '<button class="btn ghost" id="tryPlay" title="老师也能练：面板内直接开练，和学生同一张冒险地图，页顶可选是否计入班级排行榜">🎮 教师练习</button>' +
     '</div>' +
+    /* 主功能区一排菜单：点击只切本页显隐，不重绘整页（保留正在填的表单） */
+    '<div class="mtabs" id="mtabs">' +
+      [['basic', '⚙️ 基础设置'], ['points', '✨ 积分管理'], ['lb', '🏆 班级排行榜'], ['studio', '🎨 创意宠物']]
+        .map(function (t) {
+          return '<button data-mtab="' + t[0] + '"' + (S.tab === t[0] ? ' class="on"' : '') + '>' + t[1] + '</button>';
+        }).join('') +
+    '</div>' +
+    '<div class="mpane' + (S.tab === 'basic' ? ' on' : '') + '" data-mpane="basic">' +
     '<div class="grid">' +
       '<div class="card">' +
         '<h2>开放开关</h2>' +
@@ -247,6 +391,8 @@ function body() {
         '<div class="stat-grid">' + (stats || '<span style="color:var(--ink3);font-size:13px">还没有班级数据</span>') + '</div>' +
       '</div>' +
     '</div>' +
+    '</div>' + /* /mpane basic */
+    '<div class="mpane' + (S.tab === 'points' ? ' on' : '') + '" data-mpane="points">' +
     '<div class="card" style="margin-top:14px">' +
       '<h2>✨ 积分管理</h2>' +
       '<div class="hint">打字冒险岛已统一为「积分」一种数值：闯关获得、商店消费都走积分，' +
@@ -277,6 +423,8 @@ function body() {
       '<div class="pts-sec"><span class="tag-lbl">最近操作记录</span></div>' +
       '<div id="ptsLogBox" class="pts-log"></div>' +
     '</div>' +
+    '</div>' + /* /mpane points */
+    '<div class="mpane' + (S.tab === 'lb' ? ' on' : '') + '" data-mpane="lb">' +
     '<div class="card" style="margin-top:14px">' +
       '<h2>班级排行榜</h2>' +
       '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px">' +
@@ -288,10 +436,148 @@ function body() {
         '</div>' +
       '</div>' +
       '<div id="lbBox" style="margin-top:8px"><span style="color:var(--ink3);font-size:13px">加载中…</span></div>' +
-    '</div>';
+    '</div>' +
+    '</div>' + /* /mpane lb */
+    '<div class="mpane' + (S.tab === 'studio' ? ' on' : '') + '" data-mpane="studio">' +
+    studioCardHtml() +
+    '</div>'; /* /mpane studio */
 }
 
+/* 学生创意馆 · 设计者信息编辑（教师可改，学生端只读展示） */
+function studioClsId(name) {
+  var cs = ((S.ptsData || {}).classes) || [];
+  for (var i = 0; i < cs.length; i++) if (cs[i].name === name) return cs[i].id;
+  return '';
+}
+function studioClsOpts(sel) {
+  var cs = ((S.ptsData || {}).classes) || [];
+  var h = '<option value="">（待填写）</option>', found = !sel;
+  cs.forEach(function (c) {
+    if (c.name === sel) found = true;
+    h += '<option value="' + esc(c.name) + '"' + (c.name === sel ? ' selected' : '') + '>' + esc(c.name) + '</option>';
+  });
+  if (sel && !found) h += '<option value="' + esc(sel) + '" selected>' + esc(sel) + '</option>';
+  return h;
+}
+function studioStuDataOpts(clsName) {
+  var h = '';
+  clsStudents(studioClsId(clsName)).forEach(function (s) {
+    h += '<option value="' + esc(s.name) + '">' +
+      esc((s.student_no ? s.student_no + ' ' : '') + s.name) + '</option>';
+  });
+  return h;
+}
+function studioStuOpts(clsName, sel) {
+  var list = clsStudents(studioClsId(clsName));
+  var h = '<option value="">（待填写）</option>', found = !sel;
+  list.forEach(function (s) {
+    if (s.name === sel) found = true;
+    h += '<option value="' + esc(s.name) + '"' + (s.name === sel ? ' selected' : '') + '>' +
+      esc((s.student_no ? s.student_no + ' ' : '') + s.name) + '</option>';
+  });
+  if (sel && !found) h += '<option value="' + esc(sel) + '" selected>' + esc(sel) + '</option>';
+  return h;
+}
+function studioClsDataOpts() {
+  return (((S.ptsData || {}).classes) || []).map(function (c) {
+    return '<option value="' + esc(c.name) + '"></option>';
+  }).join('');
+}
+function studioCardHtml() {
+  var works = (S.studio && S.studio.works) || [];
+  var clsList = studioClsDataOpts();
+  var list = works.map(function (w) {
+    var d = w.designer || {};
+    var kind = w.kind === 'theme' ? '主题' : '宠物';
+    return '<div class="sd-item" data-sd="' + esc(w.id) + '">' +
+      '<div class="sd-h"><img class="sd-thumb" src="' + esc(w.img) + '" alt="">' +
+        '<span class="sd-title">' + esc(w.name) + '</span>' +
+        '<span class="sd-kind ' + (w.kind === 'theme' ? 'theme' : '') + '">' + kind + '</span></div>' +
+      '<div class="sd-f"><label>创作者</label><input data-f="pen" maxlength="60" ' +
+        'value="' + esc(d.name || '') + '" placeholder="选填，比如：小画家（不要填真实姓名）"></div>' +
+    '</div>';
+  }).join('');
+  /* 2.0.76：学生不满 14 周岁属敏感个人信息，公开接口（含演示页/公网）
+     只下发自愿笔名，不再展示真实姓名 / 班级 / 学校 / 介绍。教师端也只留笔名一个
+     输入框，旧的批量填学校工具随之删除。老配置里的真实数据保留不删、不外泄。
+     牛哥要求：卡片顶部的标题 + 说明文字整块去掉，画面只留输入项。 */
+  return '<div class="card" id="studioCardWrap">' +
+    (works.length
+      ? '<div class="sd-list">' + list + '</div>'
+      : '<div class="cl-empty">作品清单加载中…（教师登录后显示）</div>') +
+    (works.length ? '<button class="btn sd-save" id="sdSaveAll">💾 保存</button>' : '') +
+  '</div>';
+}
+function refreshStudioCard() {
+  var wrap = $('#studioCardWrap');
+  if (wrap) { wrap.outerHTML = studioCardHtml(); bindStudioCard(); }
+}
+
+/* 2.0.76：只留笔名一个输入框，旧的「批量填学校」「班级联动候选名单」绑定
+   随表单一起删除。保存逻辑不变：把所有 [data-f]（现在只有 pen）POST 上去。 */
+function bindStudioCard() {
+  var sdAll = $('#sdSaveAll');
+  if (sdAll) sdAll.onclick = function () {
+    if (S.demo) {
+      /* 2.0.76：iframe 里演示模式的 toast 一闪而过，牛哥以为点了没反应。
+         给一个明确、停留更久的提示，说明为什么没落库。 */
+      toast('当前是演示模式（未登录教师账号），创作者信息不会保存。请在教师端登录后打开「打字」页再保存。', 4200);
+      return;
+    }
+    var items = document.querySelectorAll('.sd-item');
+    var jobs = [];
+    items.forEach(function (it) {
+      var body = { id: it.getAttribute('data-sd') };
+      it.querySelectorAll('[data-f]').forEach(function (inp) {
+        body[inp.getAttribute('data-f')] = inp.value;
+      });
+      jobs.push(api('/api/v2/studio/designer', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      }));
+    });
+    /* 点击瞬间就给反馈，避免觉得「没反应」 */
+    sdAll.disabled = true;
+    var oldTxt = sdAll.textContent;
+    sdAll.textContent = '⏳ 保存中…';
+    Promise.all(jobs).then(function (rs) {
+      var ok = rs.length && rs.every(function (r) { return r && r.ok; });
+      toast(ok ? ('已保存 ' + rs.length + ' 个作品的创作者信息') : '部分保存失败，请重试', ok ? 2400 : 3600);
+      if (ok && rs[rs.length - 1] && rs[rs.length - 1].studio) {
+        S.studio = rs[rs.length - 1].studio;
+        refreshStudioCard();
+        /* 教师练习 iframe 里也即时显示新设计者信息，不用关掉重开 */
+        var f = document.querySelector('iframe[title="打字练习课堂展示"]');
+        if (f && f.contentWindow) {
+          try { f.contentWindow.postMessage({ type: 'wb-studio-reload' }, '*'); } catch (e) {}
+        }
+      }
+      /* 失败（或返回里没带 studio）时按钮仍是旧的 disabled 状态，恢复它 */
+      if (!(ok && rs[rs.length - 1] && rs[rs.length - 1].studio)) {
+        sdAll.disabled = false;
+        sdAll.textContent = oldTxt;
+      }
+    }).catch(function () {
+      toast('保存失败，请重试', 3600);
+      sdAll.disabled = false;
+      sdAll.textContent = oldTxt;
+    });
+  };
+}
 function bind() {
+  bindStudioCard();
+  /* 主功能区一排 tab：只切显隐，不重绘整页（避免丢失正在填的表单/输入框） */
+  document.querySelectorAll('[data-mtab]').forEach(function (b) {
+    b.onclick = function () {
+      var t = b.getAttribute('data-mtab');
+      S.tab = t;
+      document.querySelectorAll('[data-mtab]').forEach(function (x) { x.classList.toggle('on', x === b); });
+      document.querySelectorAll('[data-mpane]').forEach(function (p) {
+        p.classList.toggle('on', p.getAttribute('data-mpane') === t);
+      });
+      if (t === 'studio' && S.studio) refreshStudioCard();
+    };
+  });
   var tp = $('#tryPlay');
   if (tp) tp.onclick = enterPlay;
   var sw = $('#swBtn');
@@ -407,11 +693,22 @@ function enterPlay() {
   v.innerHTML =
     '<div class="play-bar">' +
       '<button class="btn ghost" id="backMgr">← 返回管理</button>' +
-      '<b>教师练习 · 和学生同一张冒险地图，成绩默认只存本机，页顶可选计入班级排行榜</b>' +
+      '<b>教师课堂展示 · 学生视角预览，不会改动学生档案</b>' +
     '</div>' +
-    '<iframe src="/typing/?embed=1" title="打字练习"></iframe>';
+    '<iframe src="/typing/?embed=1&view=studio" title="打字练习课堂展示"></iframe>';
   document.body.appendChild(v);
   document.body.classList.add('play-lock');
+  /* 2.0.73：iframe 内容 load 完成后再推一次主题，确保学生页的 message
+     监听器已建立；早推的那次可能落在监听器建立之前被丢弃。 */
+  var frame = v.querySelector('iframe');
+  if (frame) frame.addEventListener('load', function () {
+    try {
+      var mode = localStorage.getItem('wb-mode') || 'light';
+      if (mode === 'auto') mode = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+      var hue = localStorage.getItem('wb-theme') || 'forest';
+      if (window.wbPushPlayTheme) window.wbPushPlayTheme(mode, hue);
+    } catch (e) {}
+  });
   $('#backMgr').onclick = function () { v.remove(); document.body.classList.remove('play-lock'); };
 }
 
@@ -510,8 +807,20 @@ function loadPoints() {
   api('/api/v2/typing/points-admin').then(function (r) {
     if (r && r.ok) S.ptsData = { classes: r.classes || [], log: r.log || [] };
     paintPointBoxes();
-  }).catch(function () { paintPointBoxes(); });
+    refreshStudioCard();
+  }).catch(function () { paintPointBoxes(); refreshStudioCard(); });
 }
+
+/* 2.0.76：教师练习（课堂展示）iframe 里把宠物/像素画设为头像后，
+   学生页只 postMessage 给直接父级（本页 teacher.html）。这里再往上
+   转发一层给工作台顶层 index.html，左下角账号头像才会即时刷新，
+   不用手动点开账号弹层才看到新头像。独立打开本页时 parent===self，跳过。 */
+window.addEventListener('message', function (ev) {
+  var d = ev && ev.data;
+  if (d && d.type === 'wb-avatar-changed' && window.parent && window.parent !== window) {
+    try { window.parent.postMessage({ type: 'wb-avatar-changed', avatar: d.avatar || '' }, '*'); } catch (e) {}
+  }
+});
 
 boot();
 })();

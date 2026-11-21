@@ -3189,6 +3189,9 @@ body.seat-rsz-dragging .seat:hover { transform:none; box-shadow:none; }
   animation:uavWave 7s linear infinite;
 }
 @keyframes uavWave { to { background-position:400% 50%; } }
+/* 像素画作品设为头像：图片铺满圆形头像位 */
+.su-av.uav-img { overflow:hidden; padding:0; background:#fff; }
+.su-av.uav-img img { width:100%; height:100%; object-fit:cover; display:block; image-rendering:pixelated; }
 /* 设置页 · 头像选择器 */
 .av-picker { display:flex; flex-wrap:wrap; gap:8px; }
 .av-opt {
@@ -3504,7 +3507,15 @@ body:has(.mini-bar) .corner-credit { display:none; }
   display:flex; justify-content:space-between; align-items:center; gap:10px;
   margin-top:9px; font-size:11.5px; color:var(--text-secondary); flex-wrap:wrap;
 }
-.roll-history { display:flex; flex-wrap:wrap; gap:6px; margin-top:7px; }
+/* 2.0.72：最近点名不随名单增加把整窗撑长——历史列表本身限高内滚，
+   窗口其余部分保持固定高度（.float-box 已有 max-height:82vh + 内容层滚动）。 */
+.roll-history {
+  display:flex; flex-wrap:wrap; align-content:flex-start; gap:6px; margin-top:7px;
+  max-height:104px; overflow-y:auto; overscroll-behavior:contain;
+  scrollbar-width:thin; padding-right:3px;
+}
+.roll-history::-webkit-scrollbar { width:6px; }
+.roll-history::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
 .roll-h {
   display:inline-flex; align-items:baseline; gap:5px; font-size:11.5px;
   padding:2px 9px; border-radius:11px; background:var(--bg-page);
@@ -4258,15 +4269,19 @@ body:has(.mini-bar) .corner-credit { display:none; }
     0 -1px 0 rgba(0,0,0,.45) inset;
   text-shadow: 0 1px 1px rgba(0,0,0,.5);
 }
+/* 2.0.66：暗色下 --brand-primary 是亮色（forest #3ECFA0 等），
+   原来的「亮品牌色 + 白字」几乎看不清。改成深底 + 品牌色字。 */
 [data-mode="dark"][data-ui="skeuo"] .btn-primary {
   background: linear-gradient(180deg,
-    color-mix(in srgb, var(--brand-primary) 86%, #fff) 0%,
-    var(--brand-primary) 55%,
-    color-mix(in srgb, var(--brand-primary) 72%, #000) 100%);
+    color-mix(in srgb, var(--brand-primary) 54%, #16201D) 0%,
+    color-mix(in srgb, var(--brand-primary) 36%, #16201D) 55%,
+    color-mix(in srgb, var(--brand-primary) 26%, #0F1715) 100%);
+  color:color-mix(in srgb, var(--brand-primary) 76%, #fff);
+  border-color:color-mix(in srgb, var(--brand-primary) 46%, #16201D);
   box-shadow:
     0 3px 8px rgba(0,0,0,.5),
-    0 1px 0 rgba(255,255,255,.25) inset,
-    0 -1px 0 rgba(0,0,0,.35) inset;
+    0 1px 0 rgba(255,255,255,.12) inset,
+    0 -1px 0 rgba(0,0,0,.4) inset;
 }
 [data-mode="dark"][data-ui="skeuo"] .card,
 [data-mode="dark"][data-ui="skeuo"] .float-box {
@@ -4601,6 +4616,62 @@ body:has(.mini-bar) .corner-credit { display:none; }
     radial-gradient(600px 90px at 12% -12%,
       rgba(62,207,160,.07) 0%, transparent 70%),
     linear-gradient(180deg, #1C2523 0%, #171E1C 100%);
+}
+/* ========== 2.0.66 全局夜色可读性补丁 ==========
+   暗色主题里 --brand-primary 是提亮过的（forest #3ECFA0 / mist #A79BFF …），
+   凡是「品牌色底 + 白字」的按钮、胶囊、角标都会变成浅底浅字。
+   这里统一改成深色墨字；拟物皮肤的胶囊则连底色一起换成深色渐变。 */
+[data-mode="dark"][data-ui="skeuo"] :is(.tl-chip,.vs-btn,.td-fbtn,.hw-fbtn,.tl-tag){
+  background:linear-gradient(180deg,#242E2B 0%,#1B2321 100%);
+  border-color:rgba(255,255,255,.14);
+  box-shadow:0 1px 2px rgba(0,0,0,.45),0 1px 0 rgba(255,255,255,.06) inset;
+  color:var(--text-primary);
+}
+[data-mode="dark"] :is(.tl-chip,.vs-btn,.td-fbtn,.hw-fbtn,.tl-tag){color:var(--text-primary)}
+[data-mode="dark"][data-ui="skeuo"] :is(.vs-btn.on,.tl-chip.on,.td-fbtn.on,.hw-fbtn.on){
+  background-image:linear-gradient(135deg,
+    color-mix(in srgb, var(--brand-primary) 48%, #16201D),
+    color-mix(in srgb, var(--brand-primary) 30%, #16201D));
+  border-color:color-mix(in srgb, var(--brand-primary) 42%, #16201D);
+}
+[data-mode="dark"] :is(
+  .day-toggle.on,.gf-chip.on,.att-fl-act.pri,.sf-seg.on,.sp-tab.on,
+  .ttc-day.on,.fl-act,.box-tick,.box-new,.cc-custom:hover,.wp-seg.on,
+  .grp-chip.lead,.fp-item.on,.mor-btn.gm>i,.tl-type.on,.tl-chip.on,
+  .roll-tab.on,.vs-btn.on,.lt-badge,.lt-tag:hover,.lt-tag.off:hover,
+  .td-fbtn.on,.td-rep-btn:hover,.td-rep-btn.on,.td-rep-day:hover,
+  .td-rep-day.on,.td-rep-log b,.rep-ava,.td-sub-pill:hover,.dt-today,
+  .cls-cur,.hq.on,.seg.on,.hw-fbtn.on,.hwr-tab.on,.mor-stu-ck,
+  .cw-file .acts button.cw-send:hover,.cw-file .acts button.sent,
+  .cw-file .acts button.sent:hover,.cw-file .cw-sent-dot,
+  .cw-lrow .op button:hover,.cw-lrow .op button.sent,
+  .cwl-card .acts button:hover,.act-pub-chip:hover,.act-pub-chip.sel,
+  .act-pub-badge,.qz-tab.on
+){color:#08110E}
+/* 主按钮单独写低权重版：拟物皮肤有自己的深底品牌字规则（权重更高），别被 :is 里
+   那些复合选择器抬权重后盖掉。 */
+[data-mode="dark"] .btn-primary{color:#08110E}
+[data-mode="dark"] .hwr-tab.on b{color:inherit}
+/* 2.0.72 夜色补丁：上面那条大 :is() 组合了复合选择器，整条权重被抬得极高，
+   把「选中态」和「透明底次按钮」的文字一起刷成近黑，而它们的底色也被压暗，
+   于是出现「试卷库 / 分组‘手动’ / 加减分弹窗‘取消’」黑底黑字。
+   这里逐条按原意恢复：真·品牌亮底保留墨字；透明底次按钮恢复浅字。 */
+[data-mode="dark"] .qz-tab.on{
+  background:var(--brand-primary); border-color:transparent; color:#08110E !important;
+}
+[data-mode="dark"] .grp-sort .seg.on{
+  background:var(--brand-primary); border-color:var(--brand-primary);
+  color:#08110E !important; font-weight:600;
+}
+[data-mode="dark"] :is(.fl-act.ghost,.btn-ghost,.roll-btn:not(.on)){
+  color:var(--text-primary) !important;
+}
+[data-mode="dark"] .su-av:not(.uav-img){color:#08110E}
+/* 成绩卡删除按钮 / 各种警示角标：白底浅字一并换暗版 */
+[data-mode="dark"] .sc-exam-del{background:rgba(24,30,28,.9);border-color:rgba(255,255,255,.14)}
+[data-mode="dark"] :is(.cw-badge.warn,.cw-warn,.cwl-res-bad,.cw-role-card.b .tag,
+  .act-link-warn,.act-warn,.cw-course .new){
+  background:rgba(239,159,39,.16);border-color:rgba(239,159,39,.38);color:#F0C868
 }
 /* 手机上关掉 fixed 背景，省电也避免滚动抖动 */
 @media (max-width:820px) {
@@ -5873,7 +5944,7 @@ body:has(.mini-bar) .corner-credit { display:none; }
 .rep-hint { font-size:11.5px; color:var(--text-secondary); padding-top:6px;
   border-top:1px dashed var(--border, #DCE5E0); margin-top:6px; }
 .rep-hint b { color:var(--brand-primary, #0F6E56); }
-.rep-cond select.fl-inp, .rep-cond input.fl-inp { height:30px; font-size:12.5px; }
+.rep-cond select.fl-inp, .rep-cond input.fl-inp { height:36px; font-size:13px; line-height:34px; }
 /* 分析报告弹窗（2026-11-02）：桌面加宽到 1060px，明细表/图表不憋屈；
    条件控件允许收缩换行（min-width:0），窄屏不再把「姓名/学号」裁出弹窗 */
 .float-layer.rpt .float-box { width:min(1060px, 100%); }
@@ -6439,6 +6510,14 @@ body:has(.mini-bar) .corner-credit { display:none; }
   [data-mode="dark"][data-ui="skeuo"] .btn:not(.btn-primary),
   [data-mode="dark"][data-ui="skeuo"] .icon-btn { background-color:#242E2B; }
   [data-mode="dark"][data-ui="skeuo"] .card { background-color:#1A2320; }
+  /* 不支持 color-mix 的旧内核：主按钮 / 筛选胶囊给等价实色，白字白底不能复发 */
+  [data-mode="dark"][data-ui="skeuo"] .btn-primary { background-color:#264037; color:var(--brand-primary); }
+  [data-mode="dark"][data-ui="skeuo"] :is(.tl-chip,.vs-btn,.td-fbtn,.hw-fbtn,.tl-tag){
+    background-color:#242E2B;color:var(--text-primary)
+  }
+  [data-mode="dark"][data-ui="skeuo"] :is(.vs-btn.on,.tl-chip.on,.td-fbtn.on,.hw-fbtn.on){
+    background-color:#2B4A40;color:#08110E
+  }
 }
 
 /* ============================================================
@@ -7156,7 +7235,7 @@ body:has(.mini-bar) .corner-credit { display:none; }
   .cwv-btn{padding:5px 9px;font-size:12px}
 }
 </style>
-<link rel="stylesheet" href="submit-enh.css">
+<link rel="stylesheet" href="submit-enh.css?v=2.0.66">
 </head>
 <body>
 <div id="root"></div>
@@ -8107,6 +8186,13 @@ function applyTheme() {
   const root = document.documentElement;
   root.setAttribute('data-theme', hue);
   root.setAttribute('data-mode', resolved);
+  /* 2.0.57：打字练习 iframe 不再自带夜色按钮，课堂展示直接跟教师机这套主题 */
+  try {
+    document.querySelectorAll('iframe').forEach(function (f) {
+      if (f.contentWindow) f.contentWindow.postMessage(
+        { type: 'wb-theme', mode: resolved, hue: hue }, '*');
+    });
+  } catch (e) {}
   /* 浏览器 UI（地址栏/滚动条）也跟着变，手机上看更整体 */
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) {
@@ -9079,9 +9165,61 @@ var TEACHER_AVATARS = {
     { id:'wave',   label:'流彩', css:'uav-wave'   }
   ]
 };
+/* 2.0.56：服务端头像（像素画设为头像后存账号，随数据导入导出同步）。
+   优先于本机 localStorage 的预设头像；未设置时为空串。 */
+var serverAvatar = '';
+/* 教师端本地头像预设必须按账号隔离。以前所有账号共用 wb-avatar，
+   一台电脑上换老师登录就看到上一位的头像（和学生端串号同因）。
+   这里不迁移旧全局键：那等于把 A 老师的头像自动灌给 B 老师。 */
+var teacherAvatarKey = '';
+try { teacherAvatarKey = String(LS.get('wb-teacher-account', '') || ''); } catch (e) {}
+function teacherAvatarStoreKey() {
+  return 'wb-avatar:' + (teacherAvatarKey || '__none__');
+}
+function setTeacherAccountKey(key) {
+  key = String(key || '');
+  if (key === teacherAvatarKey) return;
+  teacherAvatarKey = key;
+  /* 换账号先把上一账号的服务端头像摘掉并立刻重绘，免得新账号没头像时
+     继续挂着旧账号的图（下面 setServerAvatar 同值 early-return 就不会漏） */
+  serverAvatar = '';
+  try { LS.set('wb-teacher-account', key); } catch (e) {}
+  if (typeof refreshAvatarEls === 'function') refreshAvatarEls();
+}
+function applyTeacherSession(j) {
+  if (!j || !j.ok) { resetTeacherAvatarContext(); return; }
+  setTeacherAccountKey(String(j.account || j.username || 'teacher'));
+  setServerAvatar(j.avatar || '');
+}
+function resetTeacherAvatarContext() {
+  setTeacherAccountKey('');
+  serverAvatar = '';
+  try { LS.set('wb-teacher-account', ''); } catch (e) {}
+  if (typeof refreshAvatarEls === 'function') refreshAvatarEls();
+}
+window.applyTeacherSession = applyTeacherSession;
+function setServerAvatar(v) {
+  v = v || '';
+  if (serverAvatar === v) return;
+  serverAvatar = v;
+  if (typeof refreshAvatarEls === 'function') refreshAvatarEls();
+}
+/* 像素画 iframe（教师练习）里设为头像后即时刷新教师端头像位 */
+window.addEventListener('message', function (ev) {
+  if (ev && ev.data && ev.data.type === 'wb-avatar-changed') {
+    setServerAvatar(ev.data.avatar || '');
+    if (!ev.data.avatar) {
+      /* 没带图（老版本通知）：回服务端拉一次 */
+      fetch('/api/v2/auth/session', { credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (j) { if (j && j.ok) setServerAvatar(j.avatar); })
+        .catch(function () {});
+    }
+  }
+});
 function avatarPref() {
   var p = null;
-  try { p = LS.get('wb-avatar', null); } catch (e) {}
+  try { p = LS.get(teacherAvatarStoreKey(), null); } catch (e) {}
   /* LS 里是原样字符串（setItem 会自动 String()），对象必须先 JSON 再存；
      早期版本直接存对象 → "[object Object]"，这里一并兼容解析失败的情况。 */
   if (typeof p === 'string') {
@@ -9094,6 +9232,10 @@ function userAvatarHtml(cls, id) {
   cls = cls ? ' ' + cls : '';
   var idAttr = id ? ' id="' + id + '"' : '';
   var p = avatarPref();
+  if (serverAvatar)
+    return '<span' + idAttr + ' class="su-av uav-img' + cls + '"><img src="' + esc(serverAvatar) + '" alt="头像"></span>';
+  if (p.kind === 'img' && p.v)
+    return '<span' + idAttr + ' class="su-av uav-img' + cls + '"><img src="' + esc(p.v) + '" alt="头像"></span>';
   if (p.kind === 'static' && TEACHER_AVATARS.static.indexOf(p.v) >= 0)
     return '<span' + idAttr + ' class="su-av uav-emoji' + cls + '">' + p.v + '</span>';
   if (p.kind === 'dynamic') {
@@ -9110,7 +9252,7 @@ function refreshAvatarEls() {
   if (lg) lg.outerHTML = userAvatarHtml('lg');
 }
 function pickAvatar(kind, v) {
-  try { LS.set('wb-avatar', JSON.stringify({ kind: kind, v: v || '' })); } catch (e) {}
+  try { LS.set(teacherAvatarStoreKey(), JSON.stringify({ kind: kind, v: v || '' })); } catch (e) {}
   refreshAvatarEls();
   toast(kind === 'text' ? '已恢复默认文字头像' : '头像已更新');
   if (state.route === 'settings') renderContent();
@@ -9150,6 +9292,7 @@ function userPopFill() {
       if (j && j.ok) {
         el.textContent = '账号 ' + (j.username || 'teacher') +
           (j.role === 'teacher' ? ' · 教师端' : '');
+        if (typeof applyTeacherSession === 'function') applyTeacherSession(j);
       } else {
         el.textContent = DEMO.on ? '预览模式 · 未登录' : '未登录';
       }
@@ -9951,7 +10094,10 @@ function _sessionAlive() {
   return fetch('/api/v2/auth/session', { credentials: 'same-origin', cache: 'no-store' })
     .then(function (r) { return r.json().catch(function () { return {}; }); })
     .then(function (j) {
-      return !!(j && (j.role === 'teacher' || j.role === 'student' || j.student));
+      var ok = !!(j && (j.role === 'teacher' || j.role === 'student' || j.student));
+      /* 同一台电脑换教师账号时，会话复核顺带把头像上下文切到新账号 */
+      if (ok && typeof applyTeacherSession === 'function') applyTeacherSession(j);
+      return ok;
     });
 }
 async function handleSignedOut() {
@@ -9974,6 +10120,7 @@ async function handleSignedOut() {
   } catch (e) {
     return;                                // 连不上服务：不要误踢人
   }
+  if (typeof resetTeacherAvatarContext === 'function') resetTeacherAvatarContext();
   renderLogin('登录已过期，请重新登录');
 }
 
@@ -11668,6 +11815,7 @@ async function doLogout() {
   state.session = null;
   state.classes = [];
   state.settings = {};
+  if (typeof resetTeacherAvatarContext === 'function') resetTeacherAvatarContext();
   /* 2.0.41：退出 = 先真的把服务端会话注销，再统一回 /teacher/login。
      以前这里只调 renderLogin()，结果停在那套「手机号+密码」的旧界面上，
      看起来像跳到另一个登录系统。 */
@@ -12510,7 +12658,7 @@ function renderHome() {
   const _stus = dbT('students') || [];
   const totalStudents = state.currentClass === 'all'
     ? _stus.length
-    : _stus.filter(x => String(x.class_id) === String(state.currentClass)).length;
+    : _stus.filter(x => stuInClass(x, state.currentClass)).length;
   const cats = Object.keys(state.settings).length;
   const optCount = Object.values(state.settings)
     .reduce((s,a) => s + a.length, 0);
@@ -15587,7 +15735,7 @@ async function applyGroupTemplate(id, mode) {
 
   /* ---------- 方式 B：按学生匹配（原逻辑） ---------- */
 
-  const stus = (dbT('students') || []).filter(s => s.class_id === cls);
+  const stus = (dbT('students') || []).filter(s => stuInClass(s, cls));
   const byNo = new Map(stus.filter(s => s.student_no).map(s => [String(s.student_no), s]));
   const byName = new Map(stus.map(s => [s.name, s]));
   const seatByStu = new Map();
@@ -16119,11 +16267,33 @@ function stuGoPage(n) {
 }
 window.stuGoPage = stuGoPage;
 
+/* 2.0.71 多班：一个学生可兼属多个班（如课外班），档案只有一份。
+   class_id = 主班，class_ids = 兼属班数组。所有「某班有哪些学生」的
+   判断统一走这里，避免各页面口径不一致。 */
+function stuClassIds(s) {
+  const out = [];
+  if (s && s.class_id !== undefined && s.class_id !== null && s.class_id !== '') {
+    const n = Number(s.class_id);
+    if (Number.isFinite(n)) out.push(n);
+  }
+  (s && Array.isArray(s.class_ids) ? s.class_ids : []).forEach(x => {
+    const n = Number(x);
+    if (Number.isFinite(n) && !out.includes(n)) out.push(n);
+  });
+  return out;
+}
+window.stuClassIds = stuClassIds;
+function stuInClass(s, cls) {
+  const n = Number(cls);
+  return stuClassIds(s).includes(n);
+}
+window.stuInClass = stuInClass;
+
 /** 班级人数跟着学生表重算（列表和下拉都显示它对不对得上） */
 function syncClassCount() {
   const stus = dbT('students') || [];
   (dbT('classes') || []).forEach(c => {
-    c.student_count = stus.filter(s => s.class_id === c.id).length;
+    c.student_count = stus.filter(s => stuInClass(s, c.id)).length;
   });
 }
 window.syncClassCount = syncClassCount;
@@ -16167,6 +16337,16 @@ function openStudentDialog(id) {
         <label class="hwp-lbl" for="sdPhone">手机号</label>
         <input id="sdPhone" class="fl-inp" style="flex:1" maxlength="11"
           placeholder="11 位手机号（可选）" value="${v('phone1')}">
+      </div>
+      <div class="hwp-row" style="align-items:flex-start">
+        <label class="hwp-lbl" style="padding-top:4px">兼属班</label>
+        <div id="sdExtraCls" style="flex:1;display:flex;flex-wrap:wrap;gap:6px 12px;max-height:96px;overflow:auto">
+          ${classes.filter(c => String(c.id) !== String(curCls)).map(c => {
+            const on = editing && stuInClass(editing, c.id) && Number(editing.class_id) !== Number(c.id);
+            return `<label style="display:inline-flex;align-items:center;gap:3px;white-space:nowrap;font-size:13px">
+              <input type="checkbox" class="sd-extra-cls" value="${c.id}" ${on ? 'checked' : ''}>${esc(c.name)}</label>`;
+          }).join('') || '<span style="color:var(--text-muted);font-size:12px">暂无其他班级</span>'}
+        </div>
       </div>
       <div class="hwp-acts">
         <button class="btn btn-primary" type="button"
@@ -16237,8 +16417,15 @@ function saveStudentDialog(id) {
     if (taken) { toast(`学号 ${no} 已被「${taken.name}」使用，请换一个`); return; }
   }
   const arr = dbT('students') || (dbT('students'), []);
+  /* 2.0.71 多班：主班进 class_id，勾选的兼属班进 class_ids；
+     学号查重按全部档案（同一人只有一份，学号天然唯一）。 */
+  const extra = [];
+  document.querySelectorAll('.sd-extra-cls:checked').forEach(el => {
+    const n = Number(el.value);
+    if (Number.isFinite(n) && n !== clsId && !extra.includes(n)) extra.push(n);
+  });
   const fields = {
-    class_id: clsId, name,
+    class_id: clsId, class_ids: extra, name,
     student_no: no,
     gender: (document.getElementById('sdSex') || {}).value || 'male',
     parent_name: ((document.getElementById('sdParent') || {}).value || '').trim().slice(0, 20),
@@ -16822,7 +17009,7 @@ function actCurClass() {
   return null;   // 「全部班级」时，活动无具体班级可匹配
 }
 function actClassStudents(cls) {
-  return (dbT('students') || []).filter(s => Number(s.class_id) === Number(cls));
+  return (dbT('students') || []).filter(s => stuInClass(s, cls));
 }
 function actSubMatchClass(sub, clsStus) {
   /* 2026-11-04 按班级维度收集：学生从学生端打开学习单时，提交记录会带上
@@ -19256,7 +19443,7 @@ window.copyParents = copyParents;
 function copyAllParents() {
   const all = dbT('students');
   const cls = state.currentClass;
-  const list = (cls === 'all' ? all : all.filter(x => String(x.class_id) === String(cls)));
+  const list = (cls === 'all' ? all : all.filter(x => stuInClass(x, cls)));
   if (!list.length) return toast('没有可复制的学生');
   const showAll = !!window.__maskOff;
   const txt = list.map(s => {
@@ -19742,7 +19929,7 @@ function exportHomeworkXlsx(format) {
   const clsName = (dbT('classes').find(c => c.id === cls) || {}).name || ('班级' + cls);
   const hws = dbT('homeworks').filter(h => h.class_id === cls)
     .sort((a, b) => new Date(a.due) - new Date(b.due));
-  const stus = dbT('students').filter(s => s.class_id === cls);
+  const stus = dbT('students').filter(s => stuInClass(s, cls));
   const recOf = (hid, sid) => (dbT('homework_records') || [])
     .find(r => r.homework_id === hid && r.student_id === sid);
 
@@ -21967,6 +22154,30 @@ function attTrendData() {
   return out;
 }
 
+/** 图表画布统一按 CSS 像素绘制（2.0.68）
+    老写法把 640×220 的 canvas 用 CSS 拉到容器宽，10px 的字被放大成 20px，
+    高分屏还糊；这里把画布后备存储设成 clientWidth×dpr，绘图坐标仍用 CSS 像素，
+    字体 / 线宽 / 命中区域都保持设计尺寸。 */
+function fitChartCanvas(cv, cssH) {
+  const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+  const cw = Math.max(280, Math.round(cv.clientWidth ||
+    (cv.parentNode && cv.parentNode.clientWidth) || 640));
+  const ch = Math.max(120, Math.round(cssH || cv.clientHeight || 220));
+  const bw = Math.round(cw * dpr), bh = Math.round(ch * dpr);
+  if (cv.width !== bw || cv.height !== bh) { cv.width = bw; cv.height = bh; }
+  cv.style.width = cw + 'px';
+  cv.style.height = ch + 'px';
+  const ctx = cv.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx: ctx, W: cw, H: ch };
+}
+/** 鼠标坐标 → 画布的 CSS 像素坐标（抵消整站 zoom 与高分屏倍率） */
+function chartPos(cv, e) {
+  const r = cv.getBoundingClientRect();
+  return { x: (e.clientX - r.left) * (cv.clientWidth || r.width) / r.width,
+           y: (e.clientY - r.top) * (cv.clientHeight || r.height) / r.height };
+}
+
 /** 绘制趋势图 + 环形图（元素存在才画） */
 function drawAttCharts() {
   const STAT = state.settings.attendance_status || [];
@@ -21975,14 +22186,14 @@ function drawAttCharts() {
   if (!trendCv || !donutCv) return;
   attHit.trend = []; attHit.donut = [];
   const cls = curSeatClass();
-  const stus = dbT('students').filter(x => x.class_id === cls);
+  const stus = dbT('students').filter(x => stuInClass(x, cls));
   const seatD = state.seatDate || state.appDate || today();
   const data = attTrendData();
 
   /* ---- 趋势图（堆叠柱） ---- */
   {
-    const ctx = trendCv.getContext('2d');
-    const W = trendCv.width, H = trendCv.height;
+    const fit = fitChartCanvas(trendCv, 240);
+    const ctx = fit.ctx, W = fit.W, H = fit.H;
     ctx.clearRect(0, 0, W, H);
     const L = 34, R = 8, T = 8, B = 26;
     const pw = W - L - R, ph = H - T - B;
@@ -22030,8 +22241,8 @@ function drawAttCharts() {
 
   /* ---- 环形图（当日分布 + 图例） ---- */
   {
-    const ctx = donutCv.getContext('2d');
-    const W = donutCv.width, H = donutCv.height;
+    const fit = fitChartCanvas(donutCv, 240);
+    const ctx = fit.ctx, W = fit.W, H = fit.H;
     ctx.clearRect(0, 0, W, H);
     const recs = dbT('attendance').filter(a =>
       a.date === seatD && stus.some(s => s.id === a.student_id));
@@ -22105,9 +22316,8 @@ function attTipEl() {
 
 /** 鼠标移动：命中检测 + 显示提示 */
 function attHoverMove(cv, kind, e) {
-  const rect = cv.getBoundingClientRect();
-  const x = (e.clientX - rect.left) * cv.width / rect.width;
-  const y = (e.clientY - rect.top) * cv.height / rect.height;
+  const p = chartPos(cv, e);
+  const x = p.x, y = p.y;
   let html = '';
   if (kind === 'trend') {
     const hit = attHit.trend.find(r =>
@@ -22171,7 +22381,7 @@ window.openAttExport = openAttExport;
 
 function exportAttCSV(scope) {
   const cls = curSeatClass();
-  const stus = dbT('students').filter(x => x.class_id === cls);
+  const stus = dbT('students').filter(x => stuInClass(x, cls));
   const clsName = dbT('classes').find(c => c.id === cls)?.name || '';
   const escC = s => '"' + String(s == null ? '' : s).replace(/"/g, '""') + '"';
   const rows = [['日期', '学号', '姓名', '状态', '备注'].map(escC).join(',')];
@@ -22474,7 +22684,7 @@ function periodEnded(seq) {
 
 /** 本节签到统计：已签到 / 迟到 / 未签到 / 病假 / 事假 / 缺勤 + 未签到名单 */
 function attStatsOf(cls, date, seq) {
-  const stus = dbT('students').filter(s => Number(s.class_id) === Number(cls));
+  const stus = dbT('students').filter(s => stuInClass(s, cls));
   const out = { total: stus.length, checked: 0, late: 0, unchecked: 0, sick: 0,
                 personal: 0, absent: 0, other: 0, list: [], absentList: [] };
   stus.forEach(s => {
@@ -22509,7 +22719,7 @@ window.openStuAtt = openStuAtt;
 function attAutoSettle(cls, date, seq) {
   if (date !== today()) return 0;          // 只看今天，避免把历史日期一次性刷成旷课
   if (!periodEnded(seq)) return 0;
-  const stus = dbT('students').filter(s => Number(s.class_id) === Number(cls));
+  const stus = dbT('students').filter(s => stuInClass(s, cls));
   /* 只在「这节课确实在上」时才自动结算：本节至少有一个人签到过。
      否则课间 / 没排课的时段翻看上一节，会把全班一股脑刷成旷课。
      老师点「结算本节」可以强制结算，不受这条限制。 */
@@ -22540,7 +22750,7 @@ window.attAutoSettle = attAutoSettle;
 function settleAttNow() {
   const cls = curSeatClass(), d = state.seatDate || state.appDate || today();
   const seq = attPeriod();
-  const stus = dbT('students').filter(s => Number(s.class_id) === Number(cls));
+  const stus = dbT('students').filter(s => stuInClass(s, cls));
   let n = 0;
   stus.forEach(s => {
     const rec = attOfP(s.id, d, seq);
@@ -22585,7 +22795,7 @@ function settleData(clsOpt) {
   const groups = sortedGroupsOf(cls);
   const seatOfStu = new Map(seats.filter(s => s.student_id).map(s => [s.student_id, s]));
   const groupOfSeat = sid => groups.find(g => (g.seat_ids || []).includes(sid));
-  const stus = dbT('students').filter(s => Number(s.class_id) === Number(cls));
+  const stus = dbT('students').filter(s => stuInClass(s, cls));
   /* 个人行：当天德育合计（与 morOf / 座位卡角标同一口径） */
   const stuRows = stus.map(s => {
     const m = morSumOf(s.id, d, d);
@@ -26358,7 +26568,7 @@ function morByItem(cls, from, to) {
 }
 /** 班级德育排行（区间内，按合计降序） */
 function morRanking(cls, from, to) {
-  return dbT('students').filter(s => s.class_id === cls).map(s => {
+  return dbT('students').filter(s => stuInClass(s, cls)).map(s => {
     const m = morSumOf(s.id, from, to);
     return { stu: s, group: hwGroupOfSid(s.id), ...m };
   }).sort((a, b) => b.sum - a.sum
@@ -26426,7 +26636,7 @@ function examRows(examId) {
   const exam = (dbT('exams') || []).find(e => e.id === examId);
   if (!exam) return { exam: null, rows: [] };
   const cls = curSeatClass();
-  const stus = dbT('students').filter(s => s.class_id === cls);
+  const stus = dbT('students').filter(s => stuInClass(s, cls));
   const rows = stus.map(s => {
     const sc = examScoreOf(examId, s.id);
     const total = exam.courses.reduce((a, c) => a + (sc[c] || 0), 0);
@@ -26594,11 +26804,7 @@ function drawHwCharts() {
     if (cv.dataset.hwBound) return;
     cv.dataset.hwBound = '1';
     cv.style.cursor = 'crosshair';
-    const pos = e => {
-      const r = cv.getBoundingClientRect();
-      return { x:(e.clientX - r.left) * cv.width / r.width,
-               y:(e.clientY - r.top) * cv.height / r.height };
-    };
+    const pos = e => chartPos(cv, e);
     cv.addEventListener('mousemove', e => {
       const p = pos(e);
       const hit = kind === 'trend' ? hwHitTrend(p.x) : hwHitDonut(p.x, p.y);
@@ -26621,8 +26827,8 @@ function drawHwCharts() {
 
   /* 折线：按周提交率（来自真实作业），悬停看当周数值 */
   {
-    const ctx = trendCv.getContext('2d');
-    const W = trendCv.width, H = trendCv.height;
+    const fit = fitChartCanvas(trendCv, 240);
+    const ctx = fit.ctx, W = fit.W, H = fit.H;
     ctx.clearRect(0, 0, W, H);
     const L = 34, R = 14, T = 16, B = 28;
     const pw = W - L - R, ph = H - T - B;
@@ -26681,8 +26887,8 @@ function drawHwCharts() {
 
   /* 环形：整体状态构成 + 中心提交率 */
   {
-    const ctx = donutCv.getContext('2d');
-    const W = donutCv.width, H = donutCv.height;
+    const fit = fitChartCanvas(donutCv, 240);
+    const ctx = fit.ctx, W = fit.W, H = fit.H;
     ctx.clearRect(0, 0, W, H);
     const all = dbT('homeworks').filter(h => h.class_id === cls);
     const comp = { submitted:0, late_submit:0, correcting:0, exempt:0, missing:0 };
@@ -27049,11 +27255,7 @@ function drawMorCharts() {
     if (cv.dataset.morBound) return;
     cv.dataset.morBound = '1';
     cv.style.cursor = 'crosshair';
-    const pos = e => {
-      const r = cv.getBoundingClientRect();
-      return { x:(e.clientX - r.left) * cv.width / r.width,
-               y:(e.clientY - r.top) * cv.height / r.height };
-    };
+    const pos = e => chartPos(cv, e);
     cv.addEventListener('mousemove', e => {
       const p = pos(e);
       const hit = kind === 'daily' ? morHitDaily(p.x) : morHitItem(p.x, p.y);
@@ -27076,8 +27278,8 @@ function drawMorCharts() {
 
   /* 每日加减分：零线居中，加分向上（绿）、扣分向下（红） */
   {
-    const ctx = dCv.getContext('2d');
-    const W = dCv.width, H = dCv.height;
+    const fit = fitChartCanvas(dCv, 240);
+    const ctx = fit.ctx, W = fit.W, H = fit.H;
     ctx.clearRect(0, 0, W, H);
     const L = 30, R = 12, T = 14, B = 30;
     const pw = W - L - R, ph = H - T - B;
@@ -27127,8 +27329,8 @@ function drawMorCharts() {
 
   /* 项目构成环形（按记录条数） */
   {
-    const ctx = iCv.getContext('2d');
-    const W = iCv.width, H = iCv.height;
+    const fit = fitChartCanvas(iCv, 240);
+    const ctx = fit.ctx, W = fit.W, H = fit.H;
     ctx.clearRect(0, 0, W, H);
     const sc = morScope();
     const byItem = morByItem(sc.cls, sc.from, sc.to);
@@ -27506,7 +27708,11 @@ function renderScoreReportBody() {
   const exam = vd.exam;
   const view = vd.view;
   const clsName = ((dbT('classes') || []).find(c => Number(c.id) === Number(curSeatClass())) || {}).name || '';
-  const stats = examStats(view.map(r => ({ total: vd.valOf(r) })), vd.sel.length);
+  /* examStats 在 view 为空时返回 null（筛选命中 0 人 / 新考试 0 人录入），
+     直接读 stats.avg 会抛「Cannot read properties of null」；给全 0 兜底，
+     下面 KPI / 图表照常渲染，配合 emptyHtml 提示「没有符合条件的学生」。 */
+  const stats = examStats(view.map(r => ({ total: vd.valOf(r) })), vd.sel.length) ||
+    { n: 0, full: vd.sel.length * 100, avg: 0, max: 0, min: 0, passRate: 0, goodRate: 0 };
   const subjStats = vd.sel.map(cid => {
     const vals = view.map(r => r.scores[cid]).filter(v => v != null);
     return { cid, name: repCourseName(cid), n: vals.length,
@@ -27534,18 +27740,18 @@ function renderScoreReportBody() {
     <div class="rep-cond">
       <div class="rep-row">
         <span class="sc-coursebar-lbl">考试</span>
-        <select class="fl-inp" style="width:auto;max-width:190px" onchange="setRepFilter('exam', this.value)" title="选择要分析的考试">
+        <select class="fl-inp" style="width:360px;flex:none;min-width:0" onchange="setRepFilter('exam', this.value)" title="选择要分析的考试">
           ${examOpts.map(e => `<option value="${e.id}" ${String(e.id) === String(exam.id) ? 'selected' : ''}>${esc(e.name)}${e.date ? '（' + esc(e.date) + '）' : ''}</option>`).join('')}
         </select>
         <span class="sc-coursebar-lbl">对比</span>
-        <select class="fl-inp" style="width:auto;max-width:190px" onchange="setRepFilter('examB', this.value)" title="选一场考试做纵向对比">
+        <select class="fl-inp" style="width:190px;flex:none;min-width:0" onchange="setRepFilter('examB', this.value)" title="选一场考试做纵向对比">
           <option value="">不对比</option>
           ${examOpts.filter(e => e.id !== exam.id).map(e => `<option value="${e.id}" ${String(e.id) === String(F.examB || '') ? 'selected' : ''}>${esc(e.name)}</option>`).join('')}
         </select>
-        <select class="fl-inp" style="width:auto" onchange="setRepFilter('band', this.value)" title="按分数段筛选">
+        <select class="fl-inp" style="width:110px;flex:none" onchange="setRepFilter('band', this.value)" title="按分数段筛选">
           ${bandOpts.map(([v, l]) => `<option value="${v}" ${F.band === v ? 'selected' : ''}>${l}</option>`).join('')}
         </select>
-        <input class="fl-inp" style="width:140px" placeholder="姓名 / 学号" value="${esc(F.kw || '')}"
+        <input class="fl-inp" style="width:150px;flex:none" placeholder="姓名 / 学号" value="${esc(F.kw || '')}"
           onchange="setRepFilter('kw', this.value)" title="姓名或学号关键词（回车/失焦生效）">
         ${vd.hasFilter ? `<button type="button" class="btn btn-ghost btn-sm"
           style="width:auto;padding:3px 10px;font-size:12px" onclick="clearRepFilter()">✕ 重置条件</button>` : ''}
@@ -27829,8 +28035,9 @@ function renderRepCompare(vd) {
           <td style="text-align:center" class="${d > 0 ? 'up' : d < 0 ? 'dn' : ''}">${
             d === 0 ? '持平' : (d > 0 ? '+' : '') + d + (unit || '')}</td></tr>`;
       };
-      const statA = examStats(vd.view.map(r => ({ total: vd.valOf(r) })), vd.sel.length);
-      const statB = examStats(pair.map(x => ({ total: bVal(x.b) })), (common.length || B.courses.length));
+      const ZERO_ST = { n: 0, full: vd.sel.length * 100, avg: 0, max: 0, min: 0, passRate: 0, goodRate: 0 };
+      const statA = examStats(vd.view.map(r => ({ total: vd.valOf(r) })), vd.sel.length) || ZERO_ST;
+      const statB = examStats(pair.map(x => ({ total: bVal(x.b) })), (common.length || B.courses.length)) || ZERO_ST;
       body = `<div class="dim" style="font-size:11.5px;margin:2px 0 8px">
           ${esc(vd.exam.name)} vs ${esc(B.name)}${common.length ? ' · 共同科目：' + common.map(cid => esc(repCourseName(cid))).join('、') : ' · 两场无共同科目，仅比较各自总分'}。
           共同学生 ${pair.length} 人。</div>
@@ -28214,7 +28421,8 @@ function exportScoreReport() {
   const exam = vd.exam;
   const F = state.repFilter || {};
   const clsName = ((dbT('classes') || []).find(c => Number(c.id) === Number(curSeatClass())) || {}).name || '';
-  const stats = examStats(vd.view.map(r => ({ total: vd.valOf(r) })), vd.sel.length);
+  const stats = examStats(vd.view.map(r => ({ total: vd.valOf(r) })), vd.sel.length) ||
+    { n: 0, full: vd.sel.length * 100, avg: 0, max: 0, min: 0, passRate: 0, goodRate: 0 };
   const subjStats = vd.sel.map(cid => {
     const vals = vd.view.map(r => r.scores[cid]).filter(v => v != null);
     return { name: repCourseName(cid), n: vals.length,
@@ -29906,10 +30114,27 @@ function studentReportHtml(r) {
           style="fill:var(--text-secondary)">${esc(t.title.slice(0, 6))}</text>`).join('')}
     </svg>`;
   }
-  const scRows = r.sc.trend.map(t => t.items.map(it => `<tr><td>${esc(t.title)}</td>
-      <td class="c">${esc(t.date.slice(5))}</td><td>${esc(it.subject || '总分')}</td>
-      <td class="c">${it.score}</td></tr>`).join('')).join('')
-    || '<tr><td colspan="4" class="dim">还没有成绩</td></tr>';
+  /* 2.0.72：多次成绩对比改成「科目为行、考试次数为列」横向表。
+     原来是 考试/日期/科目/分数 竖排，两次月考夹着同一学科要上下翻，
+     现在左右并排一眼能比；日期收进表头小字，鼠标悬停也有 title。 */
+  const examCols = r.sc.trend;
+  const subjOrder = [];
+  examCols.forEach(t => t.items.forEach(it => {
+    const nm = it.subject || '总分';
+    if (subjOrder.indexOf(nm) < 0) subjOrder.push(nm);
+  }));
+  const scHead = examCols.length
+    ? '<thead><tr><th>科目</th>' + examCols.map(t =>
+        `<th class="c" title="${esc(t.date)} ${esc(t.title)}">${esc(t.title)}`
+        + `<div style="font-size:10px;font-weight:400;opacity:.7">${esc(t.date.slice(5))}</div></th>`).join('')
+      + '</tr></thead>'
+    : '';
+  const scRows = examCols.length
+    ? subjOrder.map(nm => '<tr><td>' + esc(nm) + '</td>' + examCols.map(t => {
+        const it = t.items.find(x => (x.subject || '总分') === nm);
+        return '<td class="c">' + (it ? it.score : '<span class="dim">—</span>') + '</td>';
+      }).join('') + '</tr>').join('')
+    : `<tr><td colspan="${Math.max(2, examCols.length + 1)}" class="dim">还没有成绩</td></tr>`;
 
   return `
   <div class="rep">
@@ -29976,8 +30201,7 @@ function studentReportHtml(r) {
       <div class="rep-sec-t">成绩</div>
       ${scChart}
       <table class="rep-tb">
-        <thead><tr><th>考试</th><th>日期</th><th>科目</th><th>分数</th></tr></thead>
-        <tbody>${scRows}</tbody></table>
+        ${scHead}<tbody>${scRows}</tbody></table>
       ${r.sc.rank ? `<div class="rep-line" style="margin-top:6px">最近一次（${
         esc(r.sc.lastTitle)}）班级第 <b>${r.sc.rank}</b>/${r.sc.rankTotal}</div>` : ''}
     </div>
@@ -30962,7 +31186,7 @@ function renderSubjectList() {
     '<div class="dim" style="font-size:11.5px;margin-bottom:6px">拖动科目行可调整显示顺序（成绩表列序、新建考试里的排列都会跟着变）。</div>' +
     list.map(c =>
     '<div class="subj-row" draggable="true" data-cid="' + c.id + '" ' +
-    'style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:grab;background:var(--card,#fff)">' +
+    'style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:grab;background:var(--bg-surface,#fff)">' +
     '<span style="display:flex;align-items:center;gap:8px;min-width:0">' +
     '<span class="dim" style="cursor:grab" title="拖动排序">⋮⋮</span>' +
     '<b>' + esc(c.name) + '</b>' + (c.teacher ? ' <span class="dim">· ' + esc(c.teacher) + '</span>' : '') + '</span>' +
@@ -31565,7 +31789,7 @@ function hwRecordOf(hid, sid) {
 }
 /** 班级学生按座位号排序（德育页/成绩页共用） */
 function clsStusSorted(cls) {
-  return dbT('students').filter(s => s.class_id === cls).sort((a,b) => {
+  return dbT('students').filter(s => stuInClass(s, cls)).sort((a,b) => {
     const ka = a.seat_no || '99-99', kb = b.seat_no || '99-99';
     return ka.localeCompare(kb, undefined, { numeric:true })
         || String(a.student_no||'').localeCompare(String(b.student_no||''));
@@ -31981,7 +32205,7 @@ function saveHomework(hid) {
     toast('已保存作业修改');
   } else {
     const id = Math.max(0, ...dbT('homeworks').map(x => x.id)) + 1;
-    const stus = dbT('students').filter(s => s.class_id === cls);
+    const stus = dbT('students').filter(s => stuInClass(s, cls));
     dbT('homeworks').push({
       id, class_id: cls, course_id: courseId, title, due, published,
       total: stus.length, submitted: 0, checked: 0,
@@ -32233,7 +32457,7 @@ const DEMO_RENDER = {
   attendance() {
     const cls = curSeatClass();
     const d = state.seatDate || state.appDate || today();
-    const stus = dbT('students').filter(x => x.class_id === cls);
+    const stus = dbT('students').filter(x => stuInClass(x, cls));
     const recs = attRecsOf(d, cls);
     const STAT = (state.settings.attendance_status||[]);
     const count = c => recs.filter(r => r.status === c).length;
@@ -32484,7 +32708,7 @@ const DEMO_RENDER = {
     const recs = morRecordsOf(cls, rng.from, rng.to);
     const bonus = recs.filter(r => (+r.score||0) > 0).reduce((a,r)=>a+(+r.score||0), 0);
     const penalty = recs.filter(r => (+r.score||0) < 0).reduce((a,r)=>a+(-+r.score||0), 0);
-    const stus = dbT('students').filter(s => s.class_id === cls);
+    const stus = dbT('students').filter(s => stuInClass(s, cls));
     const sums = stus.map(s => morSumOf(s.id, rng.from, rng.to).sum);
     const avg = sums.length
       ? Math.round(sums.reduce((a,b)=>a+b,0) / sums.length * 10) / 10 : 0;
@@ -33812,7 +34036,7 @@ const DEMO_RENDER = {
   students() {
     const all = dbT('students');
     const cls = state.currentClass;
-    let list = cls === 'all' ? all : all.filter(x => String(x.class_id) === String(cls));
+    let list = cls === 'all' ? all : all.filter(x => stuInClass(x, cls));
     if (state.keyword) {
       const k = state.keyword;
       list = list.filter(x =>
@@ -35180,7 +35404,16 @@ async function updCheck() {
       headers: { 'Content-Type': 'application/json' }, body: '{}' });
     const j = await r.json();
     if (j.ok) {
-      toast(j.has_update ? `发现新版本 v${j.manifest.version}` : (j.manifest && j.manifest.version ? `已是最新版本（v${j.manifest.version}）` : '已是最新版本'));
+      let msg;
+      if (j.has_update) {
+        msg = `发现新版本 v${j.manifest.version}`;
+      } else if (j.relation === 'local_newer') {
+        /* 本机比更新源新：说「已是最新版本 v旧号」会让人以为版本倒退了 */
+        msg = `本机 v${j.local_version} 高于更新源 v${j.manifest.version}，更新源未同步`;
+      } else {
+        msg = j.manifest && j.manifest.version ? `已是最新版本（v${j.manifest.version}）` : '已是最新版本';
+      }
+      toast(msg);
     } else {
       toast(j.msg || '检查失败');
     }
@@ -35921,6 +36154,7 @@ async function boot() {
                           { credentials: 'same-origin', cache: 'no-store' });
     const j = await r.json().catch(function () { return {}; });
     if (j && (j.role === 'teacher' || j.role === 'student' || j.student)) {
+      if (typeof applyTeacherSession === 'function') applyTeacherSession(j);
       if (lockActive() && !restoreKeyFromSession()) { renderLock(false); return; }
       goToApp();
       return;
@@ -38648,39 +38882,39 @@ function quizEnsureCss(){
   const s = document.createElement('style'); s.id = 'qzCss';
   s.textContent = `
 .qz-wrap{padding:2px 0 40px}
-.qz-hd{background:var(--card,#fff);border:1px solid var(--line,#e4e8e6);border-radius:14px;padding:14px 16px;margin-bottom:12px}
+.qz-hd{background:var(--bg-surface,#fff);border:1px solid var(--border,#e4e8e6);border-radius:14px;padding:14px 16px;margin-bottom:12px}
 .qz-hd h3{margin:0 0 6px;font-size:16px;font-weight:700}
-.qz-hd p{margin:3px 0;font-size:12.5px;line-height:1.7;color:var(--ink3,#6b7772)}
+.qz-hd p{margin:3px 0;font-size:12.5px;line-height:1.7;color:var(--text-secondary,#6b7772)}
 .qz-hd b{color:var(--brand-primary,#0F6E56)}
 .qz-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px}
-.qz-tab{border:1px solid var(--line,#e4e8e6);background:var(--card,#fff);border-radius:9px;padding:8px 15px;font-size:13px;cursor:pointer}
+.qz-tab{border:1px solid var(--border,#e4e8e6);background:var(--bg-surface,#fff);border-radius:9px;padding:8px 15px;font-size:13px;cursor:pointer}
 .qz-tab.on{background:var(--brand-primary,#0F6E56);color:#fff;border-color:transparent}
 .qz-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
 .qz-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(268px,1fr));gap:11px}
-.qz-card{background:var(--card,#fff);border:1px solid var(--line,#e4e8e6);border-radius:13px;padding:13px 14px}
+.qz-card{background:var(--bg-surface,#fff);border:1px solid var(--border,#e4e8e6);border-radius:13px;padding:13px 14px}
 .qz-card h4{margin:0 0 6px;font-size:14px;font-weight:700}
-.qz-meta{font-size:12px;color:var(--ink3,#6b7772);line-height:1.75}
+.qz-meta{font-size:12px;color:var(--text-secondary,#6b7772);line-height:1.75}
 .qz-acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
 .qz-tag{display:inline-block;font-size:11px;padding:2px 7px;border-radius:6px;background:#eef4f1;color:#0F6E56;margin:2px 4px 2px 0}
 .qz-tag.off{background:#f2f2f2;color:#777}
 .qz-tag.warn{background:#fff3e0;color:#8a5a00}
 .qz-tbl{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:8px}
-.qz-tbl th,.qz-tbl td{border-bottom:1px solid var(--line,#e9ecea);padding:8px 9px;text-align:left}
-.qz-tbl th{font-weight:600;color:var(--ink3,#6b7772);background:rgba(127,127,127,.05)}
+.qz-tbl th,.qz-tbl td{border-bottom:1px solid var(--border,#e9ecea);padding:8px 9px;text-align:left}
+.qz-tbl th{font-weight:600;color:var(--text-secondary,#6b7772);background:rgba(127,127,127,.05)}
 .qz-scroll{overflow-x:auto}
-.qz-empty{padding:26px 14px;text-align:center;color:var(--ink3,#6b7772);font-size:13px}
+.qz-empty{padding:26px 14px;text-align:center;color:var(--text-secondary,#6b7772);font-size:13px}
 .qz-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0}
-.qz-row label{font-size:12.5px;min-width:92px;color:var(--ink3,#6b7772)}
-.qz-inp,.qz-sel,.qz-ta{width:100%;box-sizing:border-box;border:1px solid var(--line,#dfe5e2);border-radius:8px;padding:7px 9px;font-size:13px;background:var(--card,#fff);color:inherit}
+.qz-row label{font-size:12.5px;min-width:92px;color:var(--text-secondary,#6b7772)}
+.qz-inp,.qz-sel,.qz-ta{width:100%;box-sizing:border-box;border:1px solid var(--border,#dfe5e2);border-radius:8px;padding:7px 9px;font-size:13px;background:var(--bg-surface,#fff);color:inherit}
 .qz-ta{min-height:62px;resize:vertical}
-.qz-q{border:1px solid var(--line,#e4e8e6);border-radius:11px;padding:11px 12px;margin-bottom:9px;background:rgba(127,127,127,.025)}
+.qz-q{border:1px solid var(--border,#e4e8e6);border-radius:11px;padding:11px 12px;margin-bottom:9px;background:rgba(127,127,127,.025)}
 .qz-q-hd{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
 .qz-q-hd .idx{font-weight:700;color:var(--brand-primary,#0F6E56);font-size:13px}
 .qz-opt{display:flex;gap:6px;align-items:center;margin:5px 0}
-.qz-opt .k{width:24px;font-size:12px;font-weight:700;color:var(--ink3,#6b7772)}
-.qz-mini{border:1px solid var(--line,#dfe5e2);background:var(--card,#fff);border-radius:7px;padding:4px 9px;font-size:12px;cursor:pointer}
+.qz-opt .k{width:24px;font-size:12px;font-weight:700;color:var(--text-secondary,#6b7772)}
+.qz-mini{border:1px solid var(--border,#dfe5e2);background:var(--bg-surface,#fff);border-radius:7px;padding:4px 9px;font-size:12px;cursor:pointer}
 .qz-mini.danger{color:#B3261E;border-color:#f0c9c5}
-.qz-note{font-size:11.5px;color:var(--ink3,#6b7772);line-height:1.7}
+.qz-note{font-size:11.5px;color:var(--text-secondary,#6b7772);line-height:1.7}
 .qz-score-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:#eef7f3;border:1px solid #cfe8dd;border-radius:11px;padding:9px 12px;margin-bottom:12px;font-size:12.5px}
 .act-win.is-bound{border-color:var(--brand-primary,#0F6E56);box-shadow:0 0 0 2px rgba(15,110,86,.13)}
 .act-win-hd .qz-mini{font-size:11px;padding:2px 7px}
@@ -38699,17 +38933,17 @@ function quizEnsureCss(){
 .qz-bank-pick .chk{font-size:12px;display:inline-flex;align-items:center;gap:4px}
 /* 试题库列表 / 紧凑视图（与资料页三视图同一套分段控件与密度） */
 .qz-bank-title{display:inline-flex;align-items:center;gap:6px;font-weight:600}
-.qz-img-xs{width:26px;height:26px;object-fit:cover;border-radius:5px;border:1px solid var(--line,#e6eae8)}
+.qz-img-xs{width:26px;height:26px;object-fit:cover;border-radius:5px;border:1px solid var(--border,#e6eae8)}
 .qz-bank-tbl td{vertical-align:middle}
 .qz-bank-tbl .btn-sm{padding:3px 9px;font-size:11px;width:auto;flex:none}
 .qz-cmp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:7px}
-.qz-cmp{display:flex;align-items:center;gap:8px;border:1px solid var(--line,#e4e8e6);
-  border-radius:9px;padding:7px 10px;font-size:12.5px;background:var(--card,#fff)}
+.qz-cmp{display:flex;align-items:center;gap:8px;border:1px solid var(--border,#e4e8e6);
+  border-radius:9px;padding:7px 10px;font-size:12.5px;background:var(--bg-surface,#fff)}
 .qz-cmp input{flex:none;margin:0}
 .qz-cmp-t{flex:none;font-size:10.5px;color:var(--brand-primary,#0F6E56);background:#eef4f1;border-radius:5px;padding:1px 6px}
 .qz-cmp-fn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.qz-cmp-pt{flex:none;color:var(--ink3,#6b7772);font-size:11px}
-.qz-cmp-x{flex:none;border:0;background:transparent;color:var(--ink3,#6b7772);cursor:pointer;font-size:12px}
+.qz-cmp-pt{flex:none;color:var(--text-secondary,#6b7772);font-size:11px}
+.qz-cmp-x{flex:none;border:0;background:transparent;color:var(--text-secondary,#6b7772);cursor:pointer;font-size:12px}
 .qz-cmp-x:hover{color:#B3261E}
 /* 选图片 / 选文件：隐藏原生 file input，用工作台同款凸起按钮触发 */
 /* 教师端 .btn 默认 width:100%（整行），在工具条 / 文件选择里要按内容宽度排 */
@@ -38717,23 +38951,39 @@ function quizEnsureCss(){
 .qz-file-btn{position:relative;overflow:hidden;cursor:pointer;display:inline-flex;
   align-items:center;gap:5px;width:auto;flex:none}
 .qz-file-btn input[type=file]{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;font-size:0}
-.qz-file-name{font-size:11.5px;color:var(--ink3,#6b7772);max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qz-file-name{font-size:11.5px;color:var(--text-secondary,#6b7772);max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .qz-file-name.on{color:var(--brand-primary,#0F6E56);font-weight:600}
 /* 格式提示常驻：选完文件也还能看到能传什么 */
-.qz-file-hint{font-size:11px;color:var(--ink3,#6b7772);opacity:.85}
+.qz-file-hint{font-size:11px;color:var(--text-secondary,#6b7772);opacity:.85}
 .qz-img-edit .btn-sm{padding:4px 10px;font-size:11.5px;width:auto;flex:none}
-.qz-img-sm{display:block;max-width:100%;max-height:88px;border-radius:8px;border:1px solid var(--line,#e6eae8);margin:5px 0}
-.qz-img-opt{max-width:100%;max-height:70px;border-radius:7px;border:1px solid var(--line,#e6eae8);margin-top:4px}
-.qz-img-edit{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:6px 0;font-size:11.5px;color:var(--ink3,#6b7772)}
+.qz-img-sm{display:block;max-width:100%;max-height:88px;border-radius:8px;border:1px solid var(--border,#e6eae8);margin:5px 0}
+.qz-img-opt{max-width:100%;max-height:70px;border-radius:7px;border:1px solid var(--border,#e6eae8);margin-top:4px}
+.qz-img-edit{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:6px 0;font-size:11.5px;color:var(--text-secondary,#6b7772)}
 .qz-img-edit input[type=file]{font-size:11px;max-width:190px}
 .qz-prev{margin-top:10px}
 .qz-prev-hd{font-size:12.5px;color:var(--brand-primary,#0F6E56);margin-bottom:7px}
-.qz-prev-list{max-height:280px;overflow:auto;border:1px solid var(--line,#e4e8e6);border-radius:10px}
-.qz-prev-row{padding:7px 10px;border-bottom:1px solid var(--line,#eceeec);font-size:12.5px;line-height:1.7}
+.qz-prev-list{max-height:280px;overflow:auto;border:1px solid var(--border,#e4e8e6);border-radius:10px}
+.qz-prev-row{padding:7px 10px;border-bottom:1px solid var(--border,#eceeec);font-size:12.5px;line-height:1.7}
 .qz-prev-row:last-child{border-bottom:0}
 .qz-prev-row .qz-note{margin-left:6px}
 .qz-err{background:#fdeceb;border:1px solid #f0c9c5;color:#8a1c14;font-size:12.5px}
 .qz-opt-img label{display:flex;align-items:center;gap:8px}
+/* 2.0.65 夜色适配：测验模块原来用 --card/--line/--ink3 这几个不存在的变量，
+   夜色下回落成白底白卡；上面已统一换成现用主题变量，这里再补硬编码浅色的暗版。 */
+[data-mode="dark"] .qz-hd,[data-mode="dark"] .qz-card,
+[data-mode="dark"] .qz-tab,[data-mode="dark"] .qz-inp,
+[data-mode="dark"] .qz-sel,[data-mode="dark"] .qz-ta,
+[data-mode="dark"] .qz-mini,[data-mode="dark"] .qz-cmp{background:var(--bg-surface)}
+[data-mode="dark"] .qz-tab.on{color:#08110E}
+[data-mode="dark"] .qz-tag{background:rgba(159,180,188,.16);color:var(--text-primary)}
+[data-mode="dark"] .qz-tag.off{background:rgba(255,255,255,.07);color:var(--text-secondary)}
+[data-mode="dark"] .qz-tag.warn{background:rgba(239,159,39,.18);color:#F0C868}
+[data-mode="dark"] .qz-mini.danger{color:#FF9B93;border-color:rgba(226,75,74,.4)}
+[data-mode="dark"] .qz-score-bar{background:rgba(62,207,160,.1);border-color:rgba(62,207,160,.26)}
+[data-mode="dark"] .qz-q{background:rgba(255,255,255,.025)}
+[data-mode="dark"] .act-bind-bar{background:rgba(62,207,160,.08);border-color:rgba(62,207,160,.2)}
+[data-mode="dark"] .qz-cmp-t{background:rgba(62,207,160,.16);color:var(--brand-primary)}
+[data-mode="dark"] .qz-err{background:rgba(226,75,74,.14);border-color:rgba(226,75,74,.3);color:#FFB4AE}
 @media(max-width:760px){.qz-row label{min-width:100%}.qz-grid{grid-template-columns:1fr}}
 `;
   document.head.appendChild(s);
@@ -38846,6 +39096,11 @@ function quizPublishListHtml(){
       + '<span class="qz-tag '+(p.show_analysis?'':'off')+'">解析'+(p.show_analysis?'开放':'不开放')+'</span>'
       + '<span class="qz-tag warn">大屏窗口：'+esc(p.window||'')+'</span></div>'
       + '<div class="qz-acts">'
+      /* 2.0.72：停止/恢复不再藏进配置弹窗的下拉第三项，直接外置成卡片首按钮。
+         用工作台统一的 .qz-mini；已关闭时换成「恢复发布」，一眼看得出当前状态。 */
+      + (p.state === 'closed'
+          ? '<button type="button" class="qz-mini" onclick="quizSetStatus(\''+esc(p.id)+'\',\'published\')">▶ 恢复发布</button>'
+          : '<button type="button" class="qz-mini danger" onclick="quizSetStatus(\''+esc(p.id)+'\',\'closed\')">⏹ 停止提交</button>')
       + '<button type="button" class="qz-mini" onclick="quizOpenData(\''+esc(p.id)+'\')">📊 去成绩页看成绩</button>'
       + '<button type="button" class="qz-mini" onclick="quizGradeOpen(\''+esc(p.id)+'\')" title="批阅简答 / 图片题，分数直接计入总分">✍ 人工批阅</button>'
       + '<button type="button" class="qz-mini" onclick="quizPublishOpen(\''+esc(p.id)+'\')">✎ 配置</button>'
@@ -39464,6 +39719,10 @@ function quizPublishOpen(id, paperId){
     + '<option value="draft"'+(d.status==='draft'?' selected':'')+'>草稿（学生不可见）</option>'
     + '<option value="closed"'+(d.status==='closed'?' selected':'')+'>关闭（停止提交）</option></select></div>';
   const foot = '<button type="button" class="btn btn-primary" style="width:auto" onclick="quizPublishSave(\''+esc(d.id||'')+'\')">保存并推送</button>'
+    /* 2.0.72：停止提交从状态下拉里拎出来，放到底部常驻操作区（滚动位置无关）。
+       保存弹窗未落盘时先让老师存一次，避免状态与表单里改的字段打架。 */
+    + (id ? '<button type="button" class="btn btn-ghost" style="width:auto" onclick="quizSetStatus(\''+esc(id)+'\',\''+(d.status==='closed'?'published':'closed')+'\')">'
+        + (d.status==='closed' ? '▶ 恢复发布' : '⏹ 停止提交') + '</button>' : '')
     + '<button type="button" class="btn btn-ghost" style="width:auto" onclick="closeFloat()">取消</button>';
   showFloat(id?'配置测验':'发布测验', body, {footer:foot});
   const layer = document.getElementById('floatLayer'); if (layer) layer.classList.add('wide');
@@ -39494,6 +39753,32 @@ async function quizPublishSave(id){
   } catch(e){ toast('发布失败：'+e.message); }
 }
 window.quizPublishSave = quizPublishSave;
+/* 2.0.72：停止提交 / 恢复发布。复用 publish/save 只改 status 字段，
+   其余字段原样带回，避免卡片上一键操作把班级/时间/显示策略清空。 */
+async function quizSetStatus(id, status){
+  const p = QT.publishes.find(x => String(x.id) === String(id));
+  if (!p) return toast('找不到这条测验');
+  const closing = status === 'closed';
+  const tip = closing
+    ? '停止后学生将无法继续提交，已有提交和成绩不受影响。确定停止「' + p.title + '」？'
+    : '恢复后学生在开放时间内可以再次提交。确定恢复「' + p.title + '」？';
+  if (!(await uiConfirm(tip, { title: closing ? '停止提交' : '恢复发布',
+                               okText: closing ? '停止提交' : '恢复发布' }))) return;
+  const payload = {
+    id: p.id, paper_id: p.paper_id, title: p.title, course: p.course || '',
+    class_ids: p.class_ids || [], open_at: p.open_at || '', close_at: p.close_at || '',
+    max_attempts: p.max_attempts || 1, allow_multiple: !!p.allow_multiple,
+    show_answer: !!p.show_answer, show_score: !!p.show_score,
+    show_analysis: !!p.show_analysis, window: p.window || '', status: status
+  };
+  try {
+    await quizApi('/api/v2/quiz/teacher/publish/save', { publish: payload });
+    closeFloat();
+    toast(closing ? '已停止提交' : '已恢复发布');
+    await quizInit(true); quizRender(false);
+  } catch (e) { toast('操作失败：' + e.message); }
+}
+window.quizSetStatus = quizSetStatus;
 async function quizPublishDelete(id){
   const p = QT.publishes.find(x=>String(x.id)===String(id)); if(!p) return;
   if (!(await uiConfirm('删除测验「'+p.title+'」？\n该次发布的所有提交与成绩会一并删除，不可恢复。',{title:'删除测验',okText:'删除'}))) return;

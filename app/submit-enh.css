@@ -7,6 +7,7 @@
 .se-h{font-weight:600;font-size:14px;display:flex;align-items:center;gap:8px;margin-bottom:10px}
 .se-h .n{width:20px;height:20px;border-radius:6px;background:var(--brand-primary);color:#fff;
   font-size:11.5px;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+[data-mode="dark"] .se-h .n{color:#08110E}
 .se-h .r{margin-left:auto;display:flex;gap:7px;align-items:center;flex-wrap:wrap}
 
 .se-row{display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px dashed var(--border)}
@@ -21,8 +22,9 @@
 .se-pill{display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:1px 8px;border-radius:20px;
   border:1px solid var(--border);background:var(--bg-page);color:var(--text-secondary);white-space:nowrap}
 .se-pill.ok{background:var(--brand-soft);color:var(--brand-primary)}
-.se-pill.warn{background:#FDF3E3;color:#8A5A10;border-color:#F0C36D}
-.se-pill.err{background:#FDECEC;color:#E24B4A;border-color:rgba(226,75,74,.3)}
+/* 2.0.66：警示色改用随主题切换的令牌，夜色下不再是浅底深字 */
+.se-pill.warn{background:var(--warn-soft);color:var(--status-warn);border-color:rgba(239,159,39,.45)}
+.se-pill.err{background:var(--error-soft);color:var(--status-error);border-color:rgba(226,75,74,.4)}
 
 /* 弹层 */
 .se-mask{position:fixed;inset:0;background:rgba(20,40,34,.34);z-index:900;display:none}
@@ -84,7 +86,7 @@
 .se-mat .in{flex:1;min-width:0}
 .se-mat .in .n{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .se-mat .in .m{font-size:11.5px;color:var(--text-secondary)}
-.se-mat.dead .ic{background:#FDECEC;color:#E24B4A}
+.se-mat.dead .ic{background:var(--error-soft);color:var(--status-error)}
 .se-mat.dead .in .n{color:var(--text-secondary);text-decoration:line-through}
 .se-mat .ops{display:flex;gap:4px}
 
@@ -104,7 +106,7 @@
 
 .se-note{background:var(--brand-soft);border:1px solid var(--border);color:var(--text-secondary);
   border-radius:9px;padding:8px 11px;font-size:12px;line-height:1.7;margin-top:10px}
-.se-note.warn{background:#FFF6E9;border-color:#F0C36D;color:#8A5A10}
+.se-note.warn{background:var(--warn-soft);border-color:rgba(239,159,39,.45);color:var(--status-warn)}
 
 .se-toast{position:fixed;left:50%;bottom:30px;transform:translateX(-50%) translateY(14px);opacity:0;
   background:#1A2E28;color:#fff;padding:9px 17px;border-radius:9px;font-size:13px;z-index:999;

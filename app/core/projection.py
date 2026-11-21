@@ -101,17 +101,23 @@ def _as_int_list(v):
     return []
 
 
-def _keep(tbl, row, cls, sid, my_seat_ids, gmem=None):
-    """这一行是否属于该学生"""
+def _keep(tbl, row, cls, sid, my_seat_ids, gmem=None, my_classes=None):
+    """这一行是否属于该学生。
+
+    2.0.71：cls 是学生的「主班」（兼容老逻辑），my_classes 是该生所属的全部
+    班级集合（主班 + 兼属班）。一个学生可兼属多个班（如课外班），班级维度的
+    行只要命中集合里任一个班级就下发；未传 my_classes 时退化为只看主班。
+    """
+    classes = my_classes or {cls}
     if tbl == "classes":
-        return _i(row.get("id")) == cls
+        return _i(row.get("id")) in classes
     if tbl == "students":
         return _i(row.get("id")) == sid
     if tbl == "seats":
         return _i(row.get("id")) in my_seat_ids
     if tbl in ("lessons", "homeworks", "course_progress", "dutys",
                "duty_areas", "materials", "guides", "activity_pushes"):
-        if _i(row.get("class_id")) != cls:
+        if _i(row.get("class_id")) not in classes:
             return False
         if tbl == "guides":
             # 导学单只下发「已发放」的：草稿是老师还没备好的课，不该让学生看见
@@ -123,14 +129,16 @@ def _keep(tbl, row, cls, sid, my_seat_ids, gmem=None):
     if tbl == "courseware_links":
         # 老数据/公共课件没有 class_id：放行；写了班级就严格按班过滤
         cid = row.get("class_id")
-        return cid in (None, "") or _i(cid) == cls
+        return cid in (None, "") or _i(cid) in classes
     if tbl in ("attendance", "homework_records", "morality_records",
                "scores", "exam_scores", "leave_requests"):
+        # 个人维度数据按 student_id 归属：学生在任一班产生的记录都归他本人，
+        # 天然跨班共用一份，不按 class_id 裁剪。
         return _i(row.get("student_id")) == sid
     if tbl == "groups":
         # 成员判定与教师端同口径：座位归组为主，student_ids 兜底
         ids = (gmem or {}).get(_i(row.get("id"))) or set(_as_int_list(row.get("student_ids")))
-        return _i(row.get("class_id")) == cls and (sid in ids)
+        return _i(row.get("class_id")) in classes and (sid in ids)
     if tbl == "exams":
         return bool(row.get("published"))
     # periods / courses / morality_items / duty_positions：全班共用，直接放行
@@ -272,6 +280,9 @@ def project(scope, ctx, tables, cfg=None, stats_scores=None, group_src=None):
 
     cls = _i(ctx.get("class_id"))
     sid = _i(ctx.get("student_id"))
+    # 2.0.71：学生所属全部班级（主班 + 兼属班），用于班级维度行的裁剪。
+    my_classes = set(_as_int_list(ctx.get("class_ids"))) | {cls}
+    my_classes.discard(0)
 
     # 先定位“我的座位”：座位表只下发本人那一行，不下发整张座位图
     my_seat_ids = set()
@@ -308,7 +319,7 @@ def project(scope, ctx, tables, cfg=None, stats_scores=None, group_src=None):
             continue
         picked = []
         for row in rows:
-            if not _keep(tbl, row, cls, sid, my_seat_ids, gmem):
+            if not _keep(tbl, row, cls, sid, my_seat_ids, gmem, my_classes):
                 continue
             if row.get("deleted"):
                 # 墓碑只带 id，避免把别的班的数据带出去
@@ -332,9 +343,15 @@ def project(scope, ctx, tables, cfg=None, stats_scores=None, group_src=None):
 
 def student_context(student_row):
     if not student_row:
-        return {"role": "student", "class_id": 0, "student_id": 0}
+        return {"role": "student", "class_id": 0, "class_ids": [], "student_id": 0}
+    main = _i(student_row.get("class_id"))
+    # 2.0.71 多班：class_ids 是兼属班级数组；主班始终并入。
+    ids = _as_int_list(student_row.get("class_ids"))
+    if main and main not in ids:
+        ids.append(main)
     return {
         "role": "student",
-        "class_id": _i(student_row.get("class_id")),
+        "class_id": main,
+        "class_ids": ids,
         "student_id": _i(student_row.get("id")),
     }

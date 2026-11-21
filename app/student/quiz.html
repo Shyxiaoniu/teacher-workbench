@@ -53,6 +53,19 @@
   border:1px solid #f0e2b8;color:#6b4e12;font-size:12.5px;line-height:1.75}
 .qzx-err{background:#fdeceb;border:1px solid #f0c9c5;color:#8a1c14;border-radius:12px;padding:13px 15px;margin-bottom:12px;font-size:13px}
 .qzx-loading{text-align:center;padding:44px 12px;color:var(--ink3,#6b7772);font-size:13.5px}
+/* 2.0.66 夜色适配：独立作答页原来有一批硬编码浅底/深字，外壳变暗后仍刺眼。
+   统一换成随主题走的软色令牌，答题页在夜间也能长时间看。 */
+html[data-mode="dark"] :is(.qzx-hd,.qzx-q,.qzx-inp,.qzx-ta,.qzx-sel,.qzx-foot){
+  background:var(--bg-surface,#241B15);border-color:var(--border,rgba(222,138,99,.18))
+}
+html[data-mode="dark"] .qzx-pill{background:var(--brand-soft,rgba(222,138,99,.16));color:var(--brand-primary,#DE8A63)}
+html[data-mode="dark"] .qzx-pill.warn{background:rgba(239,159,39,.16);color:#F0C868}
+html[data-mode="dark"] .qzx-receipt{background:rgba(62,207,142,.12);border-color:rgba(62,207,142,.3)}
+html[data-mode="dark"] .qzx-ans{border-top-color:rgba(255,255,255,.16)}
+html[data-mode="dark"] .qzx-ans .ok{color:#6FE0AD}
+html[data-mode="dark"] .qzx-ans .bad{color:#F79189}
+html[data-mode="dark"] .qzx-ana{background:rgba(239,159,39,.14);border-color:rgba(239,159,39,.35);color:#F0C868}
+html[data-mode="dark"] .qzx-err{background:rgba(240,121,111,.16);border-color:rgba(240,121,111,.4);color:#F79189}
 @media(max-width:520px){.qzx-wrap{padding:12px 10px 118px}.qzx-q{padding:12px}}
 </style>
 </head>

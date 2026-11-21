@@ -1,10 +1,10 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN" data-mode="light">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>网页 · 教师管理</title>
-<link rel="stylesheet" href="/design/design.css?v=2.0.41f">
+<link rel="stylesheet" href="/design/design.css?v=2.0.68">
 </head>
 <body>
 <div class="tc-app">
@@ -13,39 +13,27 @@
     <h1>网页</h1>
     <span class="tc-pill off" id="pill">读取中…</span>
     <span class="sp"></span>
-    <!-- 说明默认收起：只在需要时点问号看，页面主体保持干净（2.0.40） -->
-    <div class="help-wrap">
-      <button class="help-q" id="btnHelp" title="使用说明" aria-expanded="false"
-              aria-controls="helpPop">?</button>
-      <div class="help-pop" id="helpPop" hidden role="dialog" aria-label="使用说明">
-        <div class="help-hd"><b>这一页怎么用</b>
-          <button class="x" id="helpClose" title="关闭">×</button></div>
-        <div class="help-bd">
-          <ol>
-            <li><b>开启开关</b>：大开关一点就生效，学生端不用刷新。</li>
-            <li><b>填归档课程</b>：作品落到
-              <b>资料/课程/班级/学号-姓名/</b>，文件名带「学号-姓名-」前缀，
-              单独拷出去也认得出是谁的。</li>
-            <li><b>学生做作品</b>：左写 HTML/CSS、右看效果；「保存草稿」换台电脑还能接着写。</li>
-            <li><b>看作品</b>：「大屏」页选同一课程，学生作品墙里就是截图。</li>
-            <li><b>限制提交次数</b>：默认 <b>每人只能交 1 版</b>，防止一个人反复交把作品墙和
-              归档目录塞满。要多交几版就改成 2、3…，填 <b>0</b> 表示不限。学生编辑器底部会
-              显示「还能交 N 版」，交满后提交按钮直接拦住（服务端也会再拦一道）。</li>
-          </ol>
-          <p><b>先自己练</b>：点「✏ 进入网页练习」，进度（代码 / 显示方式 / 预览宽度）自动保存，
-            下次接着来；写好了「导出图片」可当课件示例。</p>
-          <p><b>给学生的提醒</b>：预览只运行 HTML/CSS，不执行 JavaScript；外链图片在截图里可能变灰块，
-            建议用 emoji、渐变或纯 CSS 图形。</p>
-          <p><b>快捷键</b>：Ctrl + S 保存草稿，Ctrl + Enter 提交作品。</p>
-        </div>
-      </div>
-    </div>
-    <button class="btn sm" id="btnRefresh">↻ 刷新</button>
+    <button class="btn sm" id="btnRefresh"><svg class="i-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.5-5.8"/><path d="M20 4.6V9.2h-4.6"/></svg>刷新</button>
   </div>
 
+  <!-- 并排菜单（2.0.68）：与打字教师页一致，点击只切面板显隐 -->
+  <div class="tc-tabs" id="tcTabs">
+    <button type="button" class="on" data-tcpane-btn="basic">⚙️ 基础设置</button>
+    <button type="button" data-tcpane-btn="ops">🛠 常用操作</button>
+    <button type="button" data-tcpane-btn="works">📋 学生提交</button>
+    <button type="button" data-tcpane-btn="help">❓ 使用说明</button>
+  </div>
+
+  <div class="tc-pane on" data-tcpane="basic">
   <!-- 一键启停 -->
   <div class="tc-hero">
-    <div class="icon">🎨</div>
+    <div class="icon" title="网页设计">
+      <svg class="i-ic" viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="2.6" y="4.2" width="18.8" height="15.6" rx="2.6"/>
+        <path d="M2.6 8.9h18.8"/>
+        <path d="M9.6 12.6l-1.9 2.2 1.9 2.2M14.4 12.6l1.9 2.2-1.9 2.2"/>
+      </svg>
+    </div>
     <div class="txt">
       <b>学生端「网页」页签</b>
       <span>开启后学生才能写网页、交作品；关掉立刻收回入口与提交权限。</span>
@@ -97,7 +85,10 @@
       </div>
     </div>
 
-    <!-- 右：常用操作（说明收进问号气泡，这里只放真的会点的按钮） -->
+  </div><!-- /tc-grid -->
+  </div><!-- /tc-pane basic -->
+
+  <div class="tc-pane" data-tcpane="ops">
     <div class="card">
       <h2>常用操作</h2>
       <p class="hint">练习自动保存；预览只是看，不会写入任何数据。</p>
@@ -109,19 +100,42 @@
     </div>
   </div>
 
-  <!-- 提交概览 -->
-  <div class="card" style="margin-top:14px">
-    <h2>学生提交概览</h2>
-    <p class="hint" id="statHint">读取中…</p>
-    <div class="tc-stats">
-      <div class="tc-stat"><b id="stPeople">0</b><span>已提交人数</span></div>
-      <div class="tc-stat"><b id="stFiles">0</b><span>作品文件</span></div>
-      <div class="tc-stat"><b id="stLast" style="font-size:14px;line-height:1.9">—</b><span>最近一次提交</span></div>
+  <div class="tc-pane" data-tcpane="works">
+    <div class="card">
+      <h2>学生提交概览</h2>
+      <p class="hint" id="statHint">读取中…</p>
+      <div class="tc-stats">
+        <div class="tc-stat"><b id="stPeople">0</b><span>已提交人数</span></div>
+        <div class="tc-stat"><b id="stFiles">0</b><span>作品文件</span></div>
+        <div class="tc-stat"><b id="stLast" style="font-size:14px;line-height:1.9">—</b><span>最近一次提交</span></div>
+      </div>
+      <div class="tc-works" id="works"></div>
+      <div class="foot" style="margin-top:12px">
+        <button class="btn ghost sm" id="btnDash">去「大屏」页看作品墙 ›</button>
+        <span class="msg" id="dashMsg" style="color:var(--ink3)"></span>
+      </div>
     </div>
-    <div class="tc-works" id="works"></div>
-    <div class="foot" style="margin-top:12px">
-      <button class="btn ghost sm" id="btnDash">去「大屏」页看作品墙 ›</button>
-      <span class="msg" id="dashMsg" style="color:var(--ink3)"></span>
+  </div>
+
+  <div class="tc-pane" data-tcpane="help">
+    <div class="card">
+      <h2>使用说明</h2>
+      <ol>
+        <li><b>开启开关</b>：大开关一点就生效，学生端不用刷新。</li>
+        <li><b>填归档课程</b>：作品落到
+          <b>资料/课程/班级/学号-姓名/</b>，文件名带「学号-姓名-」前缀，
+          单独拷出去也认得出是谁的。</li>
+        <li><b>学生做作品</b>：左写 HTML/CSS、右看效果；「保存草稿」换台电脑还能接着写。</li>
+        <li><b>看作品</b>：「大屏」页选同一课程，学生作品墙里就是截图。</li>
+        <li><b>限制提交次数</b>：默认 <b>每人只能交 1 版</b>，防止一个人反复交把作品墙和
+          归档目录塞满。要多交几版就改成 2、3…，填 <b>0</b> 表示不限。学生编辑器底部会
+          显示「还能交 N 版」，交满后提交按钮直接拦住（服务端也会再拦一道）。</li>
+      </ol>
+      <p><b>先自己练</b>：到「常用操作」点「进入网页练习」，进度（代码 / 显示方式 / 预览宽度）自动保存，
+        下次接着来；写好了「导出图片」可当课件示例。</p>
+      <p><b>给学生的提醒</b>：预览只运行 HTML/CSS，不执行 JavaScript；外链图片在截图里可能变灰块，
+        建议用 emoji、渐变或纯 CSS 图形。</p>
+      <p><b>快捷键</b>：Ctrl + S 保存草稿，Ctrl + Enter 提交作品。</p>
     </div>
   </div>
 </div>
@@ -316,26 +330,18 @@
     $('#btnSave').onclick = function () { save(); };
     $('#btnRefresh').onclick = function () { load(); toast('已刷新'); };
 
-    /* 问号帮助（2.0.40）：默认收起，点开浮在页面上，点空白 / Esc 收起。
-       不改变任何布局，所以展开时正在看的内容不会跳。 */
-    var hp = $('#helpPop');
-    var hq = $('#btnHelp');
-    function helpOpen(v) {
-      hp.hidden = !v;
-      hq.setAttribute('aria-expanded', v ? 'true' : 'false');
-    }
-    hq.onclick = function (e) {
-      e.stopPropagation();
-      helpOpen(hp.hidden);
-    };
-    $('#helpClose').onclick = function () { helpOpen(false); };
-    document.addEventListener('click', function (e) {
-      if (hp.hidden) return;
-      if (hp.contains(e.target) || hq.contains(e.target)) return;
-      helpOpen(false);
-    });
-    document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape' && !hp.hidden) helpOpen(false);
+    /* 2.0.68：并排菜单切换。只改显隐，不重绘任何面板 —— 基础设置里正在填的
+       输入框 / 开关状态不会因为切到「学生提交」再切回来而丢失。 */
+    document.querySelectorAll('[data-tcpane-btn]').forEach(function (btn) {
+      btn.onclick = function () {
+        var t = btn.getAttribute('data-tcpane-btn');
+        document.querySelectorAll('[data-tcpane-btn]').forEach(function (x) {
+          x.classList.toggle('on', x === btn);
+        });
+        document.querySelectorAll('[data-tcpane]').forEach(function (p) {
+          p.classList.toggle('on', p.getAttribute('data-tcpane') === t);
+        });
+      };
     });
     /* 教师练习（2.0.40）：在同一个 iframe 里切到编辑器，不跳新标签。
        编辑器顶部有「‹ 返回设置」可以回来。 */

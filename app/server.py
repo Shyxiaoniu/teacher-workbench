@@ -49,8 +49,10 @@ import ports as PORTX                  # noqa: E402
 from store import Store, TABLES, ImportRefused   # noqa: E402
 from activity import ActivityStore, parse_multipart   # noqa: E402  课堂活动（自研）
 from typing_store import TypingStore   # noqa: E402
+import studio_data as STUDIO           # noqa: E402  学生设计作品（宠物/蛋/主题）
 from quiz_store import QuizStore       # noqa: E402  测验/检测（试卷含答案，独立存储）
-from quiz_api import QuizAPI, EPOCH, last_event, bump as quiz_bump   # noqa: E402
+from quiz_api import (QuizAPI, EPOCH, last_event, bump as quiz_bump,
+                      set_account_provider as _quiz_set_account)   # noqa: E402
 from design_store import DesignStore   # noqa: E402  H5 网页设计草稿（2.0.39）
 from pixel_store import PixelStore     # noqa: E402  像素画草稿（2.0.47）
 from updater import Updater            # noqa: E402  在线更新（检查/下载/安装/回滚）
@@ -85,6 +87,9 @@ CFG = A.load_config(CONFIG_PATH)
 WS = ACC.Workspace(DATA_DIR)
 ACCOUNTS = ACC.AccountStore(DATA_DIR, legacy_teacher=CFG.get("teacher") or {})
 SESS = A.Sessions()
+# 2.0.71 账号隔离：测验 SSE 事件按当前工作区账号分桶，
+# 避免 A 教师的提交实时推给 B 教师（事件里带班级 / 学号 / 窗口名）。
+_quiz_set_account(ACC.current_account)
 
 def _store_for(a):
     WS.ensure(a)
@@ -240,6 +245,39 @@ def design_cfg():
     # 每人最多提交几次（2.0.53）：0 = 不限。默认 1，和像素画同一套口径。
     d.setdefault("max_submit", 1)
     return d
+
+
+def studio_cfg():
+    """学生设计作品配置：designers（设计者信息）+ 免费孵化额度。
+
+    2.0.68：每个账号默认送 1 次学生作品蛋免费孵化（教师演示 2 次），
+    额度也存 config.json，教师端可改；实际使用次数记在 typing.json 的学生档案里，
+    改额度不影响已经用过的次数。"""
+    c = CFG.get("studio")
+    if not isinstance(c, dict):
+        c = {}
+        CFG["studio"] = c
+    ds = c.get("designers")
+    if not isinstance(ds, dict):
+        ds = STUDIO.default_designers() if STUDIO else {}
+        c["designers"] = ds
+    # 补齐后来新增作品的设计者缺省项，老配置平滑升级
+    if STUDIO:
+        for wid, d in STUDIO.default_designers().items():
+            ds.setdefault(wid, d)
+    for key, default in (("free_student", 1), ("free_teacher", 2)):
+        try:
+            n = int(c.get(key, default))
+        except (TypeError, ValueError):
+            n = default
+        c[key] = max(0, min(9, n))
+    return c
+
+
+def studio_free_cfg():
+    """给前端 / 兑换接口用的免费孵化额度（教师与学生两套）。"""
+    c = studio_cfg()
+    return {"student": c["free_student"], "teacher": c["free_teacher"]}
 
 
 def design_public_cfg():
@@ -558,7 +596,7 @@ PET_IDS = ["cat", "dog", "rabbit", "penguin", "panda", "dino", "unicorn", "drago
            "duck", "bear"]
 COND = threading.Condition()
 STARTED = time.time()
-VERSION = "2.0.53"
+VERSION = "2.1.0"
 ONLINE_WINDOW = 300      # 5 分钟内活跃算在线
 # 可内联直出的附件类型（其余一律按下载处理，防止同源执行脚本）
 _INLINE_EXTS = {"png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "pdf",
@@ -602,7 +640,14 @@ def _update_auto_loop():
 threading.Thread(target=_update_auto_loop, daemon=True, name="update-check").start()
 
 # SSE 长连接上限（每个连接一个线程）
-_SSE_MAX = 200
+# 2.0.71：由 200 上调到 600，支撑 10 班/近千人同时在线；
+# 仍可用环境变量 WB_SSE_MAX 或 config.json 的 sse.max 覆盖，便于按服务器内存调整。
+try:
+    _SSE_MAX = int(os.environ.get("WB_SSE_MAX") or
+                   (CFG.get("sse") or {}).get("max") or 600)
+except Exception:
+    _SSE_MAX = 600
+_SSE_MAX = max(50, min(5000, _SSE_MAX))
 _SSE_N = [0]
 _SSE_LOCK = threading.Lock()
 
@@ -2743,14 +2788,19 @@ class Handler(LEG.Handler):
                 t = ACCOUNTS.current_teacher()
                 out["username"] = (t or {}).get("username") or "teacher"
                 out["account"] = s.get("account") or ACC.DEFAULT_TEACHER_ID
+                out["avatar"] = (t or {}).get("avatar") or ""   # 像素画头像（服务端权威）
             if s["role"] == "admin":
                 out["username"] = ACCOUNTS.admin().get("username") or "teacher"
             if s["role"] == "student":
                 r = student_row(s.get("student_id"))
                 out["student"] = PJ.student_context(r)
+                # 头像等本机偏好按「教师账号 + 班级 + 学生 id」分键，
+                # 同一台机房电脑上换人登录不会看到上一位同学的头像。
+                out["student"]["account"] = s.get("account") or ACC.DEFAULT_TEACHER_ID
                 out["student"]["name"] = (r or {}).get("name", "")
                 out["student"]["student_no"] = (r or {}).get("student_no", "")
                 out["student"]["class_name"] = self._class_name((r or {}).get("class_id"))
+                out["student"]["avatar"] = (r or {}).get("avatar", "")   # 像素画头像（服务端权威）
                 cred = STORE.get_cred(s.get("student_id"))
                 out["must_change"] = bool(cred and cred.get("must_change"))
             return self._json(out)
@@ -2841,6 +2891,10 @@ class Handler(LEG.Handler):
             if not self._is_teacher():
                 return self._json({"ok": False, "msg": "未登录"}, 401)
             return self._json(self._now_payload())
+        if path == "/api/v2/school":
+            # 学校名称：教师设置页读写，学生创意馆作品署名下发时取用。
+            # 不含任何敏感信息；任何人都能读（和 entry 里的 school 同源）。
+            return self._json({"ok": True, "school": CFG.get("school_name") or ""})
         if path == "/api/v2/checkin/config":
             # 签到配置：教师设置页 / 学生端今日页都要读（不含任何敏感信息）
             return self._json(dict({"ok": True}, **self._checkin_cfg()))
@@ -3319,6 +3373,20 @@ class Handler(LEG.Handler):
                                           "grades": (CFG.get("typing") or {}).get("grades") or []},
                                "progress": p,
                                "pets": PET_IDS})
+        if path == "/api/v2/studio/works":
+            # 学生创意馆（只读）：作品清单 + 价格 + 设计者信息（教师改、学生看）。
+            # 2.0.58：改为公开只读 —— 未登录的演示页 / 教师预览也要能拿到完整
+            # 作品与动作配置，否则只剩 3 只兜底数据。这里不含任何学生数据与可写配置。
+            if not STUDIO:
+                return self._json({"ok": False, "msg": "作品数据未就绪"}, 500)
+            # 2.0.56：不再按教师身份「全部解锁」。教师练习页看到的创意馆
+            # 与学生端一致（真实作品 + 设计者信息 + 兑换按钮），避免误以为
+            # 教师账号拥有全部作品。unlocked 默认 False。
+            c = studio_cfg()
+            return self._json({"ok": True,
+                               "studio": STUDIO.public_cfg(c.get("designers"),
+                                                           free=studio_free_cfg(),
+                                                           school=CFG.get("school_name", ""))})
         if path == "/api/v2/typing/leaderboard":
             s = self._session()
             if not s:
@@ -3566,6 +3634,8 @@ class Handler(LEG.Handler):
             "id": r.get("id"), "name": r.get("name"), "student_no": r.get("student_no"),
             "gender": r.get("gender"), "seat_no": r.get("seat_no"),
             "class_id": r.get("class_id"), "class_name": cls.get("name", ""),
+            # 2.0.71：所属全部班级（主班 + 兼属班），供学生端显示/切换
+            "class_ids": PJ._as_int_list(r.get("class_ids")) or [int(r.get("class_id") or 0)],
         }, "modules": PJ.module_flags(CFG)})
 
     def _class_name(self, cid):
@@ -4443,6 +4513,18 @@ class Handler(LEG.Handler):
             STORE.audit("teacher", "checkin-config",
                         "enabled=%s time=%s" % (c.get("enabled"), c.get("manual_time") or "课表"))
             return self._json(dict({"ok": True}, **self._checkin_cfg()))
+        if path == "/api/v2/teacher/school":
+            # 学校名称：只写入 CFG["school_name"]，学生创意馆 designer.school 从这里取。
+            # 教师会话守卫；长度限 60，去掉首尾空白和换行。
+            if not self._is_teacher():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            v = " ".join(str(body.get("school") or "").split())[:60]
+            CFG["school_name"] = v
+            A.save_config(CONFIG_PATH, CFG)
+            CFG_VER[0] += 1
+            notify()
+            STORE.audit("teacher", "school", "name=%s" % (v or "（清空）"))
+            return self._json({"ok": True, "school": v})
         if path == "/api/v2/update/config":
             if not self._is_teacher():
                 return self._json({"ok": False, "msg": "未登录"}, 401)
@@ -4605,8 +4687,16 @@ class Handler(LEG.Handler):
                 matched = None
                 if cls_id not in (None, "") or sid not in (None, ""):
                     for r in rows:
-                        if cls_id not in (None, "") and str(r.get("class_id")) != str(cls_id):
-                            continue
+                        # 2.0.71 多班：兼属班也能登录。主班 class_id 或 class_ids
+                        # 任一命中即视为本班学生，档案仍只有一份（不复制）。
+                        if cls_id not in (None, ""):
+                            in_cls = str(r.get("class_id")) == str(cls_id)
+                            if not in_cls:
+                                in_cls = any(
+                                    str(x) == str(cls_id)
+                                    for x in (r.get("class_ids") or []))
+                            if not in_cls:
+                                continue
                         if sid not in (None, "") and str(r.get("id")) == str(sid):
                             matched = r
                             break
@@ -4771,6 +4861,66 @@ class Handler(LEG.Handler):
             notify_cfg()
             STORE.audit("teacher", "change-password", ip)
             return self._json({"ok": True})
+
+        # ---------------- 学生设计作品 · 设计者信息（教师可改，学生只读）----
+        if path == "/api/v2/studio/designer":
+            if not self._is_teacher():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            wid = str(body.get("id") or "")
+            if not STUDIO or wid not in STUDIO.BY_ID:
+                return self._json({"ok": False, "msg": "没有这个作品"}, 404)
+            ds = studio_cfg().setdefault("designers", {})
+            entry = ds.setdefault(wid, {"pen": ""})
+            # 2.0.76（隐私脱敏）：只接受自愿填写的「笔名」，不再接收/展示
+            # 真实姓名 / 班级 / 学校 / 介绍。老配置里的这些字段保留不删，
+            # 但公开接口永不回传，改写也只动 pen，不会把真实信息重新写回去。
+            if "pen" in body:
+                entry["pen"] = str(body.get("pen") or "")[:60]
+            cfg_save()
+            STORE.audit("teacher", "studio-designer",
+                        "%s:%s" % (wid, entry.get("pen", "")))
+            return self._json({"ok": True, "studio":
+                               STUDIO.public_cfg(ds, free=studio_free_cfg(),
+                                                 school=CFG.get("school_name", ""))})
+
+        # 2.0.70：教师端「免费孵化额度」设置已删除。默认额度（学生 1 / 教师 2）
+        # 仍在 studio_cfg() 里补齐，兑换接口照用；不再提供改写入口。
+
+        # ---------------- 像素画头像存服务端（2.0.56） ----------------
+        # 学生头像写 students 行的 avatar 字段（自动随 config/tables 备份导入导出）；
+        # 教师头像写 accounts.json 的 teacher.avatar（随 account 段同步）。
+        # 身份一律由服务端 session 判定，前端不传 uid，防越权。
+        if path == "/api/v2/avatar":
+            s = self._session()
+            if not s:
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            png = str(body.get("png") or "")
+            if not png.startswith("data:image/png;base64,"):
+                return self._json({"ok": False, "msg": "头像格式不对"}, 400)
+            try:
+                raw = base64.b64decode(png.split(",", 1)[1])
+            except Exception:
+                return self._json({"ok": False, "msg": "头像数据损坏"}, 400)
+            if not raw or len(raw) > 512 * 1024:
+                return self._json({"ok": False, "msg": "头像图片过大（上限 512KB）"}, 413)
+            if s["role"] == "student":
+                r = student_row(s.get("student_id"))
+                if not r:
+                    return self._json({"ok": False, "msg": "学生档案不存在"}, 404)
+                r["avatar"] = png
+                r["updated_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
+                STORE.upsert("students", r, actor="student", force=True)
+                STORE.audit("student", "avatar", str(r.get("id") or ""))
+            elif s["role"] == "teacher":
+                t = ACCOUNTS.raw_teacher(ACC.current_account())
+                if not t:
+                    return self._json({"ok": False, "msg": "教师账号不存在"}, 404)
+                t["avatar"] = png
+                ACCOUNTS.flush()
+                STORE.audit("teacher", "avatar", str(ACC.current_account()))
+            else:
+                return self._json({"ok": False, "msg": "当前账号不能设置头像"}, 403)
+            return self._json({"ok": True, "avatar": png})
 
         # ---------------- H5 网页设计（2.0.39） ----------------
         if path == "/api/v2/design/config":
@@ -5127,17 +5277,23 @@ class Handler(LEG.Handler):
             s = self._session()
             if not s or s["role"] != "student":
                 return self._json({"ok": False, "msg": "未登录"}, 401)
-            return self._json(TYPING.claim_egg(str(s.get("student_id")), PET_IDS))
+            studio_ids = STUDIO.PET_IDS if STUDIO else []
+            return self._json(TYPING.claim_egg(str(s.get("student_id")),
+                                               PET_IDS, studio_ids))
         if path == "/api/v2/typing/equip":
             s = self._session()
             if not s or s["role"] != "student":
                 return self._json({"ok": False, "msg": "未登录"}, 401)
-            # bg / fx 缺省不传 = 保持原样（None）；传 '' = 取下来
+            # bg / fx / 学生作品缺省不传 = 保持原样（None）；传 '' = 取下来
             kw = {}
             if "bg" in body:
                 kw["bg"] = str(body.get("bg") or "")
             if "fx" in body:
                 kw["fx"] = str(body.get("fx") or "")
+            if "studio_pet" in body:
+                kw["studio_pet"] = str(body.get("studio_pet") or "")
+            if "studio_theme" in body:
+                kw["studio_theme"] = str(body.get("studio_theme") or "")
             return self._json(TYPING.equip(str(s.get("student_id")),
                                            str(body.get("pet") or ""),
                                            body.get("decos") or [], **kw))
@@ -5163,6 +5319,17 @@ class Handler(LEG.Handler):
                 # 积分兑换宠物蛋（2026-11-19）：价格只认服务端 EGG_PRICE，
                 # 客户端传什么价都不看；图鉴集齐后直接拒售。
                 res = TYPING.buy_egg(uid, PET_IDS)
+            elif kind == "studio_theme":
+                # 界面主题：唯一直兑入口，价格只认服务端。
+                res = TYPING.buy_studio(uid, oid)
+            elif kind == "studio_egg":
+                # 2.0.56：作品宠物只能通过宠物蛋兑换。
+                # 客户端传 egg_id，服务端查表决定出哪只宠物、扣多少积分。
+                res = TYPING.buy_studio_egg(uid, oid,
+                                            free_quota=studio_free_cfg()["student"])
+            elif kind == "studio_pet":
+                # 老客户端 / 伪造请求：明确拒绝直兑，避免绕过蛋入口。
+                res = {"ok": False, "msg": "作品宠物不能直接兑换，请兑换对应的宠物蛋"}
             else:
                 res = {"ok": False, "msg": "未知的商品类型"}
             if res.get("ok"):

@@ -1,10 +1,10 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN" data-mode="light">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>网页 · 班级工作台</title>
-<link rel="stylesheet" href="/design/design.css?v=2.0.41f">
+<link rel="stylesheet" href="/design/design.css?v=2.0.68">
 </head>
 <body>
 <div class="ds-app">
@@ -27,8 +27,8 @@
         <button type="button" data-w="768">平板</button>
         <button type="button" data-w="390">手机</button>
       </div>
-      <button class="btn ghost sm" id="btnKb" title="查标签、查样式、看示例">📖 知识库</button>
-      <button class="btn ghost sm" id="btnImg" title="老师下发的图片，点一下插进网页">🖼 图片</button>
+      <button class="btn ghost sm" id="btnKb" title="查标签、查样式、看示例"><svg class="i-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6.5C10.4 5 8.2 4.3 4.6 4.3v13.1c3.6 0 5.8.7 7.4 2.2 1.6-1.5 3.8-2.2 7.4-2.2V4.3c-3.6 0-5.8.7-7.4 2.2z"/><path d="M12 6.5v13.1"/></svg>知识库</button>
+      <button class="btn ghost sm" id="btnImg" title="老师下发的图片，点一下插进网页"><svg class="i-ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.4" y="4.6" width="17.2" height="14.8" rx="2.4"/><circle cx="8.7" cy="9.9" r="1.5"/><path d="M4.4 17.4l4.5-4.2 3.2 2.9 2.6-2.3 4.9 4.3"/></svg>图片</button>
       <button class="btn sm" id="btnSave" title="保存到服务器，换设备也能接着写">保存草稿</button>
       <button class="btn primary sm" id="btnSubmit" title="一键截图并提交给老师">提交作品</button>
     </div>
@@ -81,7 +81,7 @@
       <div class="ds-pv-head">
         <b>实时预览</b>
         <span class="sp"></span>
-        <button class="btn ghost sm" id="btnRefresh" title="重新渲染一次（改完代码会自动刷新）">↻ 刷新</button>
+        <button class="btn ghost sm" id="btnRefresh" title="重新渲染一次（改完代码会自动刷新）"><svg class="i-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.5-5.8"/><path d="M20 4.6V9.2h-4.6"/></svg>刷新</button>
       </div>
       <div class="ds-stage" id="stage">
         <div class="ds-holder" id="holder">
@@ -123,8 +123,8 @@
       </div>
       <div class="img-viewbar">
         <div class="img-view" id="imgView" role="group" aria-label="显示方式">
-          <button type="button" data-view="grid" class="on" title="网格：看大图，适合挑图">▦ 网格</button>
-          <button type="button" data-view="list" title="列表：一行一张，看名字和归属">☰ 列表</button>
+          <button type="button" data-view="grid" class="on" title="网格：看大图，适合挑图"><svg class="i-ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.6" y="3.6" width="7" height="7" rx="1.6"/><rect x="13.4" y="3.6" width="7" height="7" rx="1.6"/><rect x="3.6" y="13.4" width="7" height="7" rx="1.6"/><rect x="13.4" y="13.4" width="7" height="7" rx="1.6"/></svg>网格</button>
+          <button type="button" data-view="list" title="列表：一行一张，看名字和归属"><svg class="i-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6.4h11M9 12h11M9 17.6h11"/><path d="M4.5 6.4h.01M4.5 12h.01M4.5 17.6h.01"/></svg>列表</button>
         </div>
       </div>
       <div class="kb-cats" id="imgCats"></div>

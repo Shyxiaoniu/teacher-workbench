@@ -211,6 +211,11 @@
 
   var toastTimer = null;
   function toast(msg, tone) {
+    // 全站统一轻提示：样式与工作台其他模块一致，位置由 pixel.css 固定到视口中间
+    if (window.WBUI && WBUI.toast) {
+      WBUI.toast(msg, tone === 'ok' ? 'ok' : tone === 'err' ? 'err' : (tone || 'info'));
+      return;
+    }
     var t = $('#toast');
     if (!t) return;
     t.textContent = msg;
@@ -576,6 +581,80 @@
     return cv.toDataURL('image/png');
   }
 
+  /** 账号头像：256px 正方形白底像素图，画面居中；比 exportPng 小，本机存储友好 */
+  function avatarPng() {
+    var n = Math.max(S.w, S.h);
+    var cv = document.createElement('canvas');
+    cv.width = cv.height = 256;
+    var g = cv.getContext('2d');
+    g.fillStyle = '#ffffff'; g.fillRect(0, 0, 256, 256);
+    g.imageSmoothingEnabled = false;
+    var cell = Math.max(1, Math.floor(256 / n));
+    var ox = Math.floor((256 - S.w * cell) / 2);
+    var oy = Math.floor((256 - S.h * cell) / 2);
+    for (var i = 0; i < S.cells.length; i++) {
+      var v = S.cells[i];
+      if (!v) continue;
+      var x = i % S.w, y = (i - x) / S.w;
+      g.fillStyle = S.pal[v - 1] || '#000000';
+      g.fillRect(ox + x * cell, oy + y * cell, cell, cell);
+    }
+    return cv.toDataURL('image/png');
+  }
+
+  /** 把当前像素画设为学生账号头像：本机保存 + 通知父窗口即时刷新头像 */
+  function setAvatar() {
+    if (!window.WBUI) { toast('弹窗组件没加载好，请刷新页面再试', 'err'); return; }
+    if (S.demo || !S.role) {
+      WBUI.warn({ title: '请先登录', message: '请先登录工作台账号，再把自己的像素画设为头像。' });
+      return;
+    }
+    var isTeacher = S.role === 'teacher';
+    var avKey = isTeacher ? 'wb-avatar' : 'wb-savatar';
+    if (!filledCount()) {
+      WBUI.warn({ title: '画布还是空的', message: '先画几笔，再把这幅像素画设为头像。' });
+      return;
+    }
+    WBUI.confirm({
+      title: '设为账号头像',
+      message: '把当前这幅像素画设为你的账号头像？\n头像会保存到服务器，跟着班级数据一起导入导出，换设备也能看到。',
+      confirmText: '设为头像', cancelText: '再想想'
+    }).then(function (ok) {
+      if (!ok) return;
+      var png;
+      try { png = avatarPng(); }
+      catch (e) {
+        WBUI.alert({ title: '设置失败', message: '头像图片生成失败，请重试。', tone: 'err' });
+        return;
+      }
+      /* 2.0.56：服务端权威存储（学生写 students 行、教师写账号），
+         不再只存本机。localStorage 仅作即时缓存，服务端失败就不写。 */
+      api('/api/v2/avatar', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ png: png })
+      }).then(function (j) {
+        if (!j || !j.ok) {
+          WBUI.alert({ title: '设置失败', message: (j && j.msg) || '服务器保存失败，请重试。', tone: 'err' });
+          return;
+        }
+        try { localStorage.setItem(avKey, JSON.stringify({ kind: 'img', v: png })); } catch (e) {}
+        try {
+          if (window.parent && window.parent !== window)
+            window.parent.postMessage({ type: 'wb-avatar-changed', avatar: png }, '*');
+        } catch (e) {}
+        WBUI.alert({
+          title: '设置成功',
+          message: isTeacher
+            ? '像素画已设为你的教师头像，保存在服务器上，导入导出数据都会带着它。'
+            : '像素画已设为你的账号头像，保存在服务器上，换设备登录也能看到。',
+          tone: 'ok', confirmText: '好的'
+        });
+      }).catch(function () {
+        WBUI.alert({ title: '设置失败', message: '连不上服务器，请检查网络后重试。', tone: 'err' });
+      });
+    });
+  }
+
   function downloadPng() {
     var a = document.createElement('a');
     a.href = exportPng();
@@ -662,29 +741,38 @@
   }
 
   function receipt(j, png) {
-    var box = $('#busyBox');
     var left = submitLeft();
     var lim = Number(S.cfg.max_submit || 0);
     var quota = (lim > 0)
-      ? '<br>' + (left > 0
-          ? '还能交 <b>' + left + '</b> 版（每人最多 ' + lim + ' 版）'
-          : '<b>这已经是最后一版了</b>（每人最多 ' + lim + ' 版）')
+      ? '\n' + (left > 0
+          ? '还能交 ' + left + ' 版（每人最多 ' + lim + ' 版）'
+          : '这已经是最后一版了（每人最多 ' + lim + ' 版）')
       : '';
-    box.innerHTML = '<div class="ds-receipt"><div class="box">' +
-      '<div class="big">🎉</div>' +
-      '<h3>作品已提交</h3>' +
-      '<p>' + esc((S.me && S.me.name) || '') + ' · ' + esc(j.at || '') + '<br>' +
-      '已归档到「' + esc(j.course || S.cfg.course) + '」' +
-      (j.archived ? '（' + j.archived + ' 个文件）' : '') + '<br>' +
-      '老师在大屏选「' + esc(j.course || S.cfg.course) + '」就能看到你的作品' +
-      quota + '</p>' +
-      '<img src="' + png + '" alt="作品预览">' +
-      '<div class="row">' +
-      '<button class="btn" id="rcClose">继续修改</button>' +
-      (left === 0 ? '' : '<button class="btn primary" id="rcAgain">再交一版</button>') +
-      '</div></div></div>';
-    $('#rcClose').onclick = function () { box.innerHTML = ''; };
-    if ($('#rcAgain')) $('#rcAgain').onclick = function () { box.innerHTML = ''; submitWork(); };
+    var msg = ((S.me && S.me.name) || '') + ' · ' + (j.at || '') + '\n' +
+      '已归档到「' + (j.course || S.cfg.course) + '」' +
+      (j.archived ? '（' + j.archived + ' 个文件）' : '') + '\n' +
+      '老师在大屏选「' + (j.course || S.cfg.course) + '」就能看到你的作品' + quota;
+    var html = '<img src="' + png + '" alt="作品预览" style="display:block;max-width:100%;' +
+      'max-height:46vh;margin:0 auto;border-radius:10px;image-rendering:pixelated;background:#fff">';
+
+    if (!window.WBUI) {   // 组件没加载时的兜底：保留旧回执，保证不丢反馈
+      var box = $('#busyBox');
+      box.innerHTML = '<div class="ds-receipt"><div class="box">' +
+        '<div class="big">🎉</div><h3>作品已提交</h3>' +
+        '<p>' + esc(msg).replace(/\n/g, '<br>') + '</p>' +
+        '<img src="' + png + '" alt="作品预览">' +
+        '<div class="row"><button class="btn" id="rcClose">继续修改</button>' +
+        (left === 0 ? '' : '<button class="btn primary" id="rcAgain">再交一版</button>') +
+        '</div></div></div>';
+      $('#rcClose').onclick = function () { box.innerHTML = ''; };
+      if ($('#rcAgain')) $('#rcAgain').onclick = function () { box.innerHTML = ''; submitWork(); };
+      return;
+    }
+    // 工作台统一弹窗：视口居中，成功反馈与后续动作一次说清
+    var o = { title: '作品已提交', message: msg, html: html, tone: 'ok', confirmText: '知道了' };
+    if (left === 0) { WBUI.alert(o); return; }
+    o.confirmText = '再交一版'; o.cancelText = '继续修改';
+    WBUI.confirm(o).then(function (again) { if (again) submitWork(); });
   }
 
   /* ================= 调色板 ================= */
@@ -766,8 +854,12 @@
     var g = $('#tplGrid');
     if (!g) return;
     g.innerHTML = TEMPLATES.map(function (t, i) {
+      /* 2.0.72：模板全是 16×16，界面以前只写「8 个 16×16」在帮助里，
+         卡片上没标尺寸，学生以为画布选的 24/32 就是模板尺寸。
+         现在每张卡直接标「16×16 格」，缩略图也从 96 放大到 128 看清楚。 */
       return '<div class="px-tpl-card" data-i="' + i + '">' +
-        '<canvas class="px-tpl-cv" aria-label="' + esc(t.name) + '"></canvas>' +
+        '<span class="px-tpl-size">' + t.w + '×' + t.h + ' 格</span>' +
+        '<canvas class="px-tpl-cv" aria-label="' + esc(t.name) + ' ' + t.w + '×' + t.h + '"></canvas>' +
         '<div class="px-tpl-nm">' + esc(t.name) + '</div>' +
         '<div class="px-tpl-ops">' +
           '<button type="button" class="px-mini" data-act="look">照着画</button>' +
@@ -776,7 +868,7 @@
     }).join('');
     $$('#tplGrid .px-tpl-card').forEach(function (card) {
       drawTpl(card.querySelector('canvas'),
-              TEMPLATES[+card.getAttribute('data-i')], 96);
+              TEMPLATES[+card.getAttribute('data-i')], 128);
     });
   }
 
@@ -798,8 +890,9 @@
     if (!box) return;
     box.hidden = false;
     var nm = $('#refName');
-    if (nm) nm.textContent = tpl.name;
-    drawTpl($('#refCv'), tpl, 76);
+    /* 2.0.72：明确标出模板格数，免得跟画布上选的 24/32 混为一谈 */
+    if (nm) nm.textContent = tpl.name + '（' + tpl.w + '×' + tpl.h + ' 格）';
+    drawTpl($('#refCv'), tpl, 120);
   }
   function clearRef() {
     S.ref = null;
@@ -826,19 +919,25 @@
 
   /** 把模板直接画到画布上（可继续改，也能 Ctrl+Z 撤回）。返回是否真的画了 */
   function applyTemplate(tpl) {
-    if (filledCount() && !confirm('把「' + tpl.name + '」画到画布上？\n' +
-        '现在画的会被替换，载入后按 Ctrl+Z 还能撤回。')) {
-      return false;
+    var msg = '把「' + tpl.name + '」画到画布上？\n现在画的会被替换，载入后按 Ctrl+Z 还能撤回。';
+    function doApply() {
+      pushUndo();
+      resetCells(tpl.w, tpl.h, false);
+      ensureTplPal();
+      loadPx(tpl.px, tpl.w, tpl.h);
+      markSize(tpl.w);
+      afterEdit();
+      layout();
+      toast('已载入「' + tpl.name + '」，接着改就行', 'ok');
+      return true;
     }
-    pushUndo();
-    resetCells(tpl.w, tpl.h, false);
-    ensureTplPal();
-    loadPx(tpl.px, tpl.w, tpl.h);
-    markSize(tpl.w);
-    afterEdit();
-    layout();
-    toast('已载入「' + tpl.name + '」，接着改就行', 'ok');
-    return true;
+    if (!filledCount()) return Promise.resolve(doApply());
+    if (!window.WBUI) {
+      return Promise.resolve(confirm(msg) ? doApply() : false);
+    }
+    return WBUI.confirm({
+      title: '载入模板', message: msg, confirmText: '载入', cancelText: '取消', danger: true
+    }).then(function (ok) { return ok ? doApply() : false; });
   }
 
   /* ================= 交互绑定 ================= */
@@ -916,13 +1015,20 @@
     $('#btnRedo').onclick = redo;
     $('#btnClear').onclick = function () {
       if (!filledCount()) { toast('画布已经是空的'); return; }
-      if (!confirm('清空整张画布？清空后可以用「↶ 撤销」找回来。')) return;
-      pushUndo();
-      S.cells = new Uint8Array(cellCount());
-      afterEdit();
-      toast('已清空');
+      var msg = '清空整张画布？清空后可以用「↶ 撤销」找回来。';
+      function doClear() {
+        pushUndo();
+        S.cells = new Uint8Array(cellCount());
+        afterEdit();
+        toast('已清空');
+      }
+      if (!window.WBUI) { if (confirm(msg)) doClear(); return; }
+      WBUI.confirm({
+        title: '清空画布', message: msg, confirmText: '清空', cancelText: '取消', danger: true
+      }).then(function (ok) { if (ok) doClear(); });
     };
     $('#btnSave').onclick = function () { saveDraft(true); };
+    $('#btnAvatar').onclick = setAvatar;
     $('#btnSubmit').onclick = function () { submitWork(); };
 
     $('#swatches').onclick = function (e) {
@@ -966,8 +1072,9 @@
           setRef(t);
           closeTpl();
           toast('参考图在右侧「模板」栏，照着它一格一格画');
-        } else if (applyTemplate(t)) {
-          closeTpl();       // 用户在 confirm 里点了取消，就留在模板库
+        } else {
+          // WBUI.confirm 是异步的：点取消就留在模板库，不关浮层
+          applyTemplate(t).then(function (ok) { if (ok) closeTpl(); });
         }
       };
     }
@@ -1046,15 +1153,19 @@
 
   function changeSize(n) {
     if (!n || SIZES.indexOf(n) < 0 || (n === S.w && n === S.h)) return;
-    if (filledCount() && !confirm('换成 ' + n + '×' + n + '？已画的部分会按左上角对齐保留，' +
-        '超出新画布的部分会被裁掉。')) {
-      return;
+    var msg = '换成 ' + n + '×' + n + '？已画的部分会按左上角对齐保留，超出新画布的部分会被裁掉。';
+    function doChange() {
+      pushUndo();
+      resetCells(n, n, true);
+      markSize(n);
+      afterEdit();
+      layout();
     }
-    pushUndo();
-    resetCells(n, n, true);
-    markSize(n);
-    afterEdit();
-    layout();
+    if (!filledCount()) { doChange(); return; }
+    if (!window.WBUI) { if (confirm(msg)) doChange(); return; }
+    WBUI.confirm({
+      title: '更换画布尺寸', message: msg, confirmText: '更换', cancelText: '取消', danger: true
+    }).then(function (ok) { if (ok) doChange(); });
   }
 
   function markSize(n) {
@@ -1165,6 +1276,29 @@
       ? '练习模式：随便画，进度会存到你自己名下；「导出图片」可存到本机。'
       : '演示模式：可以随便画，但不会保存、也不能提交。请从学生端「像素画」页签进入。';
   }
+
+  /* 教师改开关/额度后，父窗口转来 wb-pixel-cfg 消息。
+     只重拉配置和已交次数，不调用 load()，避免把学生正在画的草稿清掉。 */
+  function refreshCfgOnly() {
+    if (S.practice || S.demo) return;
+    api('/api/v2/pixel/me')
+      .then(function (j) {
+        if (!j.ok) return;             // 功能被关时父窗口会把学生踢回今日页
+        // 只同步配置与额度，不碰 cells/pal/draft，学生正在画的画不会丢
+        applyCfg(j.cfg);
+        S.used = (typeof j.used === 'number') ? j.used : 0;
+        S.left = (typeof j.left === 'number') ? j.left : -1;
+        paintQuota();
+      })
+      .catch(function () {});
+  }
+  window.addEventListener('message', function (e) {
+    if (e && e.data && e.data.type === 'wb-pixel-cfg') refreshCfgOnly();
+  });
+  /* SSE 断线或消息漏投时的兜底：仅页面可见才拉，且只更新配置 */
+  setInterval(function () {
+    if (document.visibilityState === 'visible') refreshCfgOnly();
+  }, 12000);
 
   syncTheme();
   watchTheme();

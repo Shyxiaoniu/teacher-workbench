@@ -26,18 +26,69 @@ import urllib.parse
 
 # SSE 事件版本：每次提交 / 发布变更 +1，server.py 的 _sse_loop 推 event: quiz。
 # 数据不进 STORE.rev（试卷不参与同步），所以必须有独立的一条实时通道。
-EPOCH = [0]
-LAST_EVENT = [{}]
+#
+# 2.0.71 账号隔离：事件按教师账号分桶。原实现 EPOCH/LAST_EVENT 是模块级全局，
+# 多个教师账号同时在线时，A 账号的提交事件（含班级 / 学号 / 窗口名）会被
+# B 账号的 SSE 连接收到 —— 违反「除资料共享外数据全隔离」。这里改成
+# {account: [epoch, payload]}，每个连接只取自己账号的那一份。
+# 不直接 import accounts（会循环依赖），由 server.py 启动时注入取账号的回调。
+_ACCOUNT_FN = [None]
+_BUCKETS = {}          # account -> {"epoch": int, "event": dict}
+
+
+def set_account_provider(fn):
+    """由 server.py 注入 ACC.current_account；不注入时退化为单一 'default' 桶。"""
+    _ACCOUNT_FN[0] = fn
+
+
+def _bucket():
+    acc = "default"
+    if _ACCOUNT_FN[0] is not None:
+        try:
+            acc = str(_ACCOUNT_FN[0]() or "default")
+        except Exception:
+            acc = "default"
+    return _BUCKETS.setdefault(acc, {"epoch": 0, "event": {}})
+
+
+# 兼容老代码/测试：EPOCH 仍可读，读的是 default 桶的版本号。
+class _EpochProxy(object):
+    def __getitem__(self, i):
+        return _bucket()["epoch"]
+
+
+EPOCH = _EpochProxy()
 
 
 def bump(payload=None):
-    EPOCH[0] += 1
-    LAST_EVENT[0] = payload or {}
-    return EPOCH[0]
+    b = _bucket()
+    b["epoch"] += 1
+    b["event"] = payload or {}
+    return b["epoch"]
 
 
 def last_event():
-    return {"epoch": EPOCH[0], "data": LAST_EVENT[0]}
+    b = _bucket()
+    return {"epoch": b["epoch"], "data": b["event"]}
+
+
+def student_class_ids(row):
+    """学生所属全部班级 id（主班 class_id + 兼属班 class_ids），2.0.71 多班。"""
+    out = []
+    main = row.get("class_id") if isinstance(row, dict) else None
+    try:
+        if main not in (None, ""):
+            out.append(int(main))
+    except (TypeError, ValueError):
+        pass
+    for x in (row.get("class_ids") or []) if isinstance(row, dict) else []:
+        try:
+            v = int(x)
+            if v not in out:
+                out.append(v)
+        except (TypeError, ValueError):
+            pass
+    return out
 
 
 _MIME = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
@@ -269,16 +320,23 @@ class QuizAPI(object):
             if not row:
                 return self.err("学生档案不存在", 404)
             cid = row.get("class_id")
-            out = []
-            for p in self.q.visible_publishes(cid, time.strftime("%Y-%m-%d %H:%M")):
-                d = dict(p)
-                # 显示策略由服务端在「提交回执」里执行，配置本身不下发给学生端
-                d.pop("show_answer", None)
-                d.pop("show_score", None)
-                d["paper_title"] = (self.q.paper(p.get("paper_id")) or {}).get("title", "")
-                d["attempts"] = self.q.attempt_count(p.get("id"), s.get("student_id"))
-                d["last"] = self._receipt(p, s.get("student_id"), False)
-                out.append(d)
+            out, seen_pub = [], set()
+            now_str = time.strftime("%Y-%m-%d %H:%M")
+            # 2.0.71 多班：合并该生主班 + 兼属班下发的测验，按发布 id 去重。
+            for c in student_class_ids(row):
+                for p in self.q.visible_publishes(c, now_str):
+                    pid = str(p.get("id") or "")
+                    if pid in seen_pub:
+                        continue
+                    seen_pub.add(pid)
+                    d = dict(p)
+                    # 显示策略由服务端在「提交回执」里执行，配置本身不下发给学生端
+                    d.pop("show_answer", None)
+                    d.pop("show_score", None)
+                    d["paper_title"] = (self.q.paper(p.get("paper_id")) or {}).get("title", "")
+                    d["attempts"] = self.q.attempt_count(p.get("id"), s.get("student_id"))
+                    d["last"] = self._receipt(p, s.get("student_id"), False)
+                    out.append(d)
             return self.ok(publishes=out, now=self.now(),
                            class_name=self.class_name(cid), class_id=cid)
 
@@ -292,7 +350,8 @@ class QuizAPI(object):
             pub = self.q.publish(pid)
             if not pub:
                 return self.err("测验不存在", 404)
-            if int(row.get("class_id") or 0) not in [int(x) for x in (pub.get("class_ids") or [])]:
+            my_classes = student_class_ids(row)
+            if not set(my_classes) & set(int(x) for x in (pub.get("class_ids") or [])):
                 return self.err("这份测验没有下发给你的班级", 403)
             ok, st = self.q.state(pub, time.strftime("%Y-%m-%d %H:%M"))
             if st == "draft":
@@ -591,8 +650,13 @@ class QuizAPI(object):
         if not pub:
             return self.err("测验不存在", 404)
         cid = row.get("class_id")
-        if int(cid or 0) not in [int(x) for x in (pub.get("class_ids") or [])]:
+        my_classes = student_class_ids(row)
+        hit = next((c for c in my_classes
+                    if c in [int(x) for x in (pub.get("class_ids") or [])]), None)
+        if hit is None:
             return self.err("这份测验没有下发给你的班级", 403)
+        # 兼属班学生提交时，用真正命中测验的那个班做归属（成绩按班分析才对）。
+        cid = hit
         paper = self.q.paper(pub.get("paper_id"))
         if not paper:
             return self.err("试卷不存在", 404)

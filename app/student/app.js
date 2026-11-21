@@ -147,6 +147,50 @@
     });
   }
 
+  /* 三个功能 iframe（打字 / 网页 / 像素画）内的配置不走外层同步：老师开关后由这里
+     转发一条通知，画板收到才重拉 /api/v2/pixel/me，不必让学生刷新整页。
+     2.0.55：网页页原本没有这条通道，老师改「网页」开关/额度后要点一下才更新，
+     这里和像素画一起补上。 */
+  function notifyPixelCfg() {
+    var f = document.querySelector('iframe[data-pixel-embed]');
+    if (f && f.contentWindow) {
+      try { f.contentWindow.postMessage({ type: 'wb-pixel-cfg' }, '*'); } catch (e) {}
+    }
+  }
+  function notifyDesignCfg() {
+    var f = document.querySelector('iframe[data-design-embed]');
+    if (f && f.contentWindow) {
+      try { f.contentWindow.postMessage({ type: 'wb-design-cfg' }, '*'); } catch (e) {}
+    }
+  }
+  function notifyTypingCfg() {
+    var f = document.querySelector('iframe[data-typing-embed]');
+    if (f && f.contentWindow) {
+      try { f.contentWindow.postMessage({ type: 'wb-typing-cfg' }, '*'); } catch (e) {}
+    }
+  }
+  function notifyAllEmbedCfg() {
+    notifyTypingCfg();
+    notifyDesignCfg();
+    notifyPixelCfg();
+  }
+  /* 2.0.56：打字页删掉自己的夜色按钮，外壳改主题时主动通知所有 iframe。
+     storage 事件本来也能到 iframe，但这里再推一条，切换瞬间不闪旧色。 */
+  function notifyThemeEmbeds() {
+    document.querySelectorAll('iframe').forEach(function (f) {
+      if (!f.contentWindow) return;
+      try { f.contentWindow.postMessage({ type: 'wb-theme' }, '*'); } catch (e) {}
+    });
+  }
+
+  /* 画板 iframe 里把像素画设为头像后，学生端各头像位即时刷新 */
+  window.addEventListener('message', function (e) {
+    if (e && e.data && e.data.type === 'wb-avatar-changed') {
+      if (e.data.avatar && S.me) S.me.avatar = e.data.avatar;   // 服务端已落盘，即时改内存
+      if (typeof refreshAvatars === 'function') refreshAvatars();
+    }
+  });
+
   function watch() {
     try {
       S.es = new EventSource('/api/v2/events?since=' + S.rev);
@@ -157,7 +201,12 @@
       /* 老师改了「学生能用哪些功能 / 可见字段」：配置不产生数据 rev，
          要单独收这个事件，否则学生端入口要等手动刷新才变。 */
       S.es.addEventListener('cfg', function () {
+        notifyAllEmbedCfg();
         refreshTyping();
+        /* 关键（2.0.55）：老师开关网页/像素/打字时，学生多半正停在打字页。
+           refreshTyping→render() 命中 iframe 保护会提前 return，导航就不重绘，
+           于是「要点一下才生效」。这里在重绘之外显式再刷一次导航，保证入口即时增减。 */
+        paintNav();
         pull(S.rev, false).then(render);
       });
       /* 老师发布 / 关闭测验、或有新提交：事件里不带任何名单与答案，
@@ -180,7 +229,9 @@
         /* 轮询兜底（SSE 断了的情况）：同步接口不返回功能开关，
            所以顺手把 session 拉一次 —— 否则老师开了「网页」，
            这位同学要手动刷新才看得见入口（2.0.41）。 */
+        notifyAllEmbedCfg();
         refreshTyping();
+        paintNav();
         pull(S.rev, false).then(render);
       }
     }, 10000);
@@ -226,6 +277,19 @@
 
   /* ---------------- 数据选择器 ---------------- */
   function T(name) { return S.T[name] || []; }
+  /* 2.0.71 多班：学生可兼属多个班（主班 class_id + 兼属班 class_ids）。
+     服务端投影已把各班数据下发，这里按集合判定，避免兼属班内容被主班过滤掉。 */
+  function myClasses() {
+    var ids = [];
+    var main = S.me && S.me.class_id;
+    if (main !== undefined && main !== null && main !== '') ids.push(Number(main));
+    ((S.me && S.me.class_ids) || []).forEach(function (x) {
+      var n = Number(x);
+      if (isFinite(n) && ids.indexOf(n) < 0) ids.push(n);
+    });
+    return ids;
+  }
+  function inMyClass(cid) { return myClasses().indexOf(Number(cid)) >= 0; }
   function myClass() { return T('classes').filter(function (c) { return c.id === S.me.class_id; })[0] || {}; }
   function mySeat() { return T('seats').filter(function (s) { return s.student_id === S.me.id; })[0] || null; }
   /** 我的座位「在座位表上」的排/列（2026-11-03）。
@@ -260,7 +324,7 @@
   function lessonsOf(day) {
     var pm = periodMap();
     return T('lessons').filter(function (l) {
-      return Number(l.day_of_week) === day && Number(l.class_id) === S.me.class_id;
+      return Number(l.day_of_week) === day && inMyClass(l.class_id);
     }).sort(function (a, b) {
       var pa = pm[a.period_id] || {}, pb = pm[b.period_id] || {};
       return (pa.seq || 0) - (pb.seq || 0);
@@ -268,7 +332,7 @@
   }
   function homeworks() {
     return T('homeworks').filter(function (h) {
-      return Number(h.class_id) === S.me.class_id;
+      return inMyClass(h.class_id);
     }).sort(function (a, b) { return String(b.date || b.published || '').localeCompare(String(a.date || a.published || '')); });
   }
   function recordOf(hw) {
@@ -300,7 +364,7 @@
   function cwPushed() {
     return T('materials').filter(function (m) {
       return !m.deleted && m.from === 'courseware' &&
-        String(m.class_id) === String(S.me.class_id);
+        inMyClass(m.class_id);
     }).sort(function (a, b) {
       return String(b.date || '').localeCompare(String(a.date || ''));
     });
@@ -373,7 +437,7 @@
     if (!seat) return [];
     var d = todayIdx() + 1;
     return T('dutys').filter(function (x) {
-      return Number(x.class_id) === S.me.class_id && Number(x.day) === d &&
+      return inMyClass(x.class_id) && Number(x.day) === d &&
         (x.seat_ids || []).map(String).indexOf(String(seat.id)) >= 0;
     });
   }
@@ -612,23 +676,83 @@
   /* ---------------- 壳与路由（v3.0.0：三页签 今日 / 作业 / 课程） ----------------
      概览、成绩、考勤、德育等「关于我」的内容全部收进左下角账号卡弹出的
      个人信息面板（#suPop）；课程资源独立成页，在线预览不走下载。 */
+  /* ---------------- 导航图标（2.0.63） ----------------
+     牛哥 2026-11-21：改成教师端同款拟物风格——彩色 SVG 线条放在带高光的圆形
+     小底座上，选中时底座换主色、线条转白；每类功能一个固定颜色，一眼能认。
+     沿用原来的图形：网页仍是浏览器窗口 + 尖括号，不是调色盘。 */
+  var ICON = {
+    /* 今日：太阳 */
+    today: '<circle cx="12" cy="12" r="4.1"/><path d="M12 2.9v2.1M12 19v2.1'
+      + 'M2.9 12h2.1M19 12h2.1M5.5 5.5l1.5 1.5M17 17l1.5 1.5M18.5 5.5L17 7'
+      + 'M7 17l-1.5 1.5"/>',
+    /* 作业：带夹子的清单 */
+    homework: '<path d="M8.6 5.3H6.5a1.9 1.9 0 0 0-1.9 1.9v11.9a1.9 1.9 0 0 0 1.9 1.9'
+      + 'h11a1.9 1.9 0 0 0 1.9-1.9V7.2a1.9 1.9 0 0 0-1.9-1.9h-2.1"/>'
+      + '<rect x="8.6" y="2.7" width="6.8" height="4.5" rx="1.6"/>'
+      + '<path d="M8.7 12.4h6.6M8.7 16.1h4.3"/>',
+    /* 资料：文件夹 */
+    courses: '<path d="M3.4 7.6a2.1 2.1 0 0 1 2.1-2.1h3l1.9 2.1h7.9a2.1 2.1 0 0 1 2.1 2.1'
+      + 'v7.2a2.1 2.1 0 0 1-2.1 2.1H5.5a2.1 2.1 0 0 1-2.1-2.1z"/>',
+    /* 测验：卷子 + 对勾 */
+    quiz: '<path d="M6.3 3.5h8.2l3.8 3.8v13a.9.9 0 0 1-.9.9H6.3a.9.9 0 0 1-.9-.9'
+      + 'V4.4a.9.9 0 0 1 .9-.9z"/><path d="M14.3 3.6v3.8h3.9"/>'
+      + '<path d="M8.7 13.5l1.8 1.8 3.5-3.9"/>',
+    /* 座位：一把椅子 */
+    seat: '<path d="M7.4 11V7a2.6 2.6 0 0 1 2.6-2.6h4A2.6 2.6 0 0 1 16.6 7v4"/>'
+      + '<rect x="5.2" y="11" width="13.6" height="4.8" rx="1.8"/>'
+      + '<path d="M7.6 15.8v4M16.4 15.8v4"/>',
+    /* 打字：键盘 */
+    typing: '<rect x="2.6" y="6.6" width="18.8" height="10.8" rx="2.4"/>'
+      + '<path d="M6.2 10.2h.01M9.4 10.2h.01M12.6 10.2h.01M15.8 10.2h.01M19 10.2h.01'
+      + 'M6.2 13.4h.01M19 13.4h.01M9.6 13.4h4.8"/>',
+    /* 网页：浏览器窗口 + 代码尖括号 */
+    design: '<rect x="2.6" y="4.2" width="18.8" height="15.6" rx="2.6"/>'
+      + '<path d="M2.6 8.9h18.8"/>'
+      + '<path d="M9.6 12.6l-1.9 2.2 1.9 2.2M14.4 12.6l1.9 2.2-1.9 2.2"/>',
+    /* 像素：四格，右下是实心（示意「涂满一格」） */
+    pixel: '<rect x="3.4" y="3.4" width="7.2" height="7.2" rx="1.5"/>'
+      + '<rect x="13.4" y="3.4" width="7.2" height="7.2" rx="1.5"/>'
+      + '<rect x="3.4" y="13.4" width="7.2" height="7.2" rx="1.5"/>'
+      + '<path d="M13.4 13.4h7.2v7.2h-7.2z" fill="currentColor" stroke="none"/>'
+  };
+  /* 与教师端 ICON_C 同一套配色：[底色, 线条, 选中底色, 选中线条] */
+  var ICON_C = {
+    today:    ['#FFF6DC', '#B5741B', '#B5741B', '#FFFFFF'],
+    homework: ['#FFF4E0', '#8A5A00', '#8A5A00', '#FFFFFF'],
+    courses:  ['#E4F7E9', '#1D7A4C', '#1D7A4C', '#FFFFFF'],
+    quiz:     ['#EEEDFE', '#534AB7', '#534AB7', '#FFFFFF'],
+    seat:     ['#F0EFE9', '#5F6E68', '#4A5751', '#FFFFFF'],
+    typing:   ['#E1F5EE', '#0F6E56', '#0F6E56', '#FFFFFF'],
+    design:   ['#E3F4F1', '#0F766E', '#0F766E', '#FFFFFF'],
+    pixel:    ['#FDEAF1', '#B03A62', '#B03A62', '#FFFFFF']
+  };
+  /** 教师端同款图标底座：平时彩色底 + 彩色线条，选中时底色加深、线条转白 */
+  function navIcon(id, on) {
+    var c = ICON_C[id] || ICON_C.today;
+    var line = on ? c[3] : c[1];
+    return '<span class="side-ico" style="background:' + (on ? c[2] : c[0]) + '">' +
+      '<svg class="ico" viewBox="0 0 24 24" width="15" height="15" fill="none" ' +
+      'stroke="' + line + '" stroke-width="1.8" stroke-linecap="round" ' +
+      'stroke-linejoin="round" aria-hidden="true" focusable="false">' +
+      (ICON[id] || '') + '</svg></span>';
+  }
   var NAV = [
-    { id: 'today', name: '今日', ic: '☀' },
-    { id: 'homework', name: '作业', ic: '✎', flag: 'homework' },
+    { id: 'today', name: '今日' },
+    { id: 'homework', name: '作业', flag: 'homework' },
     /* 2026-11-04 牛哥定版：原「科目」改为「资料」——只列老师下发的资料，
        不再显示课表里的科目（课表那套对学生不再有意义）。 */
-    { id: 'courses', name: '资料', ic: '📁' },
+    { id: 'courses', name: '资料' },
     /* 测验/检测（2.0.38）：按登录会话的班级自动匹配老师下发的试卷 */
-    { id: 'quiz', name: '测验', ic: '📝' },
-    /* 座位表（2026-11-03）：与教师端同一张图，讲台固定朝上，自己高亮 */
-    { id: 'seat', name: '座位', ic: '🪑' },
+    { id: 'quiz', name: '测验' },
+    /* 座位表（2.0.74）：牛哥要求侧栏不再单列座位页签，
+       改从「我的 → 座位表」入口进（suPop 的 mSeat 保留），让侧栏只留功能页。 */
     /* 打字冒险岛：老师开放后显示，站内 iframe 内嵌（2026-11-02） */
-    { id: 'typing', name: '打字', ic: '⌨️' },
+    { id: 'typing', name: '打字' },
     /* H5 网页（2.0.40 定名，原「设计」）：老师开放 + 学生自己添加后出现；
        点开在本页框架内打开设计器，不跳新标签页。 */
-    { id: 'design', name: '网页', ic: '🎨' },
+    { id: 'design', name: '网页' },
     /* 像素画（2.0.47）：老师开放即出现，点开在站内 iframe 里画，不跳新标签 */
-    { id: 'pixel', name: '像素', ic: '🟦' }
+    { id: 'pixel', name: '像素' }
   ];
   var VIEWS = ['today', 'homework', 'courses', 'quiz', 'seat', 'typing', 'design', 'pixel'];
   var TITLES = {
@@ -704,15 +828,19 @@
        正在打的关直接跳回首页。SSE 推送 / 10 秒轮询 / 配置刷新都会触发
        render，时间一随机必然「不定时闪退」。正在打字视图里（iframe 还活着、
        开关也没被老师关掉）一律不再动 DOM，切走后自动恢复。 */
+    /* 2.0.55：iframe 保护分支不能「什么都不做」地 return —— 老师开关功能时
+       refreshTyping 会走到这里，直接 return 会让导航入口漏重绘，学生要「点一下」
+       才看到入口增减（打字之所以正常，是因为关掉时 S.typingOn=false 不成立，
+       能往下走到 paintNav）。所以这里在保住 iframe 的前提下单独重绘导航。 */
     if (S.view === 'typing' && S.typingOn &&
-        document.querySelector('iframe[data-typing-embed]')) return;
+        document.querySelector('iframe[data-typing-embed]')) { paintNav(); return; }
     /* 设计页同理（2.0.39）：正在写代码时被 SSE 重绘 = 输入框重建、代码全丢，
        这比打字页「跳首页」还严重。iframe 在就绝不重建。 */
     if (S.view === 'design' && designReady() &&
-        document.querySelector('iframe[data-design-embed]')) return;
+        document.querySelector('iframe[data-design-embed]')) { paintNav(); return; }
     /* 像素画同理（2.0.47）：画到一半被重绘 = 画布重建、未存的笔画丢掉 */
     if (S.view === 'pixel' && pixelReady() &&
-        document.querySelector('iframe[data-pixel-embed]')) return;
+        document.querySelector('iframe[data-pixel-embed]')) { paintNav(); return; }
     /* 座位表走独立接口（整间教室的网格），首次进页面时拉一次；
        拿到数据后 loadSeatmap 自己再 render 一遍（2026-11-03）。 */
     if (S.view === 'seat' && !S.seatmap) loadSeatmap();
@@ -784,6 +912,7 @@
   /* 2.0.49：「今日」入口卡下线后，进入这两个页面只走左侧导航（go('design') /
      go('pixel')），原来的 openDesign/openPixel 已无调用点，一并删掉。 */
 
+
   /* ---------------- 图片素材（2.0.41） ----------------
      老师在「资料」里下发的图片，学生在这里点「加到网页」，
      就写进 localStorage 的 wb-design-assets；编辑器（同源 iframe）
@@ -820,7 +949,7 @@
         if (n.group) return '<div class="nav-gt">' + n.group + '</div>';
         if (!navShown(n)) return '';
         return '<div class="side-item' + (S.view === n.id ? ' active' : '') + '" data-go="' + n.id + '">' +
-          '<span class="ic">' + n.ic + '</span>' + n.name + badgeFor(n.id) + '</div>';
+          navIcon(n.id, S.view === n.id) + n.name + badgeFor(n.id) + '</div>';
       }).join('');
     }
     /* 底部 Tab（窄屏） */
@@ -831,7 +960,7 @@
         })
         .map(function (n) {
           return '<button class="tab' + (S.view === n.id ? ' on' : '') + '" data-go="' + n.id + '">' +
-            '<span class="ic">' + n.ic + '</span>' + n.name + '</button>';
+            navIcon(n.id, S.view === n.id) + n.name + '</button>';
         }).join('');
     }
     document.querySelectorAll('[data-go]').forEach(function (b) {
@@ -852,7 +981,7 @@
     }
     return '<iframe data-typing-embed="1" src="/typing/?embed=1" title="打字冒险岛" ' +
       'style="width:100%;height:calc(100vh - 150px);min-height:460px;' +
-      'border:1.5px solid var(--line,#eee);border-radius:16px;background:#F8F2E4;' +
+      'border:1.5px solid var(--line,#eee);border-radius:16px;background:var(--bg-surface,#F8F2E4);' +
       'box-shadow:0 6px 20px rgba(60,30,10,.06)"></iframe>';
   }
 
@@ -1442,8 +1571,10 @@
      点击上弹个人信息面板（#suPop，教师端 .su-pop 同款出入场），主题切换带
      高光（themeFlash 同款）。窄屏侧栏隐藏时由左下角悬浮头像键打开同一面板。
      头像不支持上传，提供教师端同款的预设样式（文字 / emoji / 动态），
-     只存本机 localStorage；键名 wb-savatar 与教师端 wb-avatar 分开。 */
-  var AV_KEY = 'wb-savatar';     // 与教师端 wb-avatar 分键：同一端口下 localStorage 共享
+     只存本机 localStorage。2.0.64 修串号：旧版键名 wb-savatar 是全局的，
+     机房同一台电脑换人登录就会看到上一位同学选的头像；现在按
+     「教师账号 + 班级 + 学生 id」分键，每人各存各的。 */
+  var AV_KEY_BASE = 'wb-savatar';     // 与教师端 wb-avatar 分开
   var MODE_KEY = 'wb-smode';     // 'light' / 'dark'（缺省浅色，与教师端 wb-mode 默认一致）
   /* 预设头像样式（教师端 avatarPickerHtml 同思路）：text=姓名首字，
      emoji=静态表情，anim=CSS 动画底色（v 值同时是样式类名） */
@@ -1460,13 +1591,27 @@
     { kind: 'anim', v: 'uav-wave', label: '流彩' }
   ];
 
-  function avPref() {
-    try { return JSON.parse(localStorage.getItem(AV_KEY) || 'null'); } catch (e) { return null; }
+  /** 本机头像偏好按当前登录学生分键：同一个浏览器换账号不再串头像。
+     身份三项都取服务端下发的身份，前端无法伪造到别人的键。 */
+  function avKey() {
+    var me = S.me || {};
+    var who = [me.account || '', me.class_id || '', me.id || me.student_id || '']
+      .join('|');
+    return AV_KEY_BASE + ':' + who;
   }
-  /** 渲染头像 span（cls: '' / sm / lg / xl） */
+  function avPref() {
+    try { return JSON.parse(localStorage.getItem(avKey()) || 'null'); } catch (e) { return null; }
+  }
+  /** 渲染头像 span（cls: '' / sm / lg / xl）
+      2.0.56：优先用服务端下发的 S.me.avatar（像素画设为头像，存 students 行，
+      随数据导入导出同步）；localStorage 只作离线兜底。 */
   function avHtml(cls) {
     var p = avPref(), c = 'acct-av ' + (cls || ''), ch = esc(((S.me && S.me.name) || '学').slice(0, 1));
-    if (p && p.kind === 'img' && p.v) {           // 兼容旧版本机上传数据（新版本不再提供上传）
+    var srv = (S.me && S.me.avatar) || '';
+    if (srv) {
+      return '<span class="' + c + '"><img src="' + srv + '" alt="头像"></span>';
+    }
+    if (p && p.kind === 'img' && p.v) {           // 兼容旧版本机上传数据
       return '<span class="' + c + '"><img src="' + p.v + '" alt="头像"></span>';
     }
     if (p && p.kind === 'emoji' && p.v) {
@@ -1524,6 +1669,7 @@
     document.body.classList.add('theme-switching');
     setTimeout(function () { document.body.classList.remove('theme-switching'); }, 450);
     applyMode();
+    notifyThemeEmbeds();
     paintModeBtns();
     paintThemeBtns();
     toast(m === 'dark' ? '已切换到夜间模式' : '已切换到浅色模式');
@@ -1533,19 +1679,21 @@
     document.body.classList.add('theme-switching');
     setTimeout(function () { document.body.classList.remove('theme-switching'); }, 450);
     applyMode();
+    notifyThemeEmbeds();
     paintThemeBtns();
     var t = THEMES.filter(function (x) { return x.k === k; })[0];
     toast('已切换主题：' + (t ? t.n : k));
   }
   function paintModeBtns() {
     var cur = modeState();
-    document.querySelectorAll('#suPop [data-mode]').forEach(function (b) {
+    /* 2.0.74：主题按钮现在在「主题和头像设置」弹层里，按全局选 */
+    document.querySelectorAll('[data-mode]').forEach(function (b) {
       b.classList.toggle('on', b.getAttribute('data-mode') === cur);
     });
   }
   function paintThemeBtns() {
     var cur = themeState();
-    document.querySelectorAll('#suPop [data-theme]').forEach(function (b) {
+    document.querySelectorAll('[data-theme]').forEach(function (b) {
       b.classList.toggle('on', b.getAttribute('data-theme') === cur);
     });
   }
@@ -1588,29 +1736,71 @@
       '<span>已到课 <b>' + ck + '</b>/' + atts.length + '</span>' +
       '<span>课堂评价 <b>' + (mSum > 0 ? '+' : '') + mSum + '</b></span></div>' +
       grpHtml +
-      '<div class="sup-grid">' +
+      /* 2.0.75：「我的记录」「设置」两个分区做成二级折叠菜单，
+         标题点一下展开/收起，状态存 localStorage，默认都折叠。 */
+      supSecHtml('records', '我的记录',
+        (S.flags.scores !== false ? '<button type="button" class="sup-item" id="mScore">📊 我的成绩<span class="si-n">' + sc.length + ' 次</span></button>' : '') +
+        '<button type="button" class="sup-item" id="mReport">📋 我的学习报告</button>' +
+        (S.flags.morality !== false ? '<button type="button" class="sup-item" id="mMor">🧭 德育记录</button>' : '') +
+        '<button type="button" class="sup-item" id="mAtt">🕗 考勤记录<span class="si-n">' + atts.length + ' 条</span></button>' +
+        '<button type="button" class="sup-item" id="mSeat">🪑 座位表<span class="si-n">' +
+          (sp ? ('第 ' + sp.r + ' 排 ' + sp.c + ' 列') : '未排座') + '</span></button>') +
+      supSecHtml('settings', '设置',
+        '<button type="button" class="sup-item" id="mAvatar">🎨 主题和头像设置</button>' +
+        '<button type="button" class="sup-item" id="mPwd">🔑 修改密码</button>' +
+        '<button type="button" class="sup-item danger" id="mLogout">退出登录</button>') +
+      '</div>';
+  }
+  /* 2.0.75：「我的」面板分区折叠头 + 内容容器。
+     状态存 localStorage（默认折叠）；点标题整块切换，不影响里面按钮。
+     登录成功时会清掉本地记忆，保证每次进来都是折叠态。 */
+  var SU_FOLD_KEY = 'wb-stu-sup-fold';
+  function supFoldMap() {
+    try {
+      var v = JSON.parse(localStorage.getItem(SU_FOLD_KEY) || '{}');
+      return (v && typeof v === 'object') ? v : {};
+    } catch (e) { return {}; }
+  }
+  function supSecHtml(key, title, inner) {
+    var open = supFoldMap()[key] === true;  // 默认折叠，仅显式展开过才打开
+    return '<div class="sup-sec' + (open ? ' open' : '') + '" data-sec="' + key + '">' +
+      '<button type="button" class="sup-sec-t" data-sec-toggle="' + key + '" ' +
+        'aria-expanded="' + (open ? 'true' : 'false') + '">' + title +
+        '<i class="sup-sec-ar"></i></button>' +
+      '<div class="sup-sec-b"' + (open ? '' : ' hidden') + '>' + inner + '</div></div>';
+  }
+  /** 2.0.74：主题设置（明暗 + 护眼皮肤）HTML，从「我的」面板搬进
+     「主题和头像设置」弹层复用；选择器不写死 #suPop，两个容器都能点亮。 */
+  function themePickerHtml() {
+    return '<div class="sup-grid">' +
       '<button type="button" class="sup-q" data-mode="light">☀ 浅色</button>' +
       '<button type="button" class="sup-q" data-mode="dark">🌙 夜间</button></div>' +
-      /* 护眼皮肤（2.0.41）：四个色点，浅色/夜间各有一版；点一下即时生效 */
       '<div class="sup-theme" role="group" aria-label="护眼主题">' +
       THEMES.map(function (t) {
         return '<button type="button" class="sup-dot" data-theme="' + t.k + '" title="' + esc(t.tip) + '">'
           + '<i style="background:' + t.dot + '"></i>' + esc(t.n) + '</button>';
-      }).join('') + '</div>' +
-      (S.flags.scores !== false ? '<button type="button" class="sup-item" id="mScore">📊 我的成绩<span class="si-n">' + sc.length + ' 次</span></button>' : '') +
-      '<button type="button" class="sup-item" id="mSeat">🪑 座位表<span class="si-n">' +
-        (sp ? ('第 ' + sp.r + ' 排 ' + sp.c + ' 列') : '未排座') + '</span></button>' +
-      '<button type="button" class="sup-item" id="mAtt">🕗 考勤记录<span class="si-n">' + atts.length + ' 条</span></button>' +
-      '<button type="button" class="sup-item" id="mAvatar">🖼 头像样式</button>' +
-      '<button type="button" class="sup-item" id="mReport">📋 我的学习报告</button>' +
-      (S.flags.morality !== false ? '<button type="button" class="sup-item" id="mMor">🧭 德育记录</button>' : '') +
-      '<button type="button" class="sup-item" id="mPwd">🔑 修改密码</button>' +
-      '<button type="button" class="sup-item danger" id="mLogout">退出登录</button>' +
-      '</div>';
+      }).join('') + '</div>';
   }
   function bindSu() {
     var pop = $('#suPop');
     if (!pop) return;
+    /* 2.0.75：「我的」面板分区折叠——点标题切换，只动 DOM 不整面板重绘 */
+    pop.querySelectorAll('[data-sec-toggle]').forEach(function (h) {
+      h.onclick = function (ev) {
+        ev.stopPropagation();
+        var key = h.getAttribute('data-sec-toggle');
+        var sec = h.closest ? h.closest('.sup-sec') : h.parentNode;
+        var box = sec ? sec.querySelector('.sup-sec-b') : null;
+        if (!box) return;
+        var open = box.hidden;
+        box.hidden = !open;
+        sec.classList.toggle('open', open);
+        h.setAttribute('aria-expanded', open ? 'true' : 'false');
+        var m = supFoldMap();
+        m[key] = open;
+        try { localStorage.setItem(SU_FOLD_KEY, JSON.stringify(m)); } catch (e) {}
+      };
+    });
     /* 两个触发点：侧栏账号卡（桌面）+ 左下角悬浮键（窄屏） */
     ['#suBtn', '#suFab'].forEach(function (sel) {
       var btn = $(sel);
@@ -1619,7 +1809,7 @@
         ev.stopPropagation();
         pop.hidden = !pop.hidden;
         btn.setAttribute('aria-expanded', pop.hidden ? 'false' : 'true');
-        if (!pop.hidden) { paintModeBtns(); paintThemeBtns(); }
+        /* 2.0.74：主题按钮已搬进头像弹层，这里只需刷新头像显示 */
       };
     });
     /* 点面板与触发点之外的地方收起（只挂一次全局监听） */
@@ -1634,12 +1824,7 @@
         }
       });
     }
-    pop.querySelectorAll('[data-mode]').forEach(function (b) {
-      b.onclick = function () { setMode(b.getAttribute('data-mode')); };
-    });
-    pop.querySelectorAll('[data-theme]').forEach(function (b) {
-      b.onclick = function () { setTheme(b.getAttribute('data-theme')); };
-    });
+    /* 2.0.74：主题按钮已搬进头像弹层，由 openAvatarSheet 自己绑定 */
     var ms = $('#mScore'); if (ms) ms.onclick = function () { pop.hidden = true; openScoreSheet(); };
     var mseat = $('#mSeat');
     if (mseat) mseat.onclick = function () { pop.hidden = true; go('seat'); };
@@ -1680,18 +1865,29 @@
       return '<button type="button" class="av-opt' + on + '" data-kind="' + o.kind +
         '" data-v="' + esc(o.v) + '">' + inner + '<i>' + esc(o.label) + '</i></button>';
     }).join('');
-    showSheet('<div class="sh"><b>头像样式</b>' +
+    showSheet('<div class="sh"><b>主题和头像设置</b>' +
       '<button class="x" id="shClose">×</button></div>' +
-      '<div class="av-preview"><span class="av-slot" data-av="xl" id="avBig">' + avHtml('xl') + '</span>' +
-      '<div class="note" style="margin:0;flex:1">挑一个喜欢的样式，点一下就换上；头像只保存在这台设备上。</div></div>' +
-      '<div class="av-picker" id="avPicker" style="margin-top:12px">' + opts + '</div>');
+      /* 2.0.74：主题设置（明暗 + 护眼皮肤）从「我的」面板搬进来 */
+      '<div class="set-sub-t">外观主题</div>' + themePickerHtml() +
+      '<div class="set-sub-sep"></div>' +
+      '<div class="set-sub-t">头像样式</div>' +
+      '<div class="av-preview"><span class="av-slot" data-av="xl" id="avBig">' + avHtml('xl') + '</span></div>' +
+      '<div class="av-picker" id="avPicker" style="margin-top:10px">' + opts + '</div>');
     var cl = $('#shClose'); if (cl) cl.onclick = hideSheet;
+    /* 主题按钮绑定 + 点亮当前选中态 */
+    document.querySelectorAll('#sheet [data-mode]').forEach(function (b) {
+      b.onclick = function () { setMode(b.getAttribute('data-mode')); };
+    });
+    document.querySelectorAll('#sheet [data-theme]').forEach(function (b) {
+      b.onclick = function () { setTheme(b.getAttribute('data-theme')); };
+    });
+    paintModeBtns(); paintThemeBtns();
     /* 点选即生效 + 大图预览同步 + 选中态高亮（教师端 .av-opt.on 同款） */
     document.querySelectorAll('#avPicker .av-opt').forEach(function (b) {
       b.onclick = function () {
         var kind = b.getAttribute('data-kind'), v = b.getAttribute('data-v');
         var pref = kind === 'text' ? { kind: 'text', v: '' } : { kind: kind, v: v };
-        try { localStorage.setItem(AV_KEY, JSON.stringify(pref)); } catch (e) { toast('保存失败，本机存储不可用'); return; }
+        try { localStorage.setItem(avKey(), JSON.stringify(pref)); } catch (e) { toast('保存失败，本机存储不可用'); return; }
         document.querySelectorAll('#avPicker .av-opt').forEach(function (x) { x.classList.remove('on'); });
         b.classList.add('on');
         refreshAvatars();
@@ -1932,6 +2128,8 @@
           btn.disabled = false; btn.textContent = '进入';
           return;
         }
+        /* 2.0.75：每次登录都从折叠态开始，清掉上一人/上次手动展开的记忆 */
+        try { localStorage.removeItem(SU_FOLD_KEY); } catch (e) {}
         if (j.must_change) location.href = '/s/?setpwd=1';
         else location.reload();
       }).catch(function () {
@@ -1963,6 +2161,8 @@
       }).then(function (j) {
         if (!j.ok) { $('#err').textContent = j.msg || '修改失败'; return; }
         toast('密码已更新');
+        /* 2.0.75：改密后重新进入，同样回到折叠默认态 */
+        try { localStorage.removeItem(SU_FOLD_KEY); } catch (e) {}
         location.href = '/s/';
       });
     };

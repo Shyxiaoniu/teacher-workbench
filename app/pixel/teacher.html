@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>像素画 · 教师管理</title>
-<link rel="stylesheet" href="/design/design.css?v=2.0.47">
-<link rel="stylesheet" href="/pixel/pixel.css?v=2.0.47">
+<link rel="stylesheet" href="/design/design.css?v=2.0.72">
+<link rel="stylesheet" href="/pixel/pixel.css?v=2.0.74">
 </head>
 <body>
 <div class="tc-app">
@@ -14,38 +14,28 @@
     <h1>像素画</h1>
     <span class="tc-pill off" id="pill">读取中…</span>
     <span class="sp"></span>
-    <div class="help-wrap">
-      <button class="help-q" id="btnHelp" title="使用说明" aria-expanded="false"
-              aria-controls="helpPop">?</button>
-      <div class="help-pop" id="helpPop" hidden role="dialog" aria-label="使用说明">
-        <div class="help-hd"><b>这一页怎么用</b>
-          <button class="x" id="helpClose" title="关闭">×</button></div>
-        <div class="help-bd">
-          <ol>
-            <li><b>开启开关</b>：一点就生效，学生端「像素画」页签立刻出现，不用刷新。</li>
-            <li><b>填归档课程</b>：作品落到 <b>资料/课程/班级/学号-姓名/</b>，
-              文件名带「学号-姓名-」前缀，单独拷出去也认得出是谁的。</li>
-            <li><b>学生画</b>：一格一格涂，边画边自动存草稿，换台电脑还能接着画。
-              画板自带 <b>8 个 16×16 模板</b>（爱心、笑脸、小房子…），学生可以「照着画」练手感，
-              也可以「载入」到画布上再改。</li>
-            <li><b>看作品</b>：这里直接出缩略图，点一下看大图；「大屏」页选同一课程也能看作品墙。</li>
-            <li><b>限制提交次数</b>：默认 <b>每人只能交 1 版</b>，防止一个人反复交把作品墙和归档目录塞满。
-              想让学生多交几版就改成 2、3…，填 <b>0</b> 表示不限。学生画板上会显示「还能交 N 版」，
-              交满后提交按钮直接拦住（服务端也会再拦一道，改前端也绕不过）。</li>
-          </ol>
-          <p><b>先自己试</b>：点「✏ 进入像素画练习」，随便画，进度自动保存；画好可「导出图片」当课件示例。</p>
-          <p><b>交上来的是什么</b>：一张 PNG 作品图 + 一份工程文件（.json，含每个像素，
-            下次导入还能继续改）。两个文件都会跟着归档。</p>
-          <p><b>快捷键</b>：Ctrl + S 保存草稿，Ctrl + Z 撤销，Ctrl + Enter 提交。</p>
-        </div>
-      </div>
-    </div>
     <button class="btn sm" id="btnRefresh">↻ 刷新</button>
   </div>
 
+  <!-- 并排菜单（2.0.68）：与打字教师页一致，点击只切面板显隐 -->
+  <div class="tc-tabs" id="tcTabs">
+    <button type="button" class="on" data-tcpane-btn="basic">⚙️ 基础设置</button>
+    <button type="button" data-tcpane-btn="ops">🛠 常用操作</button>
+    <button type="button" data-tcpane-btn="works">📋 学生提交</button>
+    <button type="button" data-tcpane-btn="help">❓ 使用说明</button>
+  </div>
+
+  <div class="tc-pane on" data-tcpane="basic">
   <!-- 一键启停 -->
   <div class="tc-hero">
-    <div class="icon">🎨</div>
+    <div class="icon" title="像素画">
+      <svg class="i-ic" viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="3.4" y="3.4" width="7.2" height="7.2" rx="1.5"/>
+        <rect x="13.4" y="3.4" width="7.2" height="7.2" rx="1.5"/>
+        <rect x="3.4" y="13.4" width="7.2" height="7.2" rx="1.5"/>
+        <path d="M13.4 13.4h7.2v7.2h-7.2z" fill="currentColor" stroke="none"/>
+      </svg>
+    </div>
     <div class="txt">
       <b>学生端「像素画」页签</b>
       <span>开启后学生才能进画板、交作品；关掉立刻收回入口与提交权限（已画的草稿不丢）。</span>
@@ -107,7 +97,10 @@
       </div>
     </div>
 
-    <!-- 右：常用操作 -->
+  </div><!-- /tc-grid -->
+  </div><!-- /tc-pane basic -->
+
+  <div class="tc-pane" data-tcpane="ops">
     <div class="card">
       <h2>常用操作</h2>
       <p class="hint">练习自动保存；关掉服务不影响已经画好的草稿。</p>
@@ -119,19 +112,42 @@
     </div>
   </div>
 
-  <!-- 提交概览 -->
-  <div class="card" style="margin-top:14px">
-    <h2>学生提交概览</h2>
-    <p class="hint" id="statHint">读取中…</p>
-    <div class="tc-stats">
-      <div class="tc-stat"><b id="stPeople">0</b><span>已提交人数</span></div>
-      <div class="tc-stat"><b id="stFiles">0</b><span>作品文件</span></div>
-      <div class="tc-stat"><b id="stLast" style="font-size:14px;line-height:1.9">—</b><span>最近一次提交</span></div>
+  <div class="tc-pane" data-tcpane="works">
+    <div class="card">
+      <h2>学生提交概览</h2>
+      <p class="hint" id="statHint">读取中…</p>
+      <div class="tc-stats">
+        <div class="tc-stat"><b id="stPeople">0</b><span>已提交人数</span></div>
+        <div class="tc-stat"><b id="stFiles">0</b><span>作品文件</span></div>
+        <div class="tc-stat"><b id="stLast" style="font-size:14px;line-height:1.9">—</b><span>最近一次提交</span></div>
+      </div>
+      <div class="tc-works px-works" id="works"></div>
+      <div class="foot" style="margin-top:12px">
+        <button class="btn ghost sm" id="btnDash">去「大屏」页看作品墙 ›</button>
+        <span class="msg" id="dashMsg" style="color:var(--ink3)"></span>
+      </div>
     </div>
-    <div class="tc-works px-works" id="works"></div>
-    <div class="foot" style="margin-top:12px">
-      <button class="btn ghost sm" id="btnDash">去「大屏」页看作品墙 ›</button>
-      <span class="msg" id="dashMsg" style="color:var(--ink3)"></span>
+  </div>
+
+  <div class="tc-pane" data-tcpane="help">
+    <div class="card">
+      <h2>使用说明</h2>
+      <ol>
+        <li><b>开启开关</b>：一点就生效，学生端「像素画」页签立刻出现，不用刷新。</li>
+        <li><b>填归档课程</b>：作品落到 <b>资料/课程/班级/学号-姓名/</b>，
+          文件名带「学号-姓名-」前缀，单独拷出去也认得出是谁的。</li>
+        <li><b>学生画</b>：一格一格涂，边画边自动存草稿，换台电脑还能接着画。
+          画板自带 <b>8 个 16×16 模板</b>（爱心、笑脸、小房子…），学生可以「照着画」练手感，
+          也可以「载入」到画布上再改。</li>
+        <li><b>看作品</b>：到「学生提交」看缩略图，点一下看大图；「大屏」页选同一课程也能看作品墙。</li>
+        <li><b>限制提交次数</b>：默认 <b>每人只能交 1 版</b>，防止一个人反复交把作品墙和归档目录塞满。
+          想让学生多交几版就改成 2、3…，填 <b>0</b> 表示不限。学生画板上会显示「还能交 N 版」，
+          交满后提交按钮直接拦住（服务端也会再拦一道，改前端也绕不过）。</li>
+      </ol>
+      <p><b>先自己试</b>：到「常用操作」点「进入像素画练习」，随便画，进度自动保存；画好可「导出图片」当课件示例。</p>
+      <p><b>交上来的是什么</b>：一张 PNG 作品图 + 一份工程文件（.json，含每个像素，
+        下次导入还能继续改）。两个文件都会跟着归档。</p>
+      <p><b>快捷键</b>：Ctrl + S 保存草稿，Ctrl + Z 撤销，Ctrl + Enter 提交。</p>
     </div>
   </div>
 </div>
@@ -357,20 +373,18 @@
     $('#btnSave').onclick = function () { save(); };
     $('#btnRefresh').onclick = function () { load(); toast('已刷新'); };
 
-    var hp = $('#helpPop'), hq = $('#btnHelp');
-    function helpOpen(v) {
-      hp.hidden = !v;
-      hq.setAttribute('aria-expanded', v ? 'true' : 'false');
-    }
-    hq.onclick = function (e) { e.stopPropagation(); helpOpen(hp.hidden); };
-    $('#helpClose').onclick = function () { helpOpen(false); };
-    document.addEventListener('click', function (e) {
-      if (hp.hidden) return;
-      if (hp.contains(e.target) || hq.contains(e.target)) return;
-      helpOpen(false);
-    });
-    document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape' && !hp.hidden) helpOpen(false);
+    /* 2.0.68：并排菜单切换。只改显隐，不重绘任何面板 —— 基础设置里正在填的
+       输入框 / 开关状态不会因为切到「学生提交」再切回来而丢失。 */
+    document.querySelectorAll('[data-tcpane-btn]').forEach(function (btn) {
+      btn.onclick = function () {
+        var t = btn.getAttribute('data-tcpane-btn');
+        document.querySelectorAll('[data-tcpane-btn]').forEach(function (x) {
+          x.classList.toggle('on', x === btn);
+        });
+        document.querySelectorAll('[data-tcpane]').forEach(function (p) {
+          p.classList.toggle('on', p.getAttribute('data-tcpane') === t);
+        });
+      };
     });
 
     // 练习 / 预览都在同一个 iframe 里切，不跳新标签（与网页设计一致）

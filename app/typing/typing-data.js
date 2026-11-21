@@ -885,6 +885,23 @@ window.TD = (function () {
     return BACKGROUNDS[0];
   }
 
+  /* 2.0.65 动态背景层：底色仍由 BACKGROUNDS.css 提供，这一层只叠会动的光影/粒子。
+     纯 CSS 动画零图片；舞台、商店预览、宠物小像共用同一套标记，
+     mini 版粒子更少、模糊更小，44px 头像和榜单也不会糊成一团。 */
+  function bgLive(id, mini) {
+    var key = id || 'warm';
+    if (key !== 'warm' && key !== 'meadow' && key !== 'beach' &&
+        key !== 'night' && key !== 'candy' && key !== 'space') key = 'warm';
+    var n = mini ? 4 : ((key === 'night' || key === 'space') ? 12 : 8);
+    var parts = '';
+    for (var i = 0; i < n; i++) {
+      parts += '<i style="--x:' + (7 + (i * 37) % 86) + '%;--y:' +
+        (5 + (i * 53) % 88) + '%;--d:-' + ((i * 0.79) % 7).toFixed(2) + 's"></i>';
+    }
+    return '<span class="bglive bg-' + key + (mini ? ' bglive-mini' : '') +
+      '" aria-hidden="true">' + parts + '</span>';
+  }
+
   /* ---------------- 出战特效（积分购买，2026-11-05） ----------------
      参考 QQ 头像动态挂件：粒子 / 光环 / 全屏氛围三类，全部 CSS 动画实现
      （学生.html 里 .stage-fx.fx-<id> 定义具体动画），零图片零外部资源。
@@ -899,8 +916,6 @@ window.TD = (function () {
       desc: '粉红爱心围着伙伴转圈圈' },
     { id: 'snow',    name: '漫天雪花',  price: 900, icon: '❄️',
       desc: '细雪落在牧场舞台上' },
-    { id: 'rainbow', name: '彩虹光环',  price: 1400, icon: '🌈',
-      desc: '头顶一道旋转的彩虹光环' },
     { id: 'aurora',  name: '极光帷幕',  price: 2000, icon: '🌌',
       desc: '整个舞台流动着绿紫色极光' }
   ];
@@ -1578,7 +1593,8 @@ window.TD = (function () {
     var cls = o.cls || 'lb-pet';
     var bg = o.bg ? bgById(o.bg) : null;
     var st = (bg && bg.id) ? ' style="background:' + bg.css + '"' : '';
-    var inner = fxMini(o.fx);
+    /* 2.0.65：小像也跟着背景动起来 —— 学生作品宠物同样吃这一层 */
+    var inner = (bg && bg.id ? bgLive(bg.id, true) : '') + fxMini(o.fx);
     /* 宠物 id 必须在图鉴里，否则渲染出空白小像（老档案里可能有已下线的 id） */
     inner += (o.pet && petById(o.pet))
       ? petSvg(o.pet, o.decos || [], o.opts || {})
@@ -1603,6 +1619,6 @@ window.TD = (function () {
     petById: petById, decoById: decoById, titleFor: titleFor,
     catName: catName, slotClash: slotClash, equipDeco: equipDeco, itemById: itemById,
     nextTitle: nextTitle, petSvg: petSvg, decoSvg: decoSvg,
-    petTile: petTile, fxMini: fxMini
+    petTile: petTile, fxMini: fxMini, bgLive: bgLive
   };
 })();

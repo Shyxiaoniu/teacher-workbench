@@ -29,13 +29,19 @@
 }
 #cv{
   display:block;border-radius:8px;background:#fff;
-  border:1px solid var(--line-2);
+  /* 2.0.73：加一圈清晰边框，画布边缘一眼可辨（原来 1px --line-2 太淡） */
+  border:2px solid #B99A72;
+  outline:1px solid rgba(120,80,40,.28);outline-offset:2px;
   box-shadow:0 6px 18px rgba(122,82,50,.10);
   /* 触摸设备上别让浏览器把拖动当成滚动 */
   touch-action:none;cursor:crosshair;
   image-rendering:pixelated;
 }
-html[data-mode="dark"] #cv{box-shadow:0 6px 18px rgba(0,0,0,.45)}
+html[data-mode="dark"] #cv{
+  border-color:#7A6248;
+  outline-color:rgba(255,220,180,.24);
+  box-shadow:0 6px 18px rgba(0,0,0,.45);
+}
 
 .px-meta{
   display:flex;align-items:center;gap:10px;width:100%;flex:none;
@@ -184,15 +190,17 @@ html[data-mode="dark"] .px-cur-row input[type=color]{color-scheme:dark}
    右侧「模板」小卡 + 全屏浮层。浮层复用作品大图那套遮罩配色，
    卡片白底棋盘格，缩略图最近邻放大，和画布上的观感一致。 */
 .px-ref{
-  display:flex;align-items:center;gap:10px;margin-top:9px;
-  padding:8px;border:1px dashed var(--line-2);border-radius:11px;
+  /* 2.0.72：参考图从 76 放大到 120 后改成纵向（图居中在上、说明在下），
+     250px 宽的右栏里才不会把文字挤成两三个字一行。 */
+  display:flex;flex-direction:column;align-items:center;gap:7px;margin-top:9px;
+  padding:9px;border:1px dashed var(--line-2);border-radius:11px;
   background:var(--card-2, #fbf7ef);position:relative;
 }
 .px-ref canvas{
   flex:none;border-radius:7px;border:1px solid var(--line);
   background:#fff;image-rendering:pixelated;
 }
-.px-ref-txt{min-width:0;display:flex;flex-direction:column;gap:2px}
+.px-ref-txt{width:100%;min-width:0;display:flex;flex-direction:column;gap:2px;text-align:center}
 .px-ref-txt b{font-size:13px;color:var(--ink)}
 .px-ref-txt span{font-size:11.5px;color:var(--ink3);line-height:1.5}
 .px-ref-x{
@@ -225,8 +233,9 @@ html[data-mode="dark"] .px-cur-row input[type=color]{color-scheme:dark}
 .px-modal-x:hover{background:var(--brand-soft);color:var(--ink)}
 
 .px-tpl-grid{
-  display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));
-  gap:10px;padding:14px 16px 16px;overflow-y:auto;
+  /* 2.0.72：缩略图放大到 128px，列宽跟着放大，卡片不再挤成一团 */
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));
+  gap:12px;padding:14px 16px 16px;overflow-y:auto;
 }
 .px-tpl-card{
   display:flex;flex-direction:column;align-items:center;gap:7px;
@@ -243,6 +252,15 @@ html[data-mode="dark"] .px-tpl-card{
   display:block;border-radius:8px;border:1px solid var(--line);
   image-rendering:pixelated;background:#fff;
 }
+/* 2.0.72：尺寸徽标压在缩略图左上角，一眼看清是 16×16 还是别的 */
+.px-tpl-card{position:relative}
+.px-tpl-size{
+  position:absolute;top:6px;left:6px;z-index:2;
+  font-size:10.5px;line-height:1;padding:4px 6px;border-radius:6px;
+  background:var(--brand);color:#fff;font-weight:600;
+  box-shadow:0 1px 4px rgba(0,0,0,.18);
+}
+html[data-mode="dark"] .px-tpl-size{color:#10201A}
 .px-tpl-nm{font-size:12.5px;color:var(--ink2);font-weight:600}
 .px-tpl-ops{display:flex;gap:6px;width:100%}
 .px-mini{
@@ -291,3 +309,18 @@ html[data-mode="dark"] .px-works .tc-work .th{
 .px-view .cap{margin-top:10px;font-size:12.5px;color:var(--ink3)}
 .px-view .cap b{color:var(--ink);font-size:14px;display:block;margin-bottom:2px}
 .px-view .row{display:flex;gap:9px;justify-content:center;margin-top:11px}
+
+/* ---- 全站统一弹窗（app/student/ui-dialog.js）----
+   工作台弹窗统一 fixed 视口居中；轻提示原本在 iframe 底部，长页面滚动时容易看不见，
+   这里改到视口中间，保证确认 / 成功 / 失败三类提示都在眼前。 */
+.wbd-mask{
+  position:fixed!important;inset:0!important;
+  display:flex!important;align-items:center!important;justify-content:center!important;
+}
+.wbd-card{max-height:86vh;overflow-y:auto}
+.wbd-toast-wrap{
+  left:50%!important;top:50%!important;bottom:auto!important;
+  transform:translate(-50%,-50%)!important;
+}
+/* 2.0.66：夜间品牌色提亮后，悬停实心按钮上的白字看不清 */
+html[data-mode="dark"] .px-mini.primary:hover{color:#1A100C}

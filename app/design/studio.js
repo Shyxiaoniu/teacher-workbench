@@ -51,7 +51,14 @@
   }
   var toastTimer = null;
   function toast(msg, tone) {
+    /* 2.0.55：全站统一轻提示（工作台 WBUI），样式与居中策略由 design.css 覆盖，
+       与打字 / 像素画一致；组件没加载时退回原来的底部吐司，保证提示不丢。 */
+    if (window.WBUI && WBUI.toast) {
+      WBUI.toast(msg, tone === 'ok' ? 'ok' : tone === 'err' ? 'err' : (tone || 'info'));
+      return;
+    }
     var t = $('#toast');
+    if (!t) return;
     t.textContent = msg;
     t.className = 'ds-toast on' + (tone ? ' ' + tone : '');
     clearTimeout(toastTimer);
@@ -1691,6 +1698,26 @@
     var intro = $('#intro');
     if (intro) intro.textContent = S.cfg.intro || '';
   }
+
+  /* 2.0.55：老师改「网页」开关 / 提交次数后，外壳会 postMessage 一条 wb-design-cfg。
+     这里只重拉配置与额度，绝不重建编辑器 / 动草稿 —— 学生正在写代码时也不受影响。 */
+  function refreshCfgOnly() {
+    if (S.practice || S.demo) return;
+    api('/api/v2/design/me').then(function (j) {
+      if (!j.ok) return;               // 功能被关时外壳会把学生踢回今日页
+      applyCfg(j.cfg);
+      S.used = (typeof j.used === 'number') ? j.used : 0;
+      paintQuota();
+      paintStateBar();
+    }).catch(function () {});
+  }
+  window.addEventListener('message', function (e) {
+    if (e && e.data && e.data.type === 'wb-design-cfg') refreshCfgOnly();
+  });
+  /* SSE 漏投 / 消息丢时的兜底：仅页面可见才拉，且只更新配置 */
+  setInterval(function () {
+    if (document.visibilityState === 'visible') refreshCfgOnly();
+  }, 12000);
 
   function paintStateBar() {
     var t = $('#stTitle');
