@@ -20,7 +20,9 @@ import os
 # 图片静态根：/typing/studio/... 由 server.py 的 _typing_static 直接服务
 IMG_ROOT = "/typing/studio"
 # 宠物原图统一去掉抠图白边，换戳让浏览器立刻拿新素材
-IMG_VER = "?v=20261121i"
+# 2.1.0：45 张 PNG 减色到 256 色（tools/reduce_studio_png.py），包体从 40MB 回落；
+#         图片字节变了必须换戳，否则浏览器缓存旧图看起来像"没改"。
+IMG_VER = "?v=20261122a"
 
 
 def _img(rel):
