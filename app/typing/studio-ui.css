@@ -1,0 +1,375 @@
+/* 创意宠物 · 独立样式（不侵入系统 22 只 SVG 宠物的 pet-ui.css）
+   牛哥需求：作品带「学生设计」特殊标签 + 专属效果动画 + 自动播放显示；
+   宠物有各自独立的动作（8 种），主题是换肤包。 */
+
+/* ---------------- 创意馆容器 ---------------- */
+.studio-wrap{padding:4px 2px 20px;min-width:0;max-width:100%}
+.studio-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:2px 0 14px}
+.studio-head h2{margin:0;font-size:19px;color:var(--ink)}
+.studio-head .sh-sub{font-size:12.5px;color:var(--ink3)}
+.studio-badge{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;
+  color:var(--sun-ink);background:var(--sun-bg);
+  border:1.5px solid var(--sun-line);border-radius:999px;padding:3px 10px;
+  box-shadow:0 2px 8px var(--shadow);white-space:nowrap}
+/* 2.0.68：免费孵化额度提示 + 蛋卡上的「免费孵化」价签 */
+.studio-free-badge{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;
+  color:#0F6E56;background:#E1F5EE;border:1.5px solid rgba(15,110,86,.28);
+  border-radius:999px;padding:3px 10px;white-space:nowrap}
+html[data-mode="dark"] .studio-free-badge{color:#7FE3C0;background:rgba(63,207,160,.14)}
+.studio-price.studio-free{color:#0F6E56;background:#E1F5EE}
+html[data-mode="dark"] .studio-price.studio-free{color:#7FE3C0;background:rgba(63,207,160,.18)}
+.studio-sec{margin:18px 0 10px;font-size:14px;font-weight:700;color:var(--ink2);
+  display:flex;align-items:center;gap:8px}
+.studio-sec small{font-weight:400;color:var(--ink3);font-size:12px}
+.studio-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:14px}
+.studio-grid>*,.studio-eggs>*{min-width:0}
+.studio-card{position:relative;background:var(--card);border:1.5px solid var(--line);
+  border-radius:16px;padding:10px 10px 12px;text-align:center;overflow:hidden;
+  /* 2.0.72：flex 列 + 按钮区 margin-top:auto，让介绍长短不同的卡片按钮都贴底对齐 */
+  display:flex;flex-direction:column;height:100%;
+  box-shadow:0 6px 16px var(--shadow);transition:transform .18s,box-shadow .18s}
+.studio-card:hover{transform:translateY(-3px);box-shadow:0 10px 22px var(--shadow)}
+.studio-card.owned{border-color:var(--sun-line);box-shadow:0 6px 20px var(--shadow)}
+.studio-card.equipped{border-color:var(--ok);box-shadow:0 6px 20px rgba(62,158,91,.28)}
+
+/* 作品图舞台：固定方区，PNG 完整显示，动作动画作用在图上。
+   2.0.55：统一加边框——之前透明化后的 PNG 有的自带浅底、有的全透明，
+   夜色下就出现「左边有框、右边没框」的错觉。给舞台本身加一条可见边框，
+   所有宠物一视同仁，图片透不透明都有一致的相框。 */
+.studio-pic{position:relative;width:100%;aspect-ratio:1/1;display:flex;align-items:center;
+  justify-content:center;border-radius:12px;
+  border:1.5px solid var(--line);
+  background:radial-gradient(70% 60% at 50% 70%,var(--paper) 0%,var(--card) 100%);
+  overflow:visible}
+/* 2.0.56：动作作用在「宠物本身」这一层，卡片和舞台都不动。
+   眨眼覆盖层和原图完全重合，平时透明，只有 blink 关键帧那 120ms 显形。 */
+.sd-stack{position:relative;display:block;width:94%;height:94%;
+  transform-origin:50% 84%;will-change:transform}
+.sd-stack img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block}
+.sd-stack .sd-blink{pointer-events:none;clip-path:inset(0 0 100% 0);
+  animation:sd-blink 4.8s linear infinite;will-change:clip-path}
+
+/* 2.0.58 局部动作：同一张图再叠一层，用羽化椭圆遮罩圈住翅膀 / 尾巴 / 耳朵 /
+   触手，绕根部小幅旋转。底图不动，只有那一块在动 —— 比整只宠物左右摇更像
+   「它自己在动」。遮罩边缘羽化，旋转时不会露出硬边。
+   坐标（--pcx/--pcy 中心、--prx/--pry 半径、--prot 角度）由服务端按作品下发。 */
+.sd-part{position:absolute;inset:0;display:block;pointer-events:none;
+  transform-origin:var(--pcx) var(--pcy);
+  -webkit-mask-image:radial-gradient(ellipse var(--prx) var(--pry) at var(--pcx) var(--pcy),
+    #000 46%,rgba(0,0,0,.72) 66%,rgba(0,0,0,.28) 82%,transparent 96%);
+  mask-image:radial-gradient(ellipse var(--prx) var(--pry) at var(--pcx) var(--pcy),
+    #000 46%,rgba(0,0,0,.72) 66%,rgba(0,0,0,.28) 82%,transparent 96%);
+  animation-name:sd-part;animation-timing-function:ease-in-out;animation-iteration-count:infinite;
+  will-change:transform}
+.sd-part img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block}
+@keyframes sd-part{
+  0%,100%{transform:rotate(calc(-1 * var(--prot)))}
+  50%{transform:rotate(var(--prot))}
+}
+
+/* 原图是笑眯眼的两只（梅花 / 小狐）：叠一层睁眼，平时显示；
+   眨眼时这一层从上往下被「擦掉」，下面的闭眼帧同时压下来 —— 看起来是眼皮合上 */
+.sd-stack .sd-eyes{pointer-events:none;clip-path:inset(0 0 0 0);
+  animation:sd-eyes 4.8s linear infinite;will-change:clip-path}
+@keyframes sd-eyes{
+  0%,86%{clip-path:inset(0 0 0 0)}
+  88.5%,91%{clip-path:inset(100% 0 0 0)}
+  95.5%,100%{clip-path:inset(0 0 0 0)}
+}
+
+/* 2.0.75：未孵化/未拥有的作品宠物——问号是主角，背景按对应蛋的主题色
+   做柔和渐变（梅花粉/方块金/黑桃紫…），不是直接贴蛋图。
+   名字 / 花色 / 描述 / 设计者照常显示（牛哥：先让大家看到作者是谁）。 */
+.studio-pic.studio-locked{
+  background:radial-gradient(70% 60% at 50% 62%,var(--paper) 0%,var(--card) 100%)}
+.studio-lock-bg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  background:
+    radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--egg-c) 20%, transparent) 0%, transparent 62%),
+    linear-gradient(155deg, var(--egg-soft) 0%, color-mix(in srgb, var(--egg-soft) 45%, #fff) 55%, var(--paper) 100%);
+  border-radius:10px}
+/* 蛋主题色的柔光晕圈：一圈虚线 + 内圈高光，像「蛋壳里的影子」 */
+.studio-lock-bg::before{content:'';position:absolute;left:50%;top:48%;
+  width:74%;aspect-ratio:1;transform:translate(-50%,-50%);border-radius:50%;
+  border:2px dashed color-mix(in srgb, var(--egg-c) 55%, transparent);
+  background:radial-gradient(circle at 38% 32%, rgba(255,255,255,.75), transparent 60%);
+  box-shadow:inset 0 0 22px color-mix(in srgb, var(--egg-c) 16%, transparent)}
+.studio-lock-q{position:relative;z-index:2;
+  font-size:56px;font-weight:900;line-height:1;letter-spacing:-2px;
+  color:var(--egg-c);
+  text-shadow:0 2px 0 rgba(255,255,255,.85), 0 6px 14px color-mix(in srgb, var(--egg-c) 35%, transparent);
+  animation:sd-lock-q-float 2.8s ease-in-out infinite;transform-origin:50% 58%;will-change:transform}
+@keyframes sd-lock-q-float{
+  0%,100%{transform:translateY(0) rotate(-6deg)}
+  50%{transform:translateY(-9px) rotate(6deg)}}
+/* 悬停整张卡时，问号加快一点，像在催你孵它 */
+.studio-card:hover .studio-lock-q{animation-duration:1.3s}
+html[data-mode="dark"] .studio-pic.studio-locked{
+  background:radial-gradient(70% 60% at 50% 62%,#2A2018 0%,#1B1410 100%)}
+html[data-mode="dark"] .studio-lock-bg{
+  background:
+    radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--egg-c) 26%, transparent) 0%, transparent 62%),
+    linear-gradient(155deg, color-mix(in srgb, var(--egg-c) 18%, #241C16) 0%, #241C16 100%)}
+html[data-mode="dark"] .studio-lock-bg::before{
+  border-color:color-mix(in srgb, var(--egg-c) 62%, transparent);
+  background:radial-gradient(circle at 38% 32%, rgba(255,255,255,.12), transparent 60%)}
+html[data-mode="dark"] .studio-lock-q{
+  color:color-mix(in srgb, var(--egg-c) 72%, #fff);
+  text-shadow:0 2px 0 rgba(0,0,0,.35), 0 6px 14px color-mix(in srgb, var(--egg-c) 45%, transparent)}
+
+/* 悬停预览：动作清单一排小胶囊浮在图片底部 */
+.sd-acts{position:absolute;left:0;right:0;bottom:0;z-index:4;
+  display:flex;flex-wrap:wrap;gap:4px;justify-content:center;
+  padding:14px 6px 6px;border-radius:0 0 12px 12px;
+  background:linear-gradient(180deg,rgba(40,26,14,0) 0%,rgba(40,26,14,.30) 62%,rgba(40,26,14,.42) 100%);
+  opacity:0;transform:translateY(6px);transition:opacity .18s,transform .18s;
+  pointer-events:none}
+.studio-card:hover .sd-acts,.studio-card:focus-within .sd-acts{opacity:1;transform:none}
+.sd-act{font-size:10px;line-height:1;padding:3px 6px;border-radius:999px;
+  background:rgba(34,22,12,.74);color:#FFF6EA;white-space:nowrap;
+  box-shadow:0 1px 4px rgba(0,0,0,.22)}
+html[data-mode="dark"] .sd-act{background:rgba(255,238,214,.20);color:#FFEFDD}
+/* 悬停时整套动作加速播一遍，学生不用等一个完整周期 */
+.sd-stack.sd-preview{animation-duration:1.7s!important}
+.sd-stack.sd-preview .sd-part{animation-duration:1.2s!important}
+.sd-stack.sd-preview .sd-blink,.sd-stack.sd-preview .sd-eyes{animation-duration:2s!important}
+.studio-pic:hover .studio-fx{animation-duration:1.6s}
+.studio-name{font-size:14px;font-weight:700;color:var(--ink);margin:8px 0 2px}
+.studio-series{font-size:11px;color:var(--ink3)}
+.studio-mood{font-size:11.5px;color:var(--ink2);line-height:1.5;margin:6px 2px 8px;min-height:32px}
+.studio-designer{font-size:11px;color:var(--ink3);background:var(--surface);
+  border-radius:8px;padding:5px 8px;margin:0 0 8px;line-height:1.5;text-align:left}
+.studio-designer b{color:var(--brand2)}
+.studio-designer .no{opacity:.6}
+/* 2.0.72：按钮统一成一行、固定高度。原来「去孵化」单按钮占满宽、
+   已拥有是两个按钮上下堆，卡片高度忽高忽低。现在全部塞进一排等宽按钮，
+   只有 1 个按钮时也占满这一行（flex:1），两个就各占一半，尺寸永远一致。 */
+.studio-card-acts{
+  display:flex;gap:6px;width:100%;margin-top:auto;
+  min-height:32px;align-items:stretch;
+}
+/* 注意：student.html 有 `#view .btn{font-size:16.5px;padding:11px 22px}`，
+   id 选择器权重高于这里的 class，必须写 `#view .studio-card .btn` 才盖得住，
+   否则按钮被撑成 16.5px、两字文案在窄卡里照样截断成「收…/头…」。 */
+#view .studio-card .btn{
+  font-size:11.5px;padding:7px 2px;letter-spacing:-.2px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.studio-card .btn{
+  flex:1 1 0;min-width:0;width:auto;font-size:11.5px;padding:7px 2px;border-radius:9px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.2px;
+}
+.studio-card-acts .btn.primary{flex:1 1 100%}
+.studio-price{display:inline-flex;align-items:center;gap:3px;font-size:12px;font-weight:700;
+  color:var(--sun-ink);background:var(--sun-bg);border-radius:8px;padding:2px 8px}
+/* 2.0.55：兑换按钮上的积分数字在夜色下要和按钮底色拉开对比，
+   否则浅金字压在橙色按钮上糊成一团看不清。 */
+html[data-mode="dark"] .studio-card .btn.primary .studio-price,
+html[data-mode="dark"] .studio-egg-card .btn.primary .studio-price{
+  color:#2A1B0F;background:rgba(255,240,205,.92);
+  box-shadow:0 1px 3px rgba(0,0,0,.25)}
+html[data-mode="dark"] .studio-card .btn.primary{filter:none}
+
+/* ---------------- 特殊标签（角标）---------------- */
+.studio-corner{position:absolute;top:7px;left:7px;z-index:3}
+.studio-eggflag{position:absolute;top:7px;right:7px;z-index:3;font-size:10px;
+  background:rgba(0,0,0,.55);color:#fff;border-radius:999px;padding:2px 8px}
+/* 2.0.72：按钮改成一排贴底后，「出战中」角标从底部移到右上角，避免压按钮 */
+.studio-own-flag{position:absolute;top:7px;right:7px;z-index:3;font-size:10.5px;
+  font-weight:700;color:#fff;border-radius:999px;padding:2px 9px}
+.studio-own-flag.have{background:var(--sun-line);color:var(--sun-ink)}
+.studio-own-flag.eq{background:var(--ok)}
+
+/* ---------------- 效果动画：光环 / 星点 / 彩虹（自动循环）---------------- */
+.studio-fx{position:absolute;inset:0;pointer-events:none;z-index:2;border-radius:12px}
+/* glow：呼吸光环 */
+.fx-glow{box-shadow:inset 0 0 22px rgba(255,205,80,.28);
+  animation:sd-glow 2.8s ease-in-out infinite}
+@keyframes sd-glow{0%,100%{box-shadow:inset 0 0 18px rgba(255,205,80,.18)}
+  50%{box-shadow:inset 0 0 34px rgba(255,205,80,.5)}}
+/* sparkle：星点闪烁 */
+.fx-sparkle::before,.fx-sparkle::after{content:'✦';position:absolute;color:#FFD25E;
+  font-size:16px;animation:sd-twinkle 1.8s ease-in-out infinite}
+.fx-sparkle::before{top:12%;right:14%}
+.fx-sparkle::after{bottom:18%;left:12%;animation-delay:.7s;font-size:12px}
+@keyframes sd-twinkle{0%,100%{opacity:.15;transform:scale(.7) rotate(0)}
+  50%{opacity:1;transform:scale(1.15) rotate(25deg)}}
+
+/* ---------------- 专属动作：每只宠物动自己的图，不是整张卡片在飘 ----------------
+   duration / delay 由服务端按作品下发，写在 .sd-stack 的 inline style 上。 */
+.sd-stack.m-tail  {transform-origin:74% 88%;animation:sd-tail  3s ease-in-out infinite}
+.sd-stack.m-tail2 {transform-origin:24% 88%;animation:sd-tail2 2.6s ease-in-out infinite}
+.sd-stack.m-tail3 {transform-origin:78% 82%;animation:sd-tail3 2.9s ease-in-out infinite}
+.sd-stack.m-tail4 {transform-origin:50% 86%;animation:sd-tail4 3.6s ease-in-out infinite}
+.sd-stack.m-tail5 {transform-origin:70% 84%;animation:sd-tail5 3.3s ease-in-out infinite}
+.sd-stack.m-ear   {transform-origin:50% 16%;animation:sd-ear   2.8s ease-in-out infinite}
+.sd-stack.m-ear2  {transform-origin:50% 18%;animation:sd-ear2  3.2s ease-in-out infinite}
+.sd-stack.m-ear3  {transform-origin:62% 18%;animation:sd-ear3  3.0s ease-in-out infinite}
+.sd-stack.m-nod   {animation:sd-nod   3.4s ease-in-out infinite}
+.sd-stack.m-blink {animation:sd-nod   4.4s ease-in-out infinite}
+.sd-stack.m-flap  {animation:sd-flap  1.9s ease-in-out infinite}
+.sd-stack.m-swim  {animation:sd-swim  3.8s ease-in-out infinite}
+.sd-stack.m-jelly {animation:sd-jelly 3.5s ease-in-out infinite}
+.sd-stack.m-float {animation:sd-float 5s ease-in-out infinite}
+.sd-stack.m-tilt  {animation:sd-tilt  5.6s ease-in-out infinite}
+
+@keyframes sd-tail  {0%,100%{transform:rotate(-3deg)}50%{transform:rotate(5deg) translateX(2px)}}
+@keyframes sd-tail2 {0%,100%{transform:rotate(4deg)}50%{transform:rotate(-5deg) translateX(-2px)}}
+@keyframes sd-tail3 {0%,100%{transform:rotate(-5deg)}50%{transform:rotate(6deg) translateX(3px)}}
+@keyframes sd-tail4 {0%,100%{transform:rotate(4deg)}50%{transform:rotate(-6deg) translateY(2px)}}
+@keyframes sd-tail5 {0%,100%{transform:rotate(-2deg)}50%{transform:rotate(5deg)}}
+@keyframes sd-ear   {0%,88%,100%{transform:skewX(0) scaleY(1)}92%{transform:skewX(-3deg) scaleY(1.03)}96%{transform:skewX(3deg) scaleY(.99)}}
+@keyframes sd-ear2  {0%,82%,100%{transform:rotate(0)}88%{transform:rotate(-3deg)}94%{transform:rotate(3deg)}}
+@keyframes sd-ear3  {0%,86%,100%{transform:skewX(0)}91%{transform:skewX(4deg)}96%{transform:skewX(-2deg)}}
+@keyframes sd-nod   {0%,100%{transform:translateY(0) scaleY(1)}50%{transform:translateY(4px) scaleY(.975)}}
+@keyframes sd-flap  {0%,100%{transform:translateY(0) scaleY(1)}18%{transform:translateY(-10px) scaleY(.955)}
+                     36%{transform:translateY(-2px) scaleY(1.01)}54%{transform:translateY(-8px) scaleY(.96)}
+                     72%{transform:translateY(0) scaleY(1)}}
+@keyframes sd-swim  {0%,100%{transform:skewY(-3deg) rotate(-2deg)}50%{transform:skewY(3deg) rotate(2deg)}}
+@keyframes sd-jelly {0%,100%{transform:scaleY(1) translateY(0)}50%{transform:scaleY(1.06) translateY(-5px)}}
+@keyframes sd-float {0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+@keyframes sd-tilt  {0%,100%{transform:rotate(0)}25%{transform:rotate(-6deg)}75%{transform:rotate(6deg)}}
+/* 眨眼：闭眼层从上往下压，合住停一下再抬起来。
+   用 clip-path 而不是 opacity —— 硬切会「啪」一下，这样才有眼皮合上的过程。 */
+@keyframes sd-blink{
+  0%,86%{clip-path:inset(0 0 100% 0)}
+  88.5%,91%{clip-path:inset(0 0 0 0)}
+  95.5%,100%{clip-path:inset(0 0 100% 0)}
+}
+
+/* 出战位 / 顶栏里的学生作品小像同样动图本身 */
+.pet-tile .sd-pet-anim{width:100%;height:100%;object-fit:contain;display:block;
+  transform-origin:50% 88%;will-change:transform;animation:sd-float 3.4s ease-in-out infinite}
+
+html[data-mode="dark"] .studio-own-flag.eq{color:#102015}
+
+/* ---------------- 作品蛋：作品宠物的唯一兑换入口 ---------------- */
+/* 卡片等高：图片区固定正方形，按钮沉到最底，同一行的蛋不会一高一低 */
+.studio-eggs{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));
+  gap:12px;align-items:stretch}
+.studio-egg-card{position:relative;display:flex;flex-direction:column;background:var(--card);
+  border:1.5px solid var(--line);
+  border-radius:14px;padding:10px;text-align:center;box-shadow:0 5px 14px var(--shadow);
+  transition:border-color .2s,box-shadow .2s,transform .2s}
+.studio-egg-card:hover{transform:translateY(-2px);border-color:var(--sun-line)}
+.studio-egg-card.owned{border-color:var(--sun-line)}
+/* 2.0.72：跳转定位的焦点提示加强。原来只换了个边框色，在一排彩色蛋里
+   根本看不出来；现在加粗边框 + 3px 实色描边 + 呼吸光晕 + 轻微抬升动画，
+   连续闪 3 次再停住，滚动到位后一眼就能找到对应那颗蛋。 */
+.studio-egg-card.sd-egg-focus{
+  z-index:3; border-color:var(--brand) !important; border-width:3px !important;
+  box-shadow:0 0 0 5px var(--brand-soft),0 0 22px 6px var(--brand-soft),0 12px 26px var(--shadow) !important;
+  animation:sd-egg-focus-pulse .72s ease-in-out 3;
+}
+@keyframes sd-egg-focus-pulse{
+  0%,100%{transform:translateY(0) scale(1);
+    box-shadow:0 0 0 5px var(--brand-soft),0 0 14px 3px var(--brand-soft),0 12px 26px var(--shadow)}
+  50%{transform:translateY(-6px) scale(1.055);
+    box-shadow:0 0 0 7px var(--brand-soft),0 0 30px 10px var(--brand-soft),0 16px 32px var(--shadow)}
+}
+html[data-mode="dark"] .studio-egg-card.sd-egg-focus{
+  box-shadow:0 0 0 5px var(--brand-soft),0 0 24px 7px var(--brand-soft),0 12px 26px var(--shadow) !important;
+}
+.studio-egg-pic{position:relative;width:100%;aspect-ratio:1/1;border-radius:11px;
+  border:1.5px solid var(--line);
+  background:radial-gradient(70% 60% at 50% 70%,var(--paper) 0%,var(--card) 100%);
+  display:flex;align-items:center;justify-content:center;overflow:hidden}
+.studio-egg-pic img{width:88%;height:88%;object-fit:contain;display:block;will-change:transform}
+.studio-egg-pic.m-egg img{animation:sd-egg 3.2s ease-in-out infinite}
+.studio-egg-pic.m-egg-random img{animation:sd-egg-random 2.4s ease-in-out infinite}
+@keyframes sd-egg{0%,100%{transform:translateY(0) rotate(-4deg)}50%{transform:translateY(-7px) rotate(4deg)}}
+@keyframes sd-egg-random{0%,100%{transform:rotate(-7deg) scale(1)}50%{transform:rotate(7deg) scale(1.04)}}
+.studio-egg-name{font-size:13px;font-weight:700;color:var(--ink);margin:7px 0 1px}
+.studio-egg-pet{font-size:11px;color:var(--ink3);min-height:18px}
+.studio-egg-have{display:inline-block;font-size:10.5px;font-weight:700;color:var(--sun-ink);
+  background:var(--sun-bg);border-radius:999px;padding:2px 9px;margin:2px 0 6px}
+.studio-egg-card .btn{width:100%;font-size:12px;padding:7px 6px;border-radius:9px;
+  white-space:normal;line-height:1.35;margin-top:auto}
+.studio-egg-card .studio-price{font-size:11px;padding:2px 5px}
+
+@media (max-width:640px){
+  .studio-grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+  .studio-eggs{grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:9px}
+}
+
+/* ---------------- 作品蛋孵化动画（2026-11-25）----------------
+   蛋裂成上下两半飞开 → 宠物从光晕里冒出来；用户可随时点「跳过」关闭，
+   结束/跳过后走「去看看」跳到牧场对应的作品宠物卡片。 */
+.sd-hatch-mask{position:fixed;inset:0;z-index:340;display:flex;align-items:center;justify-content:center;
+  padding:16px;background:radial-gradient(78% 58% at 50% 42%,rgba(46,28,12,.46),rgba(26,16,9,.82));
+  animation:sdHatchFade .3s ease both}
+.sd-hatch-mask.out{animation:sdHatchOut .24s ease both}
+@keyframes sdHatchFade{from{opacity:0}to{opacity:1}}
+@keyframes sdHatchOut{from{opacity:1}to{opacity:0}}
+.sd-hatch-card{position:relative;width:min(360px,92vw);border-radius:24px;padding:26px 20px 18px;text-align:center;
+  background:var(--card);border:1px solid var(--line);box-shadow:0 28px 64px rgba(60,30,10,.4);
+  animation:sdHatchPop .4s cubic-bezier(.2,1.3,.4,1) both}
+@keyframes sdHatchPop{0%{opacity:0;transform:scale(.86) translateY(18px)}100%{opacity:1;transform:none}}
+.sd-hatch-stage{position:relative;height:210px;display:flex;align-items:center;justify-content:center;margin-bottom:8px}
+/* 光晕：蛋裂开瞬间从中心炸开 */
+.sd-hatch-glow{position:absolute;width:220px;height:220px;border-radius:50%;
+  background:radial-gradient(circle,rgba(255,214,138,.75) 0%,rgba(255,214,138,.18) 42%,transparent 70%);
+  filter:blur(4px);animation:sdHatchGlow 1.5s .55s ease-out both}
+@keyframes sdHatchGlow{0%{transform:scale(.3);opacity:0}45%{transform:scale(1.15);opacity:1}100%{transform:scale(1);opacity:.6}}
+/* 蛋：先晃动，0.9s 时裂开，两半分别飞出画面 */
+.sd-hatch-egg{position:absolute;z-index:2;width:132px;animation:sdHatchShake .85s ease-in-out both}
+/* 蛋壳上下两半（同一张图裁开）：裂开时各飞一边，比整体淡出更像「破壳」 */
+.sd-hatch-half{position:absolute;left:0;top:0;width:100%;display:block;
+  filter:drop-shadow(0 10px 14px rgba(110,72,26,.3))}
+.sd-hatch-half.top{clip-path:polygon(0 0,100% 0,100% 52%,62% 47%,52% 53%,40% 46%,0 52%)}
+.sd-hatch-half.bottom{clip-path:polygon(0 52%,40% 46%,52% 53%,62% 47%,100% 52%,100% 100%,0 100%)}
+@keyframes sdHatchShake{0%,100%{transform:rotate(0) translateY(0)}20%{transform:rotate(-8deg) translateY(-4px)}
+  40%{transform:rotate(8deg) translateY(-4px)}60%{transform:rotate(-6deg)}80%{transform:rotate(5deg)}}
+.sd-hatch-egg.cracking{animation:none}
+.sd-hatch-egg.cracking .sd-hatch-half.top{animation:sdHatchTop .62s ease-in both}
+.sd-hatch-egg.cracking .sd-hatch-half.bottom{animation:sdHatchBottom .62s ease-in both}
+@keyframes sdHatchTop{0%{transform:translate(0,0) rotate(0);opacity:1}
+  100%{transform:translate(-46px,-72px) rotate(-52deg);opacity:0}}
+@keyframes sdHatchBottom{0%{transform:translate(0,0) rotate(0);opacity:1}
+  100%{transform:translate(44px,56px) rotate(38deg);opacity:0}}
+/* 裂开的裂纹线：盖在蛋上，晃动结束后闪一下 */
+.sd-hatch-crack{position:absolute;z-index:3;left:50%;top:50%;width:104px;height:104px;
+  margin:-52px 0 0 -52px;opacity:0;pointer-events:none}
+.sd-hatch-crack.show{animation:sdHatchLine .45s ease-out both}
+@keyframes sdHatchLine{0%{opacity:0;transform:scale(.7)}40%{opacity:1;transform:scale(1.05)}100%{opacity:1;transform:scale(1)}}
+/* 宠物：蛋裂后从中心弹出，带轻微上下浮动 */
+.sd-hatch-pet{position:absolute;z-index:4;width:150px;opacity:0;
+  animation:sdHatchPet .75s 1s cubic-bezier(.16,1.4,.36,1) both,sdHatchFloat 2.6s 1.75s ease-in-out infinite}
+.sd-hatch-pet img{width:100%;display:block;filter:drop-shadow(0 12px 16px rgba(110,72,26,.35))}
+@keyframes sdHatchPet{0%{opacity:0;transform:translateY(36px) scale(.55) rotate(-12deg)}
+  60%{opacity:1;transform:translateY(-8px) scale(1.1) rotate(4deg)}100%{opacity:1;transform:none}}
+@keyframes sdHatchFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+/* 粒子：从中心四散的星光 */
+.sd-hatch-spark{position:absolute;z-index:3;width:7px;height:7px;border-radius:50%;
+  background:radial-gradient(circle,#FFF6D8 0%,#FFC860 60%,transparent 72%);opacity:0;
+  animation:sdHatchSpark 1.15s .95s ease-out both}
+@keyframes sdHatchSpark{0%{opacity:0;transform:translate(0,0) scale(.4)}
+  25%{opacity:1}100%{opacity:0;transform:translate(var(--sx),var(--sy)) scale(1.2)}}
+.sd-hatch-title{font-size:18px;font-weight:800;color:var(--ink);margin:8px 0 4px}
+.sd-hatch-sub{font-size:12px;color:var(--ink3);margin-bottom:14px}
+.sd-hatch-acts{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.sd-hatch-acts .btn{width:auto;min-width:104px;padding:8px 18px;font-size:13px}
+.sd-hatch-skip{position:absolute;right:10px;top:9px;z-index:5;width:auto;
+  padding:3px 10px;border-radius:999px;font-size:11px;color:var(--ink3);
+  background:transparent;border:1px solid var(--line);cursor:pointer}
+.sd-hatch-skip:hover{color:var(--ink);border-color:var(--sun-line)}
+/* 动画舞台里的图/光晕/粒子都是装饰，绝不能挡住「跳过/关闭/去看看」按钮 */
+.sd-hatch-stage,.sd-hatch-stage *{pointer-events:none}
+/* 2026-11-25：蛋卡兑换按钮压成「兑换」两字一行，价格改用上方小字显示 */
+.studio-egg-cost{font-size:10.5px;color:var(--ink3);margin:6px 0 4px;white-space:nowrap}
+.studio-egg-card .btn.studio-egg-buy{font-size:11px;padding:5px 8px;white-space:nowrap;line-height:1.4}
+/* 2026-11-25：不同宠物孵化专属特效——粒子形状/颜色/运动轨迹按 fx 切换 */
+.sd-hatch-spark{background:var(--fx-main,#FFC860)}
+.sd-hatch-spark[data-shape]:empty::before{content:attr(data-shape);position:absolute;inset:-4px;
+  display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--fx-main,#FFC860);
+  text-shadow:0 0 8px var(--fx-main,#FFC860)}
+.sd-hatch-mask.fx-sparkle .sd-hatch-spark[data-shape]::before{animation:sdSparkTwinkle .5s ease-in-out infinite alternate}
+@keyframes sdSparkTwinkle{from{opacity:.55;transform:scale(.8) rotate(0)}to{opacity:1;transform:scale(1.2) rotate(25deg)}}
+.sd-hatch-mask.fx-bubble .sd-hatch-spark[data-shape]::before{border-radius:50%;
+  border:1.5px solid var(--fx-main);background:rgba(255,255,255,.35);font-size:0}
+.sd-hatch-mask.fx-bubble .sd-hatch-spark{animation-name:sdBubbleRise!important}
+@keyframes sdBubbleRise{0%{opacity:0;transform:translate(0,40px) scale(.4)}
+  25%{opacity:1}100%{opacity:0;transform:translate(var(--sx),calc(var(--sy) - 60px)) scale(1.3)}}
+.sd-hatch-mask.fx-petal .sd-hatch-spark{animation-name:sdPetalFall!important}
+@keyframes sdPetalFall{0%{opacity:0;transform:translate(0,-70px) rotate(0)}
+  25%{opacity:1}100%{opacity:0;transform:translate(var(--sx),var(--sy)) rotate(280deg)}}
+.sd-hatch-mask.fx-glow .sd-hatch-glow{background:radial-gradient(circle,var(--fx-main) 0%,transparent 70%)}

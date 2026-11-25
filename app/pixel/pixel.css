@@ -1,0 +1,326 @@
+/* 班级工作台 · 像素画（pixel.css，2.0.47）
+   ------------------------------------------------------------
+   页面同时引 /design/design.css：按钮、开关、卡片、表单、toast、
+   进度遮罩、回执弹窗都直接沿用那一套（学生端 / 教师端本来就是同一支
+   设计语言），这里只补像素画独有的东西：画布、工具面板、调色板。
+   这样 design.css 调色或改圆角时，像素画自动跟着变，不会跑偏。
+   ------------------------------------------------------------ */
+
+/* ---------------- 画板骨架 ---------------- */
+.px-app{display:flex;flex-direction:column;height:100%;min-height:0}
+.px-app.embed{height:100vh}
+
+.px-body{
+  display:flex;gap:12px;flex:1;min-height:0;
+  padding:12px 14px 10px;
+}
+
+/* 左：画布舞台。画布本身用 JS 按容器算尺寸（正方形，留 20px 余量），
+   这里只负责居中并给底下一行状态留位置。 */
+.px-stage{
+  flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:8px;
+  background:var(--card);border:1px solid var(--line);border-radius:var(--radius-lg);
+  padding:14px;overflow:hidden;
+}
+.px-holder{
+  display:flex;align-items:center;justify-content:center;
+  flex:1;min-height:0;width:100%;
+}
+#cv{
+  display:block;border-radius:8px;background:#fff;
+  /* 2.0.73：加一圈清晰边框，画布边缘一眼可辨（原来 1px --line-2 太淡） */
+  border:2px solid #B99A72;
+  outline:1px solid rgba(120,80,40,.28);outline-offset:2px;
+  box-shadow:0 6px 18px rgba(122,82,50,.10);
+  /* 触摸设备上别让浏览器把拖动当成滚动 */
+  touch-action:none;cursor:crosshair;
+  image-rendering:pixelated;
+}
+html[data-mode="dark"] #cv{
+  border-color:#7A6248;
+  outline-color:rgba(255,220,180,.24);
+  box-shadow:0 6px 18px rgba(0,0,0,.45);
+}
+
+.px-meta{
+  display:flex;align-items:center;gap:10px;width:100%;flex:none;
+  font-size:12px;color:var(--ink3);padding:0 2px;
+}
+.px-meta b{color:var(--ink2);font-weight:600;font-variant-numeric:tabular-nums}
+.px-meta .sp{flex:1}
+.px-meta .ok{color:var(--ok)}
+.px-meta .err{color:var(--err)}
+/* 提交额度（2.0.53）：老师限了次数才出现 */
+#mQuotaWrap{color:var(--ink3);white-space:nowrap}
+#mQuotaWrap b{color:var(--brand,var(--ink));font-weight:700}
+#mQuotaWrap.px-quota-full{color:#C4553B}
+#mQuotaWrap.px-quota-full b{color:#C4553B}
+
+/* ---------------- 右：工具面板 ---------------- */
+.px-tools{
+  width:250px;flex:none;display:flex;flex-direction:column;gap:10px;
+  overflow-y:auto;padding-right:2px;
+}
+.px-sec{
+  background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  padding:11px 12px 12px;
+}
+.px-sec-h{
+  font-size:12px;font-weight:700;color:var(--ink3);letter-spacing:.4px;
+  margin-bottom:9px;display:flex;align-items:center;gap:6px;
+}
+.px-sec-h::after{content:'';flex:1;height:1px;background:var(--line)}
+
+/* 工具按钮 2×2 */
+.px-tool-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.px-tool{
+  height:38px;border-radius:10px;border:1px solid var(--line);background:var(--card-2);
+  font-size:12.5px;font-weight:600;color:var(--ink2);
+  display:flex;align-items:center;justify-content:center;gap:5px;
+  transition:background .15s,border-color .15s,color .15s,transform .1s;
+}
+.px-tool:hover{border-color:var(--line-2);color:var(--ink)}
+.px-tool:active{transform:translateY(1px)}
+.px-tool.on{
+  background:var(--brand-soft);border-color:var(--line-2);color:var(--brand);
+  box-shadow:inset 0 0 0 1px rgba(180,91,51,.10);
+}
+.px-tool .ic{font-size:15px;line-height:1}
+
+/* 笔刷粗细 */
+.px-brush{display:flex;align-items:center;gap:8px;margin-top:11px;font-size:12px;color:var(--ink3)}
+.px-brush .bs{display:flex;gap:5px;margin-left:auto}
+.px-brush button{
+  width:30px;height:28px;border-radius:8px;border:1px solid var(--line);
+  background:var(--card-2);font-size:12px;font-weight:700;color:var(--ink2);
+}
+.px-brush button.on{background:var(--brand-soft);border-color:var(--line-2);color:var(--brand)}
+
+/* 镜像开关 */
+.px-chk{
+  display:flex;align-items:center;gap:7px;margin-top:10px;
+  font-size:12.5px;color:var(--ink2);cursor:pointer;user-select:none;
+}
+.px-chk input{width:15px;height:15px;accent-color:var(--brand);cursor:pointer}
+
+/* 当前颜色 */
+.px-cur-row{display:flex;align-items:center;gap:9px}
+.px-cur{
+  width:34px;height:34px;border-radius:10px;flex:none;
+  border:1px solid var(--line-2);background:#2f2a26;
+  box-shadow:inset 0 0 0 2px rgba(255,255,255,.55);
+}
+.px-cur-row code{
+  font:12px/1 var(--mono);color:var(--ink2);text-transform:uppercase;
+}
+.px-cur-row input[type=color]{
+  margin-left:auto;width:34px;height:30px;padding:0;border:1px solid var(--line);
+  border-radius:8px;background:var(--card-2);cursor:pointer;
+}
+html[data-mode="dark"] .px-cur-row input[type=color]{color-scheme:dark}
+
+/* 调色板 8 列 × N 行 */
+.px-swatches{
+  display:grid;grid-template-columns:repeat(8,1fr);gap:5px;margin-top:11px;
+}
+.px-sw{
+  aspect-ratio:1;border-radius:7px;border:1px solid rgba(0,0,0,.14);
+  position:relative;padding:0;transition:transform .1s;
+}
+.px-sw:hover{transform:scale(1.09);z-index:1}
+.px-sw.on{
+  box-shadow:0 0 0 2px var(--card),0 0 0 4px var(--brand);
+  z-index:2;
+}
+.px-sw.empty{
+  background:
+    repeating-conic-gradient(var(--card-2) 0 25%,var(--card) 0 50%) 0 0/10px 10px;
+  border-style:dashed;border-color:var(--line-2);
+}
+
+/* 作品名输入 */
+.px-tools input[type=text]{
+  width:100%;height:34px;padding:0 10px;border-radius:9px;
+  border:1px solid var(--line);background:var(--card-2);
+  font-size:13px;color:var(--ink);outline:none;
+}
+.px-tools input[type=text]:focus{
+  border-color:var(--line-2);background:var(--card);
+  box-shadow:0 0 0 3px var(--brand-soft);
+}
+
+/* 小贴士 */
+.px-tips{font-size:11.5px;line-height:1.75;color:var(--ink3)}
+.px-tips b{color:var(--ink2)}
+.px-tips kbd{
+  font:11px/1 var(--mono);padding:2px 4px;border-radius:4px;
+  background:var(--card-2);border:1px solid var(--line);color:var(--ink2);
+}
+
+/* 演示模式提示条：能画，但不会保存 */
+.px-demo{
+  margin:10px 14px 0;padding:8px 13px;border-radius:11px;font-size:12.5px;
+  background:var(--warn-soft);color:var(--warn);
+  border:1px solid rgba(180,87,15,.2);flex:none;
+}
+
+/* ---------------- 窄屏：上下排列 ---------------- */
+@media (max-width:820px){
+  .px-body{flex-direction:column;padding:10px 10px 8px;gap:10px;overflow-y:auto}
+  .px-stage{flex:none;padding:10px;min-height:0}
+  /* 关键：窄屏下画布按「宽度」定尺寸。
+     舞台高度由内容撑开，flex:1 的 holder 拿不到可用高度（clientHeight=0），
+     JS 会退到最小值，画布就缩成一小块。用 aspect-ratio 把高度锁成等于宽度，
+     量出来就是一个铺满屏宽的正方形。 */
+  .px-holder{flex:none;width:100%;aspect-ratio:1/1}
+  #cv{max-width:100%}
+  /* 工具面板单列：两列时调色板那 8 个色块会把卡片撑宽，
+     grid 反而挤成一行一张，还不如老老实实上下排 */
+  .px-tools{
+    width:auto;flex:none;overflow:visible;
+    display:flex;flex-direction:column;gap:9px;
+  }
+}
+@media (max-width:520px){
+  .px-bar .ds-brand small{display:none}
+}
+
+/* ---------------- 模板库（2.0.49） ----------------
+   右侧「模板」小卡 + 全屏浮层。浮层复用作品大图那套遮罩配色，
+   卡片白底棋盘格，缩略图最近邻放大，和画布上的观感一致。 */
+.px-ref{
+  /* 2.0.72：参考图从 76 放大到 120 后改成纵向（图居中在上、说明在下），
+     250px 宽的右栏里才不会把文字挤成两三个字一行。 */
+  display:flex;flex-direction:column;align-items:center;gap:7px;margin-top:9px;
+  padding:9px;border:1px dashed var(--line-2);border-radius:11px;
+  background:var(--card-2, #fbf7ef);position:relative;
+}
+.px-ref canvas{
+  flex:none;border-radius:7px;border:1px solid var(--line);
+  background:#fff;image-rendering:pixelated;
+}
+.px-ref-txt{width:100%;min-width:0;display:flex;flex-direction:column;gap:2px;text-align:center}
+.px-ref-txt b{font-size:13px;color:var(--ink)}
+.px-ref-txt span{font-size:11.5px;color:var(--ink3);line-height:1.5}
+.px-ref-x{
+  position:absolute;top:3px;right:3px;width:22px;height:22px;
+  border:none;background:transparent;color:var(--ink3);cursor:pointer;
+  font-size:15px;line-height:1;border-radius:6px;
+}
+.px-ref-x:hover{background:var(--line);color:var(--ink)}
+
+.px-modal{
+  position:fixed;inset:0;z-index:96;display:flex;align-items:center;justify-content:center;
+  background:rgba(30,20,14,.55);padding:20px;
+}
+.px-modal[hidden]{display:none}
+.px-modal-box{
+  background:var(--card);border-radius:18px;box-shadow:var(--shadow-lg);
+  width:min(720px,94vw);max-height:88vh;display:flex;flex-direction:column;
+  overflow:hidden;
+}
+.px-modal-h{
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  padding:14px 16px;border-bottom:1px solid var(--line);flex:none;
+}
+.px-modal-h b{font-size:15px}
+.px-modal-h span{font-size:12px;color:var(--ink3);line-height:1.55;flex:1;min-width:180px}
+.px-modal-x{
+  flex:none;width:30px;height:30px;border-radius:9px;border:1px solid var(--line);
+  background:transparent;color:var(--ink3);font-size:17px;line-height:1;cursor:pointer;
+}
+.px-modal-x:hover{background:var(--brand-soft);color:var(--ink)}
+
+.px-tpl-grid{
+  /* 2.0.72：缩略图放大到 128px，列宽跟着放大，卡片不再挤成一团 */
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));
+  gap:12px;padding:14px 16px 16px;overflow-y:auto;
+}
+.px-tpl-card{
+  display:flex;flex-direction:column;align-items:center;gap:7px;
+  padding:9px 8px 10px;border:1px solid var(--line);border-radius:13px;
+  background:
+    repeating-conic-gradient(#f3eee5 0 25%,#fbf8f1 0 50%) 0 0/12px 12px;
+  transition:border-color .16s ease, box-shadow .16s ease;
+}
+.px-tpl-card:hover{border-color:var(--line-2);box-shadow:0 4px 14px rgba(122,82,50,.10)}
+html[data-mode="dark"] .px-tpl-card{
+  background:repeating-conic-gradient(#2c221b 0 25%,#241b15 0 50%) 0 0/12px 12px;
+}
+.px-tpl-cv{
+  display:block;border-radius:8px;border:1px solid var(--line);
+  image-rendering:pixelated;background:#fff;
+}
+/* 2.0.72：尺寸徽标压在缩略图左上角，一眼看清是 16×16 还是别的 */
+.px-tpl-card{position:relative}
+.px-tpl-size{
+  position:absolute;top:6px;left:6px;z-index:2;
+  font-size:10.5px;line-height:1;padding:4px 6px;border-radius:6px;
+  background:var(--brand);color:#fff;font-weight:600;
+  box-shadow:0 1px 4px rgba(0,0,0,.18);
+}
+html[data-mode="dark"] .px-tpl-size{color:#10201A}
+.px-tpl-nm{font-size:12.5px;color:var(--ink2);font-weight:600}
+.px-tpl-ops{display:flex;gap:6px;width:100%}
+.px-mini{
+  flex:1;min-width:0;padding:5px 0;border-radius:8px;cursor:pointer;
+  border:1px solid var(--line);background:var(--card);color:var(--ink2);
+  font-size:11.5px;font-family:inherit;transition:background .14s,border-color .14s,color .14s;
+}
+.px-mini:hover{border-color:var(--line-2);color:var(--ink)}
+.px-mini.primary{background:var(--brand-soft);border-color:var(--line-2);color:var(--brand)}
+.px-mini.primary:hover{background:var(--brand);color:#fff;border-color:var(--brand)}
+@media (max-width:520px){
+  .px-tpl-grid{grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px;padding:12px}
+  .px-tpl-card{padding:8px 6px 9px}
+  .px-tpl-ops{flex-direction:column}
+}
+
+/* ---------------- 教师端：作品墙补充 ---------------- */
+/* 像素画是正方形，作品缩略图用 contain + 棋盘底，缩放后不变形 */
+.px-works .tc-work .th{
+  height:112px;display:flex;align-items:center;justify-content:center;
+  background:
+    repeating-conic-gradient(#f1ece3 0 25%,#fbf8f1 0 50%) 0 0/14px 14px;
+}
+html[data-mode="dark"] .px-works .tc-work .th{
+  background:repeating-conic-gradient(#2c221b 0 25%,#241b15 0 50%) 0 0/14px 14px;
+}
+.px-works .tc-work .th img{
+  width:auto;height:auto;max-width:100%;max-height:100%;
+  object-fit:contain;image-rendering:pixelated;padding:8px;
+}
+.px-works .tc-work{cursor:zoom-in}
+
+/* 看大图弹层（点作品缩略图） */
+.px-view{
+  position:fixed;inset:0;z-index:95;display:flex;align-items:center;justify-content:center;
+  background:rgba(30,20,14,.55);padding:20px;
+}
+.px-view .box{
+  background:var(--card);border-radius:18px;padding:14px;max-width:min(560px,92vw);
+  box-shadow:var(--shadow-lg);text-align:center;
+}
+.px-view img{
+  display:block;max-width:100%;max-height:min(66vh,520px);
+  border-radius:10px;image-rendering:pixelated;background:#fff;
+}
+.px-view .cap{margin-top:10px;font-size:12.5px;color:var(--ink3)}
+.px-view .cap b{color:var(--ink);font-size:14px;display:block;margin-bottom:2px}
+.px-view .row{display:flex;gap:9px;justify-content:center;margin-top:11px}
+
+/* ---- 全站统一弹窗（app/student/ui-dialog.js）----
+   工作台弹窗统一 fixed 视口居中；轻提示原本在 iframe 底部，长页面滚动时容易看不见，
+   这里改到视口中间，保证确认 / 成功 / 失败三类提示都在眼前。 */
+.wbd-mask{
+  position:fixed!important;inset:0!important;
+  display:flex!important;align-items:center!important;justify-content:center!important;
+}
+.wbd-card{max-height:86vh;overflow-y:auto}
+.wbd-toast-wrap{
+  left:50%!important;top:50%!important;bottom:auto!important;
+  transform:translate(-50%,-50%)!important;
+}
+/* 2.0.66：夜间品牌色提亮后，悬停实心按钮上的白字看不清 */
+html[data-mode="dark"] .px-mini.primary:hover{color:#1A100C}

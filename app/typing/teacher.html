@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>打字练习管理 · 班级工作台</title>
+<!-- 与学生端共用：排行榜小像里的背景与特效 -->
+<link rel="stylesheet" href="/typing/pet-ui.css?v=20261105">
+<script>
+/* 2.0.55：教师练字页跟随工作台主主题（wb-theme / wb-mode，同源共享）。
+   放在 head 同步执行，首屏就是对的底色，不会先白闪一下再切暗；
+   同窗口或 iframe 里切主题时，storage 事件会再次同步，无需刷新。 */
+(function () {
+  function read() {
+    try {
+      var mode = localStorage.getItem('wb-mode') || 'light';
+      var hue = localStorage.getItem('wb-theme') || 'forest';
+      if (mode === 'auto') {
+        mode = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+      }
+      var root = document.documentElement;
+      root.setAttribute('data-theme', hue);
+      root.setAttribute('data-mode', mode);
+      /* 2.0.73：把这层练字页的主题推给课堂展示 iframe。
+         学生打字页读的是 wb-smode/wb-stheme（另一套键），扫不到教师端的
+         wb-mode/wb-theme；不主动 postMessage 就会「深底深字」看不清。 */
+      pushToPlay(mode, hue);
+    } catch (e) {}
+  }
+  /* 推给所有课堂展示 iframe（enterPlay 动态创建，故按选择器现查） */
+  function pushToPlay(mode, hue) {
+    try {
+      document.querySelectorAll('.play-view iframe').forEach(function (f) {
+        if (f.contentWindow) f.contentWindow.postMessage(
+          { type: 'wb-theme', mode: mode, hue: hue }, '*');
+      });
+    } catch (e) {}
+  }
+  window.wbPushPlayTheme = pushToPlay;
+  read();
+  window.addEventListener('storage', function (e) {
+    if (e && (e.key === 'wb-mode' || e.key === 'wb-theme')) read();
+  });
+})();
+</script>
+<style>
+:root{
+  --brand:#F4632E; --brand2:#FF8A4C; --ink:#2B2B33; --ink2:#5C5C68; --ink3:#9A9AA6;
+  --bg:#FFF7F0; --card:#fff; --line:#F0E3D8; --ok:#3E9E5B; --warn:#E0A93C; --purple:#8E6FD8;
+  --surface:#fff; --paper:#FBF5E9; --brand-soft:#F6E7D6;
+}
+/* 夜间：与学生打字页同一套暖黑令牌，背景 / 文字 / 卡片 / 输入框全部换值 */
+html[data-mode="dark"]{
+  --brand:#E4926C; --brand2:#F0B392; --ink:#F5EBE4; --ink2:#C9B6A8; --ink3:#A2917F;
+  --bg:#191210; --card:#241B15; --line:rgba(226,150,112,.22);
+  --ok:#5FBF7E; --warn:#E3BC77; --purple:#B39CF0;
+  --surface:#2C221B; --paper:#1E1611; --brand-soft:rgba(228,146,108,.16);
+}
+/* 组件里写死的白底在夜色下逐条收口，避免出现刺眼白块 */
+html[data-mode="dark"] body{background:var(--bg);color:var(--ink)}
+html[data-mode="dark"] .btn.ghost,
+html[data-mode="dark"] select,
+html[data-mode="dark"] input[type=text],
+html[data-mode="dark"] input[type=number],
+html[data-mode="dark"] .sd-item input,
+html[data-mode="dark"] .tabs button{background:var(--surface);color:var(--ink);border-color:var(--line)}
+html[data-mode="dark"] .state-pill.off,
+html[data-mode="dark"] .cl-time{background:var(--surface);color:var(--ink3)}
+html[data-mode="dark"] .gchip,
+html[data-mode="dark"] .stat,
+html[data-mode="dark"] .lb-row.me,
+html[data-mode="dark"] .lb-idx,
+html[data-mode="dark"] .play-bar,
+html[data-mode="dark"] .play-bar input,
+html[data-mode="dark"] .tag,
+html[data-mode="dark"] .pts-chip,
+html[data-mode="dark"] .sd-item,
+html[data-mode="dark"] .sd-item input{background:var(--surface);color:var(--ink)}
+html[data-mode="dark"] .gchip.on,
+html[data-mode="dark"] .tabs button.on{background:var(--brand-soft);color:var(--brand)}
+html[data-mode="dark"] .state-pill.on{background:rgba(95,191,126,.16);color:var(--ok)}
+html[data-mode="dark"] .demo-bar{background:rgba(227,188,119,.13);border-color:rgba(227,188,119,.4);color:var(--warn)}
+html[data-mode="dark"] .card{box-shadow:none}
+/* 2.0.66：品牌色在夜间提亮，实心按钮/奖牌上的白字换成深色墨字 */
+html[data-mode="dark"] .btn:not(.ghost){color:#2A1B14}
+html[data-mode="dark"] .lb-rank{background:var(--surface);color:var(--ink2)}
+html[data-mode="dark"] .lb-rank.r1,
+html[data-mode="dark"] .lb-rank.r2,
+html[data-mode="dark"] .lb-rank.r3{color:#25190F}
+/* 开关轨道：未开时深灰，开时沿用绿色 */
+html[data-mode="dark"] .sw{background:#4A3C33}
+html[data-mode="dark"] .sw.on{background:linear-gradient(135deg,var(--ok),#63C57F)}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:
+  radial-gradient(1000px 400px at 90% -10%, #FFE8D9 0%, transparent 60%), var(--bg);
+  color:var(--ink);padding:18px 18px 40px;-webkit-font-smoothing:antialiased}
+#app{max-width:1000px;margin:0 auto}
+button{font-family:inherit;cursor:pointer;border:none;background:none}
+.btn{background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;border:none;
+  padding:9px 20px;border-radius:12px;font-size:14.5px;font-weight:600;box-shadow:0 4px 12px rgba(244,99,46,.28)}
+.btn.ghost{background:#fff;color:var(--ink2);border:1.5px solid var(--line);box-shadow:none}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.head{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.head h1{font-size:20px}
+.head small{color:var(--ink3);font-size:12.5px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:860px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:20px;box-shadow:0 6px 18px rgba(60,30,10,.05)}
+.card h2{font-size:15.5px;margin-bottom:4px}
+.card .hint{font-size:12.5px;color:var(--ink3);line-height:1.7;margin-bottom:12px}
+.switch-row{display:flex;align-items:center;gap:14px;margin-top:8px}
+.sw{width:64px;height:34px;border-radius:999px;background:#E4DCD2;position:relative;transition:background .2s;flex:none}
+.sw::after{content:'';position:absolute;top:3px;left:3px;width:28px;height:28px;border-radius:50%;background:#fff;
+  box-shadow:0 2px 6px rgba(0,0,0,.18);transition:left .2s}
+.sw.on{background:linear-gradient(135deg,var(--ok),#63C57F)}
+.sw.on::after{left:33px}
+.state-pill{padding:5px 14px;border-radius:999px;font-size:13px;font-weight:700}
+.state-pill.off{background:#F4EAE2;color:var(--ink3)}
+.state-pill.on{background:#E7F5EC;color:var(--ok)}
+.grade-wrap{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 14px}
+.gchip{padding:7px 14px;border-radius:11px;font-size:13.5px;font-weight:600;background:#fff;
+  border:1.5px solid var(--line);color:var(--ink2)}
+.gchip.on{border-color:var(--brand);color:var(--brand);background:#FFF3EC}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:10px}
+.stat{background:#FFF6EF;border-radius:14px;padding:12px 14px}
+.stat b{display:block;font-size:20px;color:var(--brand)}
+.stat span{font-size:11.5px;color:var(--ink3)}
+select{font-family:inherit;font-size:14px;padding:8px 12px;border:1.5px solid var(--line);border-radius:11px;background:#fff;color:var(--ink)}
+.lb-row{display:flex;align-items:center;gap:12px;padding:10px 8px;border-radius:12px}
+.lb-row+.lb-row{border-top:1px solid #F6EDE5}
+.lb-row.me{background:#FFF3EC}
+.lb-rank{width:30px;height:30px;border-radius:10px;display:flex;align-items:center;justify-content:center;
+  font-weight:800;font-size:14px;background:#F4EAE2;color:var(--ink2);flex:none}
+.lb-rank.r1{background:linear-gradient(135deg,#FFD34D,#F0A500);color:#fff}
+.lb-rank.r2{background:linear-gradient(135deg,#C8CDD6,#9BA5B3);color:#fff}
+.lb-rank.r3{background:linear-gradient(135deg,#E8A876,#C97B42);color:#fff}
+.lb-pet{width:44px;height:44px;border-radius:13px;flex:none;overflow:hidden;
+  background:radial-gradient(72% 62% at 50% 74%,#FFF8EC 0%,#F8EADC 100%);
+  border:1px solid rgba(200,160,120,.28);
+  box-shadow:inset 0 1px 0 #fff,0 1px 3px rgba(150,95,50,.1)}
+.lb-pet svg{width:100%;height:100%}
+/* 2.1.7：创意宠物/像素画设为头像后，students.avatar 是完整 data:image，
+   排行榜要直接显示这张图，不再退回系统宠物占位。 */
+.lb-pet img{width:100%;height:100%;object-fit:cover;display:block;image-rendering:pixelated}
+.lb-pet.empty{display:flex;align-items:center;justify-content:center;font-size:16px;color:#D8CFC5}
+.lb-name{font-weight:700;font-size:14.5px}
+.lb-val{margin-left:auto;font-weight:800;color:var(--brand);font-variant-numeric:tabular-nums}
+.lb-val small{font-size:11px;color:var(--ink3);font-weight:400;margin-left:2px}
+.tabs{display:flex;gap:6px;margin:10px 0}
+.tabs button{padding:6px 14px;border-radius:10px;font-size:13px;font-weight:600;background:#fff;border:1.5px solid var(--line);color:var(--ink2)}
+.tabs button.on{background:#FFF1E8;border-color:var(--brand);color:var(--brand)}
+/* 主功能区一排 tab：基础设置 / 积分管理 / 排行榜 / 创意馆，点击切换内容，减少滚动 */
+.mtabs{display:flex;gap:8px;margin:14px 0 4px;flex-wrap:wrap;border-bottom:1.5px solid var(--line);padding-bottom:0}
+.mtabs button{padding:10px 18px;border:1.5px solid transparent;border-bottom:none;border-radius:11px 11px 0 0;
+  font-size:14px;font-weight:700;background:transparent;color:var(--ink2);cursor:pointer;position:relative;top:1px}
+.mtabs button:hover{background:var(--brand-soft);color:var(--brand)}
+.mtabs button.on{background:var(--card);border-color:var(--line);color:var(--brand)}
+.mtabs button.on:after{content:'';position:absolute;left:0;right:0;bottom:-1.5px;height:2px;background:var(--card)}
+.mpane{display:none}
+.mpane.on{display:block}
+html[data-mode="dark"] .mtabs button{color:var(--ink2)}
+html[data-mode="dark"] .mtabs button.on{background:var(--surface);color:var(--brand)}
+.demo-bar{background:#FFF8E2;border:1.5px dashed #E8C96A;color:#8A6A1C;border-radius:12px;
+  padding:10px 14px;font-size:13.5px;margin-bottom:14px}
+/* 2.0.76：保存/失败等提示统一视口居中 —— 原来 bottom:26px 在教师端 iframe
+   里落在可视区下缘，滚到创意馆面板时提示在屏幕外，看着像「点了没反应」。
+   视觉跟随工作台主题：用本页主题令牌（浅/夜两套都有），不再写死黑底。 */
+.toast{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+  background:var(--card);color:var(--ink);border:1.5px solid var(--brand);
+  padding:15px 26px;border-radius:14px;font-size:14.5px;font-weight:600;
+  opacity:0;transition:opacity .25s;pointer-events:none;
+  z-index:9999;max-width:min(560px,86vw);text-align:center;line-height:1.6;
+  box-shadow:0 12px 40px rgba(43,43,51,.22)}
+.toast.show{opacity:1}
+.off-box{text-align:center;padding:70px 30px;color:var(--ink2)}
+.off-box .big{font-size:46px;margin-bottom:10px}
+/* 教师练习视图：在管理面板内嵌游戏页，不再新开标签页跳出去 */
+.play-view{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;z-index:50}
+.play-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 16px;background:#fff;
+  border-bottom:1px solid var(--line);box-shadow:0 2px 8px rgba(60,30,10,.05)}
+.play-bar b{font-size:14px}
+.play-view iframe{flex:1;min-height:0;width:100%;border:0}
+/* 练习视图开着时锁掉根滚动（2026-11-17 牛哥反馈「为啥有两个滚动条」）：
+   .play-view 是 fixed 覆盖层，但底下管理面板把 body 撑得很长，
+   根滚动条不会被盖掉，和 iframe 里打字页自己的滚动条叠成两条。 */
+body.play-lock{overflow:hidden}
+/* ---------- 积分管理 ----------
+   对齐积分页的规范：表单控件统一 36px 高 / 9px 圆角 / 1px 描边，
+   备注改成「标签 + 输入框」两段式，快捷标签沿用积分项目按钮的样式。 */
+:root{--bad:#E24B4A;--brand-soft:#FFF1E8}
+.pts-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:10px;
+  align-items:end;margin-top:12px}
+.fld{display:flex;flex-direction:column;gap:5px;min-width:0}
+.fld>span{font-size:11.5px;color:var(--ink3);font-weight:600;letter-spacing:.2px}
+input[type=text],input[type=number]{font-family:inherit;font-size:13.5px;color:var(--ink);
+  background:#fff;border:1px solid var(--line);border-radius:9px;height:36px;padding:0 11px;
+  transition:border-color .16s,box-shadow .16s;width:100%}
+select{height:36px;border-radius:9px;border:1px solid var(--line);font-size:13.5px;
+  transition:border-color .16s,box-shadow .16s;width:100%}
+input[type=text]:focus,input[type=number]:focus,select:focus{outline:none;
+  border-color:var(--brand);box-shadow:0 0 0 3px rgba(244,99,46,.14)}
+input::placeholder{color:var(--ink3)}
+.pts-form .btn{height:36px;padding:0 22px;border-radius:9px;font-size:14px}
+.note-row{display:flex;align-items:center;gap:8px;margin-top:12px}
+.tag-lbl{font-size:11.5px;color:var(--ink3);font-weight:600;flex:none;letter-spacing:.2px}
+.note-row input{flex:1;min-width:0}
+.tags{display:flex;flex-wrap:wrap;gap:7px;margin-top:9px}
+.tag{border:1px solid var(--line);background:#fff;border-radius:8px;padding:5px 11px;
+  font-family:inherit;font-size:12.5px;color:var(--ink2);cursor:pointer;
+  transition:border-color .12s,color .12s,transform .12s,background .12s}
+.tag:hover{border-color:var(--brand);color:var(--brand);transform:translateY(-1px)}
+.tag.on{border-color:var(--brand);background:var(--brand-soft);color:var(--brand);font-weight:600;
+  box-shadow:0 0 0 1.5px rgba(244,99,46,.35)}
+.pts-sec{display:flex;align-items:baseline;gap:8px;margin-top:16px}
+.pts-sec .sec-unit{font-size:11.5px;color:var(--ink3)}
+.pts-bal{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px;max-height:118px;overflow:auto}
+.pts-chip{font-size:12.5px;background:#fff;border:1px solid var(--line);border-radius:999px;
+  padding:3px 10px;color:var(--ink2)}
+.pts-chip b{color:var(--brand);font-variant-numeric:tabular-nums}
+.pts-log{margin-top:7px;max-height:190px;overflow:auto}
+.cl-row{display:flex;align-items:center;gap:8px;padding:6px 4px;font-size:12.5px;
+  border-bottom:1px dashed var(--line)}
+.cl-row:last-child{border-bottom:none}
+.cl-time{width:76px;flex:none;color:var(--ink3);font-size:11.5px}
+.cl-who{flex:none;color:var(--ink2);max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cl-nm{flex:none;font-weight:700;color:var(--ink);max-width:110px;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.cl-delta{flex:none;min-width:46px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+.cl-delta.up{color:var(--ok)}
+.cl-delta.dn{color:var(--bad)}
+.cl-note{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  padding:2px 9px;border-radius:8px;border:1px solid var(--line);background:#FFFBF7;
+  color:var(--ink2);font-size:11.5px}
+.cl-empty{color:var(--ink3);font-size:12.5px;padding:4px 2px}
+/* 学生作品 · 设计者信息编辑 */
+.sd-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px;margin-top:10px}
+/* 2.0.74：学校名设置行（创意馆面板顶部），和系统设置解耦 */
+.sd-school-row{display:flex;align-items:center;gap:8px;margin-top:12px;padding:10px 12px;
+  border:1.5px solid var(--line);border-radius:11px;background:#FFFBF7}
+.sd-school-row label{font-size:12.5px;font-weight:600;color:var(--ink);flex:none;white-space:nowrap}
+.sd-school-row input{flex:1;min-width:0;font-family:inherit;font-size:13px;height:34px;
+  padding:3px 10px;border:1.5px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
+html[data-mode="dark"] .sd-school-row{background:var(--surface)}
+html[data-mode="dark"] .sd-school-row input{background:var(--paper);color:var(--ink);border-color:var(--line)}
+.sd-item{border:1px solid var(--line);border-radius:13px;padding:9px 11px;background:#FFFBF7}
+.sd-item .sd-h{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.sd-item .sd-thumb{width:30px;height:30px;border-radius:8px;object-fit:contain;flex:none;
+  background:#fff;border:1px solid var(--line)}
+.sd-item .sd-title{font-size:13px;font-weight:700;color:var(--ink)}
+.sd-item .sd-kind{font-size:10.5px;padding:2px 7px;border-radius:999px;background:#FFF0E4;color:var(--brand)}
+.sd-item .sd-kind.theme{background:#EEEAFB;color:var(--purple)}
+/* 班级 + 设计者同一行：班级窄一点（支持手填自定义），设计者占剩下的 */
+.sd-f2{display:flex;gap:8px;margin-top:5px}
+.sd-f2 .sd-f{flex:1;min-width:0;margin-top:0}
+.sd-f2 .sd-f.cls{flex:none;width:128px}
+.sd-item .sd-f{display:flex;align-items:center;gap:6px;margin-top:5px}
+.sd-item .sd-f label{font-size:11.5px;color:var(--ink3);flex:none;white-space:nowrap;width:auto}
+.sd-item input,.sd-item select{flex:1;min-width:0;font-family:inherit;font-size:12px;
+  height:30px;padding:3px 8px;border:1.5px solid var(--line);border-radius:8px;
+  background:#fff;color:var(--ink)}
+.sd-item select{cursor:pointer}
+/* 说明压成一行，别占两行把卡片顶高 */
+#studioCardWrap .hint{font-size:12px;line-height:1.6;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+@media (max-width:900px){#studioCardWrap .hint{white-space:normal}}
+.sd-save{margin-top:12px}
+</style>
+</head>
+<body>
+<div id="app"><div style="text-align:center;padding:80px 0;color:#B9AFA4">正在加载打字练习管理面板…</div></div>
+<div class="toast" id="toast"></div>
+<script src="/typing/typing-data.js?v=20261121b"></script>
+<script>
+(function () {
+'use strict';
+var $ = function (s) { return document.querySelector(s); };
+var app = $('#app');
+var S = { demo: false, enabled: false, grades: [], classes: [], lbClass: '', scope: 'week', rows: [], lbName: '',
+  ptsCls: '', ptsStu: '', ptsData: null, studio: null, tab: 'basic', school: '' };
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+function api(url, opts) {
+  return fetch(url, Object.assign({ credentials: 'same-origin' }, opts || {}))
+    .then(function (r) { return r.json().catch(function () { return {}; }); });
+}
+function toast(msg, ms) {
+  var t = $('#toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(function () { t.classList.remove('show'); }, ms || 1800);
+}
+var DEMO_CLASSES = [
+  { id: '1', name: '三年(1)班', students: 42, joined: 38, levels: 216, stars: 412, best_wpm: 52 },
+  { id: '2', name: '三年(2)班', students: 41, joined: 30, levels: 150, stars: 260, best_wpm: 47 },
+  { id: '3', name: '四年(1)班', students: 43, joined: 12, levels: 44, stars: 96, best_wpm: 38 }
+];
+var DEMO_ROWS = [
+  { name: '李晓明', value: 18, pet: 'dog', decos: ['crown'] },
+  { name: '演示同学', value: 15, pet: 'cat', decos: ['hat-red'] },
+  { name: '张思思', value: 13, pet: 'unicorn', decos: ['bow'] },
+  { name: '陈快乐', value: 9, pet: '', decos: [] },
+  { name: '王小虎', value: 7, pet: 'dino', decos: [] }
+];
+
+function boot() {
+  api('/api/v2/typing/overview').then(function (r) {
+    if (r && r.ok) {
+      S.demo = false;
+      S.enabled = !!r.enabled; S.grades = r.grades || [];
+      S.classes = r.classes || [];
+      if (S.classes.length && !S.lbClass) S.lbClass = S.classes[0].id;
+      if (S.classes.length && !S.ptsCls) S.ptsCls = S.classes[0].id;
+    } else {
+      S.demo = true;
+      S.enabled = true; S.grades = [3]; S.classes = DEMO_CLASSES;
+      S.lbClass = DEMO_CLASSES[0].id;
+      S.ptsCls = DEMO_CLASSES[0].id;
+    }
+    // 学校名称（作品署名用）与作品清单一起拉齐再渲染，两边都在创意馆面板里设
+    Promise.all([
+      api('/api/v2/school').catch(function () { return null; }),
+      api('/api/v2/studio/works').catch(function () { return null; })
+    ]).then(function (rs) {
+      if (rs[0] && rs[0].ok) S.school = rs[0].school || '';
+      if (rs[1] && rs[1].ok) S.studio = rs[1].studio;
+      render(); loadLb(); loadPoints();
+    });
+  }).catch(function () { S.demo = true; render(); });
+}
+
+function render() {
+  if (S.demo) {
+    app.innerHTML = '<div class="demo-bar">🎬 演示模式：当前未登录教师账号，以下为示例数据。' +
+      '登录教师端后打开「打字」页，即可管理真实班级。</div>' + body();
+  } else {
+    app.innerHTML = body();
+  }
+  bind();
+}
+function body() {
+  var gradeChips = TD.GRADES.map(function (g, i) {
+    var n = i + 1;
+    var on = S.grades.indexOf(n) >= 0;
+    return '<button class="gchip' + (on ? ' on' : '') + '" data-grade="' + n + '">' + g + '</button>';
+  }).join('');
+  var stats = S.classes.map(function (c) {
+    var rate = c.students ? Math.round(c.joined / c.students * 100) : 0;
+    return '<div class="stat"><b>' + esc(c.name) + '</b>' +
+      '<span>' + c.joined + '/' + c.students + ' 人已练 · ' + rate + '%</span>' +
+      '<div style="font-size:11.5px;color:var(--ink3);margin-top:4px">累计 ' + c.stars + ' 星 · 最快 ' +
+      (Math.round(c.best_wpm * 10) / 10) + ' KPM · 通关 ' + c.levels + ' 关</div></div>';
+  }).join('');
+  var clsOpts = S.classes.map(function (c) {
+    return '<option value="' + esc(c.id) + '"' + (c.id === S.lbClass ? ' selected' : '') + '>' + esc(c.name) + '</option>';
+  }).join('');
+  return '<div class="head"><h1>⌨️ 打字练习</h1>' +
+    '<small>开放给学生端后，学生「今日」页和底部导航会出现「打字」入口</small>' +
+    '<span style="margin-left:auto"></span>' +
+    '<button class="btn ghost" id="tryPlay" title="老师也能练：面板内直接开练，和学生同一张冒险地图，页顶可选是否计入班级排行榜">🎮 教师练习</button>' +
+    '</div>' +
+    /* 主功能区一排菜单：点击只切本页显隐，不重绘整页（保留正在填的表单） */
+    '<div class="mtabs" id="mtabs">' +
+      /* 2.1.7（#13）：去掉的是「单独发放/扣除」操作，不是积分查看。
+         牛哥要能在打字页看到学生积分余额与流水；加减分仍统一去
+         工作台「班务→积分」页用标签操作，这里只读。 */
+      [['basic', '⚙️ 基础设置'], ['lb', '🏆 班级排行榜'],
+       ['points', '✨ 学生积分'], ['studio', '🎨 创意宠物']]
+        .map(function (t) {
+          return '<button data-mtab="' + t[0] + '"' + (S.tab === t[0] ? ' class="on"' : '') + '>' + t[1] + '</button>';
+        }).join('') +
+    '</div>' +
+    '<div class="mpane' + (S.tab === 'basic' ? ' on' : '') + '" data-mpane="basic">' +
+    '<div class="grid">' +
+      '<div class="card">' +
+        '<h2>开放开关</h2>' +
+        '<div class="hint">开关实时生效：打开后学生端立即出现入口（不用刷新）；关闭后入口消失，' +
+        '但已练成绩与宠物全部保留。</div>' +
+        '<div class="switch-row">' +
+          '<button class="sw' + (S.enabled ? ' on' : '') + '" id="swBtn" aria-label="开放开关"></button>' +
+          '<span class="state-pill ' + (S.enabled ? 'on' : 'off') + '">' + (S.enabled ? '已开放 · 学生可以开练' : '未开放') + '</span>' +
+        '</div>' +
+        '<h2 style="margin-top:20px">中文词库年级</h2>' +
+        '<div class="hint">限定「中文词语」篇章的素材范围；文章阅读的篇目由学生在文章库里自选。' +
+        '键位、字母、单词、大小写标点、数字小键盘、中英混排篇章不受此限制。</div>' +
+        '<div class="grade-wrap">' + gradeChips + '</div>' +
+        '<button class="btn" id="saveGrades">保存年级设置</button>' +
+        '<button class="btn ghost" id="resetWeek" style="margin-left:8px">清零本周星光榜</button>' +
+        '<div class="hint" style="margin-top:8px">这个按钮只清「本周星光」这一栏（每周一本来也会自动归零）。' +
+        '积分、宠物、装扮、道具、累计总星、各关最好成绩都是永久数据，任何周切换都不会动。</div>' +
+      '</div>' +
+      '<div class="card">' +
+        '<h2>参与统计</h2>' +
+        '<div class="hint">哪些班练起来了、谁还没动，一眼看清。数据随学生练习实时更新。</div>' +
+        '<div class="stat-grid">' + (stats || '<span style="color:var(--ink3);font-size:13px">还没有班级数据</span>') + '</div>' +
+      '</div>' +
+    '</div>' +
+    '</div>' + /* /mpane basic */
+    '<div class="mpane' + (S.tab === 'lb' ? ' on' : '') + '" data-mpane="lb">' +
+    '<div class="card" style="margin-top:14px">' +
+      '<h2>班级排行榜</h2>' +
+      '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px">' +
+        '<select id="clsSel">' + (clsOpts || '<option>（暂无班级）</option>') + '</select>' +
+        '<div class="tabs" style="margin:0">' +
+          [['week', '⭐ 本周星光'], ['total', '🏆 总星'], ['speed', '⚡ 手速']].map(function (t) {
+            return '<button class="' + (S.scope === t[0] ? 'on' : '') + '" data-scope="' + t[0] + '">' + t[1] + '</button>';
+          }).join('') +
+        '</div>' +
+      '</div>' +
+      '<div id="lbBox" style="margin-top:8px"><span style="color:var(--ink3);font-size:13px">加载中…</span></div>' +
+    '</div>' +
+    '</div>' + /* /mpane lb */
+    /* 2.1.7：恢复「学生积分」只读视图。原来误删了整个页签，
+       牛哥明确要求打字页仍要能看到学生积分情况；
+       这里不再放发/扣表单，加减分统一走班务→积分标签。 */
+    '<div class="mpane' + (S.tab === 'points' ? ' on' : '') + '" data-mpane="points">' +
+    '<div class="card" style="margin-top:14px">' +
+      '<h2>学生积分（只读）</h2>' +
+      '<div class="hint">这里查看打字积分余额和最近流水。加减分请到工作台「班务 → 积分」页，' +
+      '用全班统一的加减分标签操作；打字页不再单独发放/扣除。</div>' +
+      '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px">' +
+        '<select id="ptsCls" style="width:auto;min-width:150px">' +
+          (S.classes.length ? S.classes.map(function (c) {
+            return '<option value="' + esc(c.id) + '"' +
+              (String(c.id) === String(S.ptsCls) ? ' selected' : '') + '>' +
+              esc(c.name) + '</option>';
+          }).join('') : '<option>（暂无班级）</option>') +
+        '</select>' +
+        '<span style="font-size:12px;color:var(--ink3)">数据随学生练习与积分页加减分实时更新</span>' +
+      '</div>' +
+      '<div class="pts-sec"><b>各班学生余额</b></div>' +
+      '<div id="ptsBal" style="display:flex;flex-wrap:wrap;gap:7px;margin-top:8px">' +
+        '<span class="cl-empty">加载中…</span></div>' +
+      '<div class="pts-sec"><b>最近积分流水</b></div>' +
+      '<div id="ptsLogBox" style="margin-top:6px"></div>' +
+    '</div>' +
+    '</div>' + /* /mpane points */
+    '<div class="mpane' + (S.tab === 'studio' ? ' on' : '') + '" data-mpane="studio">' +
+    studioCardHtml() +
+    '</div>'; /* /mpane studio */
+}
+
+/* 创意宠物 · 设计者信息编辑（教师可改，学生端只读展示） */
+function studioClsId(name) {
+  var cs = ((S.ptsData || {}).classes) || [];
+  for (var i = 0; i < cs.length; i++) if (cs[i].name === name) return cs[i].id;
+  return '';
+}
+function studioClsOpts(sel) {
+  var cs = ((S.ptsData || {}).classes) || [];
+  var h = '<option value="">（待填写）</option>', found = !sel;
+  cs.forEach(function (c) {
+    if (c.name === sel) found = true;
+    h += '<option value="' + esc(c.name) + '"' + (c.name === sel ? ' selected' : '') + '>' + esc(c.name) + '</option>';
+  });
+  if (sel && !found) h += '<option value="' + esc(sel) + '" selected>' + esc(sel) + '</option>';
+  return h;
+}
+function studioStuDataOpts(clsName) {
+  var h = '';
+  clsStudents(studioClsId(clsName)).forEach(function (s) {
+    h += '<option value="' + esc(s.name) + '">' +
+      esc((s.student_no ? s.student_no + ' ' : '') + s.name) + '</option>';
+  });
+  return h;
+}
+function studioStuOpts(clsName, sel) {
+  var list = clsStudents(studioClsId(clsName));
+  var h = '<option value="">（待填写）</option>', found = !sel;
+  list.forEach(function (s) {
+    if (s.name === sel) found = true;
+    h += '<option value="' + esc(s.name) + '"' + (s.name === sel ? ' selected' : '') + '>' +
+      esc((s.student_no ? s.student_no + ' ' : '') + s.name) + '</option>';
+  });
+  if (sel && !found) h += '<option value="' + esc(sel) + '" selected>' + esc(sel) + '</option>';
+  return h;
+}
+function studioClsDataOpts() {
+  return (((S.ptsData || {}).classes) || []).map(function (c) {
+    return '<option value="' + esc(c.name) + '"></option>';
+  }).join('');
+}
+/* 2.1.8：按作品 id 找创意宠物（排行榜显示出战作品用）。
+   作品清单在初始化时已随 /api/v2/studio/works 拉到 S.studio.works。 */
+function studioWorkById(id) {
+  var ws = (S.studio && S.studio.works) || [];
+  for (var i = 0; i < ws.length; i++) if (ws[i].id === id) return ws[i];
+  return null;
+}
+function studioCardHtml() {
+  /* 2.1.7：创作者信息统一写死「坏坏 R 桃子」，教师端不再提供编辑入口。
+     作品清单保留只读展示，去掉笔名输入框与保存按钮。 */
+  var works = (S.studio && S.studio.works) || [];
+  var list = works.map(function (w) {
+    var kind = w.kind === 'theme' ? '主题' : '宠物';
+    return '<div class="sd-item" data-sd="' + esc(w.id) + '">' +
+      '<div class="sd-h"><img class="sd-thumb" src="' + esc(w.img) + '" alt="">' +
+        '<span class="sd-title">' + esc(w.name) + '</span>' +
+        '<span class="sd-kind ' + (w.kind === 'theme' ? 'theme' : '') + '">' + kind + '</span></div>' +
+      '<div class="sd-f"><label>创作者</label><b>坏坏 R 桃子</b></div>' +
+    '</div>';
+  }).join('');
+  return '<div class="card" id="studioCardWrap">' +
+    (works.length
+      ? '<div class="sd-list">' + list + '</div>'
+      : '<div class="cl-empty">作品清单加载中…（教师登录后显示）</div>') +
+  '</div>';
+}
+function refreshStudioCard() {
+  var wrap = $('#studioCardWrap');
+  if (wrap) { wrap.outerHTML = studioCardHtml(); bindStudioCard(); }
+}
+
+/* 2.1.7：创作者信息写死，教师端编辑入口已移除，绑定函数保留为空以免调用处报错。 */
+function bindStudioCard() {}
+function bind() {
+  bindStudioCard();
+  /* 主功能区一排 tab：只切显隐，不重绘整页（避免丢失正在填的表单/输入框） */
+  document.querySelectorAll('[data-mtab]').forEach(function (b) {
+    b.onclick = function () {
+      var t = b.getAttribute('data-mtab');
+      S.tab = t;
+      document.querySelectorAll('[data-mtab]').forEach(function (x) { x.classList.toggle('on', x === b); });
+      document.querySelectorAll('[data-mpane]').forEach(function (p) {
+        p.classList.toggle('on', p.getAttribute('data-mpane') === t);
+      });
+      if (t === 'studio' && S.studio) refreshStudioCard();
+    };
+  });
+  var tp = $('#tryPlay');
+  if (tp) tp.onclick = enterPlay;
+  var sw = $('#swBtn');
+  if (sw) sw.onclick = function () {
+    var next = !S.enabled;
+    if (S.demo) { S.enabled = next; render(); return; }
+    sw.style.pointerEvents = 'none';
+    api('/api/v2/typing/config', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: next })
+    }).then(function (r) {
+      sw.style.pointerEvents = '';
+      if (r && r.ok) { S.enabled = r.enabled; toast(r.enabled ? '已开放，学生端入口实时出现' : '已关闭'); }
+      else toast((r && r.msg) || '保存失败');
+      render();
+    });
+  };
+  document.querySelectorAll('[data-grade]').forEach(function (b) {
+    b.onclick = function () {
+      var n = +b.getAttribute('data-grade');
+      var i = S.grades.indexOf(n);
+      if (i >= 0) S.grades.splice(i, 1); else S.grades.push(n);
+      b.classList.toggle('on');
+    };
+  });
+  var sg = $('#saveGrades');
+  if (sg) sg.onclick = function () {
+    if (S.demo) { toast('演示模式：年级设置只在本页生效'); return; }
+    api('/api/v2/typing/config', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ grades: S.grades })
+    }).then(function (r) {
+      if (r && r.ok) toast('已保存：中文词库限定 ' + (S.grades.length ? S.grades.map(function (g) { return TD.GRADES[g - 1]; }).join('、') : '全部年级'));
+      else toast((r && r.msg) || '保存失败');
+    });
+  };
+  var rw = $('#resetWeek');
+  if (rw) rw.onclick = function () {
+    if (S.demo) { toast('演示模式'); return; }
+    if (!confirm('确定把本周星光榜清零吗？\n\n只清「本周星光」这一栏，积分、宠物、装扮、累计总星都不受影响。')) return;
+    api('/api/v2/typing/reset-week', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+      .then(function (r) { toast(r && r.ok ? '本周星光榜已清零' : '操作失败'); loadLb(); });
+  };
+  var cs = $('#clsSel');
+  if (cs) cs.onchange = function () { S.lbClass = cs.value; loadLb(); };
+  /* 积分管理：发/扣 + 记录展示 */
+  var pcls = $('#ptsCls');
+  if (pcls) pcls.onchange = function () { S.ptsCls = pcls.value; S.ptsStu = ''; paintPointBoxes(); };
+  var pstus = $('#ptsStu');
+  if (pstus) pstus.onchange = function () { S.ptsStu = pstus.value; };
+  document.querySelectorAll('#ptsTagBox [data-note]').forEach(function (b) {
+    b.onclick = function () {
+      var box = $('#ptsNote');
+      var val = b.getAttribute('data-note') || '';
+      var on = !b.classList.contains('on');
+      document.querySelectorAll('#ptsTagBox [data-note]').forEach(function (x) {
+        x.classList.remove('on');
+      });
+      if (on) {
+        b.classList.add('on');
+        if (box) box.value = val;
+      } else if (box) {
+        box.value = '';
+      }
+    };
+  });
+  var pn = $('#ptsNote');
+  if (pn) pn.oninput = function () {
+    document.querySelectorAll('#ptsTagBox [data-note]').forEach(function (x) {
+      x.classList.toggle('on', x.getAttribute('data-note') === pn.value.trim());
+    });
+  };
+  var pdo = $('#ptsDo');
+  if (pdo) pdo.onclick = function () {
+    if (S.demo) { toast('演示模式：积分管理需要登录教师账号'); return; }
+    var amtEl = $('#ptsAmt');
+    var amt = parseInt((amtEl && amtEl.value) || '0', 10);
+    if (!amt || amt < 1) { toast('请输入大于 0 的积分数'); return; }
+    var mode = ($('#ptsMode') && $('#ptsMode').value) || 'add';
+    var delta = mode === 'sub' ? -amt : amt;
+    var sid = ($('#ptsStu') && $('#ptsStu').value) || '';
+    var note = ($('#ptsNote') && $('#ptsNote').value) || '';
+    var sSel = $('#ptsStu');
+    var who = (sid && sSel && sSel.options[sSel.selectedIndex])
+      ? sSel.options[sSel.selectedIndex].textContent : '全班所有人';
+    if (!confirm('确定给「' + who + '」' + (delta > 0 ? '发放 ' + delta : '扣除 ' + amt) + ' 积分吗？')) return;
+    api('/api/v2/typing/admin-points', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ class_id: S.ptsCls, student_id: sid, delta: delta, note: note })
+    }).then(function (r) {
+      if (r && r.ok) {
+        toast('已' + (delta > 0 ? '发放' : '扣除') + ' ' + r.count + ' 名学生');
+        if ($('#ptsNote')) $('#ptsNote').value = '';
+        document.querySelectorAll('#ptsTagBox [data-note]').forEach(function (x) { x.classList.remove('on'); });
+        loadPoints();
+      } else toast((r && r.msg) || '操作失败');
+    });
+  };
+  document.querySelectorAll('[data-scope]').forEach(function (b) {
+    b.onclick = function () { S.scope = b.getAttribute('data-scope'); loadLb();
+      document.querySelectorAll('[data-scope]').forEach(function (x) {
+        x.classList.toggle('on', x.getAttribute('data-scope') === S.scope);
+      }); };
+  });
+}
+
+/* 教师练习：面板上盖一层全屏视图，iframe 内嵌打字页 */
+function enterPlay() {
+  if ($('#playView')) return;
+  var v = document.createElement('div');
+  v.id = 'playView';
+  v.className = 'play-view';
+  v.innerHTML =
+    '<div class="play-bar">' +
+      '<button class="btn ghost" id="backMgr">← 返回管理</button>' +
+      '<b>教师课堂展示 · 学生视角预览，不会改动学生档案</b>' +
+    '</div>' +
+    '<iframe src="/typing/?embed=1&view=studio" title="打字练习课堂展示"></iframe>';
+  document.body.appendChild(v);
+  document.body.classList.add('play-lock');
+  /* 2.0.73：iframe 内容 load 完成后再推一次主题，确保学生页的 message
+     监听器已建立；早推的那次可能落在监听器建立之前被丢弃。 */
+  var frame = v.querySelector('iframe');
+  if (frame) frame.addEventListener('load', function () {
+    try {
+      var mode = localStorage.getItem('wb-mode') || 'light';
+      if (mode === 'auto') mode = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+      var hue = localStorage.getItem('wb-theme') || 'forest';
+      if (window.wbPushPlayTheme) window.wbPushPlayTheme(mode, hue);
+    } catch (e) {}
+  });
+  $('#backMgr').onclick = function () { v.remove(); document.body.classList.remove('play-lock'); };
+}
+
+function loadLb() {
+  var box = $('#lbBox');
+  if (!box) return;
+  var paint = function (rows, name) {
+    if (!rows.length) {
+      box.innerHTML = '<div style="color:var(--ink3);font-size:13px;padding:16px 0;text-align:center">' +
+        (name ? esc(name) + ' 还没有练习记录' : '还没有练习记录') + '</div>';
+      return;
+    }
+    var unit = S.scope === 'speed' ? 'KPM' : '星';
+    box.innerHTML = rows.map(function (r, i) {
+      var rankCls = i === 0 ? 'r1' : i === 1 ? 'r2' : i === 2 ? 'r3' : '';
+      var medal = i < 3 ? ['🥇', '🥈', '🥉'][i] : (i + 1);
+      /* 2.1.8：排行榜小像优先级与学生端一致——像素画头像 > 出战创意宠物 > 系统宠物。
+         以前这里只读 avatar/pet，忽略了服务端返回的 studio_pet，
+         导致学生在创意宠物里选了出战，榜上却还是默认系统宠物。 */
+      var sw = r.studio_pet && String(r.studio_pet).indexOf('sd_') === 0
+        ? studioWorkById(r.studio_pet) : null;
+      var tile;
+      if (r.avatar && String(r.avatar).indexOf('data:image') === 0) {
+        tile = '<span class="lb-pet" title="' + esc(r.name || '') + ' 的头像">' +
+               '<img src="' + esc(r.avatar) + '" alt="头像"></span>';
+      } else if (sw) {
+        var bg = r.bg ? TD.bgById(r.bg) : null;
+        var bgSt = (bg && bg.id) ? ' style="background:' + bg.css + '"' : '';
+        tile = '<span class="lb-pet" title="' + esc(r.name || '') + ' 的创意宠物：' + esc(sw.name) + '"' + bgSt + '>' +
+               '<img src="' + esc(sw.img) + '" alt="' + esc(sw.name) + '"></span>';
+      } else {
+        tile = TD.petTile({ pet: r.pet, decos: r.decos, bg: r.bg, fx: r.fx, cls: 'lb-pet' });
+      }
+      return '<div class="lb-row' + (r.me ? ' me' : '') + '">' +
+        '<span class="lb-rank ' + rankCls + '">' + medal + '</span>' +
+        tile +
+        '<span class="lb-name">' + esc(r.name) +
+          (r.student_no ? '<small style="font-weight:400;color:var(--ink3)"> ' + esc(r.student_no) + ' 号</small>' : '') + '</span>' +
+        '<span class="lb-val">' + (Math.round(r.value * 10) / 10) + '<small>' + unit + '</small></span>' +
+        '</div>';
+    }).join('');
+  };
+  if (S.demo) {
+    var rows = DEMO_ROWS.map(function (r) { return Object.assign({}, r); });
+    if (S.scope === 'total') rows.forEach(function (r) { r.value = r.value * 6 + 40; });
+    if (S.scope === 'speed') rows.forEach(function (r, i) { r.value = 52 - i * 3.6; });
+    paint(rows, '三年(1)班');
+    return;
+  }
+  api('/api/v2/typing/leaderboard?scope=' + S.scope + '&class_id=' + encodeURIComponent(S.lbClass))
+    .then(function (r) {
+      if (r && r.ok) paint(r.rows || [], r.class_name);
+      else box.innerHTML = '<div style="color:var(--bad);font-size:13px;padding:12px">' + esc((r && r.msg) || '加载失败') + '</div>';
+    }).catch(function () {
+      box.innerHTML = '<div style="color:var(--bad);font-size:13px;padding:12px">网络错误</div>';
+    });
+}
+
+/* ---------------- 积分管理 ----------------
+   /api/v2/typing/points-admin 一次拉回：各班学生余额 + 最近 100 条操作记录。
+   发放/扣除走 /api/v2/typing/admin-points，服务端逐人落账并写 pts_log。 */
+function clsStudents(cid) {
+  var d = S.ptsData || {};
+  for (var i = 0; i < (d.classes || []).length; i++)
+    if (d.classes[i].id === cid) return d.classes[i].students || [];
+  return [];
+}
+function paintPointBoxes() {
+  var stu = $('#ptsStu'), bal = $('#ptsBal'), lg = $('#ptsLogBox');
+  var d = S.ptsData || { classes: [], log: [] };
+  if (stu) {
+    var opts = '<option value="">全班所有人</option>';
+    clsStudents(S.ptsCls).forEach(function (s) {
+      opts += '<option value="' + esc(s.id) + '">' +
+        esc((s.student_no ? s.student_no + ' ' : '') + s.name) + '（✨' + (s.pts || 0) + '）</option>';
+    });
+    stu.innerHTML = opts;
+    stu.value = S.ptsStu || '';
+  }
+  if (bal) {
+    var list = clsStudents(S.ptsCls);
+    bal.innerHTML = S.demo
+      ? '<span class="cl-empty">演示模式：登录后这里显示各班余额</span>'
+      : (list.length
+        ? list.map(function (s) {
+            return '<span class="pts-chip">' + esc(s.name) +
+              ' <b>✨ ' + (s.pts || 0) + '</b></span>';
+          }).join('')
+        : '<span class="cl-empty">这个班还没有学生</span>');
+  }
+  if (lg) {
+    lg.innerHTML = (d.log || []).length
+      ? d.log.slice(0, 20).map(function (e) {
+          var t = new Date((e.ts || 0) * 1000);
+          var ts = (t.getMonth() + 1) + '/' + t.getDate() + ' ' +
+            String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0');
+          var up = (e.delta || 0) > 0;
+          return '<div class="cl-row">' +
+            '<span class="cl-time">' + ts + '</span>' +
+            '<span class="cl-who">' + esc(e.by || '老师') + '</span>' +
+            '<span class="cl-nm">' + esc(e.name || '?') + '</span>' +
+            '<span class="cl-delta ' + (up ? 'up' : 'dn') + '">' +
+              (up ? '+' : '') + (e.delta || 0) + '</span>' +
+            (e.note ? '<span class="cl-note" title="' + esc(e.note) + '">' + esc(e.note) + '</span>' : '') +
+            '</div>';
+        }).join('')
+      : '<span class="cl-empty">还没有积分操作记录</span>';
+  }
+}
+function loadPoints() {
+  if (S.demo) { paintPointBoxes(); return; }
+  api('/api/v2/typing/points-admin').then(function (r) {
+    if (r && r.ok) S.ptsData = { classes: r.classes || [], log: r.log || [] };
+    paintPointBoxes();
+    refreshStudioCard();
+  }).catch(function () { paintPointBoxes(); refreshStudioCard(); });
+}
+
+/* 2.0.76：教师练习（课堂展示）iframe 里把宠物/像素画设为头像后，
+   学生页只 postMessage 给直接父级（本页 teacher.html）。这里再往上
+   转发一层给工作台顶层 index.html，左下角账号头像才会即时刷新，
+   不用手动点开账号弹层才看到新头像。独立打开本页时 parent===self，跳过。 */
+window.addEventListener('message', function (ev) {
+  var d = ev && ev.data;
+  if (d && d.type === 'wb-avatar-changed' && window.parent && window.parent !== window) {
+    try { window.parent.postMessage({ type: 'wb-avatar-changed', avatar: d.avatar || '' }, '*'); } catch (e) {}
+  }
+});
+
+boot();
+})();
+</script>
+</body>
+</html>

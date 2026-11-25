@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>宠物与装扮 · 验收页（2.0.42）</title>
+<style>
+  :root{--ink:#3F372E;--ink2:#6E665C;--ink3:#9A8B7F;--brand:#B45B33;--new:#1D9E75}
+  *{box-sizing:border-box}
+  body{margin:0;padding:24px 20px 60px;color:var(--ink);
+    background:radial-gradient(80% 58% at 50% 0%,#FFF9F0 0%,#F8F2E4 58%,#F2E8D6 100%);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;
+    -webkit-font-smoothing:antialiased}
+  .wrap{max-width:1180px;margin:0 auto}
+  h1{font-size:22px;margin:0 0 6px}
+  h2{font-size:15px;margin:28px 0 12px;color:var(--ink2);
+    display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  h2 .cnt{font-size:12px;color:var(--ink3);font-weight:400}
+  .sub{color:var(--ink2);font-size:13px;line-height:1.8;margin-bottom:14px}
+  .sub b{color:var(--brand)}
+  .grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(132px,1fr))}
+  .card{position:relative;text-align:center;border-radius:18px;padding:10px 8px 11px;
+    background:linear-gradient(170deg,#FFFFFF,#FBF3EA);
+    border:1px solid rgba(200,160,120,.28);
+    box-shadow:0 2px 5px rgba(150,95,50,.07),inset 0 1px 0 #fff}
+  .card .st{position:relative;display:flex;justify-content:center;align-items:flex-end;height:126px;
+    border-radius:14px;overflow:hidden;
+    background:radial-gradient(64% 54% at 50% 76%,#FFF7E9 0%,rgba(255,247,233,0) 74%)}
+  .card svg{width:120px;height:120px;display:block}
+  .card b{display:block;font-size:13.5px;margin-top:4px}
+  .card small{display:block;font-size:11px;color:var(--ink3);margin-top:2px;line-height:1.45;
+    min-height:28px;padding:0 2px}
+  .badge{position:absolute;top:7px;right:7px;font-size:10px;line-height:1;color:#fff;
+    background:linear-gradient(135deg,#3FC28B,#1D9E75);border-radius:999px;padding:3px 7px;
+    box-shadow:0 2px 5px rgba(29,158,117,.28)}
+  .seg{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 0}
+  .seg button{border:1px solid rgba(200,160,120,.4);background:#fff;color:var(--ink2);
+    border-radius:999px;padding:5px 13px;font-size:12.5px;cursor:pointer}
+  .seg button.on{background:linear-gradient(135deg,#D98A4A,#B45B33);color:#fff;border-color:transparent}
+  .foot{margin-top:26px;font-size:12px;color:#B3A698;line-height:1.9;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>伙伴图鉴扩容 · 装扮改版（2.0.42）</h1>
+  <div class="sub">
+    ① 伙伴从 12 只扩到 <b>22 只</b>（右上角 <span class="badge">NEW</span> 是这次新增的 10 只）；<br>
+    ② 装扮：下架「小红领结」（两片红色缎面挂在胸口，学生看成内衣），补上 <b>连帽卫衣 / 条纹T恤 / 花环 / 派对尖帽 / 小口罩 / 运动短裤 / 太空服</b>；<br>
+    ③ 装扮卡片统一穿在「小橘猫」身上展示。
+  </div>
+
+  <h2>① 全部伙伴 <span class="cnt" id="petCnt"></span>
+    <span class="seg" id="petSeg">
+      <button data-f="all" class="on">全部</button>
+      <button data-f="new">只看新增</button>
+    </span>
+  </h2>
+  <div class="grid" id="pets"></div>
+
+  <h2>② 装扮图鉴（穿在小橘猫身上） <span class="cnt" id="decoCnt"></span></h2>
+  <div class="seg" id="decoSeg"></div>
+  <div class="grid" id="decos" style="margin-top:12px"></div>
+
+  <h2>③ 搭配示例</h2>
+  <div class="grid" id="looks"></div>
+
+  <div class="foot">
+    打字冒险岛 · 宠物与装扮验收页 · 图鉴数据来自 /typing/typing-data.js，与服务端 PET_IDS 一一对应
+  </div>
+</div>
+<script src="/typing/typing-data.js?v=20261117"></script>
+<script>
+(function () {
+  /* ?solo=deco：只渲染装扮图鉴（全部部位），方便截图核对；?solo=pets 只看伙伴 */
+  var SOLO = (location.search.match(/solo=(\w+)/) || [])[1] || '';
+  if (SOLO) {
+    document.querySelectorAll('h1, .sub, h2, .seg, .foot').forEach(function (n) { n.style.display = 'none'; });
+    document.querySelectorAll('.grid').forEach(function (n, i) {
+      /* 顺序：pets / decos / looks —— solo 模式只留对应的那一块 */
+      var name = ['pets', 'decos', 'looks'][i];
+      if (name !== (SOLO === 'deco' ? 'decos' : 'pets')) n.style.display = 'none';
+    });
+  }
+  /* 这次新增的 id：用来打 NEW 角标（服务端同步改过 PET_IDS / DECO_PRICE） */
+  var NEW_PETS = ['koala', 'pig', 'tiger', 'seal', 'deer', 'bat', 'whale', 'owl', 'duck', 'bear'];
+  var NEW_DECOS = ['hoodie', 'tee', 'flower', 'party', 'mask', 'shorts', 'spacesuit'];
+
+  var petBox = document.getElementById('pets');
+  document.getElementById('petCnt').textContent = '共 ' + TD.PETS.length + ' 只 · 新增 ' + NEW_PETS.length + ' 只';
+  function paintPets(filter) {
+    petBox.innerHTML = '';
+    TD.PETS.forEach(function (p) {
+      if (filter === 'new' && NEW_PETS.indexOf(p.id) < 0) return;
+      var d = document.createElement('div');
+      d.className = 'card';
+      d.innerHTML = (NEW_PETS.indexOf(p.id) >= 0 ? '<span class="badge">NEW</span>' : '') +
+        '<div class="st">' + TD.petSvg(p, []) + '</div>' +
+        '<b>' + p.name + '</b><small>' + p.mood + '</small>';
+      petBox.appendChild(d);
+    });
+  }
+  paintPets('all');
+  Array.prototype.forEach.call(document.querySelectorAll('#petSeg button'), function (b) {
+    b.onclick = function () {
+      Array.prototype.forEach.call(document.querySelectorAll('#petSeg button'), function (x) { x.classList.remove('on'); });
+      b.classList.add('on');
+      paintPets(b.getAttribute('data-f'));
+    };
+  });
+
+  /* 装扮：按部位分组 */
+  var decoBox = document.getElementById('decos');
+  document.getElementById('decoCnt').textContent =
+    '共 ' + TD.DECOS.length + ' 件 · 新增 ' + NEW_DECOS.length + ' 件 · 下架 1 件（小红领结）';
+  document.getElementById('decoSeg').innerHTML = TD.DECO_CATS.map(function (c) {
+    return '<button data-c="' + c.id + '" class="' + (c.id === 'head' ? 'on' : '') + '">' +
+      c.icon + ' ' + c.name + '（' + TD.DECOS.filter(function (d) { return d.cat === c.id; }).length + '）</button>';
+  }).join('');
+  function paintDecos(cat) {
+    decoBox.innerHTML = '';
+    var list = TD.DECOS.filter(function (d) { return cat === 'all' || d.cat === cat; });
+    list.forEach(function (dd) {
+      var d = document.createElement('div');
+      d.className = 'card';
+      d.innerHTML = (NEW_DECOS.indexOf(dd.id) >= 0 ? '<span class="badge">NEW</span>' : '') +
+        '<div class="st">' + TD.petSvg('cat', [dd.id]) + '</div>' +
+        '<b>' + dd.name + '</b><small>' + (dd.act || '') + '<br>✨' + dd.price + ' 积分</small>';
+      decoBox.appendChild(d);
+    });
+  }
+  paintDecos((SOLO === 'deco' || (location.search || '').indexOf('deco=all') >= 0) ? 'all' : 'head');
+  Array.prototype.forEach.call(document.querySelectorAll('#decoSeg button'), function (b) {
+    b.onclick = function () {
+      Array.prototype.forEach.call(document.querySelectorAll('#decoSeg button'), function (x) { x.classList.remove('on'); });
+      b.classList.add('on');
+      paintDecos(b.getAttribute('data-c'));
+    };
+  });
+
+  /* 搭配示例：一眼看不出「多件能不能叠」，这里给几套现成组合 */
+  var LOOKS = [
+    { pet: 'cat', decos: ['party', 'tee', 'shorts'], t: '派对猫', s: '派对尖帽 + 条纹T恤 + 运动短裤' },
+    { pet: 'rabbit', decos: ['flower', 'hoodie'], t: '春游兔', s: '花环 + 连帽卫衣' },
+    { pet: 'panda', decos: ['mask'], t: '戴口罩的滚滚', s: '小口罩（只占面饰槽）' },
+    { pet: 'dragon', decos: ['spacesuit'], t: '太空龙', s: '太空服（整套，盖住上衣下衣）' },
+    { pet: 'koala', decos: ['crown', 'glasses', 'scarf'], t: '考拉校长', s: '皇冠 + 圆眼镜 + 红围巾' },
+    { pet: 'owl', decos: ['headset', 'robe'], t: '夜读猫头鹰', s: '星耳机 + 博士袍' }
+  ];
+  var lookBox = document.getElementById('looks');
+  LOOKS.forEach(function (L) {
+    var d = document.createElement('div');
+    d.className = 'card';
+    d.innerHTML = '<div class="st">' + TD.petSvg(L.pet, L.decos) + '</div>' +
+      '<b>' + L.t + '</b><small>' + L.s + '</small>';
+    lookBox.appendChild(d);
+  });
+})();
+</script>
+</body>
+</html>

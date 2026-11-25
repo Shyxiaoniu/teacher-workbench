@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-mode="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>网页 · 教师管理</title>
+<link rel="stylesheet" href="/design/design.css?v=2.0.68">
+</head>
+<body>
+<div class="tc-app">
+
+  <div class="tc-head">
+    <h1>网页</h1>
+    <span class="tc-pill off" id="pill">读取中…</span>
+    <span class="sp"></span>
+    <button class="btn sm" id="btnRefresh"><svg class="i-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.5-5.8"/><path d="M20 4.6V9.2h-4.6"/></svg>刷新</button>
+  </div>
+
+  <!-- 并排菜单（2.0.68）：与打字教师页一致，点击只切面板显隐 -->
+  <div class="tc-tabs" id="tcTabs">
+    <button type="button" class="on" data-tcpane-btn="basic">⚙️ 基础设置</button>
+    <button type="button" data-tcpane-btn="ops">🛠 常用操作</button>
+    <button type="button" data-tcpane-btn="works">📋 学生提交</button>
+    <button type="button" data-tcpane-btn="help">❓ 使用说明</button>
+  </div>
+
+  <div class="tc-pane on" data-tcpane="basic">
+  <!-- 一键启停 -->
+  <div class="tc-hero">
+    <div class="icon" title="网页设计">
+      <svg class="i-ic" viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="2.6" y="4.2" width="18.8" height="15.6" rx="2.6"/>
+        <path d="M2.6 8.9h18.8"/>
+        <path d="M9.6 12.6l-1.9 2.2 1.9 2.2M14.4 12.6l1.9 2.2-1.9 2.2"/>
+      </svg>
+    </div>
+    <div class="txt">
+      <b>学生端「网页」页签</b>
+      <span>开启后学生才能写网页、交作品；关掉立刻收回入口与提交权限。</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px">
+      <button class="sw" id="swMain" aria-label="开启或关闭"></button>
+      <b id="swTxt" style="font-size:13.5px;min-width:62px">已关闭</b>
+    </div>
+  </div>
+
+  <div class="tc-grid">
+    <!-- 左：权限与归档 -->
+    <div class="card">
+      <h2>学生端权限</h2>
+      <div class="sw-row">
+        <div class="t"><b>允许学生添加这个功能页</b>
+          <span>「今日」页出现入口卡，点一次加入导航</span></div>
+        <button class="sw on" id="swAdd"></button>
+      </div>
+      <div class="sw-row">
+        <div class="t"><b>允许学生提交作品</b>
+          <span>关掉只能练习与保存草稿</span></div>
+        <button class="sw on" id="swSubmit"></button>
+      </div>
+
+      <h2 style="margin-top:18px">归档与大屏</h2>
+      <p class="hint">作品进 <b>资料/课程/班级/学号-姓名/</b>，文件名带学号姓名前缀。</p>
+      <div class="fld">
+        <span>归档课程（资料里的文件夹）</span>
+        <input type="text" id="inpCourse" list="courseList" placeholder="例如：网页设计">
+        <datalist id="courseList"></datalist>
+      </div>
+      <div class="fld">
+        <span>大屏窗口名</span>
+        <input type="text" id="inpWindow" placeholder="例如：网页设计作品">
+      </div>
+      <div class="fld">
+        <span>每人最多提交次数（0 = 不限）</span>
+        <input type="number" id="inpMax" min="0" max="20" step="1" placeholder="1"
+               title="一个人最多能交几版。设 1 就只收一版，学生编辑器底部会显示「还能交 N 版」，交满后按钮拦住">
+      </div>
+      <div class="fld">
+        <span>任务说明（显示在学生编辑器顶部）</span>
+        <textarea id="inpIntro" maxlength="500" placeholder="例如：做一个介绍自己的网页，至少包含标题、一段文字和三个卡片。"></textarea>
+      </div>
+      <div class="foot">
+        <button class="btn primary" id="btnSave">保存设置</button>
+        <span class="msg" id="saveMsg"></span>
+      </div>
+    </div>
+
+  </div><!-- /tc-grid -->
+  </div><!-- /tc-pane basic -->
+
+  <div class="tc-pane" data-tcpane="ops">
+    <div class="card">
+      <h2>常用操作</h2>
+      <p class="hint">练习自动保存；预览只是看，不会写入任何数据。</p>
+      <div class="quick-list">
+        <button class="btn" id="btnPractice" title="进入编辑器练手，进度会自动保存">✏ 进入网页练习</button>
+        <button class="btn ghost" id="btnPreview">👀 预览学生页</button>
+      </div>
+      <div class="quick-meta" id="quickMeta"></div>
+    </div>
+  </div>
+
+  <div class="tc-pane" data-tcpane="works">
+    <div class="card">
+      <h2>学生提交概览</h2>
+      <p class="hint" id="statHint">读取中…</p>
+      <div class="tc-stats">
+        <div class="tc-stat"><b id="stPeople">0</b><span>已提交人数</span></div>
+        <div class="tc-stat"><b id="stFiles">0</b><span>作品文件</span></div>
+        <div class="tc-stat"><b id="stLast" style="font-size:14px;line-height:1.9">—</b><span>最近一次提交</span></div>
+      </div>
+      <div class="tc-works" id="works"></div>
+      <div class="foot" style="margin-top:12px">
+        <button class="btn ghost sm" id="btnDash">去「大屏」页看作品墙 ›</button>
+        <span class="msg" id="dashMsg" style="color:var(--ink3)"></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="tc-pane" data-tcpane="help">
+    <div class="card">
+      <h2>使用说明</h2>
+      <ol>
+        <li><b>开启开关</b>：大开关一点就生效，学生端不用刷新。</li>
+        <li><b>填归档课程</b>：作品落到
+          <b>资料/课程/班级/学号-姓名/</b>，文件名带「学号-姓名-」前缀，
+          单独拷出去也认得出是谁的。</li>
+        <li><b>学生做作品</b>：左写 HTML/CSS、右看效果；「保存草稿」换台电脑还能接着写。</li>
+        <li><b>看作品</b>：「大屏」页选同一课程，学生作品墙里就是截图。</li>
+        <li><b>限制提交次数</b>：默认 <b>每人只能交 1 版</b>，防止一个人反复交把作品墙和
+          归档目录塞满。要多交几版就改成 2、3…，填 <b>0</b> 表示不限。学生编辑器底部会
+          显示「还能交 N 版」，交满后提交按钮直接拦住（服务端也会再拦一道）。</li>
+      </ol>
+      <p><b>先自己练</b>：到「常用操作」点「进入网页练习」，进度（代码 / 显示方式 / 预览宽度）自动保存，
+        下次接着来；写好了「导出图片」可当课件示例。</p>
+      <p><b>给学生的提醒</b>：预览只运行 HTML/CSS，不执行 JavaScript；外链图片在截图里可能变灰块，
+        建议用 emoji、渐变或纯 CSS 图形。</p>
+      <p><b>快捷键</b>：Ctrl + S 保存草稿，Ctrl + Enter 提交作品。</p>
+    </div>
+  </div>
+</div>
+
+<div class="ds-toast" id="toast"></div>
+
+<script>
+(function () {
+  'use strict';
+  var $ = function (s) { return document.querySelector(s); };
+  var CFG = { enabled: false, allow_add: true, allow_submit: true,
+              course: '网页设计', window: '网页设计作品', intro: '',
+              max_submit: 1 };
+  var STAT = null;
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  var toastTimer = null;
+  function toast(msg, tone) {
+    var t = $('#toast');
+    t.textContent = msg;
+    t.className = 'ds-toast on' + (tone ? ' ' + tone : '');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.className = 'ds-toast'; }, 2400);
+  }
+  function api(url, opt) {
+    return fetch(url, Object.assign({
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' }
+    }, opt || {})).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (j) {
+        j._status = r.status;
+        return j;
+      });
+    });
+  }
+
+  /* 主题跟随教师端（同源 iframe 读父窗口变量，切主题整页跟着变） */
+  function syncTheme() {
+    try {
+      var p = window.parent;
+      if (!p || p === window || !p.document) return;
+      var pr = p.document.documentElement;
+      var cs = p.getComputedStyle(pr);
+      var pairs = [
+        ['--brand', '--brand-primary'], ['--brand-2', '--brand-hover'],
+        ['--brand-soft', '--brand-soft'], ['--bg', '--bg-page'],
+        ['--card', '--bg-surface'], ['--card-2', '--bg-page'],
+        ['--ink', '--text-primary'], ['--ink2', '--text-secondary'],
+        ['--line', '--border'], ['--line-2', '--border']
+      ];
+      pairs.forEach(function (it) {
+        var v = cs.getPropertyValue(it[1]);
+        if (v && String(v).trim()) document.documentElement.style.setProperty(it[0], String(v).trim());
+      });
+      var mode = pr.getAttribute('data-mode') || '';
+      if (mode === 'dark' || mode === 'light') {
+        document.documentElement.setAttribute('data-mode', mode);
+      }
+    } catch (e) {}
+  }
+  function watchTheme() {
+    try {
+      var p = window.parent;
+      if (!p || p === window || !p.document) return;
+      new MutationObserver(syncTheme).observe(p.document.documentElement,
+        { attributes: true, attributeFilter: ['data-theme', 'data-mode', 'class', 'style'] });
+    } catch (e) {}
+  }
+
+  function paintSwitch(btn, on) {
+    if (!btn) return;
+    btn.classList.toggle('on', !!on);
+  }
+  function paintAll() {
+    paintSwitch($('#swMain'), CFG.enabled);
+    paintSwitch($('#swAdd'), CFG.allow_add);
+    paintSwitch($('#swSubmit'), CFG.allow_submit);
+    $('#swTxt').textContent = CFG.enabled ? '已开启' : '已关闭';
+    var pill = $('#pill');
+    pill.textContent = CFG.enabled ? '服务运行中' : '服务已关闭';
+    pill.className = 'tc-pill ' + (CFG.enabled ? 'on' : 'off');
+    $('#inpCourse').value = CFG.course || '';
+    $('#inpWindow').value = CFG.window || '';
+    $('#inpIntro').value = CFG.intro || '';
+    $('#inpMax').value = String(CFG.max_submit == null ? 1 : CFG.max_submit);
+    $('#btnDash').disabled = false;
+    $('#dashMsg').textContent = CFG.enabled
+      ? '大屏上方课程选「' + (CFG.course || '网页设计') + '」'
+      : '';
+  }
+
+  function paintStats() {
+    var s = (STAT && STAT.stats) || { people: 0, files: 0, last_at: '' };
+    $('#stPeople').textContent = s.people || 0;
+    $('#stFiles').textContent = s.files || 0;
+    $('#stLast').textContent = s.last_at ? String(s.last_at).slice(5, 16) : '—';
+    var hint = $('#statHint');
+    if (!CFG.enabled) hint.textContent = '服务关闭中，学生暂时无法进入编辑器。';
+    else if (!s.people) hint.textContent = '还没有学生提交。开课后这里会自动出现作品缩略图。';
+    else hint.textContent = '共 ' + s.people + ' 位学生提交，按学号去重、只算最新一版。';
+    var box = $('#works');
+    var rows = (STAT && STAT.recent) || [];
+    if (!rows.length) {
+      box.innerHTML = '<div class="tc-empty" style="grid-column:1/-1">还没有作品</div>';
+    } else {
+      box.innerHTML = rows.map(function (r) {
+        return '<div class="tc-work">' +
+          '<div class="th">' + (r.url ? '<img src="' + esc(r.url) + '" alt="' + esc(r.name) + '" loading="lazy">' : '') + '</div>' +
+          '<div class="mt"><b>' + esc(r.name || '—') + '</b>' +
+          '<span>' + esc(r.no || '') + ' · ' + esc(String(r.at || '').slice(5, 16)) + '</span></div>' +
+          '</div>';
+      }).join('');
+    }
+    /* 右栏「常用操作」底部的状态摘要：只放事实，不放介绍 */
+    var qm = $('#quickMeta');
+    if (qm) {
+      qm.innerHTML = '服务：<b>' + (CFG.enabled ? '运行中' : '已关闭') + '</b><br>' +
+        '归档课程：<b>' + esc(CFG.course || '—') + '</b><br>' +
+        '提交上限：<b>' + (Number(CFG.max_submit) > 0 ? '每人 ' + CFG.max_submit + ' 版' : '不限') + '</b><br>' +
+        '已提交：<b>' + (s.people || 0) + '</b> 人';
+    }
+  }
+
+  function load() {
+    api('/api/v2/design/config').then(function (j) {
+      if (!j.ok) {
+        if (j._status === 401) { location.href = '/teacher/login'; return; }
+        throw new Error(j.msg || '读取失败');
+      }
+      CFG = Object.assign(CFG, j.cfg || {});
+      STAT = j;
+      var dl = $('#courseList');
+      dl.innerHTML = (j.courses || []).map(function (n) {
+        return '<option value="' + esc(n) + '"></option>';
+      }).join('');
+      paintAll();
+      paintStats();
+    }).catch(function (e) {
+      toast((e && e.message) || '读取失败，请刷新', 'err');
+    });
+  }
+
+  function save(extra, quiet) {
+    var body = Object.assign({
+      course: $('#inpCourse').value.trim(),
+      window: $('#inpWindow').value.trim(),
+      intro: $('#inpIntro').value,
+      max_submit: Math.max(0, Math.min(parseInt($('#inpMax').value, 10) || 0, 20)),
+      allow_add: $('#swAdd').classList.contains('on'),
+      allow_submit: $('#swSubmit').classList.contains('on')
+    }, extra || {});
+    if (!body.course) { toast('归档课程不能为空', 'err'); return Promise.resolve(false); }
+    return api('/api/v2/design/config', { method: 'POST', body: JSON.stringify(body) })
+      .then(function (j) {
+        if (!j.ok) { toast(j.msg || '保存失败', 'err'); return false; }
+        CFG = Object.assign(CFG, j.cfg || {});
+        paintAll();
+        var m = $('#saveMsg');
+        if (!quiet) {
+          m.textContent = '已保存 ' + new Date().toTimeString().slice(0, 8);
+          m.className = 'msg';
+          setTimeout(function () { m.textContent = ''; }, 4000);
+          toast('设置已保存', 'ok');
+        }
+        load();
+        return true;
+      }).catch(function () {
+        toast('连不上服务器，设置没保存', 'err');
+        return false;
+      });
+  }
+
+  function bind() {
+    $('#swMain').onclick = function () {
+      var next = !CFG.enabled;
+      // 一键启停：只提交 enabled，其它设置保持原样（不用先点保存）
+      api('/api/v2/design/config', { method: 'POST',
+        body: JSON.stringify({ enabled: next }) }).then(function (j) {
+        if (!j.ok) { toast(j.msg || '操作失败', 'err'); return; }
+        CFG.enabled = next;
+        paintAll();
+        toast(next ? '已开启：学生端立刻能进「网页」页签' : '已关闭：学生端入口已收回', 'ok');
+        load();
+      }).catch(function () { toast('连不上服务器', 'err'); });
+    };
+    $('#swAdd').onclick = function () { this.classList.toggle('on'); };
+    $('#swSubmit').onclick = function () { this.classList.toggle('on'); };
+    $('#btnSave').onclick = function () { save(); };
+    $('#btnRefresh').onclick = function () { load(); toast('已刷新'); };
+
+    /* 2.0.68：并排菜单切换。只改显隐，不重绘任何面板 —— 基础设置里正在填的
+       输入框 / 开关状态不会因为切到「学生提交」再切回来而丢失。 */
+    document.querySelectorAll('[data-tcpane-btn]').forEach(function (btn) {
+      btn.onclick = function () {
+        var t = btn.getAttribute('data-tcpane-btn');
+        document.querySelectorAll('[data-tcpane-btn]').forEach(function (x) {
+          x.classList.toggle('on', x === btn);
+        });
+        document.querySelectorAll('[data-tcpane]').forEach(function (p) {
+          p.classList.toggle('on', p.getAttribute('data-tcpane') === t);
+        });
+      };
+    });
+    /* 教师练习（2.0.40）：在同一个 iframe 里切到编辑器，不跳新标签。
+       编辑器顶部有「‹ 返回设置」可以回来。 */
+    $('#btnPractice').onclick = function () {
+      location.href = '/design/student.html?mode=teacher&practice=1';
+    };
+    $('#btnPreview').onclick = function () {
+      window.open('/design/student.html?mode=teacher', '_blank');
+    };
+    $('#btnDash').onclick = function () {
+      try {
+        if (window.parent && window.parent !== window) {
+          window.parent.location.hash = '#guide';
+          return;
+        }
+      } catch (e) {}
+      location.href = '/teacher/#guide';
+    };
+  }
+
+  syncTheme();
+  watchTheme();
+  bind();
+  load();
+  /* 把内容高度告诉外层（同源 iframe）：管理页比一屏长，让外层容器跟着长，
+     整页滚动和其他教师页一致，而不是在 iframe 里再套一层滚动条。 */
+  try {
+    var post = function () {
+      var h = Math.min(3200, Math.max(520, document.documentElement.scrollHeight));
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: 'wb-design-h', h: h }, '*');
+      }
+    };
+    if (window.ResizeObserver) new ResizeObserver(post).observe(document.body);
+    window.addEventListener('load', post);
+    setTimeout(post, 120);
+    setTimeout(post, 700);
+  } catch (e) {}
+  // 大屏那边有新提交时，这里也跟着刷新（30 秒一次，够用且不打扰）
+  setInterval(function () { if (document.visibilityState === 'visible') load(); }, 30000);
+})();
+</script>
+</body>
+</html>

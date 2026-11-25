@@ -1,0 +1,1119 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""服务端渲染的几个小页面：登录、初始化、学生端控制台、加入说明。
+
+这些页面刻意不依赖任何前端框架 —— 教室机器可能是五年前的 Edge，
+而且这些页面必须在“主程序还没加载”的时刻就能用。
+"""
+
+BRAND = "#0F6E56"
+BRAND_2 = "#1D9E75"
+
+BASE_CSS = """
+*{box-sizing:border-box}
+body{margin:0;background:#F7FAF9;color:#16231F;
+  font:15px/1.7 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif}
+.wrap{max-width:1080px;margin:0 auto;padding:28px 20px 64px}
+.card{background:#fff;border:1px solid rgba(15,110,86,.16);border-radius:16px;padding:26px 28px;
+  box-shadow:0 1px 3px rgba(15,110,86,.06)}
+.brand{display:flex;align-items:center;gap:10px;margin-bottom:18px}
+.logo{width:34px;height:34px;border-radius:9px;background:#0F6E56;color:#fff;display:grid;
+  place-items:center;font-size:17px;font-weight:700}
+h1{font-size:22px;margin:0 0 6px;letter-spacing:-.2px}
+h2{font-size:15.5px;margin:0 0 12px}
+.sub{color:#5F6E68;font-size:13.6px;margin:0 0 18px}
+label{display:block;font-size:12.6px;color:#55655F;margin:14px 0 6px;font-weight:600}
+input,select{width:100%;padding:11px 13px;border:1px solid #D6E3DE;border-radius:10px;font-size:15px;
+  background:#FBFDFC;color:#16231F;outline:none;font-family:inherit}
+input:focus,select:focus{border-color:#1D9E75;box-shadow:0 0 0 3px rgba(29,158,117,.12)}
+button{padding:11px 18px;border:0;border-radius:10px;background:#0F6E56;color:#fff;font-size:14.5px;
+  font-weight:600;cursor:pointer;font-family:inherit}
+button:hover{background:#1D9E75}
+button.ghost{background:#EAF4F0;color:#0F6E56}
+button.danger{background:#B3261E}
+.row{display:flex;gap:10px;align-items:center}
+.err{color:#B3261E;font-size:13px;min-height:20px;margin-top:10px}
+.tip{color:#849690;font-size:12.4px;line-height:1.8;margin-top:14px}
+/* 「？」说明钮（2026-11-05）：提示精简成一两行，完整说明收进弹窗 */
+.qbtn{width:22px;height:22px;border-radius:50%;border:1px solid #CDE2DA;background:#F1F7F4;
+  color:#0F6E56;font-size:13px;font-weight:700;cursor:pointer;line-height:1;padding:0;flex:none}
+.qbtn:hover{background:#0F6E56;color:#fff;border-color:#0F6E56}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+.kpi{background:#F1F7F4;border-radius:12px;padding:14px 16px}
+.kpi b{display:block;font-size:24px;color:#0F6E56;line-height:1.2}
+.kpi span{font-size:12.4px;color:#5F6E68}
+table{width:100%;border-collapse:collapse;font-size:13.2px}
+th{text-align:left;color:#24564A;background:#F1F7F4;padding:9px 10px;font-weight:650}
+td{padding:9px 10px;border-bottom:1px solid rgba(15,110,86,.08);color:#55655F}
+.switch{display:flex;align-items:center;justify-content:space-between;padding:11px 0;
+  border-bottom:1px solid rgba(15,110,86,.08)}
+.switch:last-child{border-bottom:0}
+.switch .nm{font-size:14px}
+.switch .ds{font-size:12.2px;color:#849690}
+.toggle{width:46px;height:26px;border-radius:99px;background:#D6E3DE;position:relative;cursor:pointer;
+  transition:.18s;flex:none}
+.toggle::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;
+  background:#fff;transition:.18s;box-shadow:0 1px 2px rgba(0,0,0,.2)}
+.toggle.on{background:#1D9E75}
+.toggle.on::after{left:23px}
+#qr{display:flex;justify-content:center;padding:12px 0}
+#qr img,#qr canvas{border:8px solid #fff;border-radius:10px}
+.url{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;background:#F2F6F4;
+  border:1px solid rgba(15,110,86,.12);padding:8px 11px;border-radius:8px;word-break:break-all}
+.note{background:#F4FAF7;border-left:3px solid #1D9E75;border-radius:0 10px 10px 0;padding:10px 14px;
+  font-size:13px;color:#4A6A60;margin:14px 0}
+code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.6px;background:#F0F5F3;
+  padding:1px 5px;border-radius:5px;font-variant-ligatures:none}
+/* 禁用连字：部分等宽字体把 -- 连成 — ，命令行参数会被新手照抄错 */
+@media(max-width:760px){.grid{grid-template-columns:1fr}}
+"""
+
+LOGO = '<div class="logo">班</div>'
+
+
+# 公安备案 / ICP 备案信息（2026-11-22 加）：所有服务端渲染页统一挂页脚。
+# 公安备案号待下发后填 BEIAN_GONG 即可，不用再改各页面。
+ICP_NO = "豫ICP备2026058674号-1"
+GONG_NO = ""   # 例：粤公网安备 4406050200xxxx号，拿到后填这里
+BEIAN_FOOT = (
+    '<div style="max-width:420px;margin:26px auto 18px;text-align:center;'
+    'font-size:11.5px;line-height:1.9;color:#849690">'
+    '<a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener" '
+    'style="color:inherit;text-decoration:none">' + ICP_NO + '</a>'
+    + ('<br><a href="https://beian.mps.gov.cn/" target="_blank" rel="noopener" '
+       'style="color:inherit;text-decoration:none">' + GONG_NO + '</a>' if GONG_NO else '')
+    + '</div>'
+)
+
+
+def _page(title, body, extra_head=""):
+    return """<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>%s</title><style>%s</style>%s</head>
+<body><div class="wrap">%s</div>%s</body></html>""" % (title, BASE_CSS, extra_head, body, BEIAN_FOOT)
+
+
+LOGIN_BODY = """
+<div class="card" style="max-width:420px;margin:7vh auto 0">
+  <div class="brand">__LOGO__<div><div style="font-weight:750;font-size:15px">班级工作台</div>
+  <div style="font-size:12px;color:#849690">多教师账号</div></div></div>
+  <div style="display:flex;gap:8px;margin:4px 0 16px">
+    <button type="button" id="tabAdmin" style="flex:1;padding:9px 10px;border-radius:10px;border:1.5px solid #0F6E56;background:#0F6E56;color:#fff;font-weight:700;font-size:13.5px;cursor:pointer">管理员登录</button>
+    <button type="button" id="tabTeacher" style="flex:1;padding:9px 10px;border-radius:10px;border:1.5px solid #D9E5DF;background:#fff;color:#5F6E68;font-weight:700;font-size:13.5px;cursor:pointer">教师登录</button>
+  </div>
+  <h1 id="lgTitle">管理员登录</h1>
+  <p class="sub" id="lgSub">管理教师账号。</p>
+  <form id="f">
+    <label>账号</label>
+    <input id="user" type="text" autocomplete="username" placeholder="账号" autofocus>
+    <label>密码</label>
+    <input id="pwd" type="password" autocomplete="current-password" placeholder="密码">
+    <div class="err" id="err">__MSG__</div>
+    <button style="width:100%;margin-top:6px" id="btn">进入管理控制台</button>
+  </form>
+  <div id="forgotWrap" style="margin-top:14px;font-size:13px;text-align:center">
+    <a href="/teacher/forgot" style="color:#0F6E56;text-decoration:none">忘记密码？</a>
+  </div>
+  <!-- 备份恢复入口在 2.0.19 已移到「登录后 → 教师端 系统设置 → 数据与备份」：
+       登录页谁都能打开，摆一个「一键恢复全部数据」既不安全也不好解释。 -->
+  <div class="tip" style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap">
+    <span>学生入口 <code>/s/</code></span>
+    <button id="helpBtn" type="button" class="qbtn" aria-label="查看登录页说明">？</button>
+  </div>
+</div>
+<script>
+document.getElementById('helpBtn').onclick=function(){LoginIO.help('login');};
+var lgRole='admin';
+function lgSet(r){
+  lgRole=r;
+  var a=document.getElementById('tabAdmin'), t=document.getElementById('tabTeacher');
+  var on='1.5px solid #0F6E56', off='1.5px solid #D9E5DF';
+  a.style.background=r==='admin'?'#0F6E56':'#fff'; a.style.color=r==='admin'?'#fff':'#5F6E68'; a.style.border=r==='admin'?on:off;
+  t.style.background=r==='teacher'?'#0F6E56':'#fff'; t.style.color=r==='teacher'?'#fff':'#5F6E68'; t.style.border=r==='teacher'?on:off;
+  document.getElementById('lgTitle').textContent=r==='admin'?'管理员登录':'教师登录';
+  document.getElementById('lgSub').textContent = r==='admin'
+    ? '管理教师账号。'
+    : '教师账号由管理员创建。';
+  document.getElementById('btn').textContent=r==='admin'?'进入管理控制台':'进入教师工作台';
+  document.getElementById('forgotWrap').style.display=r==='teacher'?'':'none';
+  document.getElementById('err').textContent='';
+}
+document.getElementById('tabAdmin').onclick=function(){lgSet('admin');};
+document.getElementById('tabTeacher').onclick=function(){lgSet('teacher');};
+</script>
+<script>
+document.getElementById('f').onsubmit = async function(e){
+  e.preventDefault();
+  var err=document.getElementById('err'), btn=document.getElementById('btn');
+  var label=btn.textContent;
+  err.textContent=''; btn.disabled=true; btn.textContent='验证中…';
+  var r=await fetch('/api/v2/auth/teacher',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({username:document.getElementById('user').value.trim(),
+                         password:document.getElementById('pwd').value, role:lgRole})});
+  var j=await r.json().catch(function(){return {};});
+  if(j.ok){location.href=j.landing||(lgRole==='admin'?'/admin/':'/teacher/');return;}
+  err.textContent=j.msg||'账号或密码不正确'; btn.disabled=false; btn.textContent=label;
+};
+</script>"""
+
+# 2.0.13 起账号注册已取消：下面的 SETUP_BODY 是历史模板，仅作备份兼容保留，
+# 没有任何路由或函数再渲染它（login_page_setup 也改为直接返回登录页）。
+# 教师账号一律由管理员在 /admin/ 控制台创建。
+SETUP_BODY = """
+<div class="card" style="max-width:480px;margin:5vh auto 0">
+  <div class="brand">__LOGO__<div><div style="font-weight:750;font-size:15px">班级工作台</div>
+  <div style="font-size:12px;color:#849690">首次启动 · 只需设置一次</div></div></div>
+  <div id="setupTitle">
+    <h1>创建管理员账号</h1>
+    <p class="sub">这个账号保护教师端和全部学生数据，只保存在服务端，不上传第三方、不联外网。</p>
+  </div>
+  <div id="loginTitle" style="display:none">
+    <h1>教师登录</h1>
+    <p class="sub">用已有的管理员账号进入工作台。</p>
+  </div>
+  <form id="f">
+    <label>账号</label>
+    <input id="user" type="text" autocomplete="username" value="teacher" autofocus>
+    <label>密码（至少 8 位，别用 123456 这类）</label>
+    <input id="p1" type="password" autocomplete="new-password" placeholder="设置密码">
+    <label>再输一遍</label>
+    <input id="p2" type="password" autocomplete="new-password" placeholder="确认密码">
+    <div style="margin:18px 0 4px;padding-top:14px;border-top:1px solid rgba(15,110,86,.12)">
+      <div style="font-size:13px;font-weight:700;color:#0F6E56">密保问题（用于忘记密码时自助改密）</div>
+    </div>
+    <label>问题</label>
+    <input id="q" type="text" maxlength="60" placeholder="例如：我第一只宠物的名字？">
+    <label>答案</label>
+    <input id="a" type="text" placeholder="答案（不区分大小写，忽略空格）">
+    <div class="err" id="err">__MSG__</div>
+    <button style="width:100%;margin-top:8px" id="btn">创建并进入</button>
+  </form>
+  <form id="lg" style="display:none">
+    <label>账号</label>
+    <input id="luser" type="text" autocomplete="username" value="teacher" autofocus>
+    <label>密码</label>
+    <input id="lpwd" type="password" autocomplete="current-password" placeholder="密码">
+    <div class="err" id="lerr"></div>
+    <button style="width:100%;margin-top:8px" id="lbtn">进入工作台</button>
+  </form>
+  <div style="margin-top:14px;font-size:13px;text-align:center">
+    <a href="javascript:void 0" id="swLogin" style="color:#0F6E56;text-decoration:none">已有账号？直接登录 →</a>
+    <a href="javascript:void 0" id="swSetup" style="display:none;color:#0F6E56;text-decoration:none">← 还没有账号？创建一个</a>
+  </div>
+  <div style="margin-top:8px;font-size:13px;text-align:center">
+    <a href="javascript:void 0" id="impLink" style="color:#5F6E68;text-decoration:none">📥 数据导入（旧设备有备份？直接恢复，账号也一起回来）</a>
+  </div>
+  <div class="tip" style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap">
+    <span>密保答案只存加密哈希 · 学生入口 <code>/s/</code> · 详细说明点</span>
+    <button id="helpBtn" type="button" class="qbtn" aria-label="查看首次设置说明">？</button>
+  </div>
+</div>
+<script>
+document.getElementById('f').onsubmit = async function(e){
+  e.preventDefault();
+  var p1=document.getElementById('p1').value, p2=document.getElementById('p2').value;
+  var user=document.getElementById('user').value.trim();
+  var q=document.getElementById('q').value.trim(), a=document.getElementById('a').value;
+  var err=document.getElementById('err');
+  if(user.length<2){err.textContent='账号至少 2 个字符';return;}
+  if(p1.length<8){err.textContent='密码至少 8 位';return;}
+  if(p1!==p2){err.textContent='两次输入不一致';return;}
+  if(!q||!a.trim()){err.textContent='请设置密保问题和答案（忘了密码时靠它找回）';return;}
+  if(q.length<4){err.textContent='密保问题至少 4 个字';return;}
+  var btn=document.getElementById('btn'); btn.disabled=true; btn.textContent='创建中…';
+  var r=await fetch('/api/v2/auth/setup',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({username:user,password:p1,question:q,answer:a})});
+  var j=await r.json().catch(function(){return {};});
+  if(j.ok){location.href='/teacher/';return;}
+  err.textContent=j.msg||'创建失败'; btn.disabled=false; btn.textContent='创建并进入';
+};
+/* 已有账号直接登录（2026-11-04）：首次设置页可切换到登录表单。
+   典型场景：数据/配置已经在服务器上、账号是之前设好的，不需要再建一个。 */
+(function(){
+  var show=function(login){
+    document.getElementById('f').style.display=login?'none':'block';
+    document.getElementById('setupTitle').style.display=login?'none':'block';
+    document.getElementById('lg').style.display=login?'block':'none';
+    document.getElementById('loginTitle').style.display=login?'block':'none';
+    document.getElementById('swLogin').style.display=login?'none':'inline';
+    document.getElementById('swSetup').style.display=login?'inline':'none';
+    document.getElementById('lerr').textContent='';
+    document.getElementById('err').textContent='';
+    (login?document.getElementById('luser'):document.getElementById('user')).focus();
+  };
+  document.getElementById('swLogin').onclick=function(){show(true);};
+  document.getElementById('swSetup').onclick=function(){show(false);};
+  document.getElementById('lg').onsubmit = async function(e){
+    e.preventDefault();
+    var err=document.getElementById('lerr'), btn=document.getElementById('lbtn');
+    err.textContent=''; btn.disabled=true; btn.textContent='验证中…';
+    var r=await fetch('/api/v2/auth/teacher',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({username:document.getElementById('luser').value.trim(),
+                           password:document.getElementById('lpwd').value})});
+    var j=await r.json().catch(function(){return {};});
+    if(j.ok){location.href='/teacher/';return;}
+    err.textContent=j.msg||'账号或密码不正确'; btn.disabled=false; btn.textContent='进入工作台';
+  };
+})();
+document.getElementById('impLink').onclick=function(){LoginIO.open();};
+document.getElementById('helpBtn').onclick=function(){LoginIO.help('setup');};
+</script>"""
+
+
+# 登录 / 首次设置页共用的两份公开脚本：
+#   · cipher.js        AES/SHA256 加密核心（与教师端 index.html 同一份文件）
+#   · login-import.js  「数据导入」对话框 + 「？」说明弹窗（window.LoginIO）
+LOGIN_SCRIPTS = ('<script src="/core/cipher.js"></script>'
+                 '<script src="/login-import.js"></script>')
+
+
+def login_page(msg=""):
+    body = LOGIN_BODY.replace("__LOGO__", LOGO).replace("__MSG__", msg)
+    return _page("登录 · 班级工作台", body, LOGIN_SCRIPTS)
+
+
+def login_page_setup(msg=""):
+    # 2.0.13：账号注册已取消（教师账号由管理员统一创建）。
+    # 保留函数只是为了让旧调用 / 旧书签落到登录页，不再出现创建账号表单。
+    return login_page(msg)
+
+
+# ---------------------------------------------------------------------------
+# 管理员控制台（2.0.13）：只管教师账号，不承接任何业务设置
+# ---------------------------------------------------------------------------
+# 弹窗组件（2026-11-05 牛哥反馈：管理员页还在用浏览器原生 prompt/confirm，
+# 顶着「192.168.x.x 显示」的浏览器标题缩在屏幕一角，和工作台完全脱节）。
+# 这里按教师端 .modal 的视觉语言重做一套：同款半透明模糊遮罩、16px 圆角白卡、
+# 15px 标题 / 13.5px 正文、右对齐按钮区、危险操作红色主按钮；
+# 成功提示不再写进表单红字，统一走右下角浮层 toast。
+ADMIN_UI = """
+<style>
+.wbd-ov{position:fixed;inset:0;z-index:4000;padding:20px;display:flex;
+  align-items:center;justify-content:center;background:rgba(20,30,26,.34);
+  -webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);
+  animation:wbd-fade .18s ease both}
+@keyframes wbd-fade{from{opacity:0}to{opacity:1}}
+@keyframes wbd-in{from{opacity:0;transform:translate3d(0,14px,0) scale(.96)}
+  to{opacity:1;transform:translate3d(0,0,0) scale(1)}}
+.wbd-dlg{width:100%;max-width:400px;background:#fff;border-radius:16px;
+  border:1px solid rgba(15,110,86,.16);box-shadow:0 20px 60px rgba(0,0,0,.22);
+  overflow:hidden;animation:wbd-in .22s cubic-bezier(.22,1.2,.36,1) both}
+.wbd-head{padding:16px 18px 13px;border-bottom:1px solid #E4EDE8;
+  font-size:15px;font-weight:600;color:#16231F;letter-spacing:-.1px}
+.wbd-body{padding:14px 18px;font-size:13.5px;line-height:1.85;color:#3D4F49;
+  white-space:pre-wrap;word-break:break-word}
+.wbd-body b{color:#0F6E56;font-weight:600}
+.wbd-inp{display:block;width:100%;margin-top:11px;padding:10px 12px;
+  border:1px solid #D6E3DE;border-radius:10px;background:#FBFDFC;color:#16231F;
+  font-size:14px;line-height:1.5;font-family:inherit;outline:none}
+.wbd-inp:focus{border-color:#1D9E75;box-shadow:0 0 0 3px rgba(29,158,117,.14)}
+.wbd-acts{display:flex;gap:8px;justify-content:flex-end;
+  padding:13px 18px;border-top:1px solid #E4EDE8;background:#fff}
+.wbd-btn{padding:9px 17px;border:1px solid transparent;border-radius:10px;
+  font-size:13.5px;font-weight:600;font-family:inherit;cursor:pointer;
+  transition:background .15s,border-color .15s,box-shadow .15s}
+.wbd-btn.ghost{background:#F1F7F4;color:#0F6E56;border-color:#DCEAE4}
+.wbd-btn.ghost:hover{background:#E4F1EB}
+.wbd-btn.ok{background:#0F6E56;color:#fff}
+.wbd-btn.ok:hover{background:#1D9E75}
+.wbd-btn.danger{background:#B3261E;color:#fff}
+.wbd-btn.danger:hover{background:#C23332}
+.wbd-btn:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(29,158,117,.22)}
+.wbd-toasts{position:fixed;right:24px;bottom:24px;z-index:5000;display:flex;
+  flex-direction:column;gap:8px;align-items:flex-end;pointer-events:none}
+.wbd-toast{max-width:320px;padding:11px 16px;border-radius:12px;background:#16231F;
+  color:#fff;font-size:13.5px;line-height:1.6;box-shadow:0 12px 32px rgba(16,24,21,.26);
+  animation:wbd-in .2s ease both;transition:opacity .24s,transform .24s}
+.wbd-toast.ok{background:#0F6E56}
+.wbd-toast.err{background:#B3261E}
+.wbd-toast.out{opacity:0;transform:translate3d(0,6px,0)}
+/* 表格里的行内操作按钮：轻量 ghost，危险操作浅红，避免一排实心绿按钮压过内容 */
+.wbd-row-btn{padding:5px 11px;border:1px solid #DCEAE4;border-radius:8px;
+  background:#F1F7F4;color:#0F6E56;font-size:12.5px;font-weight:600;
+  font-family:inherit;cursor:pointer;transition:background .15s,border-color .15s}
+.wbd-row-btn:hover{background:#E4F1EB;border-color:#BFDCD2}
+.wbd-row-btn.danger{background:#FDF3F2;color:#B3261E;border-color:#F2D6D4}
+.wbd-row-btn.danger:hover{background:#FAE7E5}
+@media(max-width:520px){.wbd-ov{padding:14px}.wbd-dlg{max-width:100%}}
+</style>
+<script>
+/* 独立命名 adEsc：本脚本在 <head> 里执行，页面底部的 esc() 还没定义 */
+(function(){
+  function adEsc(s){
+    return String(s==null?'':s).replace(/[&<>"']/g,function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});
+  }
+  /* 脚本在 <head> 执行，调用时 body 正常已存在；仍兜一层，避免极端时序下 null */
+  function host(){return document.body||document.documentElement;}
+  var toastBox=null;
+  function box(){
+    if(!toastBox||!toastBox.parentNode){
+      toastBox=document.createElement('div');
+      toastBox.className='wbd-toasts';
+      host().appendChild(toastBox);
+    }
+    return toastBox;
+  }
+  window.adToast=function(msg,kind){
+    if(!msg)return;
+    var el=document.createElement('div');
+    el.className='wbd-toast'+(kind?' '+kind:'');
+    el.textContent=String(msg);
+    box().appendChild(el);
+    setTimeout(function(){
+      el.classList.add('out');
+      setTimeout(function(){if(el.parentNode)el.parentNode.removeChild(el);},240);
+    },2600);
+  };
+  window.adDialog=function(opt){
+    opt=opt||{};
+    try{
+      return new Promise(function(resolve){
+        var ov=document.createElement('div');ov.className='wbd-ov';
+        var hasCancel=opt.cancelText!==null&&opt.cancelText!==undefined;
+        var acts='';
+        if(hasCancel){
+          acts+='<button type="button" class="wbd-btn ghost" data-wbd="cancel">'
+            +adEsc(opt.cancelText||'取消')+'</button>';
+        }
+        acts+='<button type="button" class="wbd-btn '+(opt.danger?'danger':'ok')
+          +'" data-wbd="ok">'+adEsc(opt.okText||'确定')+'</button>';
+        var field=opt.input
+          ? '<input class="wbd-inp" value="'+adEsc(opt.input.value||'')+'" placeholder="'
+            +adEsc(opt.input.placeholder||'')+'" autocomplete="off" spellcheck="false">'
+          : '';
+        /* 正文为空时给一行占位：宁可显示「（无更多说明）」也不要一张空白卡片 */
+        var bodyHtml=opt.html||'<span style="color:#849690">（无更多说明）</span>';
+        ov.innerHTML='<div class="wbd-dlg" role="dialog" aria-modal="true">'
+          +'<div class="wbd-head">'+adEsc(opt.title||'提示')+'</div>'
+          +'<div class="wbd-body">'+bodyHtml+field+'</div>'
+          +'<div class="wbd-acts">'+acts+'</div></div>';
+        host().appendChild(ov);
+        var inp=ov.querySelector('.wbd-inp');
+        function close(v){
+          document.removeEventListener('keydown',onKey,true);
+          if(ov.parentNode)ov.parentNode.removeChild(ov);
+          resolve(v);
+        }
+        function ok(){close(opt.input?((inp&&inp.value.trim())||''):true);}
+        function cancel(){close(opt.input?null:false);}
+        ov.querySelector('[data-wbd="ok"]').onclick=ok;
+        var cb=ov.querySelector('[data-wbd="cancel"]');
+        if(cb)cb.onclick=cancel;
+        ov.addEventListener('pointerdown',function(e){if(e.target===ov)cancel();});
+        function onKey(e){
+          if(e.key==='Escape'){e.preventDefault();e.stopPropagation();cancel();}
+          /* isComposing：中文输入法回车选词不能当成「确定」提交 */
+          else if(e.key==='Enter'&&!e.isComposing&&(!e.target||e.target.tagName!=='TEXTAREA')){
+            e.preventDefault();e.stopPropagation();ok();
+          }
+        }
+        document.addEventListener('keydown',onKey,true);
+        if(inp){inp.focus();inp.select();}
+        else{var b=ov.querySelector('[data-wbd="ok"]');if(b)b.focus();}
+      });
+    }catch(e){
+      /* 极端环境（没有 Promise / DOM 异常）：绝不留下「点了没反应」，
+         退回浏览器原生弹窗，功能先能用来。 */
+      try{console.error('[wbd] 弹窗组件异常，已降级：',e);}catch(_e){}
+      var plain=String(opt.html||opt.title||'').replace(/<[^>]*>/g,'').trim();
+      try{
+        if(opt.input){
+          var v=window.prompt(plain,(opt.input&&opt.input.value)||'');
+          return {then:function(f){return f(v);}};
+        }
+        if(opt.cancelText!==null&&opt.cancelText!==undefined){
+          var c=window.confirm(plain);
+          return {then:function(f){return f(c);}};
+        }
+        window.alert(plain);
+      }catch(_e2){}
+      return {then:function(f){return f(opt.input?null:false);}};
+    }
+  };
+  window.adConfirm=function(msg,opt){
+    opt=opt||{};
+    return window.adDialog({title:opt.title||'请确认',html:msg,
+      okText:opt.okText||'确定',cancelText:opt.cancelText||'取消',
+      danger:opt.danger!==false});
+  };
+  window.adPrompt=function(msg,opt){
+    opt=opt||{};
+    return window.adDialog({title:opt.title||'请输入',html:msg,
+      okText:opt.okText||'确定',cancelText:opt.cancelText||'取消',
+      input:{value:opt.value==null?'':opt.value,placeholder:opt.placeholder||''}});
+  };
+  window.adAlert=function(msg,opt){
+    opt=opt||{};
+    return window.adDialog({title:opt.title||'提示',html:msg,
+      okText:opt.okText||'知道了',cancelText:null});
+  };
+})();
+</script>
+"""
+
+ADMIN_BODY = """
+<div class="card" style="max-width:760px;margin:5vh auto 0">
+  <div class="brand">__LOGO__<div><div style="font-weight:750;font-size:15px">班级工作台 · 管理员</div>
+  <div style="font-size:12px;color:#849690">教师账号管理</div></div></div>
+  <h1>教师账号</h1>
+  <p class="sub">管理员只负责教师账号的注册与管理。班级、学生、资料、课程与各项设置仍由教师端配置；
+  每位教师的数据、资料与文件各自独立，互不重叠。</p>
+
+  <div style="border:1px solid #E4EDE8;border-radius:12px;padding:14px;margin:16px 0">
+    <b style="font-size:14px">新增教师账号</b>
+    <form id="addForm" style="margin-top:10px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <input id="nu" placeholder="登录账号" style="flex:1;min-width:130px" autocomplete="off">
+        <input id="nn" placeholder="显示姓名（选填）" style="flex:1;min-width:130px" autocomplete="off">
+        <input id="np" type="password" placeholder="初始密码（至少 8 位）" style="flex:1;min-width:160px" autocomplete="new-password">
+        <button type="submit" id="addBtn">创建账号</button>
+      </div>
+      <div class="err" id="addErr"></div>
+    </form>
+  </div>
+
+  <div style="font-size:12px;color:#849690;margin:12px 0 4px;line-height:1.6">
+    下表<span style="color:#5F6E68">「默认账号（原始数据）」</span>是系统内置的原始教师账号：
+    最初单账号版本的班级、学生、成绩、资料都挂在它名下，所以不能删除（可以改名、重置密码）。
+    后来新建的教师账号各自独立，互不重叠。
+  </div>
+  <div id="list" style="margin-top:12px"><span style="color:#849690">加载中…</span></div>
+
+  <div style="border-top:1px solid #E4EDE8;margin-top:20px;padding-top:14px">
+    <b style="font-size:14px">管理员账号与安全</b>
+    <div id="setupTip" style="display:none;margin-top:10px;padding:9px 12px;border-radius:8px;
+         background:#FFF6E8;border:1px solid #F0C98A;color:#A85B12;font-size:12.5px;line-height:1.6">
+      当前还在用初始账号名或初始密码，建议现在改掉，避免别人直接登录管理控制台。
+    </div>
+    <div style="font-size:12px;color:#849690;margin:10px 0 12px;line-height:1.6">
+      当前登录的管理员账号：<b id="curAdmin" style="color:#0F6E56">读取中…</b>。
+      管理员账号名只有在这里能改（教师端只读）；账号名和密码可只改一项，另一项留空。
+    </div>
+    <form id="pwdForm">
+      <div style="display:flex;flex-direction:column;gap:8px;max-width:420px">
+        <label style="font-size:12px;color:#5F6E68">新登录账号名（不改就留空）
+          <input id="adUser" placeholder="留空表示不修改账号名" autocomplete="off"
+            style="display:block;width:100%;box-sizing:border-box;margin-top:4px"></label>
+        <label style="font-size:12px;color:#5F6E68">当前密码（验证身份，必填）
+          <input id="oldP" type="password" placeholder="现在登录用的密码"
+            style="display:block;width:100%;box-sizing:border-box;margin-top:4px"></label>
+        <label style="font-size:12px;color:#5F6E68">新密码（不改就留空，至少 8 位）
+          <input id="newP" type="password" placeholder="新密码"
+            style="display:block;width:100%;box-sizing:border-box;margin-top:4px"></label>
+        <button type="submit" style="align-self:flex-start;margin-top:4px">保存</button>
+      </div>
+      <div class="err" id="pwdErr"></div>
+    </form>
+    <div style="font-size:12px;color:#849690;margin-top:8px">
+      改完其它设备上的登录会失效，需要用新的账号 / 密码重新登录。
+    </div>
+  </div>
+
+  <div style="margin-top:18px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;font-size:13px">
+    <a href="javascript:void 0" id="logout" style="color:#0F6E56;text-decoration:none">退出登录</a>
+    <span style="color:#849690">账号信息保存在服务端 accounts.json；删除账号不会自动清空其数据目录。</span>
+    <!-- 版本号：升级后如果这里还是旧版本，说明浏览器拿的是缓存页，强刷即可 -->
+    <span style="color:#A8B6B0;font-size:12px" title="页面版本，用于确认是不是最新版">v__VER__</span>
+  </div>
+</div>
+<script>
+function A(u,b){return fetch(u,{method:'POST',credentials:'same-origin',
+  headers:{'Content-Type':'application/json'},body:JSON.stringify(b||{})})
+  .then(function(r){return r.json().catch(function(){return {};});});}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+/* 字段级错误留在表单内（红字紧贴输入框），成功提示一律走右下角 adToast，
+   不再出现「成功也用红字」的混搭（2026-11-05）。 */
+function formErr(id,msg){var el=document.getElementById(id);if(el)el.textContent=msg||'';}
+
+async function load(){
+  var r=await fetch('/api/v2/admin/teachers',{credentials:'same-origin'});
+  if(r.status===401){location.href='/teacher/login';return;}
+  var j=await r.json().catch(function(){return {};});
+  var box=document.getElementById('list');
+  var rows=(j.teachers||[]);
+  box.innerHTML='<table style="width:100%;border-collapse:collapse;font-size:13px">'+
+    '<thead><tr style="text-align:left;color:#5F6E68"><th style="padding:7px 4px">账号</th>'+
+    '<th style="padding:7px 4px">姓名</th><th style="padding:7px 4px">状态</th>'+
+    '<th style="padding:7px 4px">操作</th></tr></thead><tbody>'+
+    rows.map(function(t){
+      return '<tr style="border-top:1px solid #EEF3F0"><td style="padding:8px 4px"><b>'+esc(t.username)+'</b>'+
+        '<div style="font-size:11px;color:#849690">'+esc(t.id)+'</div></td>'+
+        '<td style="padding:8px 4px">'+esc(t.name||'—')+'</td>'+
+        '<td style="padding:8px 4px">'+(t.has_password?'已设密码':'<span style="color:#B4692E">未设密码</span>')+
+        (t.builtin?' · <span title="系统内置的原始账号，班级、学生、成绩等最初的数据都挂在它名下，不能删除。改名不影响数据。" style="color:#5F6E68;border-bottom:1px dotted #9AA9A2;cursor:help">默认账号（原始数据）</span>':'')+'</td>'+
+        '<td style="padding:8px 4px"><div style="display:flex;gap:6px;flex-wrap:wrap">'+
+        '<button type="button" class="wbd-row-btn" data-act="name" data-id="'+esc(t.id)+'" data-u="'+esc(t.username)+'">改名</button>'+
+        '<button type="button" class="wbd-row-btn" data-act="pwd" data-id="'+esc(t.id)+'">重置密码</button>'+
+        (t.builtin?'':'<button type="button" class="wbd-row-btn danger" data-act="del" data-id="'+esc(t.id)+'">删除</button>')+
+        '</div></td></tr>';
+    }).join('')+'</tbody></table>';
+  box.querySelectorAll('button[data-act]').forEach(function(b){
+    b.onclick=async function(){
+      var id=b.getAttribute('data-id'), act=b.getAttribute('data-act');
+      if(act==='name'){
+        var u=await adPrompt('新的登录账号名：',{title:'修改登录账号',
+          value:b.getAttribute('data-u')||'',placeholder:'登录账号'});
+        if(!u)return; var r=await A('/api/v2/admin/teacher/update',{id:id,username:u});
+        adToast(r.ok?'账号名已更新':(r.msg||'改名失败'),r.ok?'ok':'err');
+        if(r.ok)load();
+      }else if(act==='pwd'){
+        var p=await adPrompt('新的初始密码（至少 8 位）：',{title:'重置密码',
+          placeholder:'至少 8 位'});
+        if(!p)return; var r=await A('/api/v2/admin/teacher/update',{id:id,password:p});
+        adToast(r.ok?'密码已重置':(r.msg||'重置失败'),r.ok?'ok':'err');
+      }else{
+        var yes=await adConfirm('确定删除这个教师账号吗？<br><b>其数据目录会保留，不会自动清空。</b>',
+          {title:'删除教师账号',okText:'删除',danger:true});
+        if(!yes)return;
+        var r=await A('/api/v2/admin/teacher/delete',{id:id});
+        adToast(r.ok?'账号已删除':(r.msg||'删除失败'),r.ok?'ok':'err');
+        if(r.ok)load();
+      }
+    };
+  });
+}
+document.getElementById('addForm').onsubmit=async function(e){
+  e.preventDefault();
+  formErr('addErr','');
+  var r=await A('/api/v2/admin/teacher/add',{
+    username:document.getElementById('nu').value.trim(),
+    name:document.getElementById('nn').value.trim(),
+    password:document.getElementById('np').value});
+  if(r.ok){document.getElementById('nu').value='';document.getElementById('nn').value='';
+    document.getElementById('np').value='';adToast('教师账号已创建','ok');load();}
+  else formErr('addErr',r.msg||'创建失败');
+};
+document.getElementById('pwdForm').onsubmit=async function(e){
+  e.preventDefault();formErr('pwdErr','');
+  var u=document.getElementById('adUser').value.trim();
+  var np=document.getElementById('newP').value;
+  if(!u&&!np){formErr('pwdErr','请填写新账号名或新密码');return;}
+  var r=await A('/api/v2/account/profile',{
+    old:document.getElementById('oldP').value,username:u,password:np});
+  if(r.ok){document.getElementById('adUser').value='';
+    document.getElementById('oldP').value='';document.getElementById('newP').value='';
+    var tip=document.getElementById('setupTip');if(tip)tip.style.display='none';
+    adToast('管理员账号已更新，请用新的账号 / 密码重新登录','ok');
+    setTimeout(function(){location.href='/teacher/login';},1200);}
+  else formErr('pwdErr',r.msg||'修改失败');
+};
+/* 首次登录引导：仍是初始账号/密码就提示 */
+fetch('/api/v2/auth/session',{credentials:'same-origin'}).then(function(r){return r.json();})
+ .then(function(j){
+   var tip=document.getElementById('setupTip');
+   if(tip)tip.style.display=(j&&j.ok&&j.need_setup)?'':'none';
+   /* 当前登录的管理员账号名（服务端会话为准，不猜、不读本地缓存） */
+   var cur=document.getElementById('curAdmin');
+   if(cur&&j&&j.ok)cur.textContent=j.username||'teacher';
+ }).catch(function(){});
+document.getElementById('logout').onclick=async function(){
+  await A('/api/v2/auth/logout',{}); location.href='/teacher/login';
+};
+load();
+</script>"""
+
+
+def admin_page(version=""):
+    return _page("管理员控制台 · 班级工作台",
+                 ADMIN_BODY.replace("__LOGO__", LOGO)
+                           .replace("__VER__", str(version or "")),
+                 ADMIN_UI)
+
+
+FORGOT_BODY = """
+<div class="card" style="max-width:440px;margin:7vh auto 0">
+  <div class="brand">__LOGO__<div><div style="font-weight:750;font-size:15px">班级工作台</div>
+  <div style="font-size:12px;color:#849690">教师端 · 找回密码</div></div></div>
+  <h1>重设教师密码</h1>
+  <p class="sub">选一种方式验证身份 → 设置新密码。数据不受影响。</p>
+  <div style="display:flex;gap:8px;margin:0 0 16px">
+    <button type="button" id="mQa" class="rg" style="flex:1;padding:8px;border-radius:8px;border:1.5px solid #0F6E56;background:#0F6E56;color:#fff;font-weight:700;cursor:pointer">密保问题</button>
+    <button type="button" id="mRec" class="rg" style="flex:1;padding:8px;border-radius:8px;border:1.5px solid #D9E5DF;background:#fff;color:#5F6E68;font-weight:700;cursor:pointer">恢复码</button>
+  </div>
+
+  <div id="s1">
+    <label>密保问题</label>
+    <div class="url" id="qbox" style="font-size:14px">正在读取…</div>
+    <label>答案</label>
+    <input id="ans" type="text" autocomplete="off" placeholder="不区分大小写，空格会被忽略">
+    <div class="err" id="e1"></div>
+    <button style="width:100%;margin-top:6px" id="b1">验证答案</button>
+  </div>
+
+  <div id="r1" style="display:none">
+    <div class="note">启用了文件加密的账号，可用保存的恢复码重设密码。</div>
+    <label>登录账号</label>
+    <input id="ruser" type="text" autocomplete="username" placeholder="教师账号名">
+    <label>恢复码</label>
+    <input id="rcode" type="text" autocomplete="off" placeholder="离线保存的恢复码">
+    <div class="err" id="er"></div>
+    <button style="width:100%;margin-top:6px" id="br">用恢复码重设密码</button>
+  </div>
+
+  <div id="s2" style="display:none">
+    <div class="note">✓ 密保验证通过。设置一个新密码。</div>
+  </div>
+
+  <div id="newPwd" style="display:none">
+    <label>新密码（至少 8 位）</label>
+    <input id="n1" type="password" autocomplete="new-password" placeholder="新密码">
+    <label>再输一遍</label>
+    <input id="n2" type="password" autocomplete="new-password" placeholder="重复新密码">
+    <div class="err" id="e2"></div>
+    <button style="width:100%;margin-top:6px" id="b2">保存并进入工作台</button>
+  </div>
+
+  <div class="tip" id="fallback" style="display:none">
+    这个账号还没设置密保问题，无法自助找回。请在服务器上执行
+    <code>docker compose exec workbench python launch.py --reset-password</code>
+    清除口令后重新设置（数据不会丢）。
+  </div>
+  <div style="margin-top:16px;font-size:13px;text-align:center">
+    <a href="/teacher/login" style="color:#5F6E68">← 返回登录</a>
+  </div>
+</div>
+<script>
+var ticket='', mode='qa';
+function el(id){return document.getElementById(id);}
+function setMode(m){
+  mode=m;
+  var qa=m==='qa';
+  el('mQa').style.background=qa?'#0F6E56':'#fff'; el('mQa').style.color=qa?'#fff':'#5F6E68'; el('mQa').style.border=qa?'1.5px solid #0F6E56':'1.5px solid #D9E5DF';
+  el('mRec').style.background=qa?'#fff':'#0F6E56'; el('mRec').style.color=qa?'#5F6E68':'#fff'; el('mRec').style.border=qa?'1.5px solid #D9E5DF':'1.5px solid #0F6E56';
+  el('s1').style.display=qa?'':'none'; el('r1').style.display=qa?'none':'';
+  /* 新密码框：密保方式要等答案验证通过再显示；恢复码方式一开始就显示 */
+  el('newPwd').style.display=qa?'none':'block';
+  el('s2').style.display=qa&&el('s2').style.display!=='none'?'block':'none';
+  el('fallback').style.display='none';
+  var sub=document.querySelector('.sub'); if(sub) sub.textContent=qa?'回答密保问题 → 设置新密码。':'用离线恢复码 → 设置新密码。';
+}
+el('mQa').onclick=function(){setMode('qa');};
+el('mRec').onclick=function(){setMode('rec');};
+el('br').onclick=function(){
+  var u=el('ruser').value.trim(), c=el('rcode').value.trim(), e=el('er'), b=el('br');
+  var n1=el('n1')?el('n1').value:'', n2=el('n2')?el('n2').value:'';
+  if(!u||!c){e.textContent='请填写账号和恢复码';return;}
+  if(n1.length<8){e.textContent='新密码至少 8 位';return;}
+  if(n1!==n2){e.textContent='两次输入不一致';return;}
+  /* 恢复码方式的新密码框要一直可见（不走密保的两步流程） */
+  el('newPwd').style.display='block'; el('s2').style.display='none';
+  e.textContent=''; b.disabled=true; b.textContent='重设中…';
+  fetch('/api/v2/auth/recover',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({username:u,recovery_code:c,password:n1})}).then(function(r){return r.json();}).then(function(j){
+    b.disabled=false; b.textContent='用恢复码重设密码';
+    if(j.ok){location.href='/teacher/';return;}
+    e.textContent=j.msg||'重设失败';
+  }).catch(function(){b.disabled=false;b.textContent='用恢复码重设密码';e.textContent='网络异常';});
+};
+fetch('/api/v2/auth/qa/question',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})
+ .then(function(r){return r.json();}).then(function(j){
+   if(!j.ok){el('qbox').textContent='读取失败，请刷新重试';return;}
+   if(!j.has_qa){
+     el('s1').style.display='none'; el('fallback').style.display='block';
+     el('qbox').textContent='未设置密保问题'; return;
+   }
+   el('qbox').textContent=j.question;
+ }).catch(function(){ el('qbox').textContent='网络异常，请刷新重试'; });
+
+el('b1').onclick=function(){
+  var a=el('ans').value, e=el('e1'), b=el('b1');
+  if(!a.trim()){e.textContent='请填写答案';return;}
+  e.textContent=''; b.disabled=true; b.textContent='验证中…';
+  fetch('/api/v2/auth/qa/verify',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({answer:a})}).then(function(r){return r.json();}).then(function(j){
+    b.disabled=false; b.textContent='验证答案';
+    if(!j.ok){e.textContent=j.msg||'答案不正确';return;}
+    ticket=j.ticket;
+    el('s1').style.display='none'; el('s2').style.display='block';
+    el('newPwd').style.display='block';
+    el('n1').focus();
+  }).catch(function(){b.disabled=false;b.textContent='验证答案';e.textContent='网络异常';});
+};
+
+el('b2').onclick=function(){
+  var p1=el('n1').value,p2=el('n2').value,e=el('e2'),b=el('b2');
+  if(p1.length<8){e.textContent='新密码至少 8 位';return;}
+  if(p1!==p2){e.textContent='两次输入不一致';return;}
+  e.textContent=''; b.disabled=true; b.textContent='保存中…';
+  fetch('/api/v2/auth/qa/reset',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({ticket:ticket,password:p1})}).then(function(r){return r.json();}).then(function(j){
+    if(j.ok){location.href='/teacher/';return;}
+    b.disabled=false; b.textContent='保存并进入工作台';
+    e.textContent=j.msg||'保存失败';
+    if(/过期/.test(j.msg||'')) setTimeout(function(){location.reload();},1200);
+  }).catch(function(){b.disabled=false;b.textContent='保存并进入工作台';e.textContent='网络异常';});
+};
+document.addEventListener('keydown',function(e){
+  if(e.key!=='Enter')return;
+  if(mode==='rec'){el('br').click();return;}
+  if(el('s2').style.display!=='none') el('b2').click(); else el('b1').click();
+});
+</script>"""
+
+
+def forgot_page():
+    return _page("找回密码 · 班级工作台", FORGOT_BODY.replace("__LOGO__", LOGO))
+
+
+# 「/join 扫码进入班级」整页已删除（2026-11-01 牛哥：不要扫码功能）。
+# JOIN_BODY / join_page / 二维码脚本一并移除；旧地址 /join 在 server.py
+# 里 302 到 /s/，旧的二维码和收藏不会落到 404。
+
+
+CONSOLE_HTML = r"""<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>学生端控制台 · 班级工作台</title>
+<style>__CSS__
+.top{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+.top .l{display:flex;align-items:center;gap:10px}
+.links a{color:#0F6E56;text-decoration:none;font-size:13.4px;margin-left:16px}
+.sec{margin-top:18px}
+.sec h2{font-size:15px;margin:0 0 12px;display:flex;align-items:center;gap:8px}
+.sec h2 .dot{width:7px;height:7px;border-radius:50%;background:#1D9E75}
+.mini{font-size:12.2px;color:#849690}
+.badge{display:inline-block;font-size:11.5px;padding:2px 8px;border-radius:99px;
+  background:#E7F5EE;color:#0B6B3A;font-weight:600}
+.badge.warn{background:#FDF1E4;color:#B4570F}
+.seg{display:flex;background:#EEF4F1;border-radius:10px;padding:3px;gap:3px;margin:10px 0}
+.seg button{flex:1;background:none;color:#55655F;font-size:13px;padding:8px 6px;border-radius:8px}
+.seg button.on{background:#fff;color:#0F6E56;box-shadow:0 1px 2px rgba(15,110,86,.12)}
+.inp-row{display:flex;gap:8px;margin-top:8px}
+.inp-row input{flex:1}
+.inp-row button{flex:none;padding:10px 14px;font-size:13.5px}
+@keyframes cIn{from{opacity:0;transform:translateY(10px) scale(.97)}to{opacity:1;transform:none}}
+</style></head>
+<body><div class="wrap">
+  <div class="top">
+    <div class="l"><div class="logo">班</div>
+      <div><div style="font-weight:750;font-size:16px">学生端控制台</div>
+      <div class="mini" id="sub">加载中…</div></div></div>
+    <div class="links">
+      <a href="/teacher/">返回工作台</a>
+      <a href="javascript:void 0" id="logout">退出</a>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2><span class="dot"></span>学生入口</h2>
+      <div class="url" id="entryUrl">—</div>
+      <div class="tip">学生在浏览器输入上面的网址进入：选班级 → 选学号 → 输密码，
+        姓名会自动带出来，不用手打。</div>
+    </div>
+
+    <div class="card">
+      <h2><span class="dot"></span>今天的数据</h2>
+      <div class="grid" style="grid-template-columns:repeat(2,1fr);gap:10px">
+        <div class="kpi"><b id="kOnline">0</b><span>在线设备</span></div>
+        <div class="kpi"><b id="kStudents">0</b><span>学生</span></div>
+        <div class="kpi"><b id="kHw">0</b><span>待交作业</span></div>
+        <div class="kpi"><b id="kLeave">0</b><span>待批请假</span></div>
+      </div>
+      <div class="tip">教师端的改动会自动推送到学生端，不需要手动同步。</div>
+    </div>
+  </div>
+
+  <div class="card sec">
+    <h2><span class="dot"></span>学生登录</h2>
+    <div class="seg" id="modeSeg">
+      <button data-mode="uniform">全班统一初始密码</button>
+      <button data-mode="per">每人独立密码</button>
+    </div>
+    <div class="mini" id="modeHint"></div>
+    <div class="inp-row">
+      <input id="initPwd" placeholder="初始密码（至少 6 位）">
+      <button id="savePwd">保存</button>
+    </div>
+    <div class="switch" style="margin-top:12px">
+      <div><div class="nm">首次登录必须改密码</div>
+        <div class="ds">学生用初始密码进来后，先设一个新密码才能看数据</div></div>
+      <div class="toggle" id="forceToggle"></div>
+    </div>
+    <div class="row" style="justify-content:space-between;margin-top:12px">
+      <div class="mini">已单独设过密码：<b id="credCount">0</b> 人</div>
+      <button class="ghost" id="resetAll">全部重置为初始密码</button>
+    </div>
+    <div class="tip">学生名单直接来自教师端的「学生」页，改了名册这里立刻生效，不用二次维护。</div>
+  </div>
+
+  <div class="grid sec">
+    <div class="card">
+      <h2><span class="dot"></span>学生能用的功能</h2>
+      <div id="mods"></div>
+      <div class="tip">关掉后，学生端入口消失，接口也会直接拒绝（不是只把按钮藏起来）。</div>
+    </div>
+    <div class="card">
+      <h2><span class="dot"></span>可见字段</h2>
+      <div id="vis"></div>
+      <div class="tip">默认全部关闭。手机号、家长信息学生端永远拿不到。</div>
+    </div>
+  </div>
+
+  <div class="card sec">
+    <h2><span class="dot"></span>教师账号</h2>
+    <div class="inp-row">
+      <input id="tUser" placeholder="账号" disabled>
+      <button id="saveUser" disabled title="账号名由管理员在管理控制台统一修改">管理员管理</button>
+    </div>
+    <div class="tip" style="margin:0 0 8px">教师账号的注册、改名与删除由管理员负责；这里只能改自己的密码与密保。</div>
+    <div class="inp-row">
+      <input id="tOld" type="password" placeholder="当前密码">
+      <input id="tNew" type="password" placeholder="新密码（至少 4 位）">
+      <button id="saveTpwd">改密码</button>
+    </div>
+    <div class="tip">改完立即生效，已经登录的其它设备会被退出（当前这台保持登录）。忘了密码就在服务器上执行
+      <code>docker compose exec workbench python launch.py --reset-password</code>。</div>
+
+    <div style="height:1px;background:rgba(15,110,86,.1);margin:16px 0 4px"></div>
+    <h2 style="font-size:14px"><span class="dot"></span>密保问题 <span class="badge" id="qaBadge">未设置</span></h2>
+    <div class="mini">忘记密码时，回答密保问题就能自助改密（登录页「忘记密码」）。答案只存加密哈希。</div>
+    <div class="inp-row">
+      <input id="qaQ" placeholder="密保问题，如：我小学班主任姓什么？">
+    </div>
+    <div class="inp-row">
+      <input id="qaA" placeholder="密保答案（不区分大小写）" style="flex:2">
+      <input id="qaPwd" type="password" placeholder="当前密码" style="flex:1">
+      <button id="saveQa">保存</button>
+    </div>
+  </div>
+
+  <div class="card sec">
+    <h2><span class="dot"></span>请假申请 <span class="badge" id="leaveBadge">0 待批</span></h2>
+    <div id="leaves"><div class="mini">暂无申请</div></div>
+  </div>
+
+  <div class="card sec">
+    <h2><span class="dot"></span>最近操作</h2>
+    <div id="audit"><div class="mini">暂无记录</div></div>
+  </div>
+</div>
+<script>
+const MOD_META = {
+  homework:['作业','布置、提交、批改'],
+  scores:['成绩','已发布考试的本人分数'],
+  courseware:['课件','教师标记可下发的课件'],
+  morality:['积分','本人得分（不含扣分原因）'],
+  duty:['值日','本人值日安排'],
+  leave:['请假','提交请假申请']
+};
+const VIS_META = {
+  contact:['家长联系方式','手机号、家长姓名（强烈建议保持关闭）'],
+  rank:['班级排名','显示本人位次'],
+  morality_reason:['积分扣分原因','显示具体事由'],
+  leave_reason:['请假事由','教师可见学生填写的原因']
+};
+let S = null;
+
+async function api(url, opt){
+  const r = await fetch(url, Object.assign({headers:{'Content-Type':'application/json'}}, opt||{}));
+  if(r.status===401){ location.href='/teacher/login'; return {}; }
+  return r.json().catch(()=>({}));
+}
+
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+
+/* 统一弹窗：替代原生 alert/confirm —— 原生弹窗顶着浏览器标题缩在角落，
+   和控制台风格脱节。返回 Promise；msg 可含 \n，容器 pre-wrap。 */
+function uiDialog(o){
+  o = o || {};
+  return new Promise(res=>{
+    const ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;z-index:900;background:rgba(20,30,26,.34);display:flex;align-items:center;justify-content:center;padding:20px';
+    ov.innerHTML = '<div style="background:#fff;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.22);max-width:380px;width:100%;overflow:hidden;animation:cIn .16s ease">'
+      + '<div style="padding:15px 18px 0;font-weight:600;font-size:14.5px;color:#16231F">' + esc(o.title||'提示') + '</div>'
+      + '<div style="padding:10px 18px 4px;font-size:13px;line-height:1.8;white-space:pre-wrap;word-break:break-word;color:#2C3A35">' + (o.html||'') + '</div>'
+      + '<div style="display:flex;gap:8px;justify-content:flex-end;padding:12px 18px 15px">'
+      + (o.cancelText ? '<button class="ghost ui-c" style="padding:8px 16px;font-size:13px">' + esc(o.cancelText) + '</button>' : '')
+      + '<button class="' + (o.danger?'danger':'') + ' ui-o" style="padding:8px 16px;font-size:13px">' + esc(o.okText||'确定') + '</button>'
+      + '</div></div>';
+    document.body.appendChild(ov);
+    const close = v => { ov.remove(); document.removeEventListener('keydown', onKey, true); res(v); };
+    ov.querySelector('.ui-o').onclick = () => close(true);
+    const c = ov.querySelector('.ui-c');
+    if (c) c.onclick = () => close(false);
+    ov.addEventListener('pointerdown', e => { if (e.target === ov) close(false); });
+    function onKey(e){
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(false); }
+      else if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); close(true); }
+    }
+    document.addEventListener('keydown', onKey, true);
+    ov.querySelector('.ui-o').focus();
+  });
+}
+function uiConfirm(msg, o){ return uiDialog(Object.assign({ html:msg, cancelText:'取消', danger:true }, o||{})); }
+function uiAlert(msg, o){ return uiDialog(Object.assign({ html:msg, okText:'知道了' }, o||{})); }
+
+function toggleRow(name, desc, on, key, kind){
+  return '<div class="switch"><div><div class="nm">'+esc(name)+'</div>' +
+    '<div class="ds">'+esc(desc)+'</div></div>' +
+    '<div class="toggle '+(on?'on':'')+'" data-kind="'+kind+'" data-key="'+key+'"></div></div>';
+}
+
+function paint(){
+  if(!S) return;
+  document.getElementById('sub').textContent =
+    (S.school||'班级工作台') + ' · 服务运行中 · 数据版本 ' + S.rev;
+  document.getElementById('entryUrl').textContent = S.entry_url;
+  document.getElementById('kOnline').textContent = S.online;
+  document.getElementById('kStudents').textContent = S.students;
+  document.getElementById('kHw').textContent = S.open_homework;
+  document.getElementById('kLeave').textContent = S.pending_leaves;
+  document.getElementById('leaveBadge').textContent = S.pending_leaves + ' 待批';
+
+  document.getElementById('mods').innerHTML = Object.keys(MOD_META)
+    .map(k=>toggleRow(MOD_META[k][0], MOD_META[k][1], S.modules[k], k, 'modules')).join('');
+  document.getElementById('vis').innerHTML = Object.keys(VIS_META)
+    .map(k=>toggleRow(VIS_META[k][0], VIS_META[k][1], S.visibility[k], k, 'visibility')).join('');
+  bindToggles();
+
+  const a = S.student_auth || {};
+  document.querySelectorAll('#modeSeg button').forEach(b=>{
+    b.classList.toggle('on', b.dataset.mode === (a.mode||'uniform'));
+  });
+  document.getElementById('initPwd').value = a.initial_password || '123456';
+  document.getElementById('credCount').textContent = a.custom_count || 0;
+  document.getElementById('forceToggle').classList.toggle('on', !!a.force_change);
+  document.getElementById('modeHint').textContent = (a.mode==='per')
+    ? '每人独立密码：没设过密码的学生无法登录，需要你逐个设置或先切回统一密码。'
+    : '全班统一初始密码：学生第一次用这个密码登录，之后可以自己改。';
+  document.getElementById('tUser').value = S.teacher_username || 'teacher';
+  const qb = document.getElementById('qaBadge');
+  if (qb) {
+    qb.textContent = S.teacher_has_qa ? '已设置' : '未设置';
+    qb.className = 'badge' + (S.teacher_has_qa ? '' : ' warn');
+  }
+  const qi = document.getElementById('qaQ');
+  if (qi && !qi.value && S.teacher_question) qi.value = S.teacher_question;
+
+  paintLeaves();
+  paintAudit();
+}
+
+function bindToggles(){
+  document.querySelectorAll('.toggle[data-key]').forEach(el=>{
+    el.onclick = async ()=>{
+      const kind = el.dataset.kind, key = el.dataset.key;
+      el.classList.toggle('on');
+      const body = {}; body[key] = el.classList.contains('on');
+      await api('/api/v2/teacher/'+kind, {method:'POST', body:JSON.stringify(body)});
+      S[kind][key] = body[key];
+    };
+  });
+  const ft = document.getElementById('forceToggle');
+  ft.onclick = async ()=>{
+    const on = !ft.classList.contains('on');
+    ft.classList.toggle('on', on);
+    await api('/api/v2/teacher/student-auth',{method:'POST',
+      body:JSON.stringify({force_change:on})});
+    S.student_auth.force_change = on;
+  };
+}
+
+document.querySelectorAll('#modeSeg button').forEach(b=>{
+  b.onclick = async ()=>{
+    const mode = b.dataset.mode;
+    const j = await api('/api/v2/teacher/student-auth',{method:'POST',
+      body:JSON.stringify({password_mode:mode})});
+    if(j.ok){ S.student_auth.mode = mode; paint(); }
+  };
+});
+
+document.getElementById('savePwd').onclick = async ()=>{
+  const v = document.getElementById('initPwd').value.trim();
+  const j = await api('/api/v2/teacher/student-auth',{method:'POST',
+    body:JSON.stringify({initial_password:v})});
+  await uiAlert(j.ok ? '已保存。学生下次登录用这个密码。' : (j.msg||'保存失败'));
+};
+
+document.getElementById('resetAll').onclick = async ()=>{
+  if(!(await uiConfirm('把所有学生改过的密码重置为初始密码？',{title:'重置密码',okText:'重置'}))) return;
+  await api('/api/v2/teacher/reset-cred',{method:'POST',body:JSON.stringify({all:true})});
+  await load();
+};
+
+document.getElementById('saveUser').onclick = async ()=>{
+  const u = document.getElementById('tUser').value.trim();
+  const j = await api('/api/v2/teacher/account',{method:'POST',body:JSON.stringify({username:u})});
+  await uiAlert(j.ok ? '账号已改为 '+j.username : (j.msg||'保存失败'));
+  await load();
+};
+
+document.getElementById('saveTpwd').onclick = async ()=>{
+  const old = document.getElementById('tOld').value, nw = document.getElementById('tNew').value;
+  const j = await api('/api/v2/teacher/password',{method:'POST',
+    body:JSON.stringify({old:old,new:nw})});
+  await uiAlert(j.ok ? '密码已更新。其它设备上的登录已失效。' : (j.msg||'修改失败'));
+  if(j.ok){ document.getElementById('tOld').value=''; document.getElementById('tNew').value=''; }
+};
+
+document.getElementById('saveQa').onclick = async ()=>{
+  const q = (document.getElementById('qaQ').value||'').trim();
+  const a = document.getElementById('qaA').value;
+  const pwd = document.getElementById('qaPwd').value;
+  if(!q || !a.trim()){ await uiAlert('密保问题和答案都要填'); return; }
+  const j = await api('/api/v2/teacher/security',{method:'POST',
+    body:JSON.stringify({question:q,answer:a,password:pwd})});
+  await uiAlert(j.ok ? '密保问题已保存，忘记密码时可用它自助改密' : (j.msg||'保存失败'));
+  if(j.ok){ document.getElementById('qaA').value=''; document.getElementById('qaPwd').value=''; await load(); }
+};
+
+function paintLeaves(){
+  const box = document.getElementById('leaves');
+  if(!S.leaves || !S.leaves.length){ box.innerHTML = '<div class="mini">暂无申请</div>'; return; }
+  const head = '<table><thead><tr><th>学生</th><th>日期</th><th>事由</th>' +
+    '<th>状态</th><th></th></tr></thead><tbody>';
+  box.innerHTML = head + S.leaves.map(l=>
+    '<tr><td>'+esc(l.name||'')+'</td><td>'+esc(l.date||'')+'</td>' +
+    '<td>'+esc((l.reason||'').slice(0,40))+'</td><td>' +
+    (l.status==='pending'?'<span class="badge warn">待批</span>':'<span class="badge">已处理</span>') +
+    '</td><td>' + (l.status==='pending'
+      ? '<button class="ghost" style="padding:5px 10px;font-size:12px" onclick="decide('+jsAttr(l.id)+',\'approve\')">同意</button> ' +
+        '<button class="ghost" style="padding:5px 10px;font-size:12px" onclick="decide('+jsAttr(l.id)+',\'reject\')">驳回</button>'
+      : '') + '</td></tr>').join('') + '</tbody></table>';
+}
+
+/* JS 字面量塞进 HTML 双引号属性时，引号必须转义成 &quot;，
+   否则 onclick="decide("lv1001…",'approve')" 会被截断成 decide( */
+function jsAttr(v){
+  return JSON.stringify(String(v==null?'':v))
+    .replace(/&/g,'&amp;').replace(/"/g,'&quot;')
+    .replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+async function decide(id, action){
+  await api('/api/v2/teacher/leave',{method:'POST',body:JSON.stringify({id:id,action:action})});
+  await load();
+}
+
+function paintAudit(){
+  const box = document.getElementById('audit');
+  if(!S.audit || !S.audit.length){ box.innerHTML = '<div class="mini">暂无记录</div>'; return; }
+  const head = '<table><thead><tr><th style="width:150px">时间</th>' +
+    '<th style="width:110px">角色</th><th>操作</th></tr></thead><tbody>';
+  box.innerHTML = head + S.audit.slice(0,12).map(a=>
+    '<tr><td class="mini">'+esc(a.ts)+'</td><td>'+esc(a.actor||'')+'</td>' +
+    '<td>'+esc(a.action||'')+' <span class="mini">'+esc((a.detail||'').slice(0,60))+'</span></td></tr>'
+  ).join('') + '</tbody></table>';
+}
+
+async function load(){
+  S = await api('/api/v2/teacher/console');
+  paint();
+}
+
+document.getElementById('logout').onclick = async ()=>{
+  await api('/api/v2/auth/logout',{method:'POST',body:'{}'});
+  location.href='/teacher/login';
+};
+load();
+setInterval(load, 6000);
+</script></body></html>
+"""
+
+
+def console_page():
+    return CONSOLE_HTML.replace("__CSS__", BASE_CSS)

@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f4f6fa">
+<title>截图工具</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+/* 2.1.7：截图页是独立 iframe，原来所有颜色写死浅色，教师/学生切夜间后
+   它还是白花花一片。这里改成变量，并监听外壳推来的 wb-theme。
+   注意：截图内容 canvas 本身永远保持原色，不跟着主题反色。 */
+:root{
+  --bg:#f4f6fa; --card:#fff; --line:#e3e8f0; --text:#1f2430; --muted:#718096;
+  --primary:#2b6cb0; --primary-2:#2c5282; --primary-ink:#fff;
+  --soft:#f7fafc; --soft-line:#cbd5e0; --danger:#c53030;
+  --warn-bg:#fffbea; --warn-line:#f6e05e; --warn-text:#744210;
+  --canvas-hold:#e8ecf2; --canvas-bg:#fff;
+  --editor-bg:rgba(15,23,42,.78); --tool-active:#ebf4ff; --toast-bg:#2d3748;
+  --shadow:rgba(43,108,176,.28);
+  --sel-line:#63b3ed; --sel-fill:rgba(99,179,237,.18); --sel-ink:#0a1a2f;
+}
+html[data-mode="dark"]{
+  --bg:#12161f; --card:#1b2230; --line:#2c3647; --text:#e6eaf2; --muted:#9aa7bd;
+  --primary:#63b3ed; --primary-2:#90cdf4; --primary-ink:#0b1a2a;
+  --soft:#232c3b; --soft-line:#3a475c; --danger:#fc8181;
+  --warn-bg:#3a2e12; --warn-line:#8a6d1f; --warn-text:#ffe08a;
+  --canvas-hold:#0f141d; --canvas-bg:#fff;
+  --editor-bg:rgba(0,0,0,.84); --tool-active:#243c53; --toast-bg:#0b0f16;
+  --shadow:rgba(0,0,0,.45);
+  --sel-line:#90cdf4; --sel-fill:rgba(144,205,244,.20); --sel-ink:#08131f;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.6}
+.wrap{max-width:640px;margin:0 auto;padding:48px 20px 120px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:28px;margin-bottom:16px;text-align:center}
+h1{font-size:22px;margin-bottom:8px}
+.sub{color:var(--muted);font-size:13px;margin-bottom:26px}
+.btn{border:1px solid var(--soft-line);background:var(--card);border-radius:9px;padding:10px 18px;cursor:pointer;font-size:14px;color:var(--text)}
+.btn:hover{background:var(--soft)}
+.btn.primary{background:var(--primary);color:var(--primary-ink);border-color:var(--primary);font-weight:600}
+.btn.primary:hover{background:var(--primary-2)}
+.btn.big{padding:16px 44px;font-size:18px;border-radius:40px;box-shadow:0 6px 20px var(--shadow)}
+/* 2.1.14：点截图先弹方式菜单；Alt+A 直接抓当前页面（父页面监听） */
+.shot-menu{width:min(420px,100%);margin:14px auto 0;border:1px solid var(--line);border-radius:12px;
+  background:var(--card);box-shadow:0 10px 28px var(--shadow);overflow:hidden;text-align:left}
+.sm-item{display:block;width:100%;border:0;border-bottom:1px solid var(--line);background:transparent;
+  color:var(--text);padding:11px 16px;cursor:pointer;text-align:left;font:inherit}
+.sm-item:last-child{border-bottom:0}
+.sm-item:hover{background:var(--soft)}
+.sm-item b{display:block;font-size:14px;font-weight:600}
+.sm-item span{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+.row{display:flex;align-items:center;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:20px}
+.folder-box{background:var(--soft);border:1px dashed var(--soft-line);border-radius:8px;padding:10px 14px;font-size:13px;color:var(--text);min-width:220px}
+.folder-box b{color:var(--primary)}
+.tip{color:var(--muted);font-size:12px;margin-top:14px}
+#status{margin-top:16px;font-size:13px;color:var(--primary);min-height:20px}
+.warn{background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:8px;padding:12px 16px;color:var(--warn-text);font-size:13px;margin-top:14px;text-align:left}
+
+/* 全屏捕获层：抓到画面后铺满整个屏幕，直接拖框选（这层固定黑底，不随主题） */
+.cap{position:fixed;inset:0;z-index:100;background:#000;display:none}
+.cap.on{display:block}
+#capCanvas{display:block;width:100vw;height:100vh;cursor:crosshair;touch-action:none}
+.cap-tip{position:absolute;top:20px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.66);color:#fff;padding:10px 20px;border-radius:8px;font-size:15px;pointer-events:none;white-space:nowrap}
+.sel-box{position:absolute;border:2px solid var(--sel-line);background:var(--sel-fill);pointer-events:none;display:none}
+.sel-size{position:absolute;background:var(--sel-line);color:var(--sel-ink);font-size:12px;padding:2px 8px;border-radius:4px;top:-25px;left:-2px;display:none;white-space:nowrap}
+
+.editor{position:fixed;inset:0;z-index:200;background:var(--editor-bg);display:none;align-items:center;justify-content:center;padding:20px}
+.editor.on{display:flex}
+.editor-box{background:var(--card);border-radius:14px;width:min(1000px,96vw);max-height:94vh;display:flex;flex-direction:column;overflow:hidden}
+.editor-head{padding:14px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between}
+.editor-head h3{font-size:16px}
+.icon-btn{background:none;border:0;font-size:22px;cursor:pointer;color:var(--muted);padding:2px 8px}
+.tools{display:flex;gap:6px;padding:10px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap;align-items:center}
+.tool{border:1px solid var(--soft-line);background:var(--card);border-radius:8px;padding:7px 12px;cursor:pointer;font-size:13px;color:var(--text)}
+.tool:hover{background:var(--soft)}
+.tool.active{background:var(--tool-active);border-color:var(--primary);color:var(--primary);font-weight:600}
+.tool.danger{color:var(--danger)}
+.sep{width:1px;height:22px;background:var(--line);margin:0 4px}
+.color-dot{width:18px;height:18px;border-radius:50%;border:2px solid transparent;cursor:pointer}
+.color-dot.active{border-color:var(--primary);box-shadow:0 0 0 2px var(--card) inset}
+.color-dot[data-color="#ffffff"]{border-color:var(--soft-line)}
+.tool-label{font-size:12px;color:var(--muted);margin-left:2px;white-space:nowrap}
+.size-val{font-size:12px;color:var(--text);min-width:18px;text-align:center}
+.tools input[type="range"]{width:74px;accent-color:var(--primary);cursor:pointer}
+.tools input[type="color"]{width:26px;height:26px;padding:0;border:1px solid var(--soft-line);border-radius:6px;background:var(--card);cursor:pointer}
+/* 2.1.7：应用/取消跟着区域框走，放在框的正下方（微信截图那种浮条）。
+   fixed 定位，不受 canvas-hold 滚动影响；滚动/缩放时重新算位置。 */
+.region-actions{position:fixed;z-index:250;display:flex;gap:6px;transform:translateX(-50%);background:var(--toast-bg);padding:5px;border-radius:9px;box-shadow:0 4px 14px rgba(0,0,0,.32)}
+.region-actions .tool{background:transparent;color:#fff;border-color:rgba(255,255,255,.38)}
+.region-actions .tool:hover{background:rgba(255,255,255,.16)}
+.region-actions .tool.primary{background:var(--primary);border-color:var(--primary);color:var(--primary-ink);font-weight:600}
+.canvas-hold{flex:1;overflow:auto;background:var(--canvas-hold);display:flex;align-items:center;justify-content:center;padding:20px;min-height:260px}
+#editCanvas{max-width:100%;box-shadow:0 4px 16px rgba(0,0,0,.12);background:var(--canvas-bg);cursor:crosshair;touch-action:none}
+.editor-foot{padding:14px 20px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.meta{font-size:12px;color:var(--muted)}
+.toast{position:fixed;top:24px;left:50%;transform:translateX(-50%) translateY(-80px);z-index:300;background:var(--toast-bg);color:#fff;padding:12px 24px;border-radius:8px;font-size:14px;transition:.25s;opacity:0}
+.toast.on{transform:translateX(-50%) translateY(0);opacity:1}
+.text-input{position:absolute;z-index:210;border:1px solid var(--primary);background:var(--card);color:var(--text);padding:2px 6px;font-size:14px;outline:none;min-width:60px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <h1>📷 截图工具</h1>
+    <div class="sub">点一下选截图方式 → 拖动框选 → 裁剪 / 批注 / 复制 → 保存<br>
+      按 <b>Alt + A</b> 可直接截取当前页面，不用选共享窗口</div>
+    <button class="btn primary big" id="shotBtn">📷 截图</button>
+    <div class="shot-menu" id="shotMenu" style="display:none">
+      <button type="button" class="sm-item" data-mode="page"><b>⚡ 当前页面</b><span>不弹共享窗口，直接截这一页（推荐）</span></button>
+      <button type="button" class="sm-item" data-mode="window"><b>🖥️ 选窗口 / 屏幕</b><span>自己选要共享的窗口，再拖框选区域</span></button>
+      <button type="button" class="sm-item" data-mode="delay"><b>⏱️ 延迟 5 秒</b><span>选「整个屏幕」后切到目标窗口，到点自动抓帧</span></button>
+    </div>
+    <div id="status"></div>
+    <div class="warn" id="warnBox" style="display:none"></div>
+  </div>
+
+  <div class="card">
+    <div class="row" style="margin-top:0">
+      <div class="folder-box" id="folderBox">还没设置文件夹 —— 保存时会让你选</div>
+      <button class="btn" id="pickFolderBtn">选择文件夹</button>
+    </div>
+    <div class="tip">选一次就记住，以后截图直接存进这个文件夹。</div>
+  </div>
+</div>
+
+<div class="cap" id="cap">
+  <div class="cap-tip">在画面上拖拽框选要保留的区域 · Esc 取消</div>
+  <canvas id="capCanvas"></canvas>
+  <div class="sel-box" id="selBox"><span class="sel-size" id="selSize"></span></div>
+</div>
+
+<div class="editor" id="editor">
+  <div class="editor-box">
+    <div class="editor-head"><h3>批注截图</h3><button class="icon-btn" id="closeEditor">×</button></div>
+    <div class="tools">
+      <button class="tool active" data-tool="pen">✏️ 画笔</button>
+      <button class="tool" data-tool="rect">▭ 矩形</button>
+      <button class="tool" data-tool="ellipse">◯ 椭圆</button>
+      <button class="tool" data-tool="arrow">↗ 箭头</button>
+      <button class="tool" data-tool="text">T 文字</button>
+      <button class="tool" data-tool="seq">① 序号</button>
+      <button class="tool" data-tool="crop">✂ 裁剪</button>
+      <button class="tool" data-tool="mosaic">▦ 马赛克</button>
+      <button class="tool" data-tool="blur">◌ 模糊</button>
+      <div class="sep"></div>
+      <span class="tool-label">笔刷</span>
+      <input type="range" id="sizeRange" min="1" max="14" value="3" title="画笔 / 图形粗细">
+      <span class="size-val" id="sizeVal">3</span>
+      <div class="sep"></div>
+      <div class="color-dot active" data-color="#e53e3e" style="background:#e53e3e"></div>
+      <div class="color-dot" data-color="#2b6cb0" style="background:#2b6cb0"></div>
+      <div class="color-dot" data-color="#2f855a" style="background:#2f855a"></div>
+      <div class="color-dot" data-color="#111111" style="background:#111111"></div>
+      <div class="color-dot" data-color="#ffffff" style="background:#ffffff"></div>
+      <div class="color-dot" data-color="#f6ad55" style="background:#f6ad55"></div>
+      <div class="color-dot" data-color="#f6e05e" style="background:#f6e05e"></div>
+      <div class="color-dot" data-color="#805ad5" style="background:#805ad5"></div>
+      <input type="color" id="colorPick" value="#e53e3e" title="自定义颜色">
+      <div class="sep"></div>
+      <button class="tool" data-tool="undo">↶ 撤销</button>
+      <button class="tool" data-tool="redo">↷ 重做</button>
+      <button class="tool danger" data-tool="clear">🗑 清空</button>
+    </div>
+    <div class="canvas-hold"><canvas id="editCanvas"></canvas></div>
+    <div class="editor-foot">
+      <div class="meta" id="meta">—</div>
+      <div class="row" style="margin:0">
+        <button class="btn" id="cancelBtn">取消</button>
+        <button class="btn" id="redoBtn">↻ 重新框选</button>
+        <button class="btn" id="copyBtn">⧉ 复制</button>
+        <button class="btn primary" id="saveBtn">⬇ 保存到文件夹</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="region-actions" id="regionActions" style="display:none">
+  <button class="tool primary" id="cropApplyBtn">✓ 应用裁剪</button>
+  <button class="tool" id="cropCancelBtn">✕ 取消</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* 2.1.7：跟随外壳主题。
+   教师端 applyTheme() 广播 {type:'wb-theme', mode, hue}；
+   学生端 setMode()/setTheme() 广播 {type:'wb-theme'}（不带 mode），
+   此时按学生自己的 localStorage 键 wb-smode / wb-stheme 读。
+   首屏 iframe 创建晚于外壳 applyTheme，所以这里也主动读一次存储。 */
+(function(){
+  function parentIsStudent(){
+    try { return /\/s\//.test(window.parent.location.pathname); } catch (e) { return false; }
+  }
+  function resolveMode(m){
+    if (m === 'auto') {
+      try { return (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light'; }
+      catch (e) { return 'light'; }
+    }
+    return m === 'dark' ? 'dark' : 'light';
+  }
+  function readMode(){
+    var v = '';
+    try {
+      var keys = parentIsStudent() ? ['wb-smode', 'wb-mode'] : ['wb-mode', 'wb-smode'];
+      for (var i = 0; i < keys.length; i++) {
+        v = window.localStorage.getItem(keys[i]) || '';
+        if (v) break;
+      }
+    } catch (e) {}
+    return resolveMode(v);
+  }
+  function applyMode(mode){
+    var m = resolveMode(mode);
+    document.documentElement.setAttribute('data-mode', m);
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', m === 'dark' ? '#12161f' : '#f4f6fa');
+  }
+  applyMode(readMode());
+  window.addEventListener('message', function (e) {
+    var d = e && e.data;
+    if (!d || d.type !== 'wb-theme') return;
+    applyMode(d.mode ? d.mode : readMode());
+  });
+  window.addEventListener('storage', function (e) {
+    if (e && /^wb-(mode|smode|theme|stheme)$/.test(e.key || '')) applyMode(readMode());
+  });
+})();
+</script>
+
+<script>
+(function(){
+  var shotBtn=document.getElementById('shotBtn'),
+      cap=document.getElementById('cap'),
+      capCanvas=document.getElementById('capCanvas'),
+      capCtx=capCanvas.getContext('2d'),
+      selBox=document.getElementById('selBox'),
+      selSize=document.getElementById('selSize'),
+      editor=document.getElementById('editor'),
+      canvas=document.getElementById('editCanvas'),
+      ctx=canvas.getContext('2d'),
+      meta=document.getElementById('meta'),
+      status=document.getElementById('status'),
+      toast=document.getElementById('toast'),
+      folderBox=document.getElementById('folderBox'),
+      warnBox=document.getElementById('warnBox'),
+      cropApplyBtn=document.getElementById('cropApplyBtn'),
+      cropCancelBtn=document.getElementById('cropCancelBtn'),
+      regionActions=document.getElementById('regionActions'),
+      copyBtn=document.getElementById('copyBtn'),
+      sizeRange=document.getElementById('sizeRange'),
+      sizeVal=document.getElementById('sizeVal'),
+      colorPick=document.getElementById('colorPick');
+
+  var sx=0,sy=0,cx=0,cy=0,dragging=false,
+      crop={x:0,y:0,w:0,h:0},
+      fullImage=null,dispScale=1,dispX=0,dispY=0,
+      baseImage=null,history=[],future=[],
+      tool='pen',color='#e53e3e',brushSize=3,seqNum=1,drawing=false,lastX=0,lastY=0,textInput=null,
+      cropActive=false,cropBase=null,cropRect=null,cropDragMode='',cropDragStart=null,
+      folderHandle=null;
+
+  function showToast(t){toast.textContent=t;toast.classList.add('on');clearTimeout(showToast._t);showToast._t=setTimeout(function(){toast.classList.remove('on');},2400);}
+  function setStatus(t){status.textContent=t;}
+
+  /* 环境检测 */
+  var secure=window.isSecureContext;
+  var hasGDM=!!(navigator.mediaDevices&&navigator.mediaDevices.getDisplayMedia);
+  var hasPicker=typeof window.showSaveFilePicker==='function'||typeof window.showDirectoryPicker==='function';
+  if(!secure||!hasGDM){
+    warnBox.style.display='block';
+    warnBox.innerHTML='<b>当前环境用不了屏幕捕获。</b>浏览器只允许在 HTTPS 或 localhost 下调用。'+
+      '你现在是 <code>'+location.protocol+'//'+location.host+'</code>。请用 https 地址打开，且用 Edge/Chrome。';
+    shotBtn.disabled=true;shotBtn.style.opacity=.5;
+  }
+
+  /* 目录 handle 存 IndexedDB */
+  function openDB(){return new Promise(function(res,rej){
+    var r=indexedDB.open('shotToolDB',1);
+    r.onupgradeneeded=function(){r.result.createObjectStore('cfg');};
+    r.onsuccess=function(){res(r.result);};r.onerror=function(){rej(r.error);};
+  });}
+  function dbPut(h){return openDB().then(function(db){return new Promise(function(res,rej){
+    var tx=db.transaction('cfg','readwrite');tx.objectStore('cfg').put(h,'folder');
+    tx.oncomplete=function(){res();};tx.onerror=function(){rej(tx.error);};
+  });});}
+  function dbGet(){return openDB().then(function(db){return new Promise(function(res,rej){
+    var tx=db.transaction('cfg','readonly');var q=tx.objectStore('cfg').get('folder');
+    q.onsuccess=function(){res(q.result);};q.onerror=function(){rej(q.error);};
+  });}).catch(function(){return null;});}
+  function esc(s){return String(s||'').replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  function refreshFolder(){
+    if(folderHandle)folderBox.innerHTML='保存到：<b>'+esc(folderHandle.name)+'</b>';
+    else folderBox.textContent='还没设置文件夹 —— 保存时会让你选';
+  }
+  dbGet().then(function(h){folderHandle=h||null;refreshFolder();});
+
+  document.getElementById('pickFolderBtn').onclick=async function(){
+    if(typeof window.showDirectoryPicker!=='function'){showToast('这个浏览器不支持选文件夹，用 Edge 或 Chrome');return;}
+    try{
+      folderHandle=await window.showDirectoryPicker();
+      await dbPut(folderHandle);refreshFolder();showToast('已记住文件夹：'+folderHandle.name);
+    }catch(e){if(e.name!=='AbortError')showToast('选文件夹失败：'+e.message);}
+  };
+
+  /* ---------- 2.1.14：截图入口菜单 + 三种抓帧方式 ----------
+     page  = preferCurrentTab，直接抓当前标签页，不弹共享选择器；
+     window= 保留原来的共享窗口选择；
+     delay = 选「整个屏幕」后倒数 5 秒，这段时间可以切到别的窗口，到点自动抓帧。 */
+  var shotMenu=document.getElementById('shotMenu'),busy=false;
+  function closeMenu(){if(shotMenu)shotMenu.style.display='none';}
+  document.addEventListener('pointerdown',function(e){
+    if(shotMenu&&shotMenu.style.display!=='none'&&!shotMenu.contains(e.target)&&e.target!==shotBtn)closeMenu();
+  });
+  shotBtn.onclick=function(){
+    if(shotBtn.disabled||busy)return;
+    closeMenu();
+    shotMenu.style.display=shotMenu.style.display==='none'?'block':'none';
+  };
+  Array.prototype.forEach.call(document.querySelectorAll('.sm-item'),function(b){
+    b.onclick=function(){closeMenu();startCapture(b.getAttribute('data-mode'));};
+  });
+
+  function beep(freq){
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;
+      var ac=new AC(),o=ac.createOscillator(),g=ac.createGain();
+      o.frequency.value=freq;g.gain.value=.055;o.connect(g);g.connect(ac.destination);
+      o.start();o.stop(ac.currentTime+.12);
+      setTimeout(function(){try{ac.close();}catch(e){}},320);
+    }catch(e){}
+  }
+  function countdown(sec){
+    return new Promise(function(res){
+      var n=sec;
+      (function tick(){
+        setStatus(n+' 秒后自动抓帧 —— 现在切到要截图的窗口…');
+        beep(n===1?1200:760);
+        if(--n<=0){setStatus('');res();}else setTimeout(tick,1000);
+      })();
+    });
+  }
+
+  async function startCapture(mode){
+    if(busy)return;
+    if(!secure||!hasGDM){showToast('当前环境不能截图，请用 https + Edge/Chrome');return;}
+    busy=true;shotBtn.disabled=true;
+    var stream=null,video=null;
+    try{
+      setStatus(mode==='page'?'正在截取当前页面…':'正在请求屏幕共享…');
+      try{
+        stream=await navigator.mediaDevices.getDisplayMedia(mode==='page'
+          ? {video:{frameRate:1},audio:false,preferCurrentTab:true,selfBrowserSurface:'include'}
+          : {video:{frameRate:1},audio:false});
+      }catch(e){
+        /* 老浏览器不认 preferCurrentTab：退回原生选择器，至少还能截 */
+        if(mode!=='page')throw e;
+        setStatus('浏览器不支持直截，请选「当前标签页」…');
+        stream=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:1},audio:false});
+      }
+      setStatus('画面已捕获…');
+      video=document.createElement('video');
+      video.srcObject=stream;video.muted=true;video.playsInline=true;
+      /* 关键修复：video 必须插进 DOM，否则 play() 可能被浏览器中断
+         （"The play() request was interrupted because the media was removed from the document"）*/
+      video.style.cssText='position:fixed;left:-9999px;top:0;width:2px;height:2px;opacity:0;pointer-events:none';
+      document.body.appendChild(video);
+      /* 先等元数据拿到真实尺寸 */
+      if(!video.videoWidth){
+        await new Promise(function(res,rej){
+          var done=false;
+          video.onloadedmetadata=function(){if(!done){done=true;res();}};
+          setTimeout(function(){if(!done){done=true;res();}},3000); // 兜底
+        });
+      }
+      await video.play();
+      /* 等一帧真正渲染出来再抓，否则可能是黑屏 */
+      await new Promise(function(res){
+        var done=false;
+        var finish=function(){if(!done){done=true;res();}};
+        if(video.requestVideoFrameCallback){
+          video.requestVideoFrameCallback(finish);
+          setTimeout(finish,1500); // 兜底
+        }else{
+          setTimeout(finish,250);
+        }
+      });
+      if(!video.videoWidth||!video.videoHeight)throw new Error('没拿到画面尺寸');
+      if(mode==='delay')await countdown(5);
+      var cv=document.createElement('canvas');
+      cv.width=video.videoWidth;cv.height=video.videoHeight;
+      cv.getContext('2d').drawImage(video,0,0);
+      /* 抓到立刻断开共享，关掉顶部共享条，也避免把批注界面录进去 */
+      stream.getTracks().forEach(function(t){t.stop();});stream=null;
+      if(video.parentNode)video.parentNode.removeChild(video);video=null;
+      fullImage=cv;
+      setStatus('');
+      showCapture();
+    }catch(e){
+      if(stream)stream.getTracks().forEach(function(t){t.stop();});
+      if(video&&video.parentNode)video.parentNode.removeChild(video);
+      setStatus('');
+      if(e.name==='NotAllowedError')showToast('你取消了共享，或浏览器拒绝了（要选屏幕/窗口后点共享）');
+      else showToast('截图失败：'+(e.message||e.name));
+    }finally{
+      busy=false;shotBtn.disabled=!(secure&&hasGDM);
+    }
+  }
+
+  /* 2.1.14：父页面 Alt+A 抓到的当前标签页画面，从这里接着框选。
+     父页面把 PNG blob 存进同一个 IndexedDB 的 pending 键，再跳到截图页。 */
+  function wbTryPending(){
+    if(!window.indexedDB)return;
+    openDB().then(function(db){return new Promise(function(res){
+      var tx=db.transaction('cfg','readwrite'),st=tx.objectStore('cfg'),q=st.get('pending');
+      q.onsuccess=function(){var v=q.result;if(v){try{st.delete('pending');}catch(e){}}res(v);};
+      q.onerror=function(){res(null);};
+    });}).then(function(blob){
+      if(!blob||typeof blob.arrayBuffer!=='function')return;
+      return createImageBitmap(blob).then(function(bmp){
+        var cv=document.createElement('canvas');
+        cv.width=bmp.width;cv.height=bmp.height;
+        cv.getContext('2d').drawImage(bmp,0,0);
+        if(bmp.close)bmp.close();
+        fullImage=cv;setStatus('');showCapture();
+      });
+    }).catch(function(){});
+  }
+  window.addEventListener('message',function(e){
+    var d=e&&e.data;
+    if(d&&d.type==='wb-shot-open-pending')wbTryPending();
+  });
+  setTimeout(wbTryPending,220);
+
+  /* 截图页内也支持 Alt+A（不用先选方式，直接抓当前页） */
+  document.addEventListener('keydown',function(e){
+    var k=(e.key||'').toLowerCase();
+    if(e.altKey&&k==='a'&&!e.shiftKey){
+      e.preventDefault();e.stopPropagation();
+      startCapture('page');
+    }
+  },true);
+
+  /* 第二步：全屏铺满画面，直接拖框选 */
+  function showCapture(){
+    var vw=window.innerWidth,vh=window.innerHeight;
+    capCanvas.width=vw;capCanvas.height=vh;
+    capCtx.fillStyle='#000';capCtx.fillRect(0,0,vw,vh);
+    dispScale=Math.min(vw/fullImage.width,vh/fullImage.height);
+    var w=fullImage.width*dispScale,h=fullImage.height*dispScale;
+    dispX=(vw-w)/2;dispY=(vh-h)/2;
+    capCtx.drawImage(fullImage,dispX,dispY,w,h);
+    selBox.style.display='none';selSize.style.display='none';
+    cap.classList.add('on');
+  }
+  capCanvas.addEventListener('pointerdown',function(e){
+    dragging=true;sx=cx=e.clientX;sy=cy=e.clientY;
+    selBox.style.display='block';selSize.style.display='block';updateSel();
+  });
+  window.addEventListener('pointermove',function(e){if(!dragging)return;cx=e.clientX;cy=e.clientY;updateSel();});
+  window.addEventListener('pointerup',function(){
+    if(!dragging)return;dragging=false;
+    var x1=Math.min(sx,cx),y1=Math.min(sy,cy),w=Math.abs(cx-sx),h=Math.abs(cy-sy);
+    if(w<20||h<20){showToast('选区太小，重新框一下');selBox.style.display='none';selSize.style.display='none';return;}
+    crop.x=Math.max(0,Math.round((x1-dispX)/dispScale));
+    crop.y=Math.max(0,Math.round((y1-dispY)/dispScale));
+    crop.w=Math.min(fullImage.width-crop.x,Math.round(w/dispScale));
+    crop.h=Math.min(fullImage.height-crop.y,Math.round(h/dispScale));
+    cap.classList.remove('on');
+    selBox.style.display='none';selSize.style.display='none';
+    openEditor();
+  });
+  function updateSel(){
+    var x=Math.min(sx,cx),y=Math.min(sy,cy),w=Math.abs(cx-sx),h=Math.abs(cy-sy);
+    selBox.style.left=x+'px';selBox.style.top=y+'px';
+    selBox.style.width=w+'px';selBox.style.height=h+'px';
+    selSize.textContent=Math.round(w/dispScale)+' × '+Math.round(h/dispScale);
+  }
+  document.addEventListener('keydown',function(e){
+    var k=(e.key||'').toLowerCase();
+    if(e.key==='Escape'){
+      if(cap.classList.contains('on'))cap.classList.remove('on');
+      else if(cropActive)cancelCrop();
+      else if(editor.classList.contains('on')&&!textInput)closeEditor();
+      return;
+    }
+    if(textInput||!editor.classList.contains('on'))return;
+    if(!(e.ctrlKey||e.metaKey))return;
+    if(k==='z'&&!e.shiftKey){e.preventDefault();if(cropActive)cancelCrop();else undo();return;}
+    if(k==='y'||(k==='z'&&e.shiftKey)){e.preventDefault();if(!cropActive)redo();return;}
+    if(k==='c'){e.preventDefault();if(!cropActive)copyBtn.click();return;}
+  });
+
+  /* 第三步：批注 */
+  function openEditor(){
+    canvas.width=crop.w;canvas.height=crop.h;
+    ctx.fillStyle='#fff';ctx.fillRect(0,0,crop.w,crop.h);
+    ctx.drawImage(fullImage,crop.x,crop.y,crop.w,crop.h,0,0,crop.w,crop.h);
+    baseImage=ctx.getImageData(0,0,crop.w,crop.h);history=[];future=[];seqNum=1;
+    meta.textContent=crop.w+' × '+crop.h+' 像素';
+    editor.classList.add('on');
+  }
+  function setActiveTool(t){
+    tool=t;
+    document.querySelectorAll('.tool[data-tool]').forEach(function(b){b.classList.toggle('active',b.dataset.tool===t);});
+  }
+  function cropHandleSize(){
+    var r=canvas.getBoundingClientRect();
+    return Math.max(7,Math.min(14,9*(canvas.width/(r.width||canvas.width))));
+  }
+  function cropHandles(r){
+    var x=r.x,y=r.y,w=r.w,h=r.h;
+    return [
+      {m:'nw',x:x,y:y},{m:'n',x:x+w/2,y:y},{m:'ne',x:x+w,y:y},
+      {m:'e',x:x+w,y:y+h/2},{m:'se',x:x+w,y:y+h},{m:'s',x:x+w/2,y:y+h},
+      {m:'sw',x:x,y:y+h},{m:'w',x:x,y:y+h/2}
+    ];
+  }
+  function hitCrop(p){
+    if(!cropRect)return '';
+    var tol=cropHandleSize()*1.35,hs=cropHandles(cropRect);
+    for(var i=0;i<hs.length;i++){
+      if(Math.abs(p.x-hs[i].x)<=tol&&Math.abs(p.y-hs[i].y)<=tol)return hs[i].m;
+    }
+    var r=cropRect;
+    if(p.x>=r.x&&p.x<=r.x+r.w&&p.y>=r.y&&p.y<=r.y+r.h)return 'move';
+    return '';
+  }
+  function cropCursor(m){
+    if(!m)return 'default';
+    if(m==='move')return 'move';
+    if(m==='n'||m==='s')return 'ns-resize';
+    if(m==='e'||m==='w')return 'ew-resize';
+    if(m==='nw'||m==='se')return 'nwse-resize';
+    return 'nesw-resize';
+  }
+  function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
+  function inkFor(hex){
+    var h=String(hex||'').replace('#','');
+    if(h.length===3)h=h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+    var n=parseInt(h,16);
+    if(isNaN(n))return '#ffffff';
+    var r=(n>>16)&255,g=(n>>8)&255,b=n&255;
+    return (r*299+g*587+b*114)/1000>150?'#111111':'#ffffff';
+  }
+  function drawSeq(p){
+    var box=canvas.getBoundingClientRect();
+    var sc=canvas.width/(box.width||canvas.width);
+    var r=Math.max(10,(8+brushSize*2)*sc);
+    ctx.save();
+    ctx.fillStyle=color;
+    ctx.beginPath();ctx.arc(p.x,p.y,r,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle=inkFor(color);
+    ctx.font='bold '+Math.max(11,Math.round(r*1.25))+'px sans-serif';
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(String(seqNum++),p.x,p.y+1);
+    ctx.restore();
+  }
+  function resizeCrop(start,m,dx,dy){
+    if(m==='move'){
+      var nx=clamp(start.x+dx,0,canvas.width-start.w),ny=clamp(start.y+dy,0,canvas.height-start.h);
+      return {x:Math.round(nx),y:Math.round(ny),w:start.w,h:start.h};
+    }
+    var min=Math.max(10,cropHandleSize()*1.6);
+    var l=start.x,t=start.y,r=start.x+start.w,b=start.y+start.h;
+    if(m.indexOf('w')>=0)l=clamp(start.x+dx,0,r-min);
+    if(m.indexOf('e')>=0)r=clamp(start.x+start.w+dx,l+min,canvas.width);
+    if(m.indexOf('n')>=0)t=clamp(start.y+dy,0,b-min);
+    if(m.indexOf('s')>=0)b=clamp(start.y+start.h+dy,t+min,canvas.height);
+    return {x:Math.round(l),y:Math.round(t),w:Math.round(r-l),h:Math.round(b-t)};
+  }
+  function drawCropOverlay(){
+    if(!cropActive||!cropBase||!cropRect)return;
+    ctx.putImageData(cropBase,0,0);
+    var r=cropRect,x=r.x,y=r.y,w=r.w,h=r.h;
+    var accent='#2b6cb0';
+    ctx.fillStyle='rgba(3,10,22,.42)';
+    ctx.fillRect(0,0,canvas.width,y);
+    ctx.fillRect(0,y+h,canvas.width,canvas.height-y-h);
+    ctx.fillRect(0,y,x,h);
+    ctx.fillRect(x+w,y,canvas.width-x-w,h);
+    ctx.setLineDash([7,5]);
+    ctx.lineWidth=3;ctx.strokeStyle='rgba(255,255,255,.95)';
+    ctx.strokeRect(x+.5,y+.5,Math.max(0,w-1),Math.max(0,h-1));
+    ctx.lineWidth=2;ctx.strokeStyle=accent;
+    ctx.strokeRect(x+.5,y+.5,Math.max(0,w-1),Math.max(0,h-1));
+    ctx.setLineDash([]);
+    var hs=cropHandleSize(),pts=cropHandles(r);
+    for(var i=0;i<pts.length;i++){
+      ctx.fillStyle='#fff';ctx.strokeStyle=accent;ctx.lineWidth=1.5;
+      ctx.fillRect(pts[i].x-hs/2,pts[i].y-hs/2,hs,hs);
+      ctx.strokeRect(pts[i].x-hs/2,pts[i].y-hs/2,hs,hs);
+    }
+    var box=canvas.getBoundingClientRect(),sc=canvas.width/(box.width||canvas.width);
+    var fs=Math.max(11,12*sc),txt='裁剪 '+Math.round(w)+' × '+Math.round(h);
+    ctx.font='bold '+fs+'px sans-serif';
+    var tw=ctx.measureText(txt).width,th=fs+7;
+    var lx=clamp(x,0,Math.max(0,canvas.width-tw-12)),ly=y-th-5;
+    if(ly<0)ly=y+5;
+    ctx.fillStyle='rgba(11,26,42,.82)';ctx.fillRect(lx,ly,tw+12,th);
+    ctx.fillStyle='#fff';ctx.fillText(txt,lx+6,ly+fs+1);
+  }
+  function enterCropMode(){
+    if(cropActive){showToast('裁剪框已显示，拖动虚线框或控制点调整');return;}
+    pushHistory();
+    cropBase=ctx.getImageData(0,0,canvas.width,canvas.height);
+    cropRect={x:0,y:0,w:canvas.width,h:canvas.height};
+    cropActive=true;cropDragMode='';cropDragStart=null;
+    setActiveTool('crop');
+    cropApplyBtn.textContent='✓ 应用裁剪';
+    canvas.style.cursor='move';
+    drawCropOverlay();
+    positionRegionActions();
+    showToast('拖动虚线框调整范围，四角/四边可缩放');
+  }
+  function exitCropMode(){
+    cropActive=false;cropBase=null;cropRect=null;cropDragMode='';cropDragStart=null;
+    regionActions.style.display='none';
+    canvas.style.cursor='crosshair';
+  }
+  /* 把应用/取消浮条钉在区域框下方；框贴底时自动翻到上方，避免跑出屏幕。 */
+  function positionRegionActions(){
+    if(!cropActive||!cropRect){regionActions.style.display='none';return;}
+    var box=canvas.getBoundingClientRect();
+    if(!box.width||!box.height){regionActions.style.display='none';return;}
+    var sx=box.width/canvas.width,sy=box.height/canvas.height;
+    var cx=box.left+(cropRect.x+cropRect.w/2)*sx;
+    var bottom=box.top+(cropRect.y+cropRect.h)*sy;
+    var aw=regionActions.offsetWidth||170,ah=regionActions.offsetHeight||34;
+    var left=clamp(cx,aw/2+6,window.innerWidth-aw/2-6);
+    var top=bottom+10;
+    if(top+ah+6>window.innerHeight)top=box.top+cropRect.y*sy-ah-10;
+    top=clamp(top,6,window.innerHeight-ah-6);
+    regionActions.style.left=left+'px';
+    regionActions.style.top=top+'px';
+    regionActions.style.display='flex';
+  }
+  function cancelCrop(silent){
+    if(!cropActive)return;
+    var snap=history.pop();
+    if(snap){
+      if(snap.w!==canvas.width||snap.h!==canvas.height){canvas.width=snap.w;canvas.height=snap.h;}
+      ctx.putImageData(snap.data,0,0);
+      meta.textContent=canvas.width+' × '+canvas.height+' 像素';
+    }else if(cropBase){ctx.putImageData(cropBase,0,0);}
+    exitCropMode();setActiveTool('pen');
+    if(!silent)showToast('已取消裁剪');
+  }
+  function applyCrop(){
+    if(!cropActive||!cropBase||!cropRect)return;
+    var x=clamp(Math.round(cropRect.x),0,canvas.width-1),
+        y=clamp(Math.round(cropRect.y),0,canvas.height-1),
+        w=clamp(Math.round(cropRect.w),10,canvas.width-x),
+        h=clamp(Math.round(cropRect.h),10,canvas.height-y);
+    if(w<10||h<10){showToast('裁剪区域太小');return;}
+    var cropped=sliceImageData(cropBase,x,y,w,h);
+    var baseCropped=(baseImage&&baseImage.width===cropBase.width&&baseImage.height===cropBase.height)
+      ?sliceImageData(baseImage,x,y,w,h):cropped;
+    canvas.width=w;canvas.height=h;
+    ctx.putImageData(cropped,0,0);
+    baseImage=baseCropped;
+    meta.textContent=w+' × '+h+' 像素';
+    exitCropMode();setActiveTool('pen');
+    showToast('已裁剪为 '+w+' × '+h);
+  }
+  cropApplyBtn.onclick=applyCrop;
+  cropCancelBtn.onclick=function(){cancelCrop();};
+  window.addEventListener('resize',function(){if(cropActive)positionRegionActions();});
+  window.addEventListener('scroll',function(){if(cropActive)positionRegionActions();},true);
+  function setColor(v){
+    color=v;
+    document.querySelectorAll('.color-dot').forEach(function(x){
+      x.classList.toggle('active',String(x.dataset.color).toLowerCase()===String(v).toLowerCase());
+    });
+    try{colorPick.value=v;}catch(_){}
+  }
+  document.querySelectorAll('.tool[data-tool]').forEach(function(btn){
+    btn.onclick=function(){
+      var t=btn.dataset.tool;
+      if(t==='crop'){enterCropMode();return;}
+      if(t==='undo'){if(cropActive)cancelCrop(true);undo();return;}
+      if(t==='redo'){if(cropActive)cancelCrop(true);redo();return;}
+      if(t==='clear'){
+        if(cropActive){showToast('请先应用或取消裁剪');return;}
+        clearMarks();return;
+      }
+      if(cropActive)cancelCrop(true);
+      setActiveTool(t);
+      if(t==='seq')showToast('在截图上点一下放置序号，可连续标注');
+      if(t==='mosaic'||t==='blur')showToast('按住鼠标在截图上涂抹即可'+(t==='mosaic'?'打码':'模糊'));
+    };
+  });
+  document.querySelectorAll('.color-dot').forEach(function(d){
+    d.onclick=function(){setColor(d.dataset.color);};
+  });
+  colorPick.oninput=function(){setColor(colorPick.value);};
+  sizeRange.oninput=function(){
+    brushSize=parseInt(sizeRange.value,10)||3;sizeVal.textContent=brushSize;
+  };
+  /* 历史快照带尺寸：裁剪会改 canvas.width/height，普通快照直接 putImageData
+     会被裁掉一半。这里记住尺寸，撤销裁剪时能恢复原来的大图。 */
+  function snapshot(){
+    return {w:canvas.width,h:canvas.height,data:ctx.getImageData(0,0,canvas.width,canvas.height)};
+  }
+  function restoreSnap(s){
+    if(s.w!==canvas.width||s.h!==canvas.height){canvas.width=s.w;canvas.height=s.h;}
+    ctx.putImageData(s.data,0,0);
+    meta.textContent=canvas.width+' × '+canvas.height+' 像素';
+  }
+  function pushHistory(){
+    history.push(snapshot());
+    if(history.length>30)history.shift();
+    future=[];
+  }
+  function undo(){
+    if(!history.length){showToast('没有可撤销的操作');return;}
+    future.push(snapshot());if(future.length>30)future.shift();
+    restoreSnap(history.pop());
+  }
+  function redo(){
+    if(!future.length){showToast('没有可重做的操作');return;}
+    history.push(snapshot());if(history.length>30)history.shift();
+    restoreSnap(future.pop());
+  }
+  function clearMarks(){
+    if(!baseImage){showToast('当前没有可清空的批注');return;}
+    pushHistory();ctx.putImageData(baseImage,0,0);showToast('已清空批注');
+  }
+  /* 从 ImageData 里切一块，裁剪后 baseImage 也跟着切，
+     这样「清空批注」仍回到裁剪后的干净原图。 */
+  function sliceImageData(src,x,y,w,h){
+    var dst=ctx.createImageData(w,h);
+    for(var row=0;row<h;row++){
+      var si=((y+row)*src.width+x)*4, di=row*w*4;
+      dst.data.set(src.data.subarray(si,si+w*4),di);
+    }
+    return dst;
+  }
+  function pos(e){var r=canvas.getBoundingClientRect();return{x:(e.clientX-r.left)*canvas.width/r.width,y:(e.clientY-r.top)*canvas.height/r.height};}
+  canvas.addEventListener('pointerdown',function(e){
+    if(textInput)commitText();
+    var p=pos(e);
+    if(cropActive){
+      var m=hitCrop(p);
+      if(!m)return;
+      cropDragMode=m;
+      cropDragStart={x:p.x,y:p.y,rect:{x:cropRect.x,y:cropRect.y,w:cropRect.w,h:cropRect.h}};
+      try{canvas.setPointerCapture(e.pointerId);}catch(_){}
+      e.preventDefault();return;
+    }
+    if(tool==='text'){openTextInput(p);return;}
+    if(tool==='seq'){pushHistory();drawSeq(p);return;}
+    pushHistory();
+    drawing=true;lastX=p.x;lastY=p.y;
+    if(tool==='mosaic'){stampMosaic(p);return;}
+    if(tool==='blur'){stampBlur(p);return;}
+    if(tool==='pen'){ctx.strokeStyle=color;ctx.lineWidth=brushSize;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(p.x,p.y);}
+  });
+  canvas.addEventListener('pointermove',function(e){
+    var p=pos(e);
+    if(cropActive){
+      if(!cropDragMode){canvas.style.cursor=cropCursor(hitCrop(p));return;}
+      if(!cropBase||!cropDragStart)return;
+      cropRect=resizeCrop(cropDragStart.rect,cropDragMode,p.x-cropDragStart.x,p.y-cropDragStart.y);
+      drawCropOverlay();positionRegionActions();return;
+    }
+    if(!drawing)return;
+    if(tool==='pen'){ctx.lineTo(p.x,p.y);ctx.stroke();return;}
+    if(tool==='mosaic'||tool==='blur'){
+      /* 微信式涂抹：沿鼠标轨迹按笔刷半径插值连续盖章，直接累积在当前画布上，
+         不走「恢复快照再画形状」那套，否则只剩最后一笔。 */
+      var dist=Math.hypot(p.x-lastX,p.y-lastY);
+      var n=Math.max(1,Math.ceil(dist/Math.max(4,brushSize*2)));
+      for(var i=1;i<=n;i++){
+        var q={x:lastX+(p.x-lastX)*i/n,y:lastY+(p.y-lastY)*i/n};
+        if(tool==='mosaic')stampMosaic(q);else stampBlur(q);
+      }
+      lastX=p.x;lastY=p.y;return;
+    }
+    var snap=history[history.length-1];
+    if(snap&&snap.w===canvas.width&&snap.h===canvas.height)ctx.putImageData(snap.data,0,0);
+    ctx.strokeStyle=color;ctx.lineWidth=brushSize;
+    if(tool==='rect')ctx.strokeRect(lastX,lastY,p.x-lastX,p.y-lastY);
+    else if(tool==='ellipse'){
+      ctx.beginPath();
+      ctx.ellipse((lastX+p.x)/2,(lastY+p.y)/2,Math.abs(p.x-lastX)/2,Math.abs(p.y-lastY)/2,0,0,Math.PI*2);
+      ctx.stroke();
+    }
+    else if(tool==='arrow')drawArrow(lastX,lastY,p.x,p.y);
+  });
+  function endCropDrag(e){
+    if(!cropActive||!cropDragMode)return;
+    try{canvas.releasePointerCapture(e.pointerId);}catch(_){}
+    cropDragMode='';cropDragStart=null;
+    canvas.style.cursor=cropCursor(hitCrop(pos(e)));
+  }
+  canvas.addEventListener('pointerup',function(e){
+    if(cropActive){endCropDrag(e);return;}
+    drawing=false;
+  });
+  canvas.addEventListener('pointercancel',function(e){
+    if(cropActive){endCropDrag(e);return;}
+    drawing=false;
+  });
+  function drawArrow(x1,y1,x2,y2){
+    var a=Math.atan2(y2-y1,x2-x1),len=8+brushSize*1.5;
+    ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(x2,y2);ctx.lineTo(x2-len*Math.cos(a-Math.PI/6),y2-len*Math.sin(a-Math.PI/6));
+    ctx.moveTo(x2,y2);ctx.lineTo(x2-len*Math.cos(a+Math.PI/6),y2-len*Math.sin(a+Math.PI/6));ctx.stroke();
+  }
+  /* 微信式涂抹：一次 pointermove 沿途会盖多个章。
+     马赛克章按全局网格对齐，连续涂抹时块大小一致，接缝自然。 */
+  function stampRect(p,size){
+    size=Math.max(12,size);
+    var x=clamp(Math.round(p.x-size/2),0,Math.max(0,canvas.width-1)),
+        y=clamp(Math.round(p.y-size/2),0,Math.max(0,canvas.height-1));
+    return {x:x,y:y,w:Math.min(Math.round(size),canvas.width-x),h:Math.min(Math.round(size),canvas.height-y)};
+  }
+  function stampMosaic(p){
+    var bs=Math.max(6,brushSize*3),r=stampRect(p,brushSize*8);
+    /* 对齐到全局马赛克网格 */
+    var x=Math.floor(r.x/bs)*bs,y=Math.floor(r.y/bs)*bs;
+    var w=Math.min(Math.ceil(r.w/bs)*bs,canvas.width-x);
+    var h=Math.min(Math.ceil(r.h/bs)*bs,canvas.height-y);
+    if(w<1||h<1)return;
+    var tw=Math.max(1,Math.ceil(w/bs)),th=Math.max(1,Math.ceil(h/bs));
+    var tmp=document.createElement('canvas');tmp.width=tw;tmp.height=th;
+    tmp.getContext('2d').drawImage(canvas,x,y,w,h,0,0,tw,th);
+    ctx.save();ctx.imageSmoothingEnabled=false;
+    ctx.drawImage(tmp,0,0,tw,th,x,y,w,h);ctx.restore();
+  }
+  function stampBlur(p){
+    var r=stampRect(p,brushSize*8);
+    if(r.w<2||r.h<2)return;
+    var tmp=document.createElement('canvas');tmp.width=r.w;tmp.height=r.h;
+    tmp.getContext('2d').drawImage(canvas,r.x,r.y,r.w,r.h,0,0,r.w,r.h);
+    ctx.save();ctx.filter='blur('+Math.max(2,brushSize*1.5)+'px)';
+    ctx.drawImage(tmp,r.x,r.y);ctx.restore();
+  }
+  function openTextInput(p){
+    textInput=document.createElement('input');textInput.className='text-input';
+    var r=canvas.getBoundingClientRect();
+    textInput.style.left=(r.left+p.x*canvas.width/r.width)+'px';
+    textInput.style.top=(r.top+p.y*canvas.height/r.height)+'px';
+    textInput.placeholder='输入文字后回车';
+    textInput.style.fontSize=Math.max(14,10+brushSize*3)+'px';
+    document.body.appendChild(textInput);textInput.focus();
+    textInput.onkeydown=function(e){if(e.key==='Enter')commitText();};
+    textInput._p=p;
+  }
+  function commitText(){
+    if(!textInput)return;
+    var t=textInput.value.trim(),p=textInput._p;
+    if(t){
+      pushHistory();
+      var fs=Math.max(14,10+brushSize*3);
+      ctx.fillStyle=color;ctx.font='bold '+fs+'px sans-serif';
+      ctx.fillText(t,p.x,p.y+fs*0.9);
+    }
+    document.body.removeChild(textInput);textInput=null;
+  }
+  function closeEditor(){
+    if(cropActive)cancelCrop(true);
+    editor.classList.remove('on');
+    if(textInput){document.body.removeChild(textInput);textInput=null;}
+  }
+  document.getElementById('closeEditor').onclick=closeEditor;
+  document.getElementById('cancelBtn').onclick=closeEditor;
+  document.getElementById('redoBtn').onclick=function(){closeEditor();showCapture();};
+
+  /* 微信式「复制」：直接把画布写成 PNG 进系统剪贴板，可粘到聊天/文档。
+     注意必须在点击手势里同步调用 clipboard.write，Blob 可以后到（Promise）。 */
+  copyBtn.onclick=async function(){
+    if(cropActive){showToast('请先应用或取消裁剪');return;}
+    if(!navigator.clipboard||typeof window.ClipboardItem!=='function'){
+      showToast('当前浏览器不支持复制图片，请用保存到文件夹');return;
+    }
+    try{
+      var item=new ClipboardItem({'image/png':new Promise(function(res){
+        canvas.toBlob(function(blob){res(blob);},'image/png');
+      })});
+      await navigator.clipboard.write([item]);
+      showToast('已复制到剪贴板，可直接粘贴');
+      closeEditor();
+    }catch(e){showToast('复制失败：'+((e&&(e.message||e.name))||'未知错误'));}
+  };
+
+  /* 第四步：保存 */
+  document.getElementById('saveBtn').onclick=async function(){
+    if(cropActive){showToast('请先应用或取消裁剪');return;}
+    canvas.toBlob(async function(blob){
+      var name='截图_'+new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')+'.png';
+      try{
+        var where='';
+        if(folderHandle){
+          var perm=await folderHandle.queryPermission({mode:'readwrite'});
+          if(perm!=='granted')perm=await folderHandle.requestPermission({mode:'readwrite'});
+          if(perm!=='granted')throw new Error('文件夹权限被拒绝');
+          var fh=await folderHandle.getFileHandle(name,{create:true});
+          var w=await fh.createWritable();await w.write(blob);await w.close();
+          where=folderHandle.name+'/'+name;
+        }else if(typeof window.showSaveFilePicker==='function'){
+          var h=await window.showSaveFilePicker({suggestedName:name,types:[{description:'PNG 图片',accept:{'image/png':['.png']}}]});
+          var w2=await h.createWritable();await w2.write(blob);await w2.close();
+          where=h.name;
+        }else{
+          var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();
+          setTimeout(function(){URL.revokeObjectURL(a.href);},1000);
+          where='浏览器下载目录/'+name;
+        }
+        showToast('已保存：'+where);
+        closeEditor();
+      }catch(e){if(e.name!=='AbortError')showToast('保存失败：'+e.message);}
+    },'image/png');
+  };
+})();
+</script>
+</body>
+</html>

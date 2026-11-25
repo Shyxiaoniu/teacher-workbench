@@ -1,0 +1,740 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+班级工作台 2.0 · 测验/检测接口层（quiz_api.py，2.0.38）
+
+抽出来单独放，是为了不让 270KB 的 server.py 里再塞几百行分支：
+server.py 只在 GET / POST 分发开头各插一行，其余全在这里。
+
+安全边界（重点）
+--------------
+· 教师接口一律 _is_teacher()；
+· 学生接口一律按会话取 student_row，班级由**服务端**查出来，不信客户端传的 class_id；
+· 下发的试卷是 quiz_store.paper_for_student() 裁剪过的，没有 answer / accept / 分值；
+· 提交由服务端 grade_paper() 判分，answers 里客户端塞 score 也没用；
+· 提交后是否给答案 / 给分数，按该次发布的 show_answer / show_score 在**出网前**裁掉，
+  不是前端隐藏——前端隐藏等于把答案发到学生机器上了；
+· 图片题落 <工作区>/quiz_files/，取图时教师可看全部、学生只能看自己的。
+"""
+
+import os
+import re
+import json
+import base64
+import time
+import urllib.parse
+
+# SSE 事件版本：每次提交 / 发布变更 +1，server.py 的 _sse_loop 推 event: quiz。
+# 数据不进 STORE.rev（试卷不参与同步），所以必须有独立的一条实时通道。
+#
+# 2.0.71 账号隔离：事件按教师账号分桶。原实现 EPOCH/LAST_EVENT 是模块级全局，
+# 多个教师账号同时在线时，A 账号的提交事件（含班级 / 学号 / 窗口名）会被
+# B 账号的 SSE 连接收到 —— 违反「除资料共享外数据全隔离」。这里改成
+# {account: [epoch, payload]}，每个连接只取自己账号的那一份。
+# 不直接 import accounts（会循环依赖），由 server.py 启动时注入取账号的回调。
+_ACCOUNT_FN = [None]
+_BUCKETS = {}          # account -> {"epoch": int, "event": dict}
+
+
+def set_account_provider(fn):
+    """由 server.py 注入 ACC.current_account；不注入时退化为单一 'default' 桶。"""
+    _ACCOUNT_FN[0] = fn
+
+
+def _bucket():
+    acc = "default"
+    if _ACCOUNT_FN[0] is not None:
+        try:
+            acc = str(_ACCOUNT_FN[0]() or "default")
+        except Exception:
+            acc = "default"
+    return _BUCKETS.setdefault(acc, {"epoch": 0, "event": {}})
+
+
+# 兼容老代码/测试：EPOCH 仍可读，读的是 default 桶的版本号。
+class _EpochProxy(object):
+    def __getitem__(self, i):
+        return _bucket()["epoch"]
+
+
+EPOCH = _EpochProxy()
+
+
+def bump(payload=None):
+    b = _bucket()
+    b["epoch"] += 1
+    b["event"] = payload or {}
+    return b["epoch"]
+
+
+def last_event():
+    b = _bucket()
+    return {"epoch": b["epoch"], "data": b["event"]}
+
+
+def student_class_ids(row):
+    """学生所属全部班级 id（主班 class_id + 兼属班 class_ids），2.0.71 多班。"""
+    out = []
+    main = row.get("class_id") if isinstance(row, dict) else None
+    try:
+        if main not in (None, ""):
+            out.append(int(main))
+    except (TypeError, ValueError):
+        pass
+    for x in (row.get("class_ids") or []) if isinstance(row, dict) else []:
+        try:
+            v = int(x)
+            if v not in out:
+                out.append(v)
+        except (TypeError, ValueError):
+            pass
+    return out
+
+
+_MIME = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+         ".gif": "image/gif", ".webp": "image/webp", ".bmp": "image/bmp"}
+MAX_IMAGE = 2 * 1024 * 1024          # 单张 2MB（base64 解码后）
+MAX_IMAGES = 6                        # 单次提交最多 6 张
+
+
+class QuizAPI(object):
+    def __init__(self, handler, quiz, store, act, files_dir,
+                 student_row_fn, class_name_fn, notify_fn, cross_account=None):
+        self.h = handler
+        self.q = quiz
+        self.store = store
+        self.act = act
+        self.files_dir = files_dir
+        self.student_row = student_row_fn
+        self.class_name = class_name_fn
+        self.notify = notify_fn
+        self.cross_account = cross_account
+
+    # ------------------------------------------------------------------ 工具
+    def ok(self, **kw):
+        # 返回值是给 server.py 分发器的「我已处理」标记。
+        # Handler._json() 本身返回 None，直接 return 它会被当成「未知接口」
+        # 而在同一条 keep-alive 连接上再写一次 404 响应（HTTP 流被污染）。
+        self.h._json(dict({"ok": True}, **kw))
+        return True
+
+    def err(self, msg, code=400):
+        self.h._json({"ok": False, "msg": msg}, code)
+        return True
+
+    def teacher(self):
+        return self.h._is_teacher()
+
+    def me(self):
+        s = self.h._session()
+        if not s or s.get("role") != "student":
+            return None, None
+        row = self.student_row(s.get("student_id"))
+        if not row:
+            return s, None
+        return s, row
+
+    def roster(self):
+        """{class_id: 人数} 与班级名，全部从 STORE 实时取（改名/转班自动跟着变）。"""
+        counts, names = {}, {}
+        try:
+            for c in self.store.table_rows("classes"):
+                names[str(c.get("id"))] = str(c.get("name") or "")
+            for s in self.store.table_rows("students"):
+                k = str(s.get("class_id") or "")
+                counts[k] = counts.get(k, 0) + 1
+        except Exception:
+            pass
+        return counts, names
+
+    def classes(self):
+        out = []
+        try:
+            counts, _ = self.roster()
+            rows = list(self.store.table_rows("classes"))
+            def _so(v):
+                try:
+                    return int(v)
+                except (TypeError, ValueError):
+                    return 10 ** 9
+            rows.sort(key=lambda c: (_so(c.get("sort_order")), str(c.get("name") or "")))
+            for c in rows:
+                out.append({"id": c.get("id"), "name": str(c.get("name") or ""),
+                            "n": int(counts.get(str(c.get("id")), 0))})
+        except Exception:
+            pass
+        return out
+
+    def now(self):
+        return {"date": time.strftime("%Y-%m-%d"), "time": time.strftime("%H:%M:%S"),
+                "stamp": time.strftime("%Y-%m-%d %H:%M"), "ts": time.time()}
+
+    # ------------------------------------------------------------------ 图片
+    def _save_images(self, sub_id, paper, answers):
+        """把 dataURL 落到磁盘，answers 里只留只读 URL（quiz.json 不被撑爆）。"""
+        qmap = {str(q.get("id")): q for q in (paper.get("questions") or [])}
+        for qid, val in list((answers or {}).items()):
+            q = qmap.get(str(qid)) or {}
+            if str(q.get("type")) != "image" or not isinstance(val, dict):
+                continue
+            data = str(val.get("data") or "")
+            m = re.match(r"^data:image/([a-zA-Z0-9+.-]+);base64,([A-Za-z0-9+/=\s]+)$", data)
+            if not m:
+                answers[qid] = {"name": str(val.get("name") or ""), "url": "", "size": 0}
+                continue
+            ext = "." + m.group(1).lower().replace("jpeg", "jpg")
+            if ext not in _MIME:
+                ext = ".png"
+            try:
+                raw = base64.b64decode(m.group(2), validate=True)
+            except Exception:
+                raw = b""
+            if not raw or len(raw) > MAX_IMAGE:
+                answers[qid] = {"name": str(val.get("name") or ""), "url": "", "size": 0}
+                continue
+            try:
+                os.makedirs(self.files_dir, exist_ok=True)
+                fn = "%s_%s%s" % (re.sub(r"[^A-Za-z0-9_-]", "", str(sub_id)),
+                                  re.sub(r"[^A-Za-z0-9_-]", "", str(qid)), ext)
+                try:
+                    import enc_ctx as _ENC
+                    raw_on_disk = _ENC.enc_file(raw) if _ENC.get_fek() else raw
+                except Exception:
+                    raw_on_disk = raw
+                with open(os.path.join(self.files_dir, fn), "wb") as f:
+                    f.write(raw_on_disk)
+                answers[qid] = {"name": str(val.get("name") or "图片"), "size": len(raw),
+                                "url": "/api/v2/quiz/file?sub=%s&q=%s" % (
+                                    urllib.parse.quote(str(sub_id)), urllib.parse.quote(str(qid)))}
+            except Exception:
+                answers[qid] = {"name": str(val.get("name") or ""), "url": "", "size": 0}
+        return answers
+
+    def _file(self, qs):
+        s = self.h._session()
+        if not s:
+            return self.err("未登录", 401)
+        sub = (qs.get("sub") or [""])[0]
+        qid = (qs.get("q") or [""])[0]
+        rows = [x for x in self.q.submissions() if str(x.get("id")) == sub]
+        if not rows:
+            return self.err("图片不存在", 404)
+        rec = rows[0]
+        if s.get("role") != "teacher" and str(s.get("student_id")) != str(rec.get("student_id")):
+            return self.err("无权查看", 403)
+        val = (rec.get("answers") or {}).get(qid) or {}
+        url = str(val.get("url") or "")
+        if not url.startswith("/api/v2/quiz/file"):
+            return self.err("图片不存在", 404)
+        fn = "%s_%s" % (re.sub(r"[^A-Za-z0-9_-]", "", sub),
+                        re.sub(r"[^A-Za-z0-9_-]", "", qid))
+        found = None
+        for ext, mime in _MIME.items():
+            p = os.path.normpath(os.path.join(self.files_dir, fn + ext))
+            if os.path.commonpath([os.path.abspath(self.files_dir), p]) != os.path.abspath(self.files_dir):
+                continue
+            if os.path.isfile(p):
+                found = (p, mime)
+                break
+        if not found:
+            return self.err("图片不存在", 404)
+        with open(found[0], "rb") as f:
+            body = f.read()
+        try:
+            import enc_ctx as _ENC
+            body = _ENC.dec_file(body)
+        except Exception:
+            return self.err("图片解密失败，请重新登录", 500)
+        self.h.send_response(200)
+        self.h.send_header("Content-Type", found[1])
+        self.h.send_header("Content-Length", str(len(body)))
+        self.h.send_header("Cache-Control", "no-store")
+        self.h.end_headers()
+        self.h.wfile.write(body)
+        return True
+
+    # ------------------------------------------------------------------ GET
+    def get(self, path, qs):
+        if path == "/api/v2/quiz/file":
+            return self._file(qs)
+
+        if path == "/api/v2/quiz/board":
+            # 大屏实时看板只给教师：名单里有别班学号，学生端不该拿到
+            if not self.teacher():
+                return self.err("未登录", 401)
+            return self._board(qs)
+
+        if path == "/api/v2/quiz/teacher/overview":
+            if not self.teacher():
+                return self.err("未登录", 401)
+            pubs = self.q.publishes()
+            counts, names = self.roster()
+            for p in pubs:
+                ok, st = self.q.state(p, time.strftime("%Y-%m-%d %H:%M"))
+                p["state"] = st
+                p["open"] = ok
+                p["paper_title"] = (self.q.paper(p.get("paper_id")) or {}).get("title", "（试卷已删除）")
+                p["class_names"] = [names.get(str(c), str(c)) for c in (p.get("class_ids") or [])]
+                p["submitted"] = len(self.q.latest_per_person(self.q.submissions(p.get("id"))))
+                p["roster"] = sum(int(counts.get(str(c), 0)) for c in (p.get("class_ids") or []))
+            pubs.sort(key=lambda x: str(x.get("created_at") or ""), reverse=True)
+            papers = self.q.papers()
+            papers.sort(key=lambda x: str(x.get("updated_at") or ""), reverse=True)
+            return self.ok(papers=papers, publishes=pubs, classes=self.classes(),
+                           now=self.now(), board=self._board_data(),
+                           policy=self._policy_text())
+
+        if path == "/api/v2/quiz/teacher/paper":
+            if not self.teacher():
+                return self.err("未登录", 401)
+            p = self.q.paper((qs.get("id") or [""])[0])
+            return self.ok(paper=p) if p else self.err("试卷不存在", 404)
+
+        if path == "/api/v2/quiz/teacher/bank":
+            if not self.teacher():
+                return self.err("未登录", 401)
+            return self.ok(bank=self.q.bank_list())
+
+        if path == "/api/v2/quiz/teacher/sample":
+            if not self.teacher():
+                return self.err("未登录", 401)
+            from quiz_import import SAMPLE
+            return self.ok(sample=SAMPLE)
+
+        if path == "/api/v2/quiz/teacher/stats":
+            if not self.teacher():
+                return self.err("未登录", 401)
+            pid = (qs.get("pub") or [""])[0]
+            if not self.q.publish(pid):
+                return self.err("测验不存在", 404)
+            cid = (qs.get("class") or [""])[0] or None
+            counts, names = self.roster()
+            st = self.q.stats(pid, cid, counts)
+            for b in st["classes"]:
+                b["class_name"] = names.get(str(b.get("class_id")), "") or b.get("class_name") or "未分班"
+            return self.ok(stats=st, classes=self.classes(), now=self.now())
+
+        if path == "/api/v2/quiz/teacher/score-rows":
+            # 成绩页「从测验导入」的数据源：只给行，真正的写库由前端走既有同步链路
+            if not self.teacher():
+                return self.err("未登录", 401)
+            pid = (qs.get("pub") or [""])[0]
+            cid = (qs.get("class") or [""])[0]
+            pub = self.q.publish(pid)
+            if not pub:
+                return self.err("测验不存在", 404)
+            rows = self.q.score_rows(pid, cid or None)
+            paper = self.q.paper(pub.get("paper_id")) or {}
+            _c, names = self.roster()
+            return self.ok(rows=rows, publish=pub,
+                           paper={"id": paper.get("id"), "title": paper.get("title"),
+                                  "total": paper.get("total", 0)},
+                           class_name=names.get(cid, ""), class_id=cid)
+
+        if path == "/api/v2/quiz/student/list":
+            s, row = self.me()
+            if not s:
+                return self.err("未登录", 401)
+            if not row:
+                return self.err("学生档案不存在", 404)
+            cid = row.get("class_id")
+            out, seen_pub = [], set()
+            now_str = time.strftime("%Y-%m-%d %H:%M")
+            # 2.0.71 多班：合并该生主班 + 兼属班下发的测验，按发布 id 去重。
+            for c in student_class_ids(row):
+                for p in self.q.visible_publishes(c, now_str):
+                    pid = str(p.get("id") or "")
+                    if pid in seen_pub:
+                        continue
+                    seen_pub.add(pid)
+                    d = dict(p)
+                    # 显示策略由服务端在「提交回执」里执行，配置本身不下发给学生端
+                    d.pop("show_answer", None)
+                    d.pop("show_score", None)
+                    d["paper_title"] = (self.q.paper(p.get("paper_id")) or {}).get("title", "")
+                    d["attempts"] = self.q.attempt_count(p.get("id"), s.get("student_id"))
+                    d["last"] = self._receipt(p, s.get("student_id"), False)
+                    out.append(d)
+            return self.ok(publishes=out, now=self.now(),
+                           class_name=self.class_name(cid), class_id=cid)
+
+        if path == "/api/v2/quiz/student/paper":
+            s, row = self.me()
+            if not s:
+                return self.err("未登录", 401)
+            if not row:
+                return self.err("学生档案不存在", 404)
+            pid = (qs.get("pub") or [""])[0]
+            pub = self.q.publish(pid)
+            if not pub:
+                return self.err("测验不存在", 404)
+            my_classes = student_class_ids(row)
+            if not set(my_classes) & set(int(x) for x in (pub.get("class_ids") or [])):
+                return self.err("这份测验没有下发给你的班级", 403)
+            ok, st = self.q.state(pub, time.strftime("%Y-%m-%d %H:%M"))
+            if st == "draft":
+                return self.err("测验尚未发布", 403)
+            paper = self.q.paper_for_student(pub.get("paper_id"))
+            if not paper:
+                return self.err("试卷不存在", 404)
+            safe = {k: pub.get(k) for k in ("id", "title", "course", "max_attempts",
+                                            "allow_multiple", "open_at", "close_at")}
+            safe["state"] = st
+            safe["open"] = ok
+            safe["attempts"] = self.q.attempt_count(pid, s.get("student_id"))
+            return self.ok(paper=paper, publish=safe, now=self.now(),
+                           class_name=self.class_name(row.get("class_id")),
+                           student={"name": row.get("name"), "no": row.get("student_no")})
+
+        if path == "/api/v2/quiz/student/result":
+            s, row = self.me()
+            if not s:
+                return self.err("未登录", 401)
+            pid = (qs.get("pub") or [""])[0]
+            pub = self.q.publish(pid)
+            if not pub:
+                return self.err("测验不存在", 404)
+            return self.ok(receipt=self._receipt(pub, s.get("student_id"), True))
+
+        return None      # 不是测验接口
+
+    # ------------------------------------------------------------------ 回执
+    def _receipt(self, pub, sid, with_detail):
+        """按 show_answer / show_score 在出网前裁剪，绝不把答案发给不该看的人。"""
+        rows = [x for x in self.q.submissions(pub.get("id"))
+                if str(x.get("student_id")) == str(sid)]
+        if not rows:
+            return None
+        rec = sorted(rows, key=lambda x: str(x.get("submitted_at") or ""))[-1]
+        out = {"id": rec.get("id"), "attempt": rec.get("attempt"),
+               "submitted_at": rec.get("submitted_at"), "needs_grade": bool(rec.get("needs_grade")),
+               "show_answer": bool(pub.get("show_answer")),
+               "show_score": bool(pub.get("show_score"))}
+        if pub.get("show_score"):
+            out["score"] = rec.get("score")
+            out["auto_full"] = rec.get("auto_full")
+            out["full"] = rec.get("full")
+        if pub.get("show_answer"):
+            # 答案解析独立开关：只有「显示答案」+「开放解析」同时为真才下发，
+            # 否则连字段都不带，避免学生从回执里翻到解析。
+            with_analysis = bool(pub.get("show_analysis"))
+            out["show_analysis"] = with_analysis
+            paper = self.q.paper(rec.get("paper_id")) or {}
+            ans = {}
+            for q in (paper.get("questions") or []):
+                qid = str(q.get("id") or "")
+                ans[qid] = {"answer": q.get("answer"), "accept": q.get("accept") or [],
+                            "pairs": q.get("pairs") or [],
+                            "analysis": (str(q.get("analysis") or "") if with_analysis else "")}
+            out["answers"] = ans
+            if with_detail:
+                out["detail"] = rec.get("detail") or {}
+                out["mine"] = rec.get("answers") or {}
+        return out
+
+    def _board_data(self):
+        """同源合并：测验提交 + 学习单按钮提交 → 按窗口分组。"""
+        act_subs = []
+        try:
+            for t in (self.act.tasks() or []):
+                tid = t.get("task_id") or t.get("id")
+                if not tid:
+                    continue
+                # ActivityStore.submissions() 返回的是已摊平的 data 字典本身
+                # （按钮名在 data["按钮"]，时间/学号/姓名也都在这一层）。
+                for d in (self.act.submissions(tid) or []):
+                    if not isinstance(d, dict):
+                        continue
+                    _btn = " ".join(str(d.get("按钮") or d.get("button") or "").split())
+                    # 2026-11-17：模拟提交（预览页 ?test=1）不再直接丢弃 ——
+                    # 统一归到独立的「测试提交」窗口，老师课前能在大屏看到
+                    # 链路是通的，又不会混进真实提交窗口。
+                    # 学号以 TEST 开头也算（老数据没有 _test 标记时靠它认）。
+                    _test = (bool(d.get("_test")) or _btn == "测试提交"
+                             or str(d.get("学号") or d.get("student_no") or "")
+                             .strip().upper().startswith("TEST"))
+                    act_subs.append({"按钮": "测试提交" if _test else _btn,
+                                     "test": _test,
+                                     "data": d,
+                                     # 来源任务号：大屏按窗口反查该清哪个 act_task
+                                     "task": str(tid),
+                                     "submitted_at": d.get("submitted_at") or "",
+                                     "has_file": bool(d.get("attachment") or d.get("_files")
+                                                      or d.get("file") or d.get("作品链接"))})
+        except Exception:
+            pass
+        return self.q.board(act_subs)
+
+    def _board(self, qs):
+        task = (qs.get("task") or [""])[0]
+        b = self._board_data()
+        b["now"] = self.now()
+        b["task"] = task
+        return self.ok(board=b)
+
+    @staticmethod
+    def _policy_text():
+        return {
+            "screen": "大屏（上课页）：实时收件看板，只统计「谁交了 / 交到哪个窗口」，不显示答案与分数。",
+            "quiz": "测验/检测页：唯一的逐题、分数、按班提交与成绩分析入口。",
+            "scores": "成绩页：把某次测验某班成绩导入成一场考试，之后走既有成绩分析。",
+            "rule": "三处读同一份提交；同一次发布同一名学生只算最后一次提交，不重复计数。",
+        }
+
+    # ------------------------------------------------------------------ POST
+    def post(self, path, body):
+        if not path.startswith("/api/v2/quiz/"):
+            return None
+        # 跨账号操作（如试卷分享）由 server 层注入的回调处理
+        if self.cross_account:
+            r = self.cross_account(self.h, path, body)
+            if r is not None:
+                return r
+        if not self.teacher():
+            # 学生提交单独走下面的学生分支
+            if path != "/api/v2/quiz/student/submit":
+                return self.err("未登录", 401)
+        body = body if isinstance(body, dict) else {}
+
+        if path == "/api/v2/quiz/teacher/paper/save":
+            p = self.q.save_paper(body.get("paper") or body)
+            if not p:
+                return self.err("试卷内容不对")
+            return self.ok(paper=p)
+
+        # ---- 整份试卷导入（严格按标准试卷格式解析，支持先预览再载入） ----
+        if path == "/api/v2/quiz/teacher/import":
+            from quiz_import import parse_paper_text
+            text = str(body.get("text") or "")
+            res = parse_paper_text(text, str(body.get("title") or "导入试卷"))
+            if not res.get("ok"):
+                return self.err("；".join(res.get("errors") or ["解析失败"]))
+            if body.get("preview"):
+                return self.ok(preview=res["paper"], warnings=res.get("warnings") or [])
+            p = self.q.save_paper(res["paper"])
+            added = updated = 0
+            if body.get("add_to_bank"):
+                added, updated = self.q.bank_add(res["paper"].get("questions") or [])
+            return self.ok(paper=p, warnings=res.get("warnings") or [],
+                           bank_added=added, bank_updated=updated)
+
+        # ---- Word / Excel 试卷导入（.docx / .xlsx 完整解析，.doc 文本兜底） ----
+        if path == "/api/v2/quiz/teacher/import-file":
+            from quiz_import import parse_office_blob
+            fn = str(body.get("filename") or "")
+            raw = str(body.get("data") or "")
+            if raw.startswith("data:") and "," in raw:
+                raw = raw.split(",", 1)[1]
+            try:
+                blob = base64.b64decode(raw, validate=False)
+            except Exception:
+                return self.err("文件内容读取失败，请重新选择文件")
+            if not blob:
+                return self.err("文件是空的")
+            if len(blob) > 8 * 1024 * 1024:
+                return self.err("文件超过 8MB，请精简后再导入")
+            res = parse_office_blob(fn, blob, str(body.get("title") or "导入试卷"))
+            if not res.get("ok"):
+                return self.err("；".join(res.get("errors") or ["解析失败"]))
+            if body.get("preview"):
+                return self.ok(preview=res["paper"], warnings=res.get("warnings") or [],
+                               kind=res.get("kind"), degraded=bool(res.get("degraded")))
+            p = self.q.save_paper(res["paper"])
+            if not p:
+                return self.err("试卷内容不完整，未保存")
+            added = updated = 0
+            if body.get("add_to_bank"):
+                added, updated = self.q.bank_add(res["paper"].get("questions") or [])
+            return self.ok(paper=p, warnings=res.get("warnings") or [],
+                           kind=res.get("kind"), degraded=bool(res.get("degraded")),
+                           bank_added=added, bank_updated=updated)
+
+        # ---- 试题库 ----
+        if path == "/api/v2/quiz/teacher/bank/add":
+            pid = str(body.get("paper_id") or "")
+            qs = body.get("questions")
+            if not isinstance(qs, list):
+                p = self.q.paper(pid)
+                if not p:
+                    return self.err("试卷不存在", 404)
+                qs = p.get("questions") or []
+            a, u = self.q.bank_add(qs)
+            return self.ok(added=a, updated=u, total=len(self.q.bank_list()))
+
+        if path == "/api/v2/quiz/teacher/bank/delete":
+            return self.ok(deleted=self.q.bank_delete(body.get("id")))
+
+        if path == "/api/v2/quiz/teacher/paper/from-bank":
+            ids = body.get("ids") if isinstance(body.get("ids"), list) else []
+            picked = self.q.bank_pick(ids)
+            if not picked:
+                return self.err("题库里没有选中的题目")
+            p = self.q.save_paper({"title": str(body.get("title") or "题库组卷"),
+                                   "course": str(body.get("course") or ""),
+                                   "desc": "从试题库选择组成", "questions": picked})
+            return self.ok(paper=p, count=len(picked))
+
+        if path == "/api/v2/quiz/teacher/paper/append-bank":
+            """把题库里选中的题追加到一份已有试卷（2026-11-07）。
+
+            以前题库全选只有「新建试卷」一条路，想把几道好题补进已有卷子，
+            只能手动重录。这里保留原题顺序，把选中题接在末尾。
+            """
+            ids = body.get("ids") if isinstance(body.get("ids"), list) else []
+            pid = str(body.get("paper_id") or "").strip()
+            p = self.q.paper(pid)
+            if not p:
+                return self.err("试卷不存在", 404)
+            picked = self.q.bank_pick(ids)
+            if not picked:
+                return self.err("题库里没有选中的题目")
+            qs = (p.get("questions") or []) + picked
+            p2 = self.q.save_paper({"id": pid, "title": p.get("title"),
+                                    "course": p.get("course"), "desc": p.get("desc"),
+                                    "questions": qs})
+            return self.ok(paper=p2, added=len(picked), total=len(qs))
+
+        if path == "/api/v2/quiz/teacher/paper/delete":
+            ok = self.q.delete_paper(body.get("id"))
+            return self.ok(deleted=ok) if ok else self.err("试卷不存在", 404)
+
+        if path == "/api/v2/quiz/teacher/publish/save":
+            raw = body.get("publish") or body
+            pid = str(raw.get("paper_id") or "")
+            if not self.q.paper(pid):
+                return self.err("请先选择一份试卷")
+            if not (raw.get("class_ids") or []):
+                return self.err("请至少选择一个班级")
+            # 发放必须填时间（2.0.41）：没时间窗的测验没法自动收口，
+            # 以前靠「手动结束」按钮补救，现在从源头要求填清楚。
+            # 草稿（draft）可以先空着，正式发布才卡。
+            if str(raw.get("status") or "published") != "draft":
+                if not str(raw.get("open_at") or "").strip():
+                    return self.err("请填写开始时间（不填就没法控制什么时候能作答）")
+                if not str(raw.get("close_at") or "").strip():
+                    return self.err("请填写结束时间（到点自动收卷，不用老师盯着）")
+                if str(raw.get("close_at")).strip() <= str(raw.get("open_at")).strip():
+                    return self.err("结束时间要晚于开始时间")
+            p = self.q.save_publish(raw)
+            bump({"kind": "publish", "pub": p.get("id"), "window": p.get("window")})
+            self.notify()
+            return self.ok(publish=p)
+
+        if path == "/api/v2/quiz/teacher/publish/close":
+            # 手动结束（2.0.41）：只对「没设开始/结束时间」的测验开放。
+            # 有时间窗的测验由时间自动收口，多一个按钮反而容易误关。
+            pid = str(body.get("id") or "")
+            pub = next((p for p in (self.q.publishes() or [])
+                        if str(p.get("id")) == pid), None)
+            if not pub:
+                return self.err("测验不存在", 404)
+            if str(pub.get("open_at") or "").strip() or str(pub.get("close_at") or "").strip():
+                return self.err("这个测验设了时间，会按时间自动结束，不用手动关", 403)
+            pub = dict(pub)
+            pub["status"] = "closed"
+            p = self.q.save_publish(pub)
+            bump({"kind": "publish", "pub": p.get("id"), "window": p.get("window")})
+            self.notify()
+            return self.ok(publish=p, closed=True,
+                           msg="测验已结束，学生端立刻不能作答")
+
+        if path == "/api/v2/quiz/teacher/publish/delete":
+            ok = self.q.delete_publish(body.get("id"))
+            if not ok:
+                return self.err("测验不存在", 404)
+            bump({"kind": "publish-delete"})
+            self.notify()
+            return self.ok(deleted=True)
+
+        if path == "/api/v2/quiz/teacher/grade":
+            # 人工批阅简答 / 图片上传题（按题目给分，服务端复核上限）
+            sid = str(body.get("sub") or "")
+            marks = body.get("marks") if isinstance(body.get("marks"), dict) else {}
+            rec = next((x for x in self.q.submissions() if str(x.get("id")) == sid), None)
+            if not rec:
+                return self.err("提交不存在", 404)
+            n = self.q.grade_submission(sid, marks) if hasattr(self.q, "grade_submission") else 0
+            return self.ok(graded=n)
+
+        if path == "/api/v2/quiz/student/submit":
+            return self._submit(body)
+
+        return None
+
+    # ------------------------------------------------------------------ 提交
+    def _submit(self, body):
+        s, row = self.me()
+        if not s:
+            return self.err("未登录", 401)
+        if not row:
+            return self.err("学生档案不存在", 404)
+        pid = str(body.get("pub") or "")
+        pub = self.q.publish(pid)
+        if not pub:
+            return self.err("测验不存在", 404)
+        cid = row.get("class_id")
+        my_classes = student_class_ids(row)
+        hit = next((c for c in my_classes
+                    if c in [int(x) for x in (pub.get("class_ids") or [])]), None)
+        if hit is None:
+            return self.err("这份测验没有下发给你的班级", 403)
+        # 兼属班学生提交时，用真正命中测验的那个班做归属（成绩按班分析才对）。
+        cid = hit
+        paper = self.q.paper(pub.get("paper_id"))
+        if not paper:
+            return self.err("试卷不存在", 404)
+        answers = body.get("answers") if isinstance(body.get("answers"), dict) else {}
+        # 图片先落盘（判分前做，答卷里只留 URL）
+        answers = self._save_images("tmp%s" % int(time.time() * 1000), paper, answers)
+        who = {
+            "student_id": s.get("student_id"),
+            "student_no": row.get("student_no") or "",
+            "name": row.get("name") or "",
+            "class_id": cid,
+            "class_name": self.class_name(cid),
+        }
+        rec, err = self.q.add_submission(pub, paper, who, answers,
+                                         now=time.strftime("%Y-%m-%d %H:%M"))
+        if err:
+            return self.err(err, 403)
+        # 图片文件名带的是临时前缀，落库后按 sub_id 重命名一次
+        self._rename_images(rec, paper)
+        bump({"kind": "submit", "pub": pid, "window": pub.get("window"),
+              "class_id": cid, "student_no": who["student_no"]})
+        self.notify()
+        return self.ok(receipt=self._receipt(pub, s.get("student_id"), True),
+                       submitted_at=rec.get("submitted_at"))
+
+    def _rename_images(self, rec, paper):
+        """把临时名换成 <sub_id>_<qid>，同时把答卷里的 url 指到正式记录。"""
+        sub = str(rec.get("id") or "")
+        qids = {str(q.get("id")) for q in (paper.get("questions") or [])
+                if str(q.get("type")) == "image"}
+        changed = False
+        with self.q.lock:
+            for x in self.q.data["submissions"]:
+                if str(x.get("id")) != sub:
+                    continue
+                for qid in qids:
+                    val = (x.get("answers") or {}).get(qid)
+                    if not isinstance(val, dict) or not val.get("url"):
+                        continue
+                    for ext in _MIME:
+                        tmp = val["url"].split("sub=", 1)[-1].split("&", 1)[0]
+                        old = os.path.join(self.files_dir,
+                                           "%s_%s%s" % (re.sub(r"[^A-Za-z0-9_-]", "", tmp),
+                                                        re.sub(r"[^A-Za-z0-9_-]", "", qid), ext))
+                        if not os.path.isfile(old):
+                            continue
+                        new = os.path.join(self.files_dir, "%s_%s%s" % (sub, qid, ext))
+                        try:
+                            os.replace(old, new)
+                        except Exception:
+                            pass
+                        val["url"] = "/api/v2/quiz/file?sub=%s&q=%s" % (
+                            urllib.parse.quote(sub), urllib.parse.quote(qid))
+                        changed = True
+                        break
+                break
+            if changed:
+                self.q._save()

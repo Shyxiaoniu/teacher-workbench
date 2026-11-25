@@ -1,0 +1,81 @@
+# 运行期数据：含教师密码哈希、班级 / 学生 / 家长信息、上传文件、每日快照
+app/data/
+
+# 提交系统的运行期数据：名册含真实学号与姓名、提交记录、上传的作品文件
+# （只保留目录说明文件，其余一律不入库）
+app/submission-system/data/*
+!app/submission-system/data/README.txt
+
+# 本地测试 / 演示辅助脚本：仅供开发调试，不随公开仓库分发
+docker/smoke-test.sh
+
+# 开发 / 自检脚本与发布素材：2026-11-22 起不入仓库
+# （打包与自检脚本备份在 E:\wb-backup\repo-clean-20261122\）
+tools/
+app/tools/
+发布/
+docs/*.md
+
+# 打包产物：dist/ 下的离线安装包是分发渠道（version.json 指向它、在线更新下载它），
+# 必须随仓库分发，不能忽略！仅忽略其他位置的临时 zip。
+*.zip
+!dist/*.zip
+
+# 生成物/临时交付物
+.wbapp_*.genie
+
+# 本地分析与备份目录（截图、报告、旧版快照）
+_analysis/
+_backup/
+.workbuddy/
+
+# 各种临时文件
+__pycache__/
+*.py[cod]
+*.log
+.DS_Store
+Thumbs.db
+
+# 本地环境变量（端口等），不应入库
+.env
+
+# HTTPS 证书私钥：绝不入库（ca.key / server.key / *.csr）
+# ca.crt / server.crt 是证书公钥，可入库也可不入库；这里统一整目录忽略，
+# 部署时用 deploy/nas/certs/gen-cert.sh 现场生成，避免私钥泄露。
+*.key
+*.csr
+docker/nginx/certs/
+
+# 工作台数据快照（含学生真实姓名 / 学号，禁止入库；公开仓库尤其不能有）
+workbench.json
+workbench-*.json
+
+# ============================================================
+# 安全补充（2026-11-03 敏感数据审计）
+# 以下目录/文件此前未被忽略，存在误提交真实数据、大文件的风险
+# ============================================================
+
+# 课件库：含大体积课件（单个 pptx >100MB，超 GitHub/Gitee 单文件限制）与课堂作品
+app/courseware/
+
+# 临时 / AI 产出目录（内部业务产物，不对外）
+work_dir/
+
+# 离线运行时与 wheel 包（体积巨大，按需本地构建，不入库）
+runtime/
+wheels/
+
+# 环境变量本地覆盖（保留示例文件）
+.env.*
+!.env.example
+
+# 通用数据库文件兜底（任意位置的 SQLite 都不入库）
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# 内部审计 / 评估报告：含凭据存放位置、数据清单等敏感描述，只在本地留存
+docs/安全审计-*.md
+docs/部署可行性分析-*.md

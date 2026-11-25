@@ -1,0 +1,1798 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+课件库 · 本地文件服务（仅 Python 标准库）
+=========================================
+职责
+----
+1. 管理一个「课件根目录」：默认自动生成，老师可改成任意位置（含其他磁盘）；
+2. 上传课程资料（图片 / 文档 / 音视频…），按「课程」分文件夹存放；
+3. 在线查看：图片、音视频、PDF 直接给原始文件；docx / xlsx / pptx / 文本
+   由服务端解析成 HTML 再喂给前端 iframe（不依赖 Office、不联网、不装库）；
+4. 活动作品归档：把「活动」里学生提交的文件复制进 `<课程>/_活动作品/<活动名>/`。
+
+设计原则
+--------
+· **目录即数据**：不维护索引文件，目录结构就是事实。老师用资源管理器手动
+  往里拷课件，工作台刷新就能看到；把整个目录拷走就是完整备份。
+· **路径必须锁在根目录内**：所有 id 都是「相对根目录的路径」，读写前统一做
+  commonpath 校验，避免 ../ 穿越。
+· **失败要说人话**：所有错误返回中文原因，界面直接展示，不让老师猜。
+"""
+import os
+import io
+import re
+import json
+import html
+import shutil
+import zipfile
+import threading
+import datetime
+import urllib.parse
+import urllib.request
+import xml.etree.ElementTree as ET
+
+# 文件名错码还原（2026-11-05）：与 app/core/textfix.py 同一套实现。
+# 归档名、学生文件夹名都过这一道，否则旧记录里的 ä½œä¸š 会被原样复制进资料。
+try:
+    from core.textfix import fix_filename, looks_like_uuid_name
+except Exception:
+    try:
+        from textfix import fix_filename, looks_like_uuid_name   # 独立运行时（core 在 path 上）
+    except Exception:
+        def fix_filename(name, max_len=0):
+            return str(name or "")
+        def looks_like_uuid_name(name):
+            return False
+
+ROOT = os.path.dirname(os.path.abspath(__file__))          # submission-system/
+WB_ROOT = os.path.dirname(ROOT)                            # 工作台根
+# 同 submission-server：容器部署时由 WB_SUBMISSION_DATA_DIR 指到数据卷
+DATA = (os.environ.get("WB_SUBMISSION_DATA_DIR")
+        or (os.path.join(os.environ["WB_DATA_DIR"], "submissions")
+            if os.environ.get("WB_DATA_DIR") else "")
+        or os.path.join(ROOT, "data"))
+CFG_PATH = os.path.join(DATA, "courseware.json")
+# 课件库根目录：
+#   ① WB_COURSEWARE_DIR（容器部署，指到数据卷，重建镜像不丢）
+#   ② WB_DATA_DIR/courseware（只设了数据目录时跟着走）
+#   ③ 桌面版老行为：工作台根目录下的 courseware/
+DEFAULT_ROOT = (os.environ.get("WB_COURSEWARE_DIR")
+                or (os.path.join(os.environ["WB_DATA_DIR"], "courseware")
+                    if os.environ.get("WB_DATA_DIR") else "")
+                or os.path.join(WB_ROOT, "courseware"))
+MAX_UPLOAD = 5 * 1024 * 1024 * 1024                        # 单文件上限 5G（2.1.7 牛哥要求）；流式落盘不吃内存
+
+# 目录里不当作课件的东西（工作台自己在每个课程下写的说明文件除外）
+_IGNORE = (".ds_store", "thumbs.db", ".write_probe")
+# 危险根目录：指向这些位置会把系统/源码搞乱，直接拒绝
+_BAD_ROOTS = ("/", "/System", "/Library", "/usr", "/bin", "/etc", "/private",
+              "/Applications", "C:\\", "C:\\Windows", "C:\\Program Files")
+# 前缀级黑名单（/System/xxx 这类也要拦；只做整词匹配，避免误伤 /Users/xxx/System）
+_BAD_PREFIX = ("/system", "/library", "/usr", "/bin", "/sbin", "/etc", "/private",
+               "/applications", "/cores", "/volumes",
+               "c:/windows", "c:/program files", "c:/programdata")
+
+
+# ---------------------------------------------------------------------------
+# 配置 / 工作区路径（2.0.13 多教师账号隔离）
+# ---------------------------------------------------------------------------
+# 主服务会注入 PATH_FN：() -> {"data","cfg","root"}，按当前请求的教师账号
+# 返回各自独立的目录。没注入时（单独跑旧提交服务）沿用上面的全局常量，
+# 行为与改版前完全一致。
+PATH_FN = None
+
+
+def _paths():
+    if PATH_FN:
+        try:
+            p = PATH_FN() or {}
+            return {
+                "data": p.get("data") or DATA,
+                "cfg": p.get("cfg") or CFG_PATH,
+                "root": os.path.normpath(p.get("root") or DEFAULT_ROOT),
+                "activity": p.get("activity") or "",
+            }
+        except Exception:
+            pass
+    return {"data": DATA, "cfg": CFG_PATH, "root": DEFAULT_ROOT, "activity": ""}
+
+
+def _now():
+    return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def load_cfg():
+    p = _paths()
+    try:
+        with open(p["cfg"], "r", encoding="utf-8") as f:
+            cfg = json.load(f) or {}
+    except Exception:
+        cfg = {}
+    root = str(cfg.get("root") or "").strip()
+    if PATH_FN:
+        # 多账号：根由工作区决定。配置里若残留别的账号/旧机器的绝对路径，
+        # 一律纠正 —— 否则 A 老师的课件页会读到 B 老师的目录去。
+        root = p["root"]
+    else:
+        # 容器部署：以环境变量为准（单独跑旧提交服务时的老行为）。
+        env_root = os.environ.get("WB_COURSEWARE_DIR")
+        if env_root:
+            root = os.path.normpath(env_root)
+    if not root:
+        root = p["root"]
+        # 注意：只补字段，不能整个重建 cfg —— 否则 mounts（本地资料夹）、allow_lan
+        # 这些同文件里的设置会在「根目录字段丢失」时被一起抹掉。
+        cfg["version"] = cfg.get("version") or 1
+        cfg["root"] = root
+        cfg["auto"] = True
+        cfg["updated_at"] = cfg.get("updated_at") or _now()
+        save_cfg(cfg)
+        ensure_root(root)
+    elif os.path.normpath(str(cfg.get("root") or "")) != os.path.normpath(root):
+        cfg["root"] = root
+        cfg["auto"] = os.path.normpath(root) == os.path.normpath(p["root"])
+        cfg["updated_at"] = _now()
+        save_cfg(cfg)
+        ensure_root(root)
+    cfg.setdefault("version", 1)
+    cfg.setdefault("auto", os.path.normpath(root) == os.path.normpath(p["root"]))
+    return cfg
+
+
+def save_cfg(cfg):
+    p = _paths()
+    os.makedirs(p["data"], exist_ok=True)
+    tmp = p["cfg"] + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(cfg, f, ensure_ascii=False, indent=2)
+    shutil.move(tmp, p["cfg"])
+
+
+def root_dir():
+    return os.path.normpath(load_cfg().get("root") or _paths()["root"])
+
+
+def ensure_root(path=None):
+    p = path or root_dir()
+    try:
+        os.makedirs(p, exist_ok=True)
+        return True, p
+    except Exception as e:
+        return False, str(e)
+
+
+# ---------------------------------------------------------------------------
+# 路径安全
+# ---------------------------------------------------------------------------
+def safe_name(name):
+    """文件名清洗：去掉路径分隔符与控制字符，保留中文"""
+    s = str(name or "").replace("\\", "/").split("/")[-1]
+    s = re.sub(r'[\x00-\x1f<>:"|?*]', "", s).strip().strip(".")
+    return s or "未命名"
+
+
+def safe_course(name):
+    """课程名 → 文件夹名（去掉非法字符，防止把目录撑成多级）"""
+    s = safe_name(name)
+    s = s.replace("/", "-")
+    return s[:60] or "未分课程"
+
+
+def abs_of(rel, must_exist=False):
+    """相对路径 → 绝对路径，并保证仍在根目录内；非法返回 None"""
+    base = root_dir()
+    rel = str(rel or "").replace("\\", "/").strip("/")
+    if not rel or ".." in rel.split("/"):
+        return None
+    full = os.path.normpath(os.path.join(base, rel.replace("/", os.sep)))
+    try:
+        if os.path.commonpath([os.path.normpath(base), full]) != os.path.normpath(base):
+            return None
+    except ValueError:
+        return None
+    if must_exist and not os.path.exists(full):
+        return None
+    return full
+
+
+def rel_of(full):
+    base = root_dir()
+    try:
+        r = os.path.relpath(full, base)
+    except ValueError:
+        return ""
+    return r.replace(os.sep, "/")
+
+
+# ---------------------------------------------------------------------------
+# 文件类型
+# ---------------------------------------------------------------------------
+EXT_IMAGE = ("png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "avif")
+EXT_VIDEO = ("mp4", "webm", "mov", "m4v", "ogv")
+EXT_AUDIO = ("mp3", "wav", "m4a", "aac", "ogg", "flac")
+EXT_PDF = ("pdf",)
+EXT_OFFICE = ("docx", "xlsx", "pptx")
+EXT_LEGACY = ("doc", "xls", "ppt")
+EXT_TEXT = ("txt", "md", "csv", "tsv", "json", "xml", "html", "htm",
+            "log", "py", "js", "css", "ini", "yaml", "yml", "srt")
+
+
+def ext_of(name):
+    return str(name or "").rsplit(".", 1)[-1].lower() if "." in str(name or "") else ""
+
+
+def kind_of(name):
+    e = ext_of(name)
+    if e in EXT_IMAGE:
+        return "image"
+    if e in EXT_VIDEO:
+        return "video"
+    if e in EXT_AUDIO:
+        return "audio"
+    if e in EXT_PDF:
+        return "pdf"
+    if e in EXT_OFFICE:
+        return "office"
+    if e in EXT_LEGACY:
+        return "legacy"
+    if e in EXT_TEXT:
+        return "text"
+    return "other"
+
+
+def human_size(n):
+    n = float(n or 0)
+    for unit in ("B", "KB", "MB", "GB"):
+        if n < 1024 or unit == "GB":
+            return ("%.0f %s" % (n, unit)) if unit == "B" else ("%.1f %s" % (n, unit))
+        n /= 1024.0
+    return "%.1f GB" % n
+
+
+# ---------------------------------------------------------------------------
+# 目录扫描
+# ---------------------------------------------------------------------------
+def list_courses():
+    """一级文件夹 = 课程；根目录下的散文件归到「未分课程」"""
+    base = root_dir()
+    ok, _ = ensure_root(base)
+    out = []
+    try:
+        names = os.listdir(base)
+    except Exception as e:
+        return [], "无法读取课件目录：%s" % e
+    loose = 0
+    for name in sorted(names, key=lambda x: x.lower()):
+        full = os.path.join(base, name)
+        if name.startswith(".") or name.lower() in _IGNORE:
+            continue
+        if os.path.isdir(full):
+            cnt = 0
+            size = 0
+            for dirpath, dirnames, filenames in os.walk(full):
+                dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+                for fn in filenames:
+                    if fn.startswith(".") or fn.lower() in _IGNORE:
+                        continue
+                    cnt += 1
+                    try:
+                        size += os.path.getsize(os.path.join(dirpath, fn))
+                    except Exception:
+                        pass
+            out.append({"name": name, "count": cnt, "size": size,
+                        "size_text": human_size(size)})
+        elif os.path.isfile(full):
+            loose += 1
+    if loose:
+        out.append({"name": "未分课程", "count": loose, "size": 0,
+                    "size_text": "", "loose": True})
+    return out, None
+
+
+def list_files(course):
+    """某课程下的文件（含子目录，_活动作品 单独标记）"""
+    base = root_dir()
+    if course == "未分课程":
+        folder = base
+        walk_root = base
+        only_top = True
+    else:
+        folder = abs_of(safe_course(course))
+        walk_root = folder
+        only_top = False
+    if not folder or not os.path.isdir(folder):
+        return []
+    out = []
+    for dirpath, dirnames, filenames in os.walk(folder):
+        dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+        if only_top and os.path.normpath(dirpath) != os.path.normpath(walk_root):
+            continue
+        rel_dir = os.path.relpath(dirpath, walk_root).replace(os.sep, "/")
+        if rel_dir == ".":
+            rel_dir = ""
+        for fn in filenames:
+            if fn.startswith(".") or fn.lower() in _IGNORE:
+                continue
+            if only_top and os.path.isdir(os.path.join(dirpath, fn)):
+                continue
+            full = os.path.join(dirpath, fn)
+            if not os.path.isfile(full):
+                continue
+            try:
+                st = os.stat(full)
+                size, mtime = st.st_size, st.st_mtime
+            except Exception:
+                size, mtime = 0, 0
+            rel = rel_of(full)
+            top = rel_dir.split("/")[0]
+            archived = top in ("_活动作品", "_活动数据")     # 活动归档：作品文件 + 提交数据表
+            act_name = ""
+            if archived:
+                parts = rel_dir.split("/")
+                act_name = parts[1] if len(parts) > 1 else re.sub(r"-提交数据$", "", os.path.splitext(fn)[0])
+            out.append({
+                "id": rel,
+                "name": fn,
+                "rel_dir": rel_dir,
+                "course": course,
+                "kind": kind_of(fn),
+                "ext": ext_of(fn),
+                "size": size,
+                "size_text": human_size(size),
+                "mtime": datetime.datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M") if mtime else "",
+                "archived": archived,
+                "activity": act_name,
+                "previewable": kind_of(fn) in ("image", "video", "audio", "pdf", "office", "text"),
+            })
+    out.sort(key=lambda x: (x["archived"], x["rel_dir"], x["name"].lower()))
+    return out
+
+
+def all_files():
+    courses, err = list_courses()
+    if err:
+        return [], err
+    out = []
+    for c in courses:
+        out.extend(list_files(c["name"]))
+    return out, None
+
+
+# ---------------------------------------------------------------------------
+# 预览：把 Office / 文本转成可读 HTML（纯标准库）
+# ---------------------------------------------------------------------------
+_W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+_A = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
+_S = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+_R = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"
+
+
+def _docx_html(path, cover=False):
+    with zipfile.ZipFile(path) as z:
+        xml = z.read("word/document.xml")
+    tree = ET.fromstring(xml)
+    body = tree.find(_W + "body")
+    if body is None:
+        return "<p>（文档是空的）</p>"
+    ps = []
+
+    def para_text(p):
+        buf = []
+        for node in p.iter():
+            tag = node.tag
+            if tag == _W + "t" and node.text:
+                buf.append(html.escape(node.text))
+            elif tag == _W + "br":
+                buf.append("<br>")
+            elif tag == _W + "tab":
+                buf.append("&nbsp;&nbsp;&nbsp;&nbsp;")
+        return "".join(buf)
+
+    def style_level(p):
+        pr = p.find(_W + "pPr")
+        if pr is None:
+            return 0
+        st = pr.find(_W + "pStyle")
+        if st is None:
+            return 0
+        v = str(st.get(_W + "val") or "")
+        m = re.search(r"(\d)", v)
+        if v.lower().startswith(("heading", "title")) or "标题" in v:
+            return int(m.group(1)) if m else 1
+        return 0
+
+    for child in list(body):
+        if child.tag == _W + "p":
+            t = para_text(child)
+            lv = style_level(child)
+            if not t.strip():
+                ps.append('<div class="p-gap"></div>')
+            elif lv:
+                lv = min(lv + 1, 5)
+                ps.append('<h%d>%s</h%d>' % (lv, t, lv))
+            else:
+                ps.append("<p>%s</p>" % t)
+        elif child.tag == _W + "tbl":
+            rows = []
+            for tr in child.findall(_W + "tr"):
+                cells = []
+                for tc in tr.findall(_W + "tc"):
+                    txt = " ".join(para_text(p) for p in tc.findall(_W + "p")).strip()
+                    cells.append("<td>%s</td>" % (txt or "&nbsp;"))
+                rows.append("<tr>%s</tr>" % "".join(cells))
+            ps.append("<table>%s</table>" % "".join(rows))
+    if cover:
+        # 封面只要「开头一小段」：标题 + 前 3 段，够认出是哪份文档
+        keep = []
+        for blk in ps:
+            if blk == '<div class="p-gap"></div>' and keep:
+                continue
+            keep.append(blk)
+            if len(keep) >= 4:
+                break
+        return "\n".join(keep) or "<p>（文档没有可显示的内容）</p>"
+    return "\n".join(ps) or "<p>（文档没有可显示的内容）</p>"
+
+
+def _col_letter(idx):
+    s = ""
+    idx = int(idx)
+    while idx > 0:
+        idx, r = divmod(idx - 1, 26)
+        s = chr(65 + r) + s
+    return s
+
+
+def _col_index(ref):
+    m = re.match(r"([A-Z]+)", str(ref or ""))
+    if not m:
+        return 0
+    n = 0
+    for ch in m.group(1):
+        n = n * 26 + (ord(ch) - 64)
+    return n
+
+
+def _xlsx_html(path, cover=False):
+    with zipfile.ZipFile(path) as z:
+        names = z.namelist()
+        shared = []
+        if "xl/sharedStrings.xml" in names:
+            st = ET.fromstring(z.read("xl/sharedStrings.xml"))
+            for si in st.findall(_S + "si"):
+                shared.append("".join(t.text or "" for t in si.iter(_S + "t")))
+        # 工作簿里的工作表顺序与名称
+        sheets = []
+        try:
+            wb = ET.fromstring(z.read("xl/workbook.xml"))
+            rels = {}
+            if "xl/_rels/workbook.xml.rels" in names:
+                rt = ET.fromstring(z.read("xl/_rels/workbook.xml.rels"))
+                for rel in rt:
+                    rels[rel.get("Id")] = rel.get("Target")
+            for sh in wb.iter(_S + "sheet"):
+                tgt = rels.get(sh.get(_R + "id"), "") or ""
+                tgt = tgt.lstrip("/")
+                if not tgt.startswith("xl/"):
+                    tgt = "xl/" + tgt
+                sheets.append((sh.get("name") or "Sheet", tgt))
+        except Exception:
+            pass
+        if not sheets:
+            sheets = [("Sheet1", n) for n in sorted(names)
+                      if n.startswith("xl/worksheets/sheet") and n.endswith(".xml")]
+        out = []
+        for sname, target in sheets:
+            if target not in names:
+                continue
+            root = ET.fromstring(z.read(target))
+            rows = []
+            for row in root.iter(_S + "row"):
+                cells = {}
+                for c in row.findall(_S + "c"):
+                    t = c.get("t")
+                    v = c.find(_S + "v")
+                    val = ""
+                    if t == "s" and v is not None:
+                        try:
+                            val = shared[int(v.text)]
+                        except Exception:
+                            val = ""
+                    elif t == "inlineStr":
+                        val = "".join(x.text or "" for x in c.iter(_S + "t"))
+                    elif v is not None:
+                        val = v.text or ""
+                    if val != "":
+                        cells[_col_index(c.get("r"))] = val
+                if cells:
+                    mx = max(cells)
+                    rows.append([cells.get(i, "") for i in range(1, mx + 1)])
+            if not rows:
+                continue
+            head = rows[0]
+            body = rows[1:]
+            if cover:
+                # 封面：只画第一张表的前 4 行，小卡片上不至于糊成一团
+                body = body[:3]
+            out.append('<div class="sheet"><h3>%s</h3><div class="tblwrap"><table><tr>%s</tr>%s</table></div></div>'
+                       % (html.escape(sname),
+                          "".join("<th>%s</th>" % html.escape(x) for x in head),
+                          "".join("<tr>%s</tr>" % "".join("<td>%s</td>" % html.escape(x) for x in r) for r in body)))
+            if cover:
+                break
+        return "".join(out) or "<p>（表格是空的）</p>"
+
+
+def _pptx_html(path, cover=False):
+    with zipfile.ZipFile(path) as z:
+        slides = [n for n in z.namelist()
+                  if re.match(r"ppt/slides/slide\d+\.xml$", n)]
+        slides.sort(key=lambda n: int(re.search(r"(\d+)", n.rsplit("/", 1)[-1]).group(1)))
+        out = []
+        for i, n in enumerate(slides, 1):
+            root = ET.fromstring(z.read(n))
+            paras = []
+            for p in root.iter(_A + "p"):
+                t = "".join(x.text or "" for x in p.iter(_A + "t")).strip()
+                if t:
+                    paras.append(t)
+            if not paras:
+                continue
+            if cover:
+                # 封面 = 第一页。只留标题 + 最多 3 行正文（副标题/日期那种），
+                # 卡片缩略图要的是"这是哪份课件"的第一眼印象，不是全篇文字。
+                out.append('<div class="slide cover-slide"><h1>%s</h1>%s</div>'
+                           % (html.escape(paras[0]),
+                              "".join("<p>%s</p>" % html.escape(x) for x in paras[1:4])))
+                break
+            title = paras[0]
+            rest = paras[1:]
+            out.append('<div class="slide"><div class="slide-no">第 %d 页</div><h3>%s</h3>%s</div>'
+                       % (i, html.escape(title),
+                          "".join("<p>%s</p>" % html.escape(x) for x in rest)))
+        return "".join(out) or "<p>（演示文稿里没有可提取的文字）</p>"
+
+
+def _text_html(path, name):
+    e = ext_of(name)
+    raw = b""
+    with open(path, "rb") as f:
+        raw = f.read(2 * 1024 * 1024)          # 最多读 2MB，够看
+    for enc in ("utf-8", "gb18030", "utf-16"):
+        try:
+            text = raw.decode(enc)
+            break
+        except Exception:
+            text = None
+    if text is None:
+        text = raw.decode("utf-8", "replace")
+    if e == "md":
+        return _md_html(text)
+    if e in ("csv", "tsv"):
+        sep = "\t" if e == "tsv" else ","
+        lines = [l for l in text.splitlines() if l.strip()][:500]
+        if not lines:
+            return "<p>（空文件）</p>"
+        rows = [l.split(sep) for l in lines]
+        head, body = rows[0], rows[1:]
+        return ('<div class="tblwrap"><table><tr>%s</tr>%s</table></div>'
+                % ("".join("<th>%s</th>" % html.escape(x) for x in head),
+                   "".join("<tr>%s</tr>" % "".join("<td>%s</td>" % html.escape(x) for x in r) for r in body)))
+    return "<pre>%s</pre>" % html.escape(text)
+
+
+def _md_html(text):
+    out = []
+    in_code = False
+    for line in text.splitlines():
+        if line.strip().startswith("```"):
+            in_code = not in_code
+            out.append("<pre><code>" if in_code else "</code></pre>")
+            continue
+        if in_code:
+            out.append(html.escape(line))
+            continue
+        m = re.match(r"^(#{1,6})\s+(.*)$", line)
+        if m:
+            lv = min(len(m.group(1)) + 1, 6)
+            out.append("<h%d>%s</h%d>" % (lv, html.escape(m.group(2)), lv))
+            continue
+        if re.match(r"^\s*[-*+]\s+", line):
+            out.append("<li>%s</li>" % html.escape(re.sub(r"^\s*[-*+]\s+", "", line)))
+            continue
+        if not line.strip():
+            out.append('<div class="p-gap"></div>')
+            continue
+        t = html.escape(line)
+        t = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", t)
+        t = re.sub(r"`(.+?)`", r"<code>\1</code>", t)
+        out.append("<p>%s</p>" % t)
+    return "\n".join(out)
+
+
+PREVIEW_COVER_CSS = """
+/* 封面模式（2026-11-05）：只给卡片缩略图用。设计稿 430×260，
+   前端整体 scale(.4) 成 172×104 —— 所以这里按 430×260 排版，不滚动。 */
+html,body.cover{width:100%;height:100%;overflow:hidden}
+body.cover{margin:0;padding:0;max-width:none;display:flex;align-items:stretch;
+  background:#F6FBF9;font-size:15px;line-height:1.5}
+body.cover>div,body.cover>.slide{flex:1 1 auto;min-width:0}
+body.cover h1{font-size:27px;line-height:1.25;margin:0 0 10px;color:#0F6E56}
+body.cover h3{font-size:20px;margin:0 0 8px;color:#0F6E56}
+body.cover p{font-size:15px;line-height:1.55;margin:4px 0;color:#3C4A45;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+body.cover table{font-size:13px}
+body.cover .note{display:none}
+/* PPT 封面：整块深绿渐变 + 居中标题，像一张真封面 */
+body.cover .cover-slide{position:relative;border:0;border-radius:0;margin:0;
+  padding:34px 32px;display:flex;flex-direction:column;justify-content:center;
+  background:linear-gradient(135deg,#0F6E56 0%,#12876A 55%,#1AA37F 100%)}
+body.cover .cover-slide::after{content:'';position:absolute;right:-40px;bottom:-52px;
+  width:190px;height:190px;border-radius:50%;background:rgba(255,255,255,.09)}
+body.cover .cover-slide h1{color:#fff;font-size:28px;margin:0 0 12px;
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+body.cover .cover-slide p{color:rgba(255,255,255,.86);font-size:15px;margin:3px 0;
+  -webkit-line-clamp:1}
+/* 文档/表格封面：白底 + 顶部品牌色细条，露出一小段正文就够认 */
+body.cover .sheet{padding:22px 24px}
+body.cover .sheet+.sheet{display:none}
+body.cover>.p-gap{display:none}
+body.cover h1,body.cover p,body.cover table{margin-top:0}
+html.dark body.cover{background:#0B1210}
+html.dark body.cover h1,html.dark body.cover h3{color:#7FD9B8}
+html.dark body.cover p{color:#C9D6D1}
+"""
+
+PREVIEW_CSS = """
+:root{color-scheme:light dark}
+*{box-sizing:border-box}
+body{margin:0;padding:26px 30px 60px;font:15px/1.75 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+  background:#fff;color:#1A2E28;max-width:980px;margin:0 auto}
+h1,h2,h3,h4,h5{color:#0F6E56;line-height:1.35;margin:1.3em 0 .5em}
+h1{font-size:24px}h2{font-size:21px}h3{font-size:18px}h4,h5{font-size:16px}
+p{margin:.55em 0}
+.p-gap{height:.6em}
+table{border-collapse:collapse;width:100%;margin:.8em 0;font-size:14px}
+th,td{border:1px solid #dfe7e4;padding:6px 10px;text-align:left;vertical-align:top}
+th{background:#E1F5EE;color:#0F6E56;font-weight:600}
+.tblwrap{overflow-x:auto;max-width:100%}
+pre{background:#F4F7F6;border:1px solid #e2eae7;border-radius:10px;padding:12px 14px;
+  overflow:auto;font-size:13px;line-height:1.6;white-space:pre-wrap;word-break:break-word}
+code{background:#F4F7F6;border-radius:5px;padding:1px 5px;font-size:13px}
+li{margin:.2em 0 .2em 1.2em}
+.sheet{margin-bottom:26px}
+.slide{border:1px solid #e2eae7;border-radius:12px;padding:14px 18px;margin-bottom:14px;background:#FBFDFC}
+.slide-no{font-size:12px;color:#5F6E68;margin-bottom:4px}
+.note{background:#FFF6E9;border:1px solid #F0C36D;color:#8A5A10;border-radius:10px;
+  padding:10px 14px;font-size:13px;margin-bottom:18px}
+html.dark body{background:#0B1210;color:#E6EFEA}
+html.dark h1,html.dark h2,html.dark h3,html.dark h4,html.dark h5{color:#7FD9B8}
+html.dark th{background:#123027;color:#9FE6C9}
+html.dark th,html.dark td{border-color:#1E3A31}
+html.dark pre,html.dark code{background:#101C18;border-color:#1E3A31}
+html.dark .slide{background:#101C18;border-color:#1E3A31}
+html.dark .slide-no{color:#9BB0A8}
+html.dark .note{background:#2A2114;border-color:#6B5220;color:#E8C98A}
+@media (prefers-color-scheme:dark){
+  body{background:#0B1210;color:#E6EFEA}
+  h1,h2,h3,h4,h5{color:#7FD9B8}
+  th{background:#123027;color:#9FE6C9}
+  th,td{border-color:#1E3A31}
+  pre,code{background:#101C18;border-color:#1E3A31}
+  .slide{background:#101C18;border-color:#1E3A31}
+  .slide-no{color:#9BB0A8}
+  .note{background:#2A2114;border-color:#6B5220;color:#E8C98A}
+}
+"""
+
+
+def preview_html(full, name, dark=False, cover=False):
+    """把文件内容包成一张完整的 HTML 页（iframe 里显示，样式与主题隔离）
+
+    cover=True：只给「封面」—— 卡片缩略图用。Office 只取第一页内容，
+    不放提示条、不滚动；网页/PDF 这类原本就内嵌原文件的，只按首屏裁切。
+    这样 172px 的小卡片里看到的是一页干净的封面，而不是整篇文档的文字墙。
+    """
+    e = ext_of(name)
+    kind = kind_of(name)
+    body = ""
+    note = ""
+    # 静态加密：WBF1 课件先解密到临时文件再喂给四个解析器（它们都按路径打开）；
+    # 请求线程已由工作台注入 FEK，无 FEK 时抛错而非把密文当 zip 解析。
+    tmp_plain = None
+    try:
+        import enc_ctx as _ENC
+        with open(full, "rb") as _f:
+            _head = _f.read(4)
+        if _head == b"WBF1" and _ENC.get_fek():
+            with open(full, "rb") as _f:
+                _plain = _ENC.dec_file(_f.read())
+            import tempfile
+            _fd, tmp_plain = tempfile.mkstemp(prefix="wbprev-", suffix=os.path.splitext(name)[1])
+            with os.fdopen(_fd, "wb") as _f:
+                _f.write(_plain)
+            full = tmp_plain
+    except Exception:
+        pass
+    if kind == "office":
+        try:
+            if e == "docx":
+                body = _docx_html(full, cover=cover)
+            elif e == "xlsx":
+                body = _xlsx_html(full, cover=cover)
+            else:
+                body = _pptx_html(full, cover=cover)
+            if not cover:
+                note = "这是<b>内容预览</b>：文字、表格、幻灯片内容都能看，复杂排版（分栏、艺术字、动画）会简化。要看原样请点右上角「下载原件」。"
+        except Exception as ex:
+            body = "<p>解析失败：%s</p>" % html.escape(str(ex))
+            note = "这个文件可能已损坏，或不是标准的 Office 文件。"
+    elif kind == "text":
+        body = _text_html(full, name)
+    elif kind == "legacy":
+        body = ("<p>这是旧版 Office 格式（%s），浏览器和服务器都无法安全解析。</p>"
+                "<p>建议用 Office / WPS 另存为 <b>.docx / .xlsx / .pptx</b> 后再上传，就能在线查看了。</p>" % e.upper())
+        note = "旧格式只能下载后打开。"
+    else:
+        body = "<p>这个文件类型不支持内容预览。</p>"
+    try:
+        return ("<!doctype html><html lang=\"zh-CN\"%s><head><meta charset=\"utf-8\">"
+                "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
+                "<style>%s</style></head><body%s>%s%s</body></html>"
+                % (' class="dark"' if dark else "", PREVIEW_CSS + (PREVIEW_COVER_CSS if cover else ""),
+                   ' class="cover"' if cover else "",
+                   ('<div class="note">%s</div>' % note) if note else "", body))
+    finally:
+        if tmp_plain:
+            try:
+                os.remove(tmp_plain)
+            except OSError:
+                pass
+
+
+# ---------------------------------------------------------------------------
+# 上传 / 删除 / 归档
+# ---------------------------------------------------------------------------
+def unique_path(folder, name):
+    target = os.path.join(folder, name)
+    if not os.path.exists(target):
+        return target
+    stem, ext = os.path.splitext(name)
+    i = 2
+    while True:
+        cand = os.path.join(folder, "%s（%d）%s" % (stem, i, ext))
+        if not os.path.exists(cand):
+            return cand
+        i += 1
+
+
+def course_sub_dir(course, sub, create=False):
+    """课程内的一级子文件夹 → 绝对路径；sub 为空 = 课程根目录。
+    「未分课程」是根目录散文件的伪归属，不允许在里面建子文件夹
+    （否则会变成一个新的"课程"出现在树里，语义混乱）。"""
+    course = str(course or "").strip()
+    if not course or course == "未分课程":
+        return None
+    base = abs_of(safe_course(course))
+    if not base:
+        return None
+    sub = str(sub or "").strip()
+    if not sub:
+        return base
+    folder = abs_of(safe_course(course) + "/" + safe_name(sub))
+    if folder and create and not os.path.isdir(folder):
+        try:
+            os.makedirs(folder, exist_ok=True)
+        except Exception:
+            return None
+    return folder
+
+
+def save_upload(course, files, sub=""):
+    import base64
+    folder = course_sub_dir(course, sub, create=True)
+    if not folder:
+        return {"ok": False, "msg": "课程名不合法"}
+    try:
+        os.makedirs(folder, exist_ok=True)
+    except Exception as e:
+        return {"ok": False, "msg": "无法创建课程目录：%s" % e}
+    saved, failed = [], []
+    for f in (files or []):
+        nm = safe_name(f.get("name"))
+        raw = f.get("data") or ""
+        if "base64," in raw:
+            raw = raw.split("base64,", 1)[1]
+        try:
+            blob = base64.b64decode(raw, validate=False)
+        except Exception:
+            failed.append({"name": nm, "msg": "内容不是有效的文件数据"})
+            continue
+        if not blob:
+            failed.append({"name": nm, "msg": "文件是空的"})
+            continue
+        if len(blob) > MAX_UPLOAD:
+            failed.append({"name": nm, "msg": "超过 %s 上限" % human_size(MAX_UPLOAD)})
+            continue
+        target = unique_path(folder, nm)
+        try:
+            import io as _io
+            import enc_ctx as _ENC
+            with open(target, "wb") as fh:
+                _ENC.enc_file_stream(_io.BytesIO(blob), fh)   # 有FEK→WBF1密文，无→明文
+            saved.append({"name": os.path.basename(target), "id": rel_of(target),
+                          "size_text": human_size(len(blob))})
+        except Exception as e:
+            failed.append({"name": nm, "msg": "写入失败：%s" % e})
+    return {"ok": bool(saved) or not failed, "saved": saved, "failed": failed,
+            "course": safe_course(course), "dir": folder,
+            "msg": ("已上传 %d 个文件" % len(saved)) if saved else "没有文件被保存"}
+
+
+def save_stream(course, name, stream, length, sub=""):
+    """流式直传落盘（2026-11-04）：请求体就是文件原始字节，边收边写。
+
+    走 base64 JSON 的 save_upload 要在浏览器里把整个文件读成字符串再翻倍
+    序列化，两三百 MB 的课件就能把浏览器内存顶爆（「此页存在问题 Out of
+    Memory」）。这里从请求流按 256KB 分块写盘，浏览器用 fetch body=File
+    流式发送，前后端内存占用都是常数级。
+    """
+    folder = course_sub_dir(course, sub, create=True)
+    if not folder:
+        return {"ok": False, "msg": "课程名不合法"}
+    try:
+        os.makedirs(folder, exist_ok=True)
+    except Exception as e:
+        return {"ok": False, "msg": "无法创建课程目录：%s" % e}
+    nm = safe_name(name)
+    try:
+        length = int(length or 0)
+    except Exception:
+        length = 0
+    if length <= 0:
+        return {"ok": False, "msg": "没有收到文件内容"}
+    if length > MAX_UPLOAD:
+        return {"ok": False, "msg": "超过 %s 上限" % human_size(MAX_UPLOAD)}
+    target = unique_path(folder, nm)
+    n = 0
+    try:
+        import enc_ctx as _ENC
+        with open(target, "wb") as fh:
+            if _ENC.get_fek():
+                # HTTP 请求体按 Content-Length 结束，不能读到 EOF（会等连接关闭，
+                # 浏览器又在等响应 → 双方互等、进度卡在 99%）。必须限定只读 length 字节。
+                n = _ENC.enc_file_stream_limited(stream, fh, length)
+            else:
+                left = length
+                while left > 0:
+                    chunk = stream.read(min(262144, left))
+                    if not chunk:
+                        break
+                    fh.write(chunk)
+                    n += len(chunk)
+                    left -= len(chunk)
+    except Exception as e:
+        try:
+            os.remove(target)
+        except Exception:
+            pass
+        return {"ok": False, "msg": "写入失败：%s" % e}
+    if n <= 0:
+        try:
+            os.remove(target)
+        except Exception:
+            pass
+        return {"ok": False, "msg": "文件是空的"}
+    return {"ok": True, "saved": [{"name": os.path.basename(target),
+                                   "id": rel_of(target),
+                                   "size_text": human_size(n)}],
+            "failed": [], "course": safe_course(course),
+            "msg": "已上传 1 个文件"}
+
+
+def _safe_folder(text, fallback="未命名"):
+    """文件夹名：复用 safe_name，另把 / 换成 -，限长，空值给兜底。
+
+    2026-11-05：先还原错码再清洗 —— 班级名 / 姓名 / 学号都可能带着
+    UTF-8→latin-1 的错码进来，直接拿去建目录就是一个看不懂的文件夹名。
+    """
+    s = safe_name(fix_filename(text) or "").replace("/", "-").strip()
+    if not s or s == "未命名":
+        s = ""
+    return (s or fallback)[:60]
+
+
+# ---------------------------------------------------------------------------
+# 归档索引（2026-11-05）
+# 作用：记录「哪个课程 / 班级 / 活动」归档了哪些文件，清空提交时才能把副本
+#       一起删掉 —— 否则老师清空大屏后，资料夹里的旧作品还在，新提交一来又
+#       被看见，表现为「旧数据再次显示」。
+# 位置：数据目录下（不进课件库，老师打开资料夹看不到这个 json）。
+# ---------------------------------------------------------------------------
+def _index_path():
+    try:
+        os.makedirs(DATA, exist_ok=True)
+    except Exception:
+        pass
+    return os.path.join(DATA, "archive-index.json")
+
+
+# 归档索引是「读—改—写」，一个班几十人同时提交时会互相覆盖条目，
+# 结果就是清空提交时漏删副本。归档动作本身不重，直接串行（2026-11-05）。
+_IDX_LOCK = threading.Lock()
+
+
+def _load_index():
+    try:
+        with open(_index_path(), "r", encoding="utf-8") as f:
+            d = json.load(f)
+        return d if isinstance(d, dict) else {}
+    except Exception:
+        return {}
+
+
+def _save_index(d):
+    try:
+        with open(_index_path(), "w", encoding="utf-8") as f:
+            json.dump(d, f, ensure_ascii=False, indent=1)
+        return True
+    except Exception:
+        return False
+
+
+def _index_key(course, cls, activity):
+    return "|".join([safe_course(course), _safe_folder(cls, "未分班"),
+                     _safe_folder(activity, "未命名活动")])
+
+
+
+def _student_folder(no, name, cls_dir=""):
+    """「学号-姓名」文件夹名（2026-11-05 牛哥定版：中间加短横）。
+
+    约定与异常兜底：
+      · 学号、姓名都有 → 20250108-张三
+      · 只有学号       → 20250108
+      · 只有姓名       → 张三
+      · 都没有         → 未命名学生
+    兼容：2.0.36 及以前已按「20250108张三」（无短横）建过目录的，
+    同一班级里若老目录已存在就沿用，避免一个学生出现两个文件夹。
+    两段都做安全清洗（去路径分隔符/控制字符）并还原错码，限长 60。
+    """
+    s_no = _safe_folder(no, "")
+    s_nm = _safe_folder(name, "")
+    if s_no and s_nm:
+        new = (s_no + "-" + s_nm)[:60]
+        old = (s_no + s_nm)[:60]
+        if cls_dir:
+            try:
+                if not os.path.isdir(os.path.join(cls_dir, new)) \
+                        and os.path.isdir(os.path.join(cls_dir, old)):
+                    return old
+            except Exception:
+                pass
+        return new
+    return (s_no or s_nm)[:60] or "未命名学生"
+
+
+def _student_prefix(stu_dir_name):
+    """归档文件名的统一前缀 = 学生目录名（2.0.40）。
+
+    目录本身已经是「学号-姓名」，文件名再带一遍不是重复劳动：
+    老师把某个文件单独拷到桌面 / 发到群里时，光看文件名也知道是谁交的。
+    「未命名学生」不加前缀（没有身份可加，加了反而像学号）。
+    """
+    s = str(stu_dir_name or "").strip()
+    if not s or s == "未命名学生":
+        return ""
+    return s
+
+
+def _with_student_prefix(name, stu_dir_name):
+    """给归档文件名加「学号-姓名-」前缀（2.0.40 牛哥要求）。
+
+    规则（网页作品与学习单文件完全一致，都走这一个函数）：
+      · 前缀 = 学生目录名，形如 `20250101-阎泽楷`；
+      · 原名已经是这个前缀开头的（`前缀-` / `前缀_` / `前缀 `）→ 原样返回，
+        保证同一份文件反复归档不会变成「前缀-前缀-原名」；
+      · 只加前缀、不动扩展名；重名的 (2)(3) 由 _unique_target 统一加在扩展名前，
+        所以「原名主体」始终保留在前缀后面，信息不丢；
+      · 没有身份（未命名学生）就不加，避免出现「未命名学生-xxx」这种看不懂的名字。
+    """
+    nm = str(name or "").strip() or "file"
+    pre = _student_prefix(stu_dir_name)
+    if not pre:
+        return nm
+    low, p = nm.lower(), pre.lower()
+    if low == p or low.startswith(p + "-") or low.startswith(p + "_") or low.startswith(p + " "):
+        return nm
+    stem, ext = os.path.splitext(nm)
+    # 文件名总长留 120：目录里已经有课程 / 班级 / 学号-姓名三层，太长会顶到
+    # Windows 的 260 路径上限（深层目录 + 长原名最容易踩）。
+    room = 120 - len(pre) - 1 - len(ext)
+    if room > 8 and len(stem) > room:
+        stem = stem[:room]
+    return safe_name(pre + "-" + stem + ext)
+
+
+def _find_same_size(dir_path, name, size):
+    """在 `名字 (2).ext`、`名字 (3).ext` … 里找一份大小相同的（2.0.40）。
+
+    为什么需要：学生反复点「提交」交同一份文件时，第一份会命中「已是最新」，
+    但只要内容改过一次，同名比较就落到 (2)/(3) 分支 —— 以前只比第一份，
+    同一份文件会被反复堆成 (4)、(5)。这里按大小再认一遍：大小一致即视为已归档。
+    只比大小不比内容：浏览器上传时没有哈希，比对内容要整份读两遍，
+    课堂上几十人同时交会拖慢归档；同名 + 同大小已经足够排除「又交了一份新的」。
+    """
+    base, ext = os.path.splitext(name)
+    i = 2
+    while i <= 200:
+        p = os.path.join(dir_path, "%s (%d)%s" % (base, i, ext))
+        if not os.path.exists(p):
+            return None          # 编号是按顺序生成的，断了就不用再往后找
+        try:
+            if os.path.getsize(p) == size:
+                return p
+        except Exception:
+            pass
+        i += 1
+    return None
+
+
+def _unique_target(dir_path, name):
+    """同名文件不覆盖：第二个起加 (2)、(3)…；返回 (路径, 是否重名过)。"""
+    base, ext = os.path.splitext(name)
+    target = os.path.join(dir_path, name)
+    if not os.path.exists(target):
+        return target, False
+    i = 2
+    while i <= 200:
+        target = os.path.join(dir_path, "%s (%d)%s" % (base, i, ext))
+        if not os.path.exists(target):
+            return target, True
+        i += 1
+    return os.path.join(dir_path, "%s (%d)%s" % (base, 200, ext)), True
+
+
+def _activity_dirs():
+    """活动附件的候选目录（按优先级）：当前账号 → 数据根 activity → 其他教师账号。
+
+    2026-11-05 修：以前只认 `<WB_DATA_DIR>/activity`，可多教师账号的附件其实是
+    `<WB_DATA_DIR>/accounts/<id>/activity/`；而 rel 又被多加了一层 `activity/`，
+    拼出来是 `activity/activity/<活动>/<文件>` —— 永远读不到。读不到就只能走
+    HTTP 兜底，可前端传的 base 是 `…/api/act`，拼出来 `…/api/act/static/uploads/…`
+    必然 404，最后表现为「学生交了文件，资料里却没有」。
+    """
+    out = []
+    try:
+        p = _paths()
+        if p.get("activity"):
+            out.append(p["activity"])
+    except Exception:
+        pass
+    base = os.environ.get("WB_DATA_DIR") or os.path.join(WB_ROOT, "data")
+    out.append(os.path.join(base, "activity"))
+    acc_root = os.path.join(base, "accounts")
+    try:
+        for n in sorted(os.listdir(acc_root)):
+            d = os.path.join(acc_root, n, "activity")
+            if os.path.isdir(d):
+                out.append(d)
+    except Exception:
+        pass
+    seen, res = set(), []
+    for d in out:
+        k = os.path.normpath(d)
+        if k.lower() not in seen:
+            seen.add(k.lower())
+            res.append(k)
+    return res
+
+
+def _rel_from_url(url):
+    """把附件地址还原成 `<活动>/<文件>`（相对 activity 目录）。
+
+    认三种写法：`/static/uploads/<活动>/<文件>`（服务端产出的规范地址）、
+    `/api/act/static/uploads/…`（前端拼前缀后的地址）、`/activity/<活动>/<文件>`。
+    """
+    rel = str(url or "").lstrip("/").replace("\\", "/")
+    if rel.startswith("api/act/"):
+        rel = rel[len("api/act/"):]
+    for pre in ("static/uploads/", "activity/"):
+        if rel.startswith(pre):
+            rel = rel[len(pre):]
+            break
+    return rel
+
+
+def _norm_base(base):
+    """归档的 HTTP 兜底地址：前端可能传 `…/api/act`，要还原成站点根。"""
+    b = str(base or "").rstrip("/")
+    for suf in ("/api/act", "/api/cw", "/api/v2"):
+        if b.endswith(suf):
+            b = b[:-len(suf)]
+            break
+    return b.rstrip("/")
+
+
+def archive_items(course, activity, base, items, cls=""):
+    """归档入口：索引文件是读改写，多学生同时提交要串行，避免条目互相覆盖。"""
+    with _IDX_LOCK:
+        return _archive_items_locked(course, activity, base, items, cls)
+
+
+def _archive_items_locked(course, activity, base, items, cls=""):
+    """把活动提交的文件复制进 <课程>/<班级>/<学号+姓名>/。
+
+    2026-11-05 调整（牛哥要求）：原来是 <课程>/_活动作品/<活动名>/<学生>_<文件名>
+    平铺，交两次就分不清谁是谁。现在按「课程 → 班级 → 学号-姓名」三级建目录，
+    学生交的原始文件名保持不变，一个学生的所有作品都在自己文件夹里。
+
+    异常处理：
+      · 班级为空        → 落到「未分班」
+      · 学号/姓名缺一项 → 用有的那一项命名；都没有 → 「未命名学生」
+      · 同名文件已存在  → 大小一致视为已归档（跳过）；内容不同则存成「名字 (2).xlsx」
+      · 目录建不出来    → 返回明确中文原因，前端弹出来，不静默失败
+    """
+    course_dir = abs_of(safe_course(course))
+    if not course_dir:
+        return {"ok": False, "msg": "课程名不合法"}
+    base = str(base or "").rstrip("/")
+    act = _safe_folder(activity, "未命名活动")
+    index = _load_index()
+    mine = {}          # idx_key -> {相对路径}
+    saved, skipped = [], []
+    classes = []
+    for it in (items or []):
+        # 每个文件可以带自己的班级（服务端自动归档按学生班级传；手动归档用大屏选中的班）
+        k_cls = _safe_folder(it.get("class") or cls, "未分班")
+        if k_cls not in classes:
+            classes.append(k_cls)
+        cls_dir = os.path.join(course_dir, k_cls)
+        try:
+            os.makedirs(cls_dir, exist_ok=True)
+        except Exception as e:
+            skipped.append({"name": safe_name(fix_filename(it.get("name")) or "file"),
+                            "student": _student_folder(it.get("no"), it.get("student"), cls_dir),
+                            "msg": "无法创建班级文件夹：%s" % e})
+            continue
+        idx_key = _index_key(course, k_cls, act)
+        if idx_key not in mine:
+            mine[idx_key] = set(index.get(idx_key) or [])
+        url = str(it.get("url") or "")
+        # 文件名优先用提交里带过来的「原始文件名」，没有才退回 URL 最后一段。
+        # 2026-11-05：先还原错码（ä½œä¸š / surrogateescape）并解 %XX 百分号编码，
+        # 否则旧记录里的乱码名会被原样复制进「资料」，老师认不出是谁交的。
+        raw_name = fix_filename(str(it.get("name") or "").strip())
+        if not raw_name:
+            raw_name = urllib.parse.unquote(url.rsplit("/", 1)[-1]) or "file"
+        raw_name = fix_filename(raw_name)
+        nm = safe_name(raw_name)
+        stu_dir_name = _student_folder(it.get("no"), it.get("student"), cls_dir)
+        # 认不出原名（只剩服务端落盘名：12 位 hex）→ 改名成「学号-姓名.扩展名」，
+        # 至少老师一眼能看出这是谁交的；同一人多份仍走 (2)、(3) 不覆盖。
+        if looks_like_uuid_name(nm) and stu_dir_name != "未命名学生":
+            nm = safe_name(stu_dir_name + (os.path.splitext(nm)[1] or ""))
+        # 2.0.40（牛哥要求）：所有归档文件统一加「学号-姓名-」前缀。
+        # 网页设计作品、学习单上传、手动归档都走这一行，规则只有一套。
+        nm = _with_student_prefix(nm, stu_dir_name)
+        stu_dir = os.path.join(cls_dir, stu_dir_name)
+        if not url:
+            skipped.append({"name": nm, "student": stu_dir_name,
+                            "msg": "没有文件地址"})
+            continue
+        blob = None
+        # ① 服务器本地文件系统直读（活动附件就在 <数据目录>/activity/ 下，最快最稳）
+        #    必须做 commonpath 校验：url 是前端传来的，`/../../etc/passwd`、
+        #    `/../../data/config.json` 这种能顺着拼出程序目录外的任意文件，
+        #    读出来再落到课件库里就能被下载走（任意文件读取）。
+        if url.startswith("/"):
+            rel = _rel_from_url(url)
+            if ".." not in rel.split("/"):
+                for base_dir in _activity_dirs():
+                    c = os.path.normpath(os.path.join(base_dir, rel))
+                    try:
+                        if os.path.commonpath([os.path.normpath(base_dir), c]) != os.path.normpath(base_dir):
+                            continue
+                    except ValueError:
+                        continue
+                    if os.path.isfile(c):
+                        try:
+                            with open(c, "rb") as fh:
+                                blob = fh.read()
+                            break
+                        except Exception:
+                            blob = None
+        # ② 退回 HTTP 拉取（附件不在本机数据目录时兜底）
+        if blob is None and base:
+            try:
+                req = urllib.request.Request(_norm_base(base)
+                                             + (url if url.startswith("/") else "/" + url),
+                                             headers={"User-Agent": "class-workbench"})
+                with urllib.request.urlopen(req, timeout=20) as r:
+                    blob = r.read()
+            except Exception as e:
+                skipped.append({"name": nm, "student": stu_dir_name,
+                                "msg": "下载失败：%s" % e})
+                continue
+        if not blob:
+            skipped.append({"name": nm, "student": stu_dir_name, "msg": "读取到的内容是空的"})
+            continue
+        # 静态加密：本地直读分支拿到的是 WBF1 密文，HTTP 兜底分支拿到的是
+        # /act/file 解密后的明文。归档落盘必须统一成密文，否则兜底路径会漏明文。
+        plain_len = len(blob)
+        try:
+            import enc_ctx as _ENC
+            if _ENC.get_fek() and blob[:4] != b"WBF1":
+                blob = _ENC.enc_file(blob)
+        except Exception:
+            pass
+        try:
+            os.makedirs(stu_dir, exist_ok=True)
+        except Exception as e:
+            skipped.append({"name": nm, "student": stu_dir_name, "msg": "建学生文件夹失败：%s" % e})
+            continue
+        first = os.path.join(stu_dir, nm)
+        same = None
+        if os.path.isfile(first):
+            try:
+                if os.path.getsize(first) == len(blob):
+                    same = first
+            except Exception:
+                pass
+        # 历史版本也要认（2.0.40）：同一份文件重交时不再堆出 (4)、(5)
+        if same is None:
+            same = _find_same_size(stu_dir, nm, len(blob))
+        if same:
+            skipped.append({"name": nm, "student": stu_dir_name,
+                            "msg": "已是最新", "rel": rel_of(same)})
+            mine[idx_key].add(rel_of(same))
+            continue
+        target, renamed = _unique_target(stu_dir, nm)
+        try:
+            with open(target, "wb") as fh:
+                fh.write(blob)
+            mine[idx_key].add(rel_of(target))
+            saved.append({"name": os.path.basename(target), "origin": nm,
+                          "student": stu_dir_name, "renamed": renamed,
+                          "size_text": human_size(plain_len),
+                          "rel": rel_of(target)})
+        except Exception as e:
+            skipped.append({"name": nm, "student": stu_dir_name, "msg": "写入失败：%s" % e})
+    for k, paths in mine.items():
+        if paths:
+            index[k] = sorted(paths)
+    if mine:
+        _save_index(index)
+    cls_label = classes[0] if len(classes) == 1 else (classes[0] + " 等" if classes else "未分班")
+    first_cls_dir = os.path.join(course_dir, classes[0]) if classes else course_dir
+    return {"ok": True, "saved": saved, "skipped": skipped,
+            "dir": first_cls_dir, "rel": rel_of(first_cls_dir), "class": cls_label,
+            "classes": classes,
+            "msg": "已归档 %d 个文件到 %s / %s" % (len(saved), safe_course(course),
+                                                  cls_label)}
+
+
+def normalize_student_dirs(course, mapping):
+    """自愈：把班级目录下「平铺」的学生作品移进 <班级>/<学号-姓名>/（2026-11-06）。
+
+    老数据 / 身份注入失败时，文件会直接躺在班级目录里，列表看不出是谁交的。
+    mapping = {原文件名(小写): {class, no, student}}，由 server.py 从
+    act_file.orig + act_submission 的学号姓名班级反查构造。
+    只在「班级目录」这一层找平铺文件；已经在学生子目录里的不动。
+    """
+    course_dir = abs_of(safe_course(course))
+    if not course_dir or not os.path.isdir(course_dir):
+        return {"ok": True, "moved": [], "skipped": [], "msg": "课程目录不存在"}
+    moved, skipped = [], []
+    for cls_name in sorted(os.listdir(course_dir)):
+        cls_dir = os.path.join(course_dir, cls_name)
+        # _活动数据 / _活动作品 / 隐藏目录不是班级目录
+        if not os.path.isdir(cls_dir) or cls_name.startswith((".", "_")):
+            continue
+        for fn in sorted(os.listdir(cls_dir)):
+            src = os.path.join(cls_dir, fn)
+            if not os.path.isfile(src) or fn.startswith(".") or fn.lower() in _IGNORE:
+                continue
+            info = mapping.get(fn.lower()) or mapping.get(fix_filename(fn).lower())
+            if not info:
+                # 同名文件加过 (2) 后缀的，也认一次
+                bare = re.sub(r"\s*\(\d+\)(\.[^.]+)?$", lambda m: (m.group(2) or ""), fn)
+                info = mapping.get(bare.lower())
+            if not info:
+                skipped.append({"name": fn, "class": cls_name, "msg": "提交记录里找不到归属"})
+                continue
+            stu = _student_folder(info.get("no"), info.get("student"), cls_dir)
+            if stu == "未命名学生":
+                skipped.append({"name": fn, "class": cls_name, "msg": "提交记录里没有学号 / 姓名"})
+                continue
+            try:
+                stu_dir = os.path.join(cls_dir, stu)
+                os.makedirs(stu_dir, exist_ok=True)
+                target, _renamed = _unique_target(stu_dir, _with_student_prefix(fn, stu))
+                shutil.move(src, target)
+                moved.append({"name": fn, "class": cls_name, "student": stu,
+                              "rel": rel_of(target)})
+            except Exception as e:
+                skipped.append({"name": fn, "class": cls_name, "msg": "移动失败：%s" % e})
+    return {"ok": True, "moved": moved, "skipped": skipped,
+            "msg": "已按学号-姓名整理 %d 个文件" % len(moved)}
+
+
+def archive_clear(course, activity, cls=""):
+    """清空入口（同样要串行，理由见 _IDX_LOCK）。"""
+    with _IDX_LOCK:
+        return _archive_clear_locked(course, activity, cls)
+
+
+def _archive_clear_locked(course, activity, cls=""):
+    """清空某个活动归档出来的副本（2026-11-05）。
+
+    清空大屏提交时一并调用：按归档索引删掉该活动的文件，并把空出来的
+    学生文件夹 / 班级文件夹收掉。老版本平铺的 `_活动作品/<活动名>/` 也一起删。
+    找不到索引（老数据）不算失败：至少把旧目录清掉，剩下的留给老师手动处理。
+    """
+    course_dir = abs_of(safe_course(course))
+    if not course_dir:
+        return {"ok": False, "msg": "课程名不合法"}
+    act = _safe_folder(activity, "未命名活动")
+    index = _load_index()
+    # 2026-11-05：清空要覆盖「这个活动在所有班级下」的副本 —— 自动归档按
+    # 学生自己的班级落目录，可能不止大屏当前选中的那一个班；只清一个 key
+    # 会让别的班留下旧作品，看着像「清空没清干净」。
+    prefix = safe_course(course) + "|"
+    suffix = "|" + act
+    hit_keys = [k for k in list(index.keys()) if k.startswith(prefix) and k.endswith(suffix)]
+    paths = []
+    for k in hit_keys:
+        paths.extend(index.pop(k, []) or [])
+    root = root_dir()
+    removed, failed = 0, 0
+    dirs = set()
+    for rel in paths:
+        full = os.path.normpath(os.path.join(root, str(rel).replace("/", os.sep)))
+        try:
+            if os.path.commonpath([os.path.normpath(root), full]) != os.path.normpath(root):
+                continue
+        except ValueError:
+            continue
+        try:
+            if os.path.isfile(full):
+                os.remove(full)
+                removed += 1
+            dirs.add(os.path.dirname(full))
+        except Exception:
+            failed += 1
+    # 收掉空的学生 / 班级文件夹（不越过课程目录）
+    for d in sorted(dirs, key=lambda x: len(x), reverse=True):
+        cur = d
+        while cur and os.path.normpath(cur) != os.path.normpath(course_dir):
+            try:
+                if os.path.isdir(cur) and not os.listdir(cur):
+                    os.rmdir(cur)
+                else:
+                    break
+            except Exception:
+                break
+            cur = os.path.dirname(cur)
+    # 老版本：<课程>/_活动作品/<活动名>/
+    legacy = os.path.join(course_dir, "_活动作品", act)
+    legacy_gone = False
+    if os.path.isdir(legacy):
+        try:
+            shutil.rmtree(legacy, ignore_errors=True)
+            legacy_gone = True
+        except Exception:
+            pass
+    _save_index(index)
+    return {"ok": True, "removed": removed, "failed": failed,
+            "legacy": legacy_gone,
+            "msg": "已清理该活动的归档副本 %d 个" % removed}
+
+
+def fetch_remote(base, url, timeout=20):
+    """把「活动」里学生提交的文件取回来（/static/uploads/... 或绝对地址）。
+
+    优先直接读服务器本地文件（附件就在 <数据目录>/activity/ 下，省一次网络往返），
+    读不到再走 HTTP。安全：相对地址只接受以 / 开头的站内路径；
+    绝对地址的 base 必须是站点内部地址，避免被人拿来当跳板访问外网（SSRF）。
+    允许的范围：回环 / 私网 IP。
+    """
+    url = str(url or "").strip()
+    if not url.startswith("/"):
+        raise ValueError("只接受以 / 开头的站内地址")
+    base = str(base or "").rstrip("/")
+    # 前端交来的是同源相对地址（/api/act）：服务端自己走回环取，端口跟本进程一致。
+    if not base.startswith("http"):
+        base = "http://127.0.0.1:%s" % (os.environ.get("PORT") or "20020")
+    rel = url.lstrip("/")
+    if ".." not in rel.split("/"):
+        for pre in ("static/uploads/",):
+            if rel.startswith(pre):
+                rel = "activity/" + rel[len(pre):]
+                break
+        root = os.path.join((os.environ.get("WB_DATA_DIR")
+                             or os.path.join(WB_ROOT, "data")), "activity")
+        local = os.path.normpath(os.path.join(root, rel))
+        try:
+            if os.path.commonpath([os.path.normpath(root), local]) == os.path.normpath(root) \
+                    and os.path.isfile(local):
+                with open(local, "rb") as f:
+                    return f.read()
+        except ValueError:
+            pass
+    parsed = urllib.parse.urlparse(base)
+    host = (parsed.hostname or "").lower()
+    private = host in ("localhost", "127.0.0.1", "::1") or \
+        bool(re.match(r"^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)", host))
+    if not private:
+        raise ValueError("活动附件地址必须是站内地址（回环 / 私网）")
+    req = urllib.request.Request(base + url, headers={"User-Agent": "class-workbench"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return r.read()
+
+
+def remote_preview_html(base, url, dark=False):
+    """远程文件的在线预览：Office / 文本转 HTML，其它类型交给前端直连原地址"""
+    blob = fetch_remote(base, url)
+    name = os.path.basename(urllib.parse.urlparse(url).path) or "file"
+    kind = kind_of(name)
+    if kind not in ("office", "text", "legacy"):
+        return None, name, kind
+    cache = os.path.join(_paths()["data"], "_rwcache")
+    os.makedirs(cache, exist_ok=True)
+    ext = ext_of(name) or "bin"
+    safe = re.sub(r"[^A-Za-z0-9_.-]", "_", name)[-40:]
+    tmp = os.path.join(cache, "%s_%s" % (str(abs(hash(url)))[-10:], safe))
+    if not os.path.isfile(tmp) or os.path.getsize(tmp) != len(blob):
+        with open(tmp, "wb") as f:
+            f.write(blob)
+    return preview_html(tmp, name, dark), name, kind
+
+
+def save_text(course, subdir, name, text):
+    """把一段文本写成文件（活动提交数据 CSV / JSON 归档用），同名直接覆盖为最新。"""
+    course_dir = abs_of(safe_course(course))
+    if not course_dir:
+        return {"ok": False, "msg": "课程名不合法"}
+    folder = os.path.join(course_dir, safe_name(subdir or "_活动数据"))
+    try:
+        os.makedirs(folder, exist_ok=True)
+    except Exception as e:
+        return {"ok": False, "msg": "无法创建目录：%s" % e}
+    target = os.path.join(folder, safe_name(name))
+    try:
+        data = text if isinstance(text, str) else json.dumps(text, ensure_ascii=False, indent=2)
+        with open(target, "w", encoding="utf-8", newline="") as f:
+            f.write(data)
+        return {"ok": True, "id": rel_of(target), "msg": "已保存 " + rel_of(target)}
+    except Exception as e:
+        return {"ok": False, "msg": "写入失败：%s" % e}
+
+
+def delete_file(rel):
+    full = abs_of(rel, must_exist=True)
+    if not full or not os.path.isfile(full):
+        return {"ok": False, "msg": "文件不存在"}
+    try:
+        os.remove(full)
+        # 若删掉的正是这门课的学习单，标记一并清掉（防悬挂引用）
+        try:
+            cfg = load_cfg()
+            sheets = cfg.get("sheets") if isinstance(cfg.get("sheets"), dict) else {}
+            changed = False
+            for c, v in list(sheets.items()):
+                if str(v) == str(rel):
+                    sheets.pop(c, None)
+                    changed = True
+            if changed:
+                cfg["sheets"] = sheets
+                save_cfg(cfg)
+        except Exception:
+            pass
+        return {"ok": True, "msg": "已删除", "id": rel}
+    except Exception as e:
+        return {"ok": False, "msg": "删除失败：%s" % e}
+
+
+def rename_or_move(rel, course=None, new_name=None):
+    """改文件名（new_name）/ 换课程目录（course），或两者同时。"""
+    full = abs_of(rel, must_exist=True)
+    if not full or not os.path.isfile(full):
+        return {"ok": False, "msg": "文件不存在"}
+    cur_dir = os.path.dirname(full)
+    dst_dir = abs_of(safe_course(course)) if str(course or "").strip() else cur_dir
+    if not dst_dir:
+        return {"ok": False, "msg": "课程名不合法"}
+    nm = safe_name(new_name) if str(new_name or "").strip() else os.path.basename(full)
+    try:
+        os.makedirs(dst_dir, exist_ok=True)
+        target = unique_path(dst_dir, nm)
+        shutil.move(full, target)
+        moved = os.path.normpath(dst_dir) != os.path.normpath(cur_dir)
+        renamed = nm != os.path.basename(full)
+        if moved and renamed:
+            msg = "已改名为「%s」并移动到「%s」" % (nm, safe_course(course))
+        elif renamed:
+            msg = "已改名为「%s」" % nm
+        elif moved:
+            msg = "已移动到「%s」" % safe_course(course)
+        else:
+            msg = "没有变化"
+        return {"ok": True, "msg": msg, "id": rel_of(target), "name": nm}
+    except Exception as e:
+        return {"ok": False, "msg": "操作失败：%s" % e}
+
+
+def sheet_of(course):
+    """某课程被「设为学习单」的网页文件 id（相对路径）；没设过返回 ""。
+
+    存在配置文件 cfg["sheets"] 里（课程名 → 文件相对路径），重启不丢。
+    大屏页「学习单」下拉据此自动预选，下发即部署这份网页。"""
+    cfg = load_cfg()
+    sheets = cfg.get("sheets") if isinstance(cfg.get("sheets"), dict) else {}
+    return str(sheets.get(safe_course(course)) or "")
+
+
+def set_sheet(course, rel):
+    """把课程资料里的一个网页文件设为该课程的学习单（rel 为空 = 取消）。
+
+    校验文件真实存在且在根目录内；文件被删 / 移动后标记自动失效
+    （读取时以文件是否还在为准）。同一课程同时只有一个学习单，
+    重复设置 = 换成新的；在「大屏」下发时按此标记自动预选并部署。"""
+    course = str(course or "").strip()
+    if not course or course == "未分课程":
+        return {"ok": False, "msg": "请先选择一个课程文件夹（未分课程不能设学习单）"}
+    cfg = load_cfg()
+    sheets = cfg.get("sheets") if isinstance(cfg.get("sheets"), dict) else {}
+    rel = str(rel or "").strip()
+    if not rel:
+        sheets.pop(safe_course(course), None)
+        cfg["sheets"] = sheets
+        cfg["updated_at"] = _now()
+        save_cfg(cfg)
+        return {"ok": True, "msg": "已取消「%s」的学习单标记" % safe_course(course), "sheet": ""}
+    full = abs_of(rel, must_exist=True)
+    if not full or not os.path.isfile(full):
+        return {"ok": False, "msg": "文件不存在或已被移动"}
+    if ext_of(full) not in ("html", "htm"):
+        return {"ok": False, "msg": "只能把网页文件（.html / .htm）设为学习单"}
+    sheets[safe_course(course)] = rel_of(full)
+    cfg["sheets"] = sheets
+    cfg["updated_at"] = _now()
+    save_cfg(cfg)
+    return {"ok": True, "msg": "已把「%s」设为课程「%s」的学习单" % (os.path.basename(full), safe_course(course)),
+            "sheet": rel_of(full)}
+
+
+def delete_course(name):
+    """删除整个课程文件夹（2026-11-04 资源管理器改版）。
+    递归删除，不可恢复；「未分课程」是散文件的伪归属，不能删。"""
+    name = str(name or "").strip()
+    if not name or name == "未分课程":
+        return {"ok": False, "msg": "请选择要删除的课程文件夹"}
+    folder = abs_of(safe_course(name), must_exist=True)
+    if not folder or not os.path.isdir(folder):
+        return {"ok": False, "msg": "课程文件夹「%s」不存在" % safe_course(name)}
+    if os.path.normpath(folder) == os.path.normpath(root_dir()):
+        return {"ok": False, "msg": "不能删除课件根目录"}
+    try:
+        shutil.rmtree(folder)
+        # 课程没了，学习单标记一并清掉
+        try:
+            cfg = load_cfg()
+            sheets = cfg.get("sheets") if isinstance(cfg.get("sheets"), dict) else {}
+            if sheets.pop(safe_course(name), None) is not None:
+                cfg["sheets"] = sheets
+                save_cfg(cfg)
+        except Exception:
+            pass
+        return {"ok": True, "msg": "已删除课程文件夹「%s」" % name}
+    except Exception as e:
+        return {"ok": False, "msg": "删除失败：%s" % e}
+
+
+def rename_course(old, new):
+    """课节（课程）改名：重命名根目录下的课程文件夹。
+    子目录（_学习单 / _活动作品 等）整个跟着走，推送记录与课程匹配
+    由前端拿到返回后自行同步（materials.lesson / courseware_links.course）。"""
+    old = str(old or "").strip()
+    new = str(new or "").strip()
+    if not old or not new:
+        return {"ok": False, "msg": "请填写新的课节名"}
+    if old == "未分课程":
+        return {"ok": False, "msg": "「未分课程」是散文件的默认归属，不能改名"}
+    src = abs_of(safe_course(old), must_exist=True)
+    if not src or not os.path.isdir(src):
+        return {"ok": False, "msg": "课节「%s」不存在" % safe_course(old)}
+    dst_name = safe_course(new)
+    if dst_name == safe_course(old):
+        return {"ok": False, "msg": "新名字和现在一样"}
+    dst = abs_of(dst_name)
+    if not dst:
+        return {"ok": False, "msg": "课节名不合法"}
+    if os.path.exists(dst):
+        return {"ok": False, "msg": "已经有叫「%s」的课节了，换一个名字" % dst_name}
+    try:
+        os.rename(src, dst)
+        # 学习单标记跟着课程改名走（2026-11-04）：键换新课程名，值的路径前缀也要换
+        try:
+            cfg = load_cfg()
+            sheets = cfg.get("sheets") if isinstance(cfg.get("sheets"), dict) else {}
+            old_key = safe_course(old)
+            if old_key in sheets:
+                v = str(sheets.pop(old_key) or "")
+                rest = v.split("/", 1)[1] if "/" in v else v
+                sheets[dst_name] = dst_name + "/" + rest if rest else dst_name
+                cfg["sheets"] = sheets
+                save_cfg(cfg)
+        except Exception:
+            pass
+        return {"ok": True, "msg": "已改名为「%s」" % dst_name,
+                "old": safe_course(old), "new": dst_name}
+    except Exception as e:
+        return {"ok": False, "msg": "改名失败：%s" % e}
+
+
+def new_folder(course, name):
+    """课程内新建一级子文件夹（2026-11-04）：归类课件用。"""
+    course = str(course or "").strip()
+    nm = safe_name(name)
+    if not course or course == "未分课程":
+        return {"ok": False, "msg": "请先选择一个课程文件夹（「未分课程」不支持建子文件夹）"}
+    if not str(name or "").strip():
+        return {"ok": False, "msg": "请填写文件夹名"}
+    folder = abs_of(safe_course(course) + "/" + nm)
+    if not folder:
+        return {"ok": False, "msg": "文件夹名不合法"}
+    if os.path.exists(folder):
+        return {"ok": False, "msg": "「%s」里已经有叫「%s」的文件夹了" % (safe_course(course), nm)}
+    try:
+        os.makedirs(folder)
+        return {"ok": True, "msg": "已在「%s」里新建文件夹「%s」" % (safe_course(course), nm), "sub": nm}
+    except Exception as e:
+        return {"ok": False, "msg": "创建失败：%s" % e}
+
+
+def rmdir_folder(course, name):
+    """删除课程内的空子文件夹（非空拒绝，防止误删一整个分类）。"""
+    course = str(course or "").strip()
+    nm = safe_name(name)
+    if not course or course == "未分课程" or not str(name or "").strip():
+        return {"ok": False, "msg": "请选择要删除的文件夹"}
+    folder = abs_of(safe_course(course) + "/" + nm, must_exist=True)
+    if not folder or not os.path.isdir(folder):
+        return {"ok": False, "msg": "文件夹「%s」不存在" % nm}
+    try:
+        os.rmdir(folder)                     # 只删空目录，非空会抛 OSError
+        return {"ok": True, "msg": "已删除空文件夹「%s」" % nm}
+    except OSError:
+        return {"ok": False, "msg": "「%s」不是空的——先移走或删除里面的文件再删文件夹" % nm}
+    except Exception as e:
+        return {"ok": False, "msg": "删除失败：%s" % e}
+
+
+def move_files(course, ids, sub):
+    """课程内整理文件（2026-11-04）：sub='' 移回课程根目录，sub=名称 → 移进该子文件夹。
+    「设为学习单」的标记若指向被移动的文件，路径同步更新，标记不失效。"""
+    course = str(course or "").strip()
+    if not course or course == "未分课程":
+        return {"ok": False, "msg": "「未分课程」是散文件的伪归属，不支持文件夹整理"}
+    base = abs_of(safe_course(course))
+    if not base:
+        return {"ok": False, "msg": "课程名不合法"}
+    sub_name = safe_name(sub) if str(sub or "").strip() else ""
+    dst_dir = os.path.join(base, sub_name) if sub_name else base
+    moved, failed = [], []
+    for rid in (ids or []):
+        full = abs_of(rid, must_exist=True)
+        nm = os.path.basename(str(rid or "")) or "文件"
+        if not full or not os.path.isfile(full):
+            failed.append({"name": nm, "msg": "文件不存在"})
+            continue
+        try:
+            inside = os.path.commonpath([os.path.normpath(base),
+                                         os.path.normpath(full)]) == os.path.normpath(base)
+        except ValueError:
+            inside = False
+        if not inside:
+            failed.append({"name": nm, "msg": "不是本课程的文件"})
+            continue
+        if os.path.normpath(os.path.dirname(full)) == os.path.normpath(dst_dir):
+            failed.append({"name": nm, "msg": "已在这个文件夹里"})
+            continue
+        try:
+            os.makedirs(dst_dir, exist_ok=True)
+            target = unique_path(dst_dir, os.path.basename(full))
+            old_rel = rel_of(full)
+            shutil.move(full, target)
+            new_rel = rel_of(target)
+            moved.append({"name": os.path.basename(target), "id": new_rel})
+            # 学习单标记跟着文件走（rel 变了就同步，标记不丢）
+            try:
+                cfg = load_cfg()
+                sheets = cfg.get("sheets") if isinstance(cfg.get("sheets"), dict) else {}
+                hit = False
+                for k, v in sheets.items():
+                    if str(v) == old_rel:
+                        sheets[k] = new_rel
+                        hit = True
+                if hit:
+                    cfg["sheets"] = sheets
+                    save_cfg(cfg)
+            except Exception:
+                pass
+        except Exception as e:
+            failed.append({"name": nm, "msg": "移动失败：%s" % e})
+    return {"ok": bool(moved) or not failed, "moved": moved, "failed": failed,
+            "msg": ("已移动 %d 个文件" % len(moved)) if moved else "没有文件被移动"}
+
+
+def set_root(new_root, move):
+    """切换课件根目录。返回 (ok, cfg, msg)"""
+    raw = str(new_root or "").strip().strip('"').strip("'")
+    if not raw:
+        return False, None, "请填写目录路径"
+    p = os.path.expanduser(raw).replace("\\", "/")
+    p = os.path.normpath(p)
+    low = p.lower()
+    if p in _BAD_ROOTS or len(p.rstrip("/\\")) <= 1:
+        return False, None, "这个位置太危险（系统盘根目录或系统文件夹），请换一个专门放课件的文件夹"
+    for bad in _BAD_PREFIX:
+        if low == bad or low.startswith(bad + "/"):
+            return False, None, "不能放在系统目录（%s）里，请换一个专门放课件的文件夹，例如「文档/班级课件」" % p
+    old = root_dir()
+    # 目录不存在就自动生成（面向新手：允许直接写一个还没建的路径）
+    created = False
+    if not os.path.isdir(p):
+        try:
+            os.makedirs(p, exist_ok=True)
+            created = True
+        except Exception as e:
+            return False, None, "目录不存在且无法创建：%s（检查盘符是否存在、有没有写权限）" % e
+    probe = os.path.join(p, ".write_probe")
+    try:
+        with open(probe, "w", encoding="utf-8") as f:
+            f.write("ok")
+        os.remove(probe)
+    except Exception as e:
+        return False, None, "目录没有写入权限：%s（换个位置，或用管理员身份运行）" % e
+    moved = 0
+    if move and os.path.normpath(old) != p and os.path.isdir(old):
+        try:
+            for name in os.listdir(old):
+                if name.startswith("."):
+                    continue
+                src = os.path.join(old, name)
+                dst = os.path.join(p, name)
+                if os.path.exists(dst):
+                    continue
+                shutil.move(src, dst)
+                moved += 1
+        except Exception as e:
+            return False, None, "迁移旧文件时出错：%s（配置未改动，可先手动拷贝再切换）" % e
+    # 保留同一份配置文件里的其它设置（mounts / allow_lan / version…）。
+    # 以前这里直接 `cfg = {"version":1,"root":p,…}` 整份覆盖：
+    # 老师只要改一次课件根目录，挂载的资料夹列表和「允许局域网访问」开关就全没了，
+    # 而且没有任何提示——下次打开发现资料夹"自己消失了"。
+    cfg = load_cfg()
+    cfg["version"] = cfg.get("version") or 1
+    cfg["root"] = p
+    # 多教师账号模式：资料根目录由工作区按账号固定，不允许手动指到别的
+    # 账号目录去（否则就谈不上「各账号资料互不重叠」）。这个分支主要留给
+    # 单独跑旧提交服务的场景；注入 PATH_FN 时 set_root 会直接给出说明。
+    if PATH_FN:
+        return False, cfg, "多教师账号模式下，资料位置由系统按账号自动管理，无需也不能手动切换。"
+    cfg["auto"] = os.path.normpath(p) == os.path.normpath(_paths()["root"])
+    cfg["updated_at"] = _now()
+    save_cfg(cfg)
+    return True, cfg, ("已切换到 %s" % p) + ("，并迁移了 %d 项" % moved if moved else "") + ("（目录是新建的）" if created else "")
+
+
+# ===========================================================================
+# 本地资料夹（mounts）已于 2026-11-01 整体下线
+# ---------------------------------------------------------------------------
+# 按需求「所有资料统一上传到服务器存储」，不再支持把老师电脑上的本地文件夹
+# 挂进来只读展示。原先的 mounts / pick_dir 代码已整体移除；
+# 旧配置文件里残留的 cfg["mounts"] 字段会被忽略，不影响课件库读写。
+# ===========================================================================

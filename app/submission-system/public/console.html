@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="forest">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>学生提交系统 · 教师控制台</title>
+<style>
+:root{
+  --brand:#0F6E56; --brand2:#1D9E75; --bg:#F4F8F6; --surface:#fff;
+  --border:rgba(15,110,86,.16); --soft:#E1F5EE; --text:#1A2E28; --sub:#5F6E68;
+  --radius:14px; --shadow:0 2px 10px rgba(15,110,86,.06);
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--text);font-size:14px}
+.topbar{position:sticky;top:0;z-index:20;background:linear-gradient(120deg,var(--brand),var(--brand2));color:#fff;padding:14px 22px;display:flex;align-items:center;gap:14px;box-shadow:var(--shadow)}
+.topbar h1{font-size:17px;margin:0;font-weight:700}
+.topbar .status{margin-left:auto;font-size:13px;background:rgba(255,255,255,.16);padding:5px 12px;border-radius:20px;display:flex;align-items:center;gap:7px}
+.dot{width:9px;height:9px;border-radius:50%;background:#7CF0C0;box-shadow:0 0 0 3px rgba(124,240,192,.35)}
+.wrap{max-width:1080px;margin:18px auto;padding:0 16px;display:grid;gap:16px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow)}
+.card h2{margin:0 0 14px;font-size:15px;display:flex;align-items:center;gap:8px}
+.card h2 .n{background:var(--brand);color:#fff;width:22px;height:22px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;font-size:13px}
+label.fld{display:block;margin:10px 0 5px;font-weight:600;color:var(--sub);font-size:13px}
+input[type=text],input[type=number],textarea,select{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:10px;font-size:14px;font-family:inherit;background:#fff;color:var(--text)}
+textarea{resize:vertical;min-height:70px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+.row > div{flex:1;min-width:200px}
+.btn{background:var(--brand);color:#fff;border:0;padding:10px 18px;border-radius:10px;font-size:14px;cursor:pointer;font-weight:600;transition:.15s}
+.btn:hover{background:var(--brand2)}
+.btn.ghost{background:#fff;color:var(--brand);border:1px solid var(--brand)}
+.btn.soft{background:var(--soft);color:var(--brand)}
+.btn.sm{padding:7px 12px;font-size:13px}
+.urlbox{margin-top:10px;background:var(--soft);border:1px dashed var(--brand);border-radius:10px;padding:10px 12px;font-size:13px;display:flex;align-items:center;gap:10px}
+.urlbox code{flex:1;word-break:break-all;color:var(--brand);font-family:ui-monospace,Menlo,monospace}
+.hint{color:var(--sub);font-size:12px;margin-top:6px;line-height:1.6}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}
+.kpi{background:var(--soft);border-radius:12px;padding:14px;text-align:center;border-top:3px solid var(--brand)}
+.kpi .v{font-size:26px;font-weight:800;color:var(--brand)}
+.kpi .l{font-size:12px;color:var(--sub);margin-top:2px}
+.rank{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:7px}
+.rank li{display:flex;align-items:center;gap:12px;background:#fff;border:1px solid var(--border);border-radius:10px;padding:9px 12px}
+.rank .badge{width:28px;height:28px;border-radius:50%;background:var(--brand);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px}
+.rank .nm{font-weight:600}
+.rank .meta{color:var(--sub);font-size:12px}
+.rank .tm{margin-left:auto;color:var(--sub);font-size:12px;font-family:ui-monospace,Menlo,monospace}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{background:#fff;border:1px solid var(--border);border-radius:18px;padding:5px 12px;font-size:13px}
+.chip b{color:var(--brand)}
+table{width:100%;border-collapse:collapse;font-size:13px;margin-top:6px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--border)}
+th{color:var(--sub);font-weight:600;background:#FAFCFB}
+.tabs{display:flex;gap:8px;margin-bottom:12px}
+.tab{padding:8px 16px;border-radius:10px;background:#fff;border:1px solid var(--border);cursor:pointer;font-weight:600;color:var(--sub)}
+.tab.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+.qrow{border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:10px;background:#FAFCFB}
+.qrow .qhead{display:flex;gap:8px;align-items:center}
+.qrow .qhead b{color:var(--brand)}
+.qdel{margin-left:auto;color:#E24B4A;cursor:pointer;border:0;background:none;font-size:16px}
+.msg{font-size:13px;margin-top:8px}
+.msg.ok{color:var(--brand)} .msg.err{color:#E24B4A}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:760px){.kpis{grid-template-columns:repeat(2,1fr)}.two{grid-template-columns:1fr}}
+.genbtns{display:flex;gap:10px;flex-wrap:wrap}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <h1>📥 学生提交系统</h1>
+  <span class="status"><span class="dot"></span><span id="svcTxt">服务检测中…</span></span>
+</div>
+
+<div class="wrap">
+
+  <!-- ① 基础设置 -->
+  <div class="card">
+    <h2><span class="n">1</span>基础设置</h2>
+    <div class="row">
+      <div><label class="fld">活动 / 作业标题</label><input id="title" type="text" placeholder="例如：第4课 AI听音识传说 · 作品提交"></div>
+      <div><label class="fld">文件保存目录（接收学生上传作品）</label>
+        <input id="saveDir" type="text" placeholder="留空=系统默认目录 data/uploads/；或填绝对路径如 /Users/xxx/作业"></div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <div><label class="fld">提交截止时间（可选，仅展示）</label><input id="deadline" type="text" placeholder="例如：2026-11-01 23:59"></div>
+      <div style="flex:0 0 auto"><label class="fld">允许重复提交（同号覆盖）</label>
+        <select id="allowResub" style="padding:10px">
+          <option value="true">允许（保留最新）</option>
+          <option value="false">不允许（首次为准）</option>
+        </select></div>
+      <div style="flex:0 0 auto"><button class="btn" id="saveCfg" style="margin-bottom:0">保存设置</button></div>
+    </div>
+    <div class="msg" id="cfgMsg"></div>
+  </div>
+
+  <!-- ② 学生名册 -->
+  <div class="card">
+    <h2><span class="n">2</span>学生名册（自动关联班级 / 姓名）</h2>
+    <p class="hint">粘贴 CSV：每行 <code>学号,姓名,班级</code>（班级可空）。系统按<strong>学号</strong>把提交记录与名册关联，未匹配学号会在排行榜中标注。</p>
+    <textarea id="rosterTxt" placeholder="20250301,张明轩,七(3)班&#10;20250302,李思远,七(3)班"></textarea>
+    <div class="genbtns" style="margin-top:10px">
+      <button class="btn" id="impRoster">导入名册</button>
+      <button class="btn ghost" id="dlTpl">下载 CSV 模板</button>
+      <button class="btn soft" id="resetRoster">恢复示例名册</button>
+    </div>
+    <div class="msg" id="rosterMsg"></div>
+    <div class="hint" id="rosterStat" style="margin-top:8px"></div>
+  </div>
+
+  <!-- ③ 三类提交方式 -->
+  <div class="card">
+    <h2><span class="n">3</span>三类提交方式（一键生成学生网页）</h2>
+    <div class="two">
+      <!-- 文件提交 -->
+      <div>
+        <h3 style="margin:4px 0">📎 文件提交</h3>
+        <p class="hint">教师设定文件目录后，生成网页给学生填写学号并上传作品。</p>
+        <div class="genbtns"><button class="btn" id="genFile">生成文件提交网页</button></div>
+        <div class="urlbox" id="urlFile" style="display:none"><code></code><button class="btn soft sm cp">复制</button></div>
+      </div>
+      <!-- 测试题提交 -->
+      <div>
+        <h3 style="margin:4px 0">📝 测试题提交</h3>
+        <p class="hint">由导学单 + 答题组成，学生提交后<strong>自动算分</strong>并进入排行榜。</p>
+        <div class="genbtns"><button class="btn" id="genQuiz">保存并生成测试题网页</button></div>
+        <div class="urlbox" id="urlQuiz" style="display:none"><code></code><button class="btn soft sm cp">复制</button></div>
+      </div>
+    </div>
+
+    <!-- 测试题编辑器 -->
+    <div id="quizEditor" style="margin-top:16px;border-top:1px dashed var(--border);padding-top:14px">
+      <label class="fld">导学单内容</label>
+      <textarea id="quizIntro" placeholder="展示在学生答题页顶部，例如：请先观看微课再作答"></textarea>
+      <div id="quizList"></div>
+      <button class="btn soft sm" id="addQ" style="margin-top:6px">+ 添加题目</button>
+      <div class="msg" id="quizMsg"></div>
+    </div>
+
+    <!-- 自定义提交 -->
+    <div style="margin-top:16px;border-top:1px dashed var(--border);padding-top:14px">
+      <h3 style="margin:4px 0">🧩 自定义提交</h3>
+      <p class="hint">支持接入自定义导学单 / 网页文件。把页面里的提交动作改为 POST 到 <code>/api/submit</code>（type=custom）即可对接通用数据。下方编辑 HTML 并保存。</p>
+      <textarea id="customHtml" style="min-height:120px;font-family:ui-monospace,Menlo,monospace;font-size:12px"></textarea>
+      <div class="genbtns" style="margin-top:10px">
+        <button class="btn" id="saveCustom">保存自定义页</button>
+        <span class="urlbox" id="urlCustom" style="display:none;margin-top:0"><code></code><button class="btn soft sm cp">复制</button></span>
+      </div>
+      <div class="msg" id="customMsg"></div>
+    </div>
+  </div>
+
+  <!-- ④ 排行榜 / 数据大屏 -->
+  <div class="card">
+    <h2><span class="n">4</span>实时排行榜 · 数据大屏
+      <span class="hint" style="font-weight:400">（按提交时间排名 · 每 5 秒自动刷新）</span>
+    </h2>
+    <div class="kpis">
+      <div class="kpi"><div class="v" id="kSub">0</div><div class="l">已提交（去重后）</div></div>
+      <div class="kpi"><div class="v" id="kNo">0</div><div class="l">未提交</div></div>
+      <div class="kpi"><div class="v" id="kRate">0%</div><div class="l">提交率</div></div>
+      <div class="kpi"><div class="v" id="kTot">0</div><div class="l">名册总人数</div></div>
+    </div>
+
+    <div class="tabs">
+      <div class="tab on" data-t="seq">提交顺序（按提交时间）</div>
+      <div class="tab" data-t="miss">未提交名单</div>
+      <div class="tab" data-t="detail">最近提交明细</div>
+    </div>
+
+    <div id="pane-seq"><ol class="rank" id="rankList"></ol></div>
+    <div id="pane-miss" style="display:none"><div class="chips" id="missChips"></div></div>
+    <div id="pane-detail" style="display:none">
+      <table><thead><tr><th>名次</th><th>姓名</th><th>学号</th><th>班级</th><th>类型</th><th>分数</th><th>时间</th></tr></thead>
+      <tbody id="detailBody"></tbody></table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const API = '';
+async function api(path, opts){ const r = await fetch(API+path, opts); return r; }
+function $(id){ return document.getElementById(id); }
+function showMsg(id, t, ok){ const m=$(id); m.textContent=t; m.className='msg '+(ok?'ok':'err'); }
+
+// 服务状态
+async function checkSvc(){
+  try{ const r=await api('/api/status'); const j=await r.json();
+    $('svcTxt').textContent = j.ok? '已连接 '+location.origin : '未连接';
+  }catch(e){ $('svcTxt').textContent='未连接到服务'; }
+}
+
+// 加载配置
+async function loadCfg(){
+  try{ const j = await (await api('/api/config')).json();
+    $('title').value = j.title||''; $('saveDir').value=j.save_dir||'';
+    $('deadline').value=j.deadline||''; $('allowResub').value=String(j.allow_resubmit!==false);
+    $('quizIntro').value = (j.quiz&&j.quiz.intro)||'';
+    renderQuiz(j.quiz&&j.quiz.questions||[]);
+    $('customHtml').value = j.custom_html||'';
+  }catch(e){}
+}
+async function saveCfg(){
+  const body={ title:$('title').value.trim(), save_dir:$('saveDir').value.trim(),
+    deadline:$('deadline').value.trim(), allow_resubmit:$('allowResub').value==='true' };
+  const r=await api('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const j=await r.json(); showMsg('cfgMsg', j.ok?'设置已保存'+(j.msg?'（'+j.msg+'）':''):('保存失败：'+(j.msg||'')), j.ok);
+}
+
+// 名册
+function parseRoster(text){
+  const rows=[]; text.split(/\n+/).forEach(line=>{
+    const p=line.split(/[,，\t]/).map(s=>s.trim()).filter(s=>s);
+    if(p.length>=2) rows.push({sid:p[0],name:p[1],cls:p[2]||''});
+  }); return rows;
+}
+async function impRoster(){
+  const rows=parseRoster($('rosterTxt').value);
+  if(!rows.length){ showMsg('rosterMsg','请先粘贴至少一行 学号,姓名,班级',false); return; }
+  const r=await api('/api/roster',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({roster:rows})});
+  const j=await r.json(); showMsg('rosterMsg','已导入名册：'+j.count+' 人',true);
+  loadRosterStat();
+}
+async function loadRosterStat(){
+  try{ const j=await (await api('/api/roster')).json();
+    $('rosterStat').textContent='当前名册：'+j.count+' 人';
+  }catch(e){}
+}
+function dlTpl(){
+  const csv='学号,姓名,班级\n20250301,张明轩,七(3)班\n20250302,李思远,七(3)班\n';
+  const b=new Blob([csv],{type:'text/csv'}); const a=document.createElement('a');
+  a.href=URL.createObjectURL(b); a.download='学生名册模板.csv'; a.click();
+}
+async function resetRoster(){
+  const r=await api('/api/roster',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({roster:[{sid:'20250301',name:'张明轩',cls:'七(3)班'},{sid:'20250302',name:'李思远',cls:'七(3)班'},{sid:'20250303',name:'王雨桐',cls:'七(3)班'}]})});
+  const j=await r.json(); showMsg('rosterMsg','已恢复示例名册：'+j.count+' 人',true); loadRosterStat();
+}
+
+// 测试题编辑器
+function renderQuiz(qs){
+  const box=$('quizList'); box.innerHTML='';
+  qs.forEach((q,i)=>box.appendChild(qRow(q,i)));
+}
+function qRow(q,i){
+  const d=document.createElement('div'); d.className='qrow';
+  const opts=(q.options||[]).join(' | ');
+  d.innerHTML=`<div class="qhead"><b>Q${i+1}</b>
+    <input class="q-q" type="text" placeholder="题干" value="${escAttr(q.q||'')}" style="flex:1">
+    <span class="qdel" title="删除">✕</span></div>
+    <label class="fld">选项（用 | 分隔）</label>
+    <input class="q-o" type="text" value="${escAttr(opts)}">
+    <div class="row">
+      <div><label class="fld">正确答案</label><input class="q-a" type="text" value="${escAttr(q.answer||'')}"></div>
+      <div style="flex:0 0 120px"><label class="fld">分值</label><input class="q-s" type="number" value="${q.score||10}"></div>
+    </div>`;
+  d.querySelector('.qdel').onclick=()=>d.remove();
+  return d;
+}
+function collectQuiz(){
+  return [...$('quizList').children].map(d=>({
+    q:d.querySelector('.q-q').value.trim(),
+    options:d.querySelector('.q-o').value.split('|').map(s=>s.trim()).filter(s=>s),
+    answer:d.querySelector('.q-a').value.trim(),
+    score:Number(d.querySelector('.q-s').value||0)
+  })).filter(q=>q.q);
+}
+async function genQuiz(){
+  const questions=collectQuiz();
+  if(!questions.length){ showMsg('quizMsg','请至少添加一道题',false); return; }
+  const j=await (await api('/api/config')).json();
+  const body={ quiz:{ intro:$('quizIntro').value.trim(), questions } };
+  const r=await api('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const res=await r.json(); showMsg('quizMsg', res.ok?'测试题已保存':'保存失败', res.ok);
+  showUrl('urlQuiz', location.origin+'/s/quiz');
+}
+
+// 自定义页
+async function saveCustom(){
+  const html=$('customHtml').value;
+  const r=await api('/api/custom',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({html})});
+  const j=await r.json(); showMsg('customMsg', j.ok?'自定义页已保存':'保存失败', j.ok);
+  if(j.ok) showUrl('urlCustom', location.origin+'/s/custom');
+}
+
+// 生成链接展示
+function showUrl(boxId, url){
+  const box=$(boxId); box.style.display='flex'; box.querySelector('code').textContent=url;
+  box.querySelector('.cp').onclick=()=>{navigator.clipboard.writeText(url); box.querySelector('.cp').textContent='已复制'; setTimeout(()=>box.querySelector('.cp').textContent='复制',1200);};
+}
+function genFile(){ showUrl('urlFile', location.origin+'/s/file'); }
+
+// 排行榜
+let curTab='seq';
+function switchTab(t){ curTab=t;
+  document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x.dataset.t===t));
+  $('pane-seq').style.display = t==='seq'?'block':'none';
+  $('pane-miss').style.display = t==='miss'?'block':'none';
+  $('pane-detail').style.display = t==='detail'?'block':'none';
+}
+async function loadBoard(){
+  try{ const j=await (await api('/api/board')).json();
+    const s=j.stats;
+    $('kSub').textContent=s.submitted; $('kNo').textContent=s.not_submitted;
+    $('kRate').textContent=s.rate+'%'; $('kTot').textContent=s.total;
+    // 提交顺序
+    $('rankList').innerHTML = j.board.map((r,i)=>`
+      <li><span class="badge">${i+1}</span>
+        <span><span class="nm">${esc(r.name||'—')}</span> <span class="meta">${esc(r.cls||'')} · ${esc(r.sid)}</span></span>
+        <span class="tm">${esc(r.received_at||'')}</span></li>`).join('') || '<li style="color:var(--sub)">暂无提交</li>';
+    // 未提交
+    $('missChips').innerHTML = j.not_submitted.length ? j.not_submitted.map(s=>
+      `<span class="chip"><b>${esc(s.sid)}</b> ${esc(s.name||'')} ${esc(s.cls?'· '+s.cls:'')}</span>`).join('') : '<span class="hint">全部提交完毕 🎉</span>';
+    // 明细
+    $('detailBody').innerHTML = j.board.map((r,i)=>`<tr>
+      <td>${i+1}</td><td>${esc(r.name||'—')}</td><td>${esc(r.sid)}</td><td>${esc(r.cls||'')}</td>
+      <td>${typeLabel(r.type)}</td><td>${r.score!=null?r.score:'—'}</td><td>${esc(r.received_at||'')}</td></tr>`).join('') || '<tr><td colspan="7" style="color:var(--sub)">暂无提交</td></tr>';
+  }catch(e){}
+}
+function typeLabel(t){return t==='quiz'?'测试题':t==='custom'?'自定义':'文件';}
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function escAttr(s){return esc(s).replace(/'/g,'&#39;');}
+
+// 事件
+$('saveCfg').onclick=saveCfg;
+$('impRoster').onclick=impRoster;
+$('dlTpl').onclick=dlTpl;
+$('resetRoster').onclick=resetRoster;
+$('genQuiz').onclick=genQuiz;
+$('saveCustom').onclick=saveCustom;
+$('genFile').onclick=genFile;
+$('addQ').onclick=()=>$('quizList').appendChild(qRow({q:'',options:[],answer:'',score:10},$('quizList').children.length));
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>switchTab(t.dataset.t));
+
+// 初始化
+(async()=>{ await checkSvc(); await loadCfg(); await loadRosterStat(); await loadBoard();
+  setInterval(loadBoard,5000);
+})();
+</script>
+</body>
+</html>

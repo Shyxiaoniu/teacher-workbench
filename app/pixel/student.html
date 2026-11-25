@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-mode="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>像素画 · 班级工作台</title>
+<link rel="stylesheet" href="/design/design.css?v=2.0.72">
+<link rel="stylesheet" href="/pixel/pixel.css?v=2.0.74">
+<script src="/s/ui-dialog.js?v=20261102"></script>
+</head>
+<body>
+<div class="px-app" id="app">
+
+  <!-- 顶部工具条：尺寸 / 网格 / 撤销重做 / 清空 / 保存 / 提交。
+       学生端页头已有标题，这里不重复大标题，只留一行功能与状态。 -->
+  <header class="ds-bar px-bar">
+    <button class="btn ghost sm" id="btnBack" hidden title="回到像素画设置页">‹ 返回设置</button>
+    <div class="ds-brand">
+      <span class="dot"></span>
+      <b>像素画</b>
+      <small id="brandSub">一格一格画 · 做好一键交给老师</small>
+    </div>
+    <div class="ds-actions">
+      <div class="seg" id="sizeSeg" title="画布尺寸：格子越少越好画，越多细节越足">
+        <button type="button" data-sz="16">16</button>
+        <button type="button" data-sz="24">24</button>
+        <button type="button" data-sz="32" class="on">32</button>
+        <button type="button" data-sz="48">48</button>
+        <button type="button" data-sz="64">64</button>
+        <button type="button" data-sz="128">128</button>
+        <button type="button" data-sz="256">256</button>
+      </div>
+      <button class="btn ghost sm" id="btnGrid" aria-pressed="true" title="显示或隐藏网格线">▦ 网格</button>
+      <button class="btn ghost sm" id="btnUndo" title="撤销（Ctrl+Z）">撤销</button>
+      <button class="btn ghost sm" id="btnRedo" title="重做（Ctrl+Y）">重做</button>
+      <button class="btn ghost sm" id="btnClear" title="清空整张画布">清空</button>
+      <button class="btn sm" id="btnSave" title="保存到服务器，换台电脑也能接着画（Ctrl+S）">保存草稿</button>
+      <button class="btn sm" id="btnAvatar" title="把当前这幅像素画设为账号头像">🖼 设为头像</button>
+      <button class="btn primary sm" id="btnSubmit" title="导出作品图并交给老师（Ctrl+Enter）">提交作品</button>
+    </div>
+  </header>
+
+  <div class="ds-intro" id="intro"></div>
+  <div class="px-demo" id="demoTip" hidden></div>
+
+  <div class="px-body">
+    <!-- 左：画布 -->
+    <section class="px-stage" id="stage">
+      <div class="px-holder">
+        <canvas id="cv" aria-label="像素画布"></canvas>
+      </div>
+      <div class="px-meta">
+        <span>画布 <b id="mSize">32×32</b></span>
+        <span>已画 <b id="mCells">0</b> 格</span>
+        <!-- 提交额度（2.0.53）：老师限了次数才显示，交满后变红 -->
+        <span id="mQuotaWrap" hidden></span>
+        <span class="sp"></span>
+        <span id="mSaved">未保存</span>
+      </div>
+    </section>
+
+    <!-- 右：工具与调色板 -->
+    <aside class="px-tools">
+      <div class="px-sec">
+        <div class="px-sec-h">模板</div>
+        <button class="btn ghost sm" id="btnTpl" style="width:100%">🧩 打开模板库 · 照着练</button>
+        <!-- 参考图：只显示小图不动画布，学生照着描（2.0.49） -->
+        <div class="px-ref" id="pxRef" hidden>
+          <canvas id="refCv" aria-label="模板参考图"></canvas>
+          <div class="px-ref-txt">
+            <b id="refName">模板</b>
+            <span>照着它画</span>
+          </div>
+          <button class="px-ref-x" id="refClose" type="button"
+            title="收起参考图" aria-label="收起参考图">×</button>
+        </div>
+      </div>
+
+      <div class="px-sec">
+        <div class="px-sec-h">工具</div>
+        <div class="px-tool-grid" id="tools">
+          <button type="button" class="px-tool on" data-tool="pen"><span class="ic">✏️</span>铅笔</button>
+          <button type="button" class="px-tool" data-tool="eraser"><span class="ic">🧽</span>橡皮</button>
+          <button type="button" class="px-tool" data-tool="fill"><span class="ic">🪣</span>填充</button>
+          <button type="button" class="px-tool" data-tool="pick"><span class="ic">💧</span>吸管</button>
+        </div>
+        <div class="px-brush">
+          <span>笔刷</span>
+          <span class="bs" id="brushBtns">
+            <button type="button" data-b="1" class="on">1</button>
+            <button type="button" data-b="2">2</button>
+            <button type="button" data-b="3">3</button>
+          </span>
+        </div>
+        <label class="px-chk"><input type="checkbox" id="ckMirror"> 左右镜像（画对称图形）</label>
+      </div>
+
+      <div class="px-sec">
+        <div class="px-sec-h">颜色</div>
+        <div class="px-cur-row">
+          <span class="px-cur" id="curSw"></span>
+          <code id="curHex">#2F2A26</code>
+          <input type="color" id="colorPick" value="#2f2a26" title="自己挑一个颜色">
+        </div>
+        <div class="px-swatches" id="swatches"></div>
+        <button class="btn ghost sm" id="btnAddColor" style="width:100%;margin-top:9px">＋ 加进调色板</button>
+      </div>
+
+      <div class="px-sec">
+        <div class="px-sec-h">作品名</div>
+        <input type="text" id="inpTitle" maxlength="40" placeholder="我的像素画">
+      </div>
+
+      <div class="px-sec px-tips">
+        <b>怎么画</b><br>
+        点一下画一格，按住拖动连着画。<br>
+        填充：一点就把同色的一整片换掉。<br>
+        吸管：点画布上任意一格取它的颜色。<br>
+        <kbd>Ctrl</kbd>+<kbd>Z</kbd> 撤销 · <kbd>Ctrl</kbd>+<kbd>S</kbd> 保存
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div class="ds-toast" id="toast"></div>
+<div id="busyBox"></div>
+
+<!-- 模板库（2.0.49）：8 个 16×16 小图，照着画或直接载入 -->
+<div class="px-modal" id="tplModal" hidden>
+  <div class="px-modal-box" role="dialog" aria-label="模板库">
+    <div class="px-modal-h">
+      <b>模板库</b>
+      <span>8 个模板都是 <b>16×16 格</b>：「照着画」在右侧显示放大参考图（画布仍空着，可自己选 16/24/32 再描）；「载入」直接按 16×16 放到画布上，可以接着改。</span>
+      <button class="px-modal-x" id="tplClose" type="button" title="关闭" aria-label="关闭">×</button>
+    </div>
+    <div class="px-tpl-grid" id="tplGrid"></div>
+  </div>
+</div>
+
+<script src="/pixel/pixel.js?v=2.0.72"></script>
+</body>
+</html>

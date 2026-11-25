@@ -1,0 +1,1026 @@
+/* 学生端 · 界面样式（v3.1.0，2026-11-02 护眼暖色主题）
+   ------------------------------------------------------------
+   在教师端设计骨架（侧边栏 + 主区 + 卡片 + 弹层 + 拟物化渐变）之上，
+   采用护眼暖色调：陶土橙主色 + 苔绿点缀 + 米黄纸感底色——
+   降饱和、压亮度、削蓝光、降对比，色相与教师端 sunset/forest 主题呼应。
+   圆角更大、字号整体放大一档（学生端多为投屏 / 平板远看场景）。
+   · 骨架同构：左侧侧边栏（.side-brand + .side-item）
+     + 右侧主内容区（.page-title + .card/.stat-grid）
+     + 左下角账号卡 .side-user/.su-btn（概览 / 设置入口）
+   · 交互同款：卡片阴影、悬停上浮、底部弹层（窄屏）/居中弹窗（宽屏）、
+     拟物化渐变（选中态/主按钮斜向渐变 + 卡片顶光）
+   窄屏（≤860px，手机）自动收起侧边栏，换成底部 Tab 导航 +
+   左下角悬浮头像键（打开同一个个人信息面板）。
+   深色模式跟随系统，个人信息面板可手动锁定 浅色/夜间。 */
+
+:root{
+  /* 护眼暖色版（2026-11-02）：在珊瑚橙活泼主题基础上整体「降饱和 + 暖底 + 降对比」，
+     色相与教师端 sunset（暖陶土）/ forest（苔绿）主题呼应，两端风格协调。
+     · 主色 #F4632E→#B45B33：降饱和陶土橙，去掉刺眼的高亮橙光，白字对比仍达 4.6:1
+     · 背景 #FFF7F2/#FFFFFF→#F8F2E4/#FFFCF4：米黄纸感底，压低整体亮度、削减蓝光分量
+     · 点缀 #7B5CFF→#5E8C61：高蓝紫罗兰换成护眼苔绿，显著降低蓝光
+     · 文字 #2D1B12→#3B322A：放弃近黑高对比，中对比暖棕灰更耐久阅读 */
+  --brand-primary:#B45B33; --brand-hover:#C9713F;
+  --accent:#5E8C61; --accent-soft:#E9F1E7;
+  --sun:#D9A054; --sun-soft:#F8EFDA;
+  --bg-page:#F8F2E4; --bg-surface:#FFFCF4;
+  --border:rgba(180,91,51,.18); --brand-soft:#F6E7D6;
+  --text-primary:#3B322A; --text-secondary:#84756A;
+  --shadow:0 1px 3px rgba(122,82,50,.08),0 1px 2px rgba(122,82,50,.06);
+  --radius:14px;
+  /* 状态色（不随主题变） */
+  --ok:#22B573; --warn:#B4570F; --error:#C0392B;
+  --warn-soft:#FDF1E4; --error-soft:#FCEDEC;
+  /* 旧类名别名（视图层内联样式引用） */
+  --brand:var(--brand-primary); --brand2:var(--brand-hover);
+  --soft:var(--brand-soft); --bg:var(--bg-page); --card:var(--bg-surface);
+  --line:var(--border); --ink:var(--text-primary); --ink2:var(--text-secondary);
+  --ink3:#9A8B7F; --red:var(--error); --amber:var(--warn); --amber-bg:var(--warn-soft);
+  --r:var(--radius);
+  --glass-blur:blur(14px) saturate(1.15);
+  --ease-out:cubic-bezier(.22,.61,.36,1);
+}
+/* 深色变量：仅手动锁定夜间时生效（html[data-mode="dark"]，个人信息面板写入）。
+   缺省浅色，与教师端 wb-mode 默认 'light' 对齐——不再跟随系统，
+   避免机房系统深色时学生端整体变暗、资源预览难以阅读。 */
+html[data-mode="dark"]{
+  /* 夜间同样走「暖调低刺激」：品牌色压暗防眩光，紫罗兰点缀换夜间苔绿降蓝光 */
+  --brand-primary:#DE8A63; --brand-hover:#EDAF8B;
+  --accent:#8CB99A; --accent-soft:rgba(140,185,154,.16);
+  --sun:#E3BC77; --sun-soft:rgba(227,188,119,.14);
+  --bg-page:#191210; --bg-surface:#241B15;
+  --border:rgba(222,138,99,.18); --brand-soft:rgba(222,138,99,.16);
+  --text-primary:#F5EBE4; --text-secondary:#C0AC9F;
+  --shadow:0 1px 3px rgba(0,0,0,.45);
+  --warn:#EF9F27; --error:#F0796F;
+  --warn-soft:rgba(239,159,39,.15); --error-soft:rgba(240,121,111,.16);
+  --ink3:#A2917F;
+}
+/* ============================================================
+   护眼主题皮肤（2.0.41）
+   ------------------------------------------------------------
+   默认（不写 data-theme）= 暖陶。另外三套都是「低饱和 + 暖/中性底 +
+   中对比文字」，共同点是：去掉纯白纯黑、主色不超过 60% 饱和、
+   正文对比控制在 7:1 上下（够清楚，又不刺眼）。
+   夜间用 data-mode="dark" 叠加，每套各有一版，不是简单反色 —— 反色会让
+   橙/绿/蓝的色相塌掉，看着发灰。
+   所有组件都用这套变量，所以换肤不用改任何布局与交互。
+   ============================================================ */
+
+/* 竹绿：最经典的护眼绿，蓝光最低，适合连续两节课 */
+html[data-theme="green"]{
+  --brand-primary:#4E7D5A; --brand-hover:#5F9170; --brand-soft:#E3EFE4;
+  --bg-page:#EDF3EA; --bg-surface:#FBFDF8;
+  --border:rgba(78,125,90,.20);
+  --text-primary:#2F3A31; --text-secondary:#6E7E72;
+  --accent:#7A9A5E; --accent-soft:#EAF0E1;
+  --sun:#C6A05A; --sun-soft:#F5EEDC;
+  --warn:#8A6A16; --warn-soft:#F7F1DE;
+  --ink3:#8C9A8F;
+}
+html[data-mode="dark"][data-theme="green"]{
+  --brand-primary:#8DBE9A; --brand-hover:#A6D1B1; --brand-soft:rgba(141,190,154,.16);
+  --bg-page:#101713; --bg-surface:#18211B;
+  --border:rgba(141,190,154,.20);
+  --text-primary:#E4EFE6; --text-secondary:#A9BDAD;
+  --accent:#9DBE86; --accent-soft:rgba(157,190,134,.16);
+  --ink3:#8FA394;
+}
+
+/* 纸黄：模拟纸张反射，字迹最柔，适合长时间读文字 */
+html[data-theme="paper"]{
+  --brand-primary:#8A6A32; --brand-hover:#A07E42; --brand-soft:#F1E7CE;
+  --bg-page:#F4EEDC; --bg-surface:#FDFAF0;
+  --border:rgba(138,106,50,.20);
+  --text-primary:#3A3327; --text-secondary:#7C7261;
+  --accent:#7E8A4F; --accent-soft:#EEF0DC;
+  --sun:#C08A3E; --sun-soft:#F6EAD2;
+  --ink3:#938872;
+}
+html[data-mode="dark"][data-theme="paper"]{
+  --brand-primary:#D6B578; --brand-hover:#E6C994; --brand-soft:rgba(214,181,120,.16);
+  --bg-page:#17130D; --bg-surface:#221C14;
+  --border:rgba(214,181,120,.20);
+  --text-primary:#F0E8D8; --text-secondary:#C3B49B;
+  --accent:#BFBF8C; --accent-soft:rgba(191,191,140,.16);
+  --ink3:#A99B84;
+}
+
+/* 雾蓝：偏冷静，蓝色经过大幅降饱和，不会像「科技蓝」那样刺眼 */
+html[data-theme="blue"]{
+  --brand-primary:#3F6E86; --brand-hover:#4F8299; --brand-soft:#E2EDF1;
+  --bg-page:#EDF2F5; --bg-surface:#FAFCFD;
+  --border:rgba(63,110,134,.20);
+  --text-primary:#28343B; --text-secondary:#66787F;
+  --accent:#5E8C8A; --accent-soft:#E5F0EF;
+  --sun:#C09A5E; --sun-soft:#F5EEDD;
+  --ink3:#8497A0;
+}
+html[data-mode="dark"][data-theme="blue"]{
+  --brand-primary:#8CB4C6; --brand-hover:#A5C8D8; --brand-soft:rgba(140,180,198,.16);
+  --bg-page:#0D1417; --bg-surface:#162025;
+  --border:rgba(140,180,198,.20);
+  --text-primary:#E3EDF1; --text-secondary:#A7BAC2;
+  --accent:#8CB8B6; --accent-soft:rgba(140,184,182,.16);
+  --ink3:#8CA0A8;
+}
+
+/* 主题切换高光（教师端 themeFlash 同款）：短暂铺一层品牌色淡光 */
+@keyframes themeFlash{0%{opacity:.5}100%{opacity:0}}
+body.theme-switching::after{
+  content:'';position:fixed;inset:0;z-index:200;pointer-events:none;
+  background:var(--brand-soft);
+  animation:themeFlash .42s var(--ease-out);
+}
+
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg-page);color:var(--text-primary);
+  font:15.5px/1.7 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+  min-height:100vh;
+}
+@media (prefers-reduced-motion: reduce){*,*::before,*::after{transition:none!important;animation:none!important}}
+
+/* ============ 应用骨架（与教师端 .app/.sidebar 同构） ============ */
+/* 学生端壳容器是 #app（index.html 静态结构），这里直接给它上 flex */
+#app{display:flex;min-height:100vh}
+.sidebar{
+  width:236px;flex:0 0 236px;
+  background:color-mix(in srgb, var(--bg-surface) 88%, transparent);
+  backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);
+  border-right:1px solid var(--border);
+  padding:16px 0;display:flex;flex-direction:column;
+  position:sticky;top:0;height:100vh;overflow:hidden;
+}
+.side-brand{
+  font-size:15px;font-weight:500;color:var(--text-primary);
+  padding:0 16px 14px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:7px;flex-shrink:0;
+}
+.side-dot{width:7px;height:7px;border-radius:50%;background:var(--brand-primary);flex:none}
+.side-brand small{
+  margin-left:auto;font-size:11px;font-weight:400;color:var(--text-secondary);
+  border:1px solid var(--border);border-radius:999px;padding:1px 8px;
+}
+.side-nav{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:8px 0 10px;scrollbar-width:thin}
+.side-nav::-webkit-scrollbar{width:6px}
+.side-nav::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.side-nav::-webkit-scrollbar-track{background:transparent}
+.nav-group{margin-bottom:9px}
+.nav-gt{font-size:11.5px;color:var(--text-secondary);padding:7px 15px 4px;letter-spacing:1.5px;font-weight:600;opacity:.85}
+.side-item{
+  position:relative;display:flex;align-items:center;gap:10px;min-width:0;
+  padding:10px 15px;cursor:pointer;font-size:15.5px;color:var(--text-secondary);
+  border-left:2px solid transparent;
+  transition:background .16s ease,color .16s ease;
+}
+.side-item:hover{background:var(--brand-soft)}
+.side-item.active{
+  color:var(--brand-primary);border-left-color:var(--brand-primary);
+  background:var(--brand-soft);font-weight:600;
+}
+.side-item .ic{width:22px;text-align:center;font-size:16.5px;flex:none}
+.ic svg{width:1.18em;height:1.18em;display:block;margin:0 auto;fill:currentColor}
+/* 导航线性图标（旧版兜底，2.0.63 起侧栏已换成 .side-ico 彩色拟物底座） */
+.ic svg.ln{
+  fill:none;stroke:currentColor;stroke-width:1.9;
+  stroke-linecap:round;stroke-linejoin:round;overflow:visible;
+}
+/* 导航彩色拟物图标（2.0.63）：照教师端同款做——彩色 SVG 放在圆形小底座上，
+   底座有径向高光 + 上下内阴影，线条带浮雕；选中时底色加深、线条转白。 */
+.side-item .side-ico{
+  width:26px;height:26px;min-width:26px;flex:0 0 26px;border-radius:50%;
+  display:inline-flex;align-items:center;justify-content:center;overflow:hidden;
+  background-image:
+    radial-gradient(130% 90% at 50% -8%,rgba(255,255,255,.95) 0%,rgba(255,255,255,.42) 38%,rgba(255,255,255,0) 68%),
+    linear-gradient(180deg,rgba(255,255,255,.35),rgba(255,255,255,0) 55%,rgba(0,0,0,.06));
+  box-shadow:0 2px 4px rgba(16,32,27,.20),
+    0 1px 0 rgba(255,255,255,.9) inset,0 -1px 1px rgba(16,32,27,.12) inset;
+  transition:transform .18s cubic-bezier(.2,1.4,.4,1),box-shadow .18s ease;
+}
+.side-item .side-ico svg{display:block;
+  filter:drop-shadow(0 1px 0 rgba(255,255,255,.75)) drop-shadow(0 -.5px 0 rgba(0,0,0,.12))}
+.side-item:hover .side-ico{transform:scale(1.1) rotate(-6deg);
+  box-shadow:0 4px 9px rgba(16,32,27,.24),0 1px 0 rgba(255,255,255,.9) inset,0 -1px 1px rgba(16,32,27,.14) inset}
+.side-item.active .side-ico{transform:scale(1.08);
+  box-shadow:0 3px 7px rgba(16,32,27,.26),0 1px 0 rgba(255,255,255,.95) inset,0 -1px 1px rgba(16,32,27,.16) inset}
+.side-item.active .side-ico svg{filter:drop-shadow(0 1px 2px rgba(0,0,0,.35))}
+html[data-mode="dark"] .side-item .side-ico{
+  background-image:radial-gradient(130% 90% at 50% -8%,rgba(255,255,255,.3) 0%,rgba(255,255,255,.08) 42%,rgba(255,255,255,0) 70%);
+  box-shadow:0 2px 6px rgba(0,0,0,.5),0 1px 0 rgba(255,255,255,.24) inset,0 -1px 1px rgba(0,0,0,.35) inset}
+html[data-mode="dark"] .side-item .side-ico svg{
+  filter:drop-shadow(0 1px 1px rgba(0,0,0,.55))}
+.side-item .bdg{
+  margin-left:auto;font-size:12px;line-height:1;padding:4px 8px;border-radius:999px;
+  background:var(--warn-soft);color:var(--warn);font-weight:600;
+}
+/* 左下角概览 / 账号卡（教师端 .side-user/.su-btn 同款） */
+.side-user{flex:none;padding:9px 10px 11px;border-top:1px solid var(--border)}
+.su-btn{
+  width:100%;display:flex;align-items:center;gap:9px;padding:7px 9px;
+  border-radius:12px;border:1px solid transparent;background:transparent;
+  cursor:pointer;text-align:left;font-family:inherit;
+  transition:background .16s var(--ease-out),border-color .16s var(--ease-out);
+}
+.su-btn:hover{background:var(--brand-soft);
+  border-color:color-mix(in srgb,var(--brand-primary) 22%,transparent)}
+.su-btn:focus-visible{outline:2px solid var(--brand-primary);outline-offset:2px}
+.su-txt{display:flex;flex-direction:column;min-width:0;flex:1;line-height:1.35}
+.su-txt b{font-size:14.5px;font-weight:600;color:var(--text-primary);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  display:flex;align-items:center;min-width:0}
+.su-txt i{font-size:12px;color:var(--text-secondary);font-style:normal}
+/* 姓名旁的学号小徽（v3.0.1：页头身份胶囊移除后，这里是唯一身份位） */
+.su-no{font-style:normal;flex:none;font-size:10.5px;font-weight:600;
+  color:var(--brand-primary);background:var(--brand-soft);
+  border-radius:6px;padding:1px 6px;margin-left:6px}
+.su-gear{font-size:15px;color:var(--text-secondary);flex:none;transition:color .16s,transform .3s var(--ease-out)}
+.su-btn:hover .su-gear{color:var(--brand-primary);transform:rotate(60deg)}
+/* 主内容区 */
+.main{flex:1;padding:20px 22px 46px;min-width:0}
+.page-head{
+  display:flex;align-items:flex-end;justify-content:space-between;
+  flex-wrap:wrap;gap:10px;margin-bottom:14px;
+}
+.page-title{font-size:21px;font-weight:700;color:var(--text-primary);letter-spacing:-.2px}
+.page-sub{font-size:13px;color:var(--text-secondary);margin-top:3px}
+
+/* 宽屏双列：卡片自动排布 */
+.cols2{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));align-items:start}
+.cols2 .card{margin-bottom:0}
+
+/* ---------- 卡片 / 统计 ---------- */
+.card{
+  background:var(--bg-surface);border:1px solid var(--border);
+  border-radius:var(--radius);padding:18px;margin-bottom:14px;box-shadow:var(--shadow);
+  min-width:0;
+  transition:transform .18s var(--ease-out),box-shadow .18s var(--ease-out);
+}
+.card:hover{
+  transform:translateY(-2px);
+  box-shadow:0 6px 18px color-mix(in srgb,var(--brand-primary) 12%,transparent);
+}
+.card h3{
+  margin:0 0 12px;font-size:15.5px;color:var(--brand-primary);
+  display:flex;align-items:center;justify-content:space-between;font-weight:700;
+}
+.card h3 .more{font-size:12.5px;color:var(--text-secondary);font-weight:400}
+.stat-grid{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));
+  gap:12px;margin-bottom:14px;
+}
+.stat{
+  background:var(--bg-surface);border:1px solid var(--border);
+  border-radius:var(--radius);padding:14px 16px;box-shadow:var(--shadow);
+  transition:transform .18s ease;
+}
+.stat:hover{transform:translateY(-2px)}
+.stat-num{font-size:27px;font-weight:700;line-height:1.2;color:var(--text-primary)}
+.stat-num small{font-size:13px;font-weight:400;color:var(--text-secondary);margin-left:2px}
+.stat-label{font-size:12.5px;color:var(--text-secondary);margin-top:3px;font-weight:500}
+.empty{
+  text-align:center;padding:34px 20px;color:var(--text-secondary);font-size:14px;
+  background:var(--bg-surface);border:1px dashed var(--border);border-radius:var(--radius);
+}
+.empty.slim{padding:16px 14px;border:0;background:none}
+.notice,.note{
+  background:var(--brand-soft);border:1px solid var(--border);
+  padding:10px 14px;border-radius:var(--radius);font-size:13.5px;
+  margin:10px 0;color:var(--text-secondary);
+}
+
+/* ---------- 顶栏问候（窄屏/页内小标题） ---------- */
+.hero{padding:2px 0 12px}
+.hero .hi{font-size:12.5px;color:var(--text-secondary);letter-spacing:.02em}
+.hero .nm{font-size:20px;font-weight:600;letter-spacing:-.2px;margin-top:2px;color:var(--text-primary)}
+.hero .nm small{font-size:12.5px;font-weight:500;color:var(--text-secondary);margin-left:6px}
+.hero .meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.pill{
+  font-size:12px;background:var(--bg-surface);border:1px solid var(--border);
+  border-radius:999px;padding:4px 10px;color:var(--text-secondary);
+}
+.pill b{color:var(--brand-primary);font-weight:600}
+
+/* ---------- 列表行：课程 / 作业 / 成绩 ---------- */
+.lesson{display:flex;gap:12px;padding:11px 0;border-bottom:1px solid var(--border)}
+.lesson:last-child{border-bottom:0}
+.lesson .t{width:66px;flex:none;font-size:13px;color:var(--text-secondary);font-family:ui-monospace,Menlo,monospace}
+.lesson .t b{display:block;color:var(--text-primary);font-size:13.5px;font-family:inherit}
+.lesson .m{flex:1;min-width:0}
+.lesson .m b{font-size:16px;font-weight:700;color:var(--text-primary)}
+.lesson .m span{display:block;font-size:13px;color:var(--text-secondary)}
+.lesson.now{background:var(--brand-soft);margin:0 -10px;padding:11px;border-radius:10px;border-bottom:0}
+/* 已关闭的学习单：条目仍显示，但整行置灰、不可点 */
+.lesson.locked{opacity:.6;cursor:not-allowed}
+.lesson.locked .tag{cursor:not-allowed}
+.lesson.now .m b{color:var(--brand-primary)}
+.tag{
+  font-size:12.5px;padding:4px 10px;border-radius:8px;white-space:nowrap;flex:none;
+  background:var(--warn-soft);color:var(--warn);align-self:center;font-weight:600;
+}
+.tag.done{background:var(--brand-soft);color:var(--brand-primary)}
+.tag.late{background:var(--error-soft);color:var(--error)}
+.tag.mut{background:var(--bg-page);color:var(--text-secondary);font-weight:500}
+.tag.hot{background:linear-gradient(135deg,var(--brand-primary),var(--brand-hover));
+  color:#fff;box-shadow:0 2px 6px color-mix(in srgb,var(--brand-primary) 30%,transparent);
+  cursor:pointer;transition:transform .15s var(--ease-out)}
+.tag.hot:hover{transform:translateY(-1px) scale(1.04)}
+/* 图片资料上的「加到网页」（2.0.41）：虚线描边、按压态跟 .tag 一致，
+   视觉上比主操作「预览」弱一级，不抢注意力 */
+.tag.addimg{
+  background:transparent;color:var(--brand-primary);font-weight:600;
+  border:1px dashed color-mix(in srgb,var(--brand-primary) 46%,transparent);
+  cursor:pointer;font-family:inherit;
+}
+.tag.addimg:hover{background:var(--brand-soft);border-style:solid}
+.tag.addimg:active{transform:translateY(1px)}
+.hw{display:flex;gap:10px;align-items:flex-start;padding:12px 0;border-bottom:1px solid var(--border)}
+.hw:last-child{border-bottom:0}
+.hw .dot{width:9px;height:9px;border-radius:50%;background:var(--warn);margin-top:8px;flex:none}
+.hw .dot.done{background:var(--ok)}
+.hw .m{flex:1;min-width:0}
+.hw .m b{font-size:15.5px;font-weight:700;color:var(--text-primary);display:block}
+.hw .m span{font-size:13px;color:var(--text-secondary)}
+.hw[data-hw]{cursor:pointer}
+.hw.stat .m b{font-size:15px}
+.score{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--border)}
+.score:last-child{border-bottom:0}
+.score .m{flex:1;min-width:0}
+.score .m b{font-size:15.5px;display:block;font-weight:700;color:var(--text-primary)}
+.score .m span{font-size:13px;color:var(--text-secondary)}
+.score .v{font-family:ui-monospace,Menlo,monospace;font-size:21px;font-weight:700;color:var(--brand-primary)}
+.score .v small{font-size:12px;color:var(--text-secondary);font-weight:400}
+
+/* ---------- 签到卡 ---------- */
+.ckin{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  border:1px solid var(--brand-hover)!important;
+  background:linear-gradient(180deg,var(--brand-soft),var(--bg-surface));
+}
+.ckin .ck-l{display:flex;flex-direction:column;gap:3px;min-width:0}
+.ckin .ck-l b{font-size:16.5px;color:var(--text-primary)}
+.ckin .ck-l span{font-size:13.5px;color:var(--text-secondary)}
+.ckin .ck-b{width:auto;padding:10px 22px;font-size:15px;margin:0;flex:none;font-weight:600}
+.ckin .ck-done{
+  flex:none;width:40px;height:40px;border-radius:50%;background:var(--brand-primary);
+  color:#fff;font-size:20px;display:flex;align-items:center;justify-content:center;font-weight:700;
+}
+.ckin.on .ck-l b{color:var(--brand-primary)}
+
+/* ---------- 按钮 / 表单（教师端同款） ---------- */
+.btn{
+  display:block;width:100%;padding:12px 18px;border-radius:var(--radius);
+  font-size:15px;font-weight:600;cursor:pointer;font-family:inherit;
+  background:var(--brand-primary);color:#fff;border:1px solid var(--brand-primary);
+  transition:background .18s ease,transform .15s ease;
+}
+.btn:hover{background:var(--brand-hover)}
+.btn:active{transform:scale(.97)}
+.btn.ghost{background:var(--brand-soft);color:var(--brand-primary);border-color:transparent}
+.btn.line{background:var(--bg-surface);color:var(--text-secondary);border:1px solid var(--border);font-weight:500}
+.btn.line:hover{background:var(--brand-soft);color:var(--brand-primary)}
+input,textarea,select{
+  width:100%;padding:11px 13px;border:1px solid var(--border);border-radius:var(--radius);
+  font-size:15px;background:var(--bg-page);color:var(--text-primary);outline:none;font-family:inherit;
+}
+input:focus,textarea:focus,select:focus{outline:2px solid var(--brand-primary);outline-offset:-1px}
+label{display:block;font-size:13px;color:var(--text-secondary);margin:12px 0 6px;font-weight:500}
+.row{display:flex;gap:10px}
+
+/* ---------- 弹层：宽屏居中弹窗（教师端同款），窄屏底部抽屉 ---------- */
+.sheet-mask{position:fixed;inset:0;background:rgba(9,20,16,.42);z-index:80;display:none}
+.sheet-mask.on{display:block}
+.sheet{
+  position:fixed;left:50%;top:50%;z-index:90;width:min(540px,calc(100vw - 32px));
+  max-height:82vh;overflow:auto;background:var(--bg-surface);
+  border:1px solid var(--border);border-radius:var(--radius);
+  padding:18px;box-shadow:0 18px 50px rgba(0,0,0,.20);
+  transform:translate(-50%,-46%);opacity:0;pointer-events:none;
+  transition:transform .2s var(--ease-out),opacity .2s var(--ease-out);
+}
+.sheet.on{transform:translate(-50%,-50%);opacity:1;pointer-events:auto}
+.sheet .sh{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.sheet .sh b{font-size:17.5px;font-weight:700;color:var(--text-primary)}
+.sheet .x{border:0;background:none;font-size:20px;color:var(--text-secondary);cursor:pointer;padding:0 4px}
+@media (max-width:860px){
+  .sheet{
+    left:0;right:0;top:auto;bottom:0;width:auto;max-height:86vh;
+    border-radius:18px 18px 0 0;border-bottom:0;
+    transform:translateY(103%);opacity:1;pointer-events:auto;
+    padding:18px 18px calc(18px + env(safe-area-inset-bottom));
+  }
+  .sheet.on{transform:translateY(0)}
+}
+
+/* ---------- 登录 / 改密（教师端登录卡同款） ---------- */
+.login{
+  position:relative;   /* 备案号/署名在卡片内 absolute 定位，不越出边框（2026-11-23） */
+  max-width:400px;margin:7vh auto 0;background:var(--bg-surface);
+  border:1px solid var(--border);border-radius:calc(var(--radius) + 4px);
+  padding:36px 30px 34px;box-shadow:var(--shadow);text-align:left;
+}
+.login .logo{
+  width:56px;height:56px;border-radius:16px;
+  background:linear-gradient(135deg,var(--brand-hover),var(--brand-primary) 55%,var(--accent));
+  color:#fff;display:grid;place-items:center;font-size:26px;font-weight:700;margin-bottom:14px;
+  box-shadow:0 4px 14px color-mix(in srgb,var(--brand-primary) 35%,transparent),
+    inset 0 1px 0 rgba(255,255,255,.3);
+}
+.login h1{font-size:22px;font-weight:700;margin:0 0 6px;color:var(--text-primary)}
+.login p{color:var(--text-secondary);font-size:13.5px;margin:0 0 16px}
+.err{color:var(--error);font-size:13.5px;min-height:20px;margin-top:10px;font-weight:500}
+
+/* ---------- 导航（2026-11-23 定版：所有屏幕都用左侧栏，跟 PC 一致） ----------
+   以前窄屏（≤860px）隐藏侧栏、改用底部 Tab 栏；牛哥要求统一成 PC 那样——
+   菜单全放左边，不再放底部。侧栏窄屏收窄到 172px（保留图标+文字），
+   主内容区仍有足够宽度；tabbar 全部隐藏。 */
+.tabbar{display:none !important}
+@media (max-width:860px){
+  .sidebar{width:172px;flex-basis:172px;padding:12px 0}
+  .side-brand{padding:0 10px 10px;font-size:13.5px}
+  .side-brand small{display:none}
+  .nav-gt{padding:6px 10px 3px;font-size:10.5px}
+  .side-item{padding:9px 10px;font-size:13px;gap:7px}
+  .main{padding:14px 14px 24px}
+  .cols2{grid-template-columns:1fr}
+}
+@media (max-width:560px){
+  /* 手机再收窄到 128px，只留图标+短文字，主内容不被挤没 */
+  .sidebar{width:128px;flex-basis:128px}
+  .side-item{padding:8px 7px;font-size:11.5px;gap:5px}
+  .nav-gt{padding:5px 7px 2px;font-size:10px}
+}
+
+/* ---------- 其余组件 ---------- */
+/* ---------- 设计者署名（v3.0.1 · 复用教师端 .af-credit/.corner-credit 同款）
+   fixed 视口右下角、低层级常驻；颜色走本端主题变量，浅色/夜间自动适配。
+   窄屏（≤860px）底部是 Tab 栏：署名让位到 Tab 栏上方（与主区底部留白同高），
+   不遮挡 Tab 与页面内容。 */
+.af-credit{
+  display:inline-flex;align-items:center;gap:4px;
+  padding:2px 10px;border-radius:999px;
+  background:var(--brand-soft);color:var(--brand);
+  font-size:11.5px;font-weight:600;letter-spacing:.4px;
+  cursor:default;user-select:none;-webkit-user-select:none;white-space:nowrap;
+}
+.corner-credit{position:fixed;right:14px;bottom:11px;z-index:60}
+@media (max-width:860px){
+  .af-credit{font-size:11px;padding:2px 8px}
+  .corner-credit{right:10px;bottom:11px}
+}
+/* 备案号（2026-11-23 定版）：固定视口左下角，与右下角「牛老师设计」严格同一水平线。
+   bottom 与署名 .corner-credit 完全一致（所有屏幕都是 11px）；
+   left 14px（窄屏 10px）贴左边。2026-11-23 取消底部 Tab 栏后不再需要让位。 */
+.beian-foot{
+  position:fixed;left:14px;right:auto;bottom:11px;z-index:60;
+  display:flex;flex-direction:column;align-items:flex-start;gap:0;
+  font-size:10px;line-height:1.45;color:var(--text-secondary,#849690);
+  opacity:.82;user-select:none;-webkit-user-select:none;white-space:nowrap;
+}
+.beian-foot a{color:inherit;text-decoration:none}
+.beian-foot a:hover{text-decoration:underline}
+@media (max-width:860px){
+  .beian-foot{left:10px;bottom:11px}
+}
+/* 登录/改密卡片内：署名+备案号贴卡片底部内侧（相对 .login absolute），
+   left/right 对齐卡片 padding(30px)，不再贴视口边缘、不越出卡片边框。
+   两者 bottom 同为 8px，严格同一水平线。 */
+.login .corner-credit{position:absolute;right:30px;bottom:8px}
+.login .beian-foot{position:absolute;left:30px;right:auto;bottom:8px;z-index:auto}
+@media (max-width:860px){
+  .login .corner-credit{right:24px;bottom:8px}
+  .login .beian-foot{left:24px;bottom:8px}
+}
+/* 矮屏（≤900px 高）压缩登录/改密卡片，一屏放下、不出滚动条（2026-11-23）。
+   加了页脚后卡片变高，手机上要滚一下才看全——这里收紧各处间距。 */
+@media (max-height:900px){
+  .login{margin-top:0;padding:16px 24px 28px}
+  .login .logo{width:40px;height:40px;font-size:19px;border-radius:12px;margin-bottom:8px}
+  .login h1{font-size:19px;margin-bottom:3px}
+  .login p{font-size:12px;margin-bottom:8px;line-height:1.45}
+  .login label{margin:6px 0 3px;font-size:12.5px}
+  .login input,.login select{padding:7px 10px;font-size:13px}
+  .login .btn{padding:9px 14px}
+  .login .err{min-height:14px;margin-top:4px;font-size:12.5px}
+  .login .empty{padding-top:8px;font-size:11.5px}
+  .login .corner-credit,.login .beian-foot{bottom:5px}
+}
+.toast{
+  position:fixed;left:50%;bottom:84px;transform:translateX(-50%) translateY(20px);
+  background:rgba(16,35,29,.93);color:#fff;padding:10px 16px;border-radius:10px;font-size:13px;
+  opacity:0;transition:.22s;z-index:120;max-width:86%;text-align:center;
+}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+.skel{
+  height:64px;border-radius:var(--radius);
+  background:linear-gradient(90deg,var(--bg-page) 25%,var(--bg-surface) 37%,var(--bg-page) 63%);
+  background-size:400% 100%;animation:sk 1.3s ease infinite;margin-bottom:10px;
+}
+@keyframes sk{0%{background-position:100% 50%}100%{background-position:0 50%}}
+.offline{
+  background:var(--warn-soft);color:var(--warn);font-size:12.4px;padding:7px 12px;
+  border-radius:var(--radius);margin-bottom:10px;display:none;
+}
+.offline.on{display:block}
+
+/* ---------- 导学单详情 ---------- */
+.lesson[data-guide]{cursor:pointer}
+.g-sec{
+  font-size:12.4px;color:var(--brand-primary);font-weight:600;margin:14px 0 4px;
+  display:flex;align-items:center;gap:6px;
+}
+.g-sec::after{content:'';flex:1;height:1px;background:var(--border)}
+.g-item{padding:10px 0;border-bottom:1px solid var(--border)}
+.g-item:last-child{border-bottom:0}
+.g-item b{font-size:14px;font-weight:600;color:var(--text-primary)}
+.g-item .g-sub{display:block;font-size:12px;color:var(--text-secondary);margin-top:2px}
+.g-item .g-txt{font-size:13.4px;color:var(--text-secondary);white-space:pre-wrap;margin-top:6px}
+.g-item .g-go{margin-top:10px;display:block;text-align:center;text-decoration:none;line-height:40px;padding:0 12px}
+
+/* 周课表（保留兼容） */
+.day{margin-bottom:10px}
+.day .dh{font-size:12.5px;color:var(--text-secondary);margin:0 0 6px;display:flex;gap:8px;align-items:center}
+.day .dh b{color:var(--text-primary);font-size:13.5px}
+.day .dh .tdy{font-size:11px;background:var(--brand-soft);color:var(--brand-primary);padding:1px 7px;border-radius:99px}
+.chip{display:inline-block;font-size:12.5px;background:var(--bg-surface);border:1px solid var(--border);border-radius:9px;padding:6px 10px;margin:0 6px 6px 0}
+.chip i{font-style:normal;color:var(--text-secondary);font-size:11px;margin-right:5px;font-family:ui-monospace,Menlo,monospace}
+
+/* ============ 头像（v2.3.0 · 教师端 .su-av 同款规范） ============ */
+.av-slot{display:inline-flex;flex:none}
+.acct-av{
+  display:grid;place-items:center;color:#fff;overflow:hidden;
+  width:30px;height:30px;border-radius:10px;
+  font-size:14px;font-weight:700;letter-spacing:.5px;
+  background:linear-gradient(135deg,var(--brand-primary),
+    color-mix(in srgb,var(--brand-primary) 52%,#ffffff));
+  box-shadow:0 2px 6px color-mix(in srgb,var(--brand-primary) 30%,transparent);
+}
+.acct-av img{width:100%;height:100%;object-fit:cover;display:block}
+.acct-av.sm{width:22px;height:22px;border-radius:7px;font-size:11px}
+.acct-av.lg{width:38px;height:38px;border-radius:12px;font-size:17px}
+.acct-av.xl{width:68px;height:68px;border-radius:16px;font-size:28px;box-shadow:0 4px 14px color-mix(in srgb,var(--brand-primary) 34%,transparent)}
+/* 预设样式：静态 emoji 铺满一点；动态 = 教师端同款 CSS 动画 */
+.acct-av.uav-emoji{font-size:16px}
+.acct-av.lg.uav-emoji{font-size:20px}
+.acct-av.uav-aurora{
+  /* 护眼版极光：陶土橙/柔琥珀/苔绿，去掉高饱和橙与蓝紫 */
+  background:linear-gradient(120deg,#B45B33,#D9A054,#5E8C61,#B45B33);
+  background-size:300% 300%;
+  animation:uavAurora 5s ease-in-out infinite;
+}
+@keyframes uavAurora{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+.acct-av.uav-pulse{
+  background:linear-gradient(135deg,var(--brand-primary),var(--brand-hover));
+  animation:uavPulse 1.8s ease-in-out infinite;
+}
+@keyframes uavPulse{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--brand-primary) 45%,transparent)}55%{box-shadow:0 0 0 7px transparent}}
+.acct-av.uav-wave{
+  /* 护眼版波纹：柔琥珀/灰玫瑰/苔绿/雾蓝灰——把 #38BDF8 高能蓝光换成低饱和雾蓝 */
+  background:linear-gradient(135deg,#D9A054,#C9808F,#5E8C61,#8FA8BC,#D9A054);
+  background-size:400% 400%;
+  animation:uavWave 7s linear infinite;
+}
+@keyframes uavWave{to{background-position:400% 50%}}
+/* 头像更新 / 页面渲染时的弹跳进场（教师端头像 hover 缩放同款动效语言） */
+.av-pop{animation:avPop .28s var(--ease-out)}
+@keyframes avPop{from{transform:scale(.55);opacity:.3}to{transform:scale(1);opacity:1}}
+
+/* ============ 个人信息面板（v2.3.0 · 教师端 .su-pop 同款交互） ============
+   停靠左下角：桌面端在侧栏账号卡上方，窄屏在悬浮头像键上方。 */
+.acct-pop{
+  position:fixed;left:16px;bottom:88px;z-index:80;width:258px;
+  background:var(--bg-surface);border:1px solid var(--border);
+  border-radius:14px;padding:10px;
+  box-shadow:0 18px 42px rgba(0,0,0,.20),0 2px 6px rgba(0,0,0,.06);
+  animation:acctPopIn .16s var(--ease-out);
+}
+.acct-pop[hidden]{display:none}
+@keyframes acctPopIn{from{opacity:0;transform:translateY(6px) scale(.98)}to{opacity:1;transform:none}}
+.sup-head{display:flex;align-items:center;gap:10px;padding:3px 4px 10px;margin-bottom:8px;border-bottom:1px solid var(--border)}
+.sup-head b{display:block;font-size:13.5px;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sup-head i{font-size:11px;color:var(--text-secondary);font-style:normal;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sup-info{
+  display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;
+  font-size:11.5px;color:var(--text-secondary);
+}
+.sup-info span{background:var(--bg-page);border:1px solid var(--border);
+  border-radius:8px;padding:3px 9px}
+.sup-info b{color:var(--brand-primary);font-weight:600}
+/* 小组成员卡（v3.0.1）：面板里的名单块，组长挂小标、本人高亮 */
+.sup-group{
+  background:var(--bg-page);border:1px solid var(--border);border-radius:10px;
+  padding:8px 10px;margin-bottom:8px;
+}
+.sup-g-head{
+  display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;
+  color:var(--text-primary);margin-bottom:7px;
+}
+.sup-g-head span{
+  margin-left:auto;font-weight:500;font-size:10.5px;color:var(--text-secondary);
+  background:var(--bg-surface);border:1px solid var(--border);
+  border-radius:999px;padding:1px 8px;
+}
+.sup-g-chips{display:flex;flex-wrap:wrap;gap:5px}
+.gmem-chip{
+  display:inline-flex;align-items:center;gap:4px;font-size:11.5px;
+  background:var(--bg-surface);border:1px solid var(--border);
+  border-radius:999px;padding:3px 10px;color:var(--text-primary);
+}
+.gmem-chip.me{
+  border-color:color-mix(in srgb,var(--brand-primary) 45%,transparent);
+  background:var(--brand-soft);color:var(--brand-primary);font-weight:600;
+}
+.gmem-chip em{
+  font-style:normal;font-size:9.5px;font-weight:700;color:#fff;
+  background:var(--brand-primary);border-radius:5px;padding:1px 5px;
+}
+.gmem-empty{font-size:11.5px;color:var(--text-secondary)}
+.sup-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px}
+.sup-q{
+  font-family:inherit;font-size:12px;padding:7px 8px;border-radius:9px;cursor:pointer;
+  border:1px solid var(--border);background:var(--bg-page);color:var(--text-secondary);
+  transition:all .16s var(--ease-out);
+}
+.sup-q:hover{border-color:var(--brand-primary);color:var(--brand-primary);background:var(--brand-soft)}
+.sup-q.on{border-color:var(--brand-primary);color:var(--brand-primary);background:var(--brand-soft);font-weight:600}
+/* 护眼皮肤色卡（2.0.41）：四个等宽按钮，色点 + 名字；
+   选中态用品牌色描边，夜间同样可辨（不靠亮度差，靠边框与底色） */
+.sup-theme{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:8px 0 4px}
+.sup-dot{
+  display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 2px;
+  font-family:inherit;font-size:11px;line-height:1.2;cursor:pointer;
+  border:1px solid var(--border);border-radius:9px;background:var(--bg-page);
+  color:var(--text-secondary);transition:all .16s var(--ease-out);
+}
+.sup-dot i{width:16px;height:16px;border-radius:50%;display:block;
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.08),0 1px 3px rgba(0,0,0,.12)}
+.sup-dot:hover{border-color:var(--brand-primary);color:var(--brand-primary)}
+.sup-dot.on{border-color:var(--brand-primary);background:var(--brand-soft);
+  color:var(--brand-primary);font-weight:600}
+.sup-item{
+  display:block;width:100%;text-align:left;font-family:inherit;font-size:12.5px;
+  padding:8px 9px;border:0;border-radius:9px;background:transparent;
+  color:var(--text-primary);cursor:pointer;transition:background .14s;
+}
+.sup-item:hover{background:var(--brand-soft)}
+.sup-item.danger{color:var(--error)}
+/* 2.1.8：头像和主题 / 修改密码 提成常驻按钮，和「我的记录」平级 */
+.sup-live-items{margin-top:5px;padding:5px 0 2px;border-top:1px solid var(--border)}
+.sup-live-items .sup-item{font-size:12.5px}
+/* 2.1.7：退出登录常驻在设置分区下方，顶部分隔线跟设置区隔开 */
+.sup-logout-wrap{margin-top:6px;padding-top:6px;border-top:1px solid var(--border)}
+/* 2.0.75：「我的」面板分区二级折叠——标题整行可点，箭头展开时转 90° */
+.sup-sec-t{display:flex;align-items:center;justify-content:space-between;width:100%;
+  font-family:inherit;font-size:11px;color:var(--text-secondary);letter-spacing:1px;font-weight:600;
+  padding:11px 9px 4px;border:0;border-top:1px solid var(--border);margin-top:5px;
+  background:transparent;cursor:pointer;text-align:left}
+.sup-sec-t:hover{color:var(--brand-primary)}
+.sup-sec-ar{position:relative;width:12px;height:12px;flex:none;opacity:.6;
+  transition:transform .18s ease}
+.sup-sec-ar::before{content:'';position:absolute;left:3px;top:2px;width:5px;height:5px;
+  border-right:1.6px solid currentColor;border-bottom:1.6px solid currentColor;
+  transform:rotate(45deg)}
+.sup-sec.open .sup-sec-t .sup-sec-ar{transform:rotate(90deg)}
+.sup-sec-b[hidden]{display:none}
+.set-sub-t{font-size:12px;font-weight:600;color:var(--text-primary);margin:2px 0 8px}
+.set-sub-sep{height:1px;background:var(--border);margin:16px 0 13px}
+/* 窄屏：侧栏隐藏，左下角悬浮头像键打开同一面板 */
+.su-fab{
+  display:none;position:fixed;left:12px;z-index:70;
+  bottom:calc(74px + env(safe-area-inset-bottom));
+  width:44px;height:44px;border-radius:50%;padding:0;border:1px solid var(--border);
+  background:color-mix(in srgb,var(--bg-surface) 92%,transparent);
+  backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);
+  box-shadow:var(--shadow);cursor:pointer;place-items:center;
+  transition:transform .16s var(--ease-out);
+}
+.su-fab:hover{transform:translateY(-2px)}
+.su-fab .acct-av{width:34px;height:34px;border-radius:50%;font-size:15px}
+/* 2026-11-23：所有屏幕都用左侧栏（账号卡在侧栏底部），悬浮头像键不再需要 */
+@media (max-width:860px){
+  .su-fab{display:none !important}
+}
+
+/* 头像样式选择器（教师端 .av-picker/.av-opt 同款） */
+.av-picker{display:flex;flex-wrap:wrap;gap:8px}
+.av-opt{
+  display:flex;flex-direction:column;align-items:center;gap:4px;
+  padding:8px 6px 6px;min-width:58px;border:1.5px solid var(--border);
+  border-radius:12px;background:var(--bg-surface);cursor:pointer;
+  font-family:inherit;transition:border-color .15s,transform .15s;
+}
+.av-opt:hover{border-color:var(--brand-primary);transform:translateY(-2px)}
+.av-opt.on{border-color:var(--brand-primary);background:var(--brand-soft);
+  box-shadow:0 0 0 2px var(--brand-soft)}
+.av-opt i{font-size:10.5px;color:var(--text-secondary);font-style:normal}
+.av-opt.on i{color:var(--brand-primary);font-weight:600}
+
+/* 头像样式弹层里的实时预览区 */
+.av-preview{display:flex;align-items:center;gap:14px;margin-top:6px}
+
+/* ============ 拟物化视觉层（对齐教师端 data-ui="skeuo"） ============
+   同一套配方：选中/主按钮用品牌色斜向渐变，卡片和统计卡加极淡的
+   顶部彩光避免死白，按钮带内高光 + 投影，压下时轻微内陷。 */
+.side-item.active{
+  background-color:var(--brand-soft);
+  background-image:linear-gradient(128deg,
+    color-mix(in srgb,var(--brand-primary) 18%,var(--bg-surface)) 0%,
+    color-mix(in srgb,var(--brand-soft) 90%,var(--bg-surface)) 55%,
+    color-mix(in srgb,var(--brand-soft) 76%,var(--bg-surface)) 100%);
+  color:var(--brand-primary);font-weight:600;
+}
+.side-item:hover:not(.active){
+  background-image:linear-gradient(128deg,
+    color-mix(in srgb,var(--bg-surface) 95%,transparent) 0%,
+    color-mix(in srgb,var(--brand-soft) 40%,var(--bg-surface)) 100%);
+}
+.btn{
+  background-image:linear-gradient(135deg,
+    color-mix(in srgb,var(--brand-hover) 88%,var(--bg-surface)) 0%,
+    var(--brand-primary) 48%,
+    color-mix(in srgb,var(--brand-primary) 82%,#000) 100%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.22),0 2px 6px color-mix(in srgb,var(--brand-primary) 26%,transparent);
+}
+.btn:hover{background-image:linear-gradient(135deg,var(--brand-hover) 0%,var(--brand-primary) 100%)}
+.btn:active{transform:scale(.97);box-shadow:inset 0 2px 5px rgba(0,0,0,.18)}
+.btn.ghost,.btn.line{
+  background-image:linear-gradient(172deg,var(--bg-surface) 0%,
+    color-mix(in srgb,var(--brand-soft) 45%,var(--bg-page)) 58%,
+    color-mix(in srgb,var(--brand-soft) 75%,var(--bg-page)) 100%);
+  box-shadow:var(--shadow);
+}
+.card{
+  background-image:
+    radial-gradient(600px 90px at 12% -12%,
+      color-mix(in srgb,var(--brand-soft) 60%,transparent) 0%,transparent 70%),
+    linear-gradient(180deg,var(--bg-surface) 0%,
+      color-mix(in srgb,var(--bg-surface) 96%,var(--bg-page)) 100%);
+}
+.stat{
+  background-image:
+    radial-gradient(340px 70px at 10% -18%,
+      color-mix(in srgb,var(--brand-soft) 55%,transparent) 0%,transparent 72%),
+    linear-gradient(180deg,var(--bg-surface),color-mix(in srgb,var(--bg-surface) 97%,var(--bg-page)));
+}
+.ckin{
+  background-image:linear-gradient(180deg,var(--brand-soft),var(--bg-surface))!important;
+}
+
+/* ============ v3.0.0 课程页 / 资源预览 ============ */
+/* 课程卡：每门课一张，卡头带琥珀色小书签装饰，突出课程名 */
+.course-card{position:relative}
+.course-card::before{
+  content:'';position:absolute;left:-1px;top:16px;bottom:16px;width:4px;
+  border-radius:0 4px 4px 0;
+  background:linear-gradient(180deg,var(--sun),var(--brand-primary));
+}
+.course-card .cc-name{font-size:17px;font-weight:700;color:var(--text-primary)}
+.course-card .card:hover{transform:translateY(-2px)}
+.res-row{cursor:pointer;border-radius:10px;transition:background .15s}
+.res-row:hover{background:var(--brand-soft)}
+.res-row:hover .tag{transform:translateY(-1px)}
+/* 资源在线预览：iframe 占满弹层主体（PDF / 文本 / HTML / Office 转出的 PDF） */
+.mat-frame{
+  flex:1 1 auto;width:100%;height:auto;min-height:300px;
+  border:1px solid var(--border);border-radius:12px;display:block;margin-top:10px;
+  /* 预览画布恒为浅色白底：嵌入的资源 HTML（课件/学习单）多为浅色设计，
+     不随学生端主题变暗——与教师端预览及「新窗口打开」效果一致；
+     color-scheme:light 同时防止浏览器把 iframe 内表单控件画成深色。 */
+  background:#FFFCF4;color-scheme:light;overflow:auto;
+}
+/* 预览专用弹层：更大、内容区弹性填充 */
+.sheet--preview{
+  width:min(900px,94vw);height:min(84vh,840px);max-height:none;
+  display:flex;flex-direction:column;overflow:hidden;
+}
+.sheet--preview .sh{flex:0 0 auto}
+.sheet--preview .note{flex:0 0 auto}
+/* 图片 / 音视频 预览元素撑满弹层主体 */
+.mat-img{
+  flex:1 1 auto;width:100%;min-height:300px;object-fit:contain;
+  margin-top:10px;background:#0e1116;border-radius:12px;
+}
+.mat-media{
+  flex:1 1 auto;width:100%;min-height:300px;margin-top:10px;
+  background:#000;border-radius:12px;
+}
+/* 音频：不拉伸，居中一条播放条 */
+.mat-audio{flex:0 0 auto;margin-top:14px}
+.mat-audio-el{width:100%;display:block;border-radius:12px}
+/* 拖拽手柄：标题栏（排除关闭按钮 / 链接），避免触屏滚动被吞 */
+.sheet .sh{cursor:move;touch-action:none}
+.sheet .sh .x{cursor:pointer}
+.sheet-rs{
+  position:absolute;right:3px;bottom:3px;width:20px;height:20px;z-index:6;
+  cursor:nwse-resize;touch-action:none;opacity:.45;border-radius:0 0 8px 0;
+  background:linear-gradient(135deg,transparent 46%,var(--brand,#0F6E56) 46% 54%,
+    transparent 54% 64%,var(--brand,#0F6E56) 64% 72%,transparent 72%);
+}
+.sheet-rs:hover{opacity:.9}
+/* 窄屏：预览窗改成整幅底部抽屉（否则 left/right/width 打架会挤成半宽） */
+@media (max-width:860px){
+  .sheet--preview{left:0;right:0;top:auto;bottom:0;width:auto;height:88vh;
+    border-radius:18px 18px 0 0}
+}
+/* 个人信息面板条目右侧的数量小徽标 */
+.sup-item{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.sup-item .si-n{font-size:11px;color:var(--text-secondary);background:var(--bg-page);
+  border:1px solid var(--border);border-radius:999px;padding:1px 8px;font-weight:600}
+/* toast 字号跟主题一起放大 */
+.toast{font-size:14px;padding:11px 18px;border-radius:12px}
+
+/* ================= 座位表（2026-11-03 新增） =================
+   学生端「座位」页：整间教室的座位网格 + 自己的位置高亮。
+   · 讲台永远画在最上方（老师那边讲台在下方时由 JS 倒转行序）；
+   · 格子用 --c 控制列数，窄屏横向滚动而不是把名字压扁；
+   · 颜色全部走主题变量，浅色 / 夜间一套代码。 */
+.smap-card{padding-bottom:14px}
+/* 座位卡左右收窄到 12px：8 列的手机屏一格只有 40px，
+   学号、组名、职务牌能不能放下全在这几像素里 */
+.smap-card{padding-left:12px;padding-right:12px}
+/* 座位卡（今日页）：可点进座位表 */
+.stat.stat-go{cursor:pointer}
+.stat.stat-go .stat-label{color:var(--brand-primary);font-weight:600}
+.smap-stage{
+  margin:2px 0 10px;padding:9px;border-radius:12px;text-align:center;
+  background:var(--brand-soft);border:1px dashed var(--border);
+  color:var(--brand-primary);font-weight:700;font-size:13px;
+  letter-spacing:7px;text-indent:7px;   /* 字距会把整体左移，用 text-indent 补回来 */
+}
+.smap-note{
+  margin:-2px 0 10px;font-size:11.5px;line-height:1.6;
+  color:var(--text-secondary);text-align:center;
+}
+.smap-scroll{overflow-x:auto;overflow-y:hidden;padding-bottom:2px;
+  scrollbar-width:thin;-webkit-overflow-scrolling:touch}
+.smap-scroll::-webkit-scrollbar{height:5px}
+.smap-scroll::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.smap-grid{
+  display:grid;gap:6px;
+  /* 第 1 列是排号轴（固定窄列），其余是座位格 */
+  grid-template-columns:18px repeat(calc(var(--c,9) - 1),minmax(0,1fr));
+  /* 列多时保底宽度，名字不被压成一列竖字 */
+  min-width:calc(18px + (var(--c,9) - 1) * 40px + (var(--c,9) - 1) * 6px);
+}
+/* 轴标注：左侧排号 / 顶部列号，让「第几排第几列」一眼可读 */
+.smap-ax{
+  display:flex;align-items:center;justify-content:center;
+  font-size:calc(var(--fs,11.5px) * .8);font-weight:700;color:var(--text-secondary);
+  font-variant-numeric:tabular-nums;user-select:none;
+}
+.smap-ax.corner{font-size:calc(var(--fs,11.5px) * .72);font-weight:600;gap:1px;opacity:.85}
+.smap-ax.corner i{font-style:normal}
+.smap-ax.axc{align-self:end;padding-bottom:1px}
+.smap-ax.axr{min-height:56px}
+.smap-cell{
+  position:relative;min-height:56px;border-radius:9px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:1px;padding:calc(var(--fs,11.5px) * 1.15 + 3px) 1px 14px;
+  font-size:var(--fs,11.5px);line-height:1.2;font-weight:600;
+  color:var(--text-primary);background:var(--bg-surface);
+  border:1px solid var(--border);overflow:hidden;
+}
+/* 姓名最多两行，绝不截成「张…」：8 列的手机屏一格只有 40px 左右，
+   一个字加省略号等于没显示名字，学生根本认不出自己那一格。
+   用 -webkit-box 做两行截断时实测会把整行挤出格子被裁掉，
+   所以退回普通块级 + max-height 限制高度，换行交给 word-break。 */
+.smap-nm{
+  display:block;max-width:100%;overflow:hidden;
+  word-break:break-all;text-align:center;line-height:1.15;
+  max-height:2.35em;
+}
+/* 学号：与教师端 .seat-no2 同款，等宽小字跟在姓名下面。
+   字号随 --fs 自适应（宽屏格子大字就大，手机自动缩），
+   更长的学号省略号截断 */
+.smap-no{
+  display:block;max-width:100%;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap;text-align:center;
+  font-size:calc(var(--fs,11.5px) * .78);line-height:1.25;font-weight:500;letter-spacing:-.2px;
+  color:var(--text-secondary);font-family:var(--font-mono,ui-monospace,monospace);
+}
+/* 小组条：与教师端 .seat-gname 同款——组色底白字贴顶、高度锁死不盖姓名。
+   高度与字号都随 --fs 走，格子右上永远留不出给姓名的位置 */
+.smap-g{
+  position:absolute;top:0;left:0;right:0;
+  height:calc(var(--fs,11.5px) * 1.15 + 2px);
+  display:flex;align-items:center;justify-content:space-between;gap:1px;
+  padding:0 1px;border-radius:8px 8px 0 0;overflow:hidden;
+  background:var(--gc,var(--brand-primary));color:#fff;
+  font-size:calc(var(--fs,11.5px) * .75);font-weight:500;line-height:1;letter-spacing:.2px;
+}
+.smap-g i{font-size:calc(var(--fs,11.5px) * .75)}
+.smap-g .gn-t{
+  min-width:0;flex:1 1 auto;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap;text-align:left;font-weight:600;
+}
+.smap-g i{font-style:normal;font-size:calc(var(--fs,11.5px) * .75);opacity:.92;flex-shrink:0;white-space:nowrap}
+.smap-g i.lead{font-weight:700;opacity:1;background:rgba(255,255,255,.28);
+  padding:0 3px;border-radius:4px}
+/* 座位号（序号）角签：与教师端 .seat-seq 同款。贴左下——右上被组条占了，
+   中间是姓名行，只有底部两角是空的（右下给班干部牌） */
+.smap-seq{
+  position:absolute;left:2px;bottom:2px;font-style:normal;
+  font-size:calc(var(--fs,11.5px) * .72);font-weight:700;line-height:1;
+  padding:2px 3px;border-radius:5px;
+  background:var(--brand-soft);color:var(--brand-primary);
+  font-variant-numeric:tabular-nums;
+}
+/* 班干部职务牌：与教师端 .mk-pos 同款金色，贴右下（考勤状态学生端一律不显示） */
+.smap-pos{
+  position:absolute;right:2px;bottom:2px;font-style:normal;
+  max-width:72%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font-size:calc(var(--fs,11.5px) * .76);font-weight:600;line-height:1;
+  padding:2px 4px;border-radius:5px;
+  background:linear-gradient(135deg,#FFF3D6,#FFE7AD);color:#8A6116;
+}
+.smap-cell.empty{background:transparent;border:1px dashed var(--border);opacity:.45}
+.smap-cell.blank{border-style:dashed;background:transparent}
+/* 轴标注说明行 */
+.smap-axis-note{margin:8px 0 0}
+/* 「我」的格子里学号/座位号跟着白字走 */
+.smap-cell.me .smap-no{color:inherit;opacity:.85}
+.smap-cell.me .smap-seq{background:rgba(255,255,255,.30);color:inherit}
+/* 图例：班干部金块（与座位格上的职务牌同色） */
+.smap-foot .sk i.pos{
+  background:linear-gradient(135deg,#FFF3D6,#FFE7AD);
+  border-color:#E8C96A;
+}
+.smap-foot .smap-lg-lead{color:#D89614;font-weight:700}
+/* 自己的座位：品牌色实心 + 内描边 + 呼吸光晕。
+   曾经在右上角放一枚「我」胶囊，但 8 列的手机屏一格只有 40px，
+   角标必然压住 3 个字的姓名；姓名才是学生认位的第一线索，
+   所以只留色块（底部图例已标注「我的座位」），姓名与其它格同版同字号。 */
+.smap-cell.me{
+  background:linear-gradient(135deg,var(--brand-primary),var(--brand-hover));
+  color:#fff;border-color:transparent;font-weight:700;
+  box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.55);
+  animation:smapBreathe 2.6s var(--ease-out) infinite;
+}
+html[data-mode="dark"] .smap-cell.me{color:#2A1B14}
+/* 呼吸动画也要带上内描边，否则动画一开始就把 ring 顶掉 */
+@keyframes smapBreathe{
+  0%,100%{box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.55),
+                     0 0 0 0 color-mix(in srgb,var(--brand-primary) 42%,transparent)}
+  50%{box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.55),
+                 0 0 0 5px color-mix(in srgb,var(--brand-primary) 0%,transparent)}
+}
+/* 我在第几排第几列 */
+.smap-mine{
+  display:flex;align-items:center;gap:7px;margin-top:12px;
+  padding:9px 13px;border-radius:12px;font-size:13.5px;
+  background:var(--brand-soft);color:var(--brand-primary);font-weight:600;
+}
+.smap-mine b{font-weight:700}
+.smap-mine .pin{font-size:14px;line-height:1}
+.smap-mine.none{background:var(--bg-page);color:var(--text-secondary);
+  border:1px dashed var(--border);font-weight:500}
+.smap-foot{
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  margin-top:10px;font-size:12px;color:var(--text-secondary);
+}
+.smap-foot .sk{display:inline-flex;align-items:center;gap:5px}
+.smap-foot .sk i{
+  width:12px;height:12px;border-radius:4px;flex:none;
+  border:1px solid var(--border);background:var(--bg-surface);
+}
+.smap-foot .sk i.me{
+  background:linear-gradient(135deg,var(--brand-primary),var(--brand-hover));
+  border-color:transparent;
+}
+.smap-foot .sk i.blank{border-style:dashed;background:transparent}
+.smap-foot .smap-cnt{margin-left:auto;font-variant-numeric:tabular-nums}
+@media (max-width:420px){
+  .smap-grid{gap:4px;min-width:calc(16px + (var(--c,9) - 1) * 36px + (var(--c,9) - 1) * 4px)}
+  .smap-cell{min-height:52px;font-size:var(--fs,11px);border-radius:8px;
+    padding:calc(var(--fs,11px) * 1.15 + 3px) 1px 14px}
+  .smap-ax.axr{min-height:52px}
+  .smap-foot{gap:10px}
+}
+
+/* ================= 夜间模式补丁（2026-11-03） =================
+   背景：品牌色在夜间被提亮成 #DE8A63（暗底上才看得清），可白字压上去
+   只剩 2.6:1 —— 登录按钮、签到对勾、组长标、头像首字都会"糊"在色块里。
+   统一改成暖黑字后 6:1 以上，观感也更像原生的暗色主题（亮色强调块配深字）。
+   另外把次要说明文字（--ink3）再提亮一档，暗底上才真的"一眼看清"。 */
+html[data-mode="dark"] .btn,
+html[data-mode="dark"] .ckin .ck-done,
+html[data-mode="dark"] .tag.hot,
+html[data-mode="dark"] .gmem-chip em,
+html[data-mode="dark"] .login .logo,
+html[data-mode="dark"] .acct-av{ color:#2A1B14 }
+/* 面板里的学号原本用品牌色小字，压在深棕渐变上略低于 4.5:1，夜间降成次要色 */
+html[data-mode="dark"] .su-no{ color:var(--text-secondary) }
+/* 失败态文字（缺勤 / 退出登录 / 红色标签）：夜间用更亮的珊瑚红 */
+html[data-mode="dark"] .tag.late{ background:rgba(240,121,111,.18);color:#F79189 }
+/* toast 在暗底上别再用近黑绿，换成暖黑，和整站色温一致 */
+html[data-mode="dark"] .toast{ background:rgba(44,34,27,.96);color:var(--text-primary);
+  border:1px solid var(--border) }
+/* 座位表（2026-11-03）：轴标注 / 班干部职务牌 / 图例的夜间对比度 */
+html[data-mode="dark"] .smap-ax{ color:var(--ink3) }
+html[data-mode="dark"] .smap-pos{ background:rgba(214,158,44,.24);color:#F0C868 }
+html[data-mode="dark"] .smap-foot .sk i.pos{
+  background:rgba(214,158,44,.24);border-color:rgba(240,200,104,.55) }
+html[data-mode="dark"] .smap-cell.me .smap-seq{ background:rgba(0,0,0,.22);color:inherit }
+/* 小组条底色是品牌色，夜间品牌色被提亮，白字贴上去几乎看不见 */
+html[data-mode="dark"] .smap-g{ color:#2A1B14 }
