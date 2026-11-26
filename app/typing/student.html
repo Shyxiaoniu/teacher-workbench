@@ -3828,12 +3828,13 @@ function bindPlay() {
     'Comma': '<', 'Period': '>', 'Slash': '?' };
   function evChar(e) {
     var c = e.code, m;
-    /* 2.1.20：小键盘篇章「=」只改按键、不改显示内容 —— 课文仍显示 =，
-       学生按减号键（- / Minus / NumpadSubtract）就当作输入了等号。
-       其他篇章保持原样，- 还是 -。 */
+    /* 2.1.20：小键盘篇章「=」只改按键、不改显示内容 —— 课文仍显示 =。
+       虚拟键盘把 = 画在 Enter 键上，所以按 Enter / 小键盘 Enter 就输入等号；
+       减号键保留作兜底，普通 - 仍照常输入。 */
     if (S.play && S.play.L && Number(S.play.L.stage) === 7 &&
         S.play.L.text.charAt(S.play.idx) === '=' &&
-        (e.key === '-' || c === 'Minus' || c === 'NumpadSubtract')) return '=';
+        (e.key === 'Enter' || c === 'Enter' || c === 'NumpadEnter' ||
+         e.key === '-' || c === 'Minus' || c === 'NumpadSubtract')) return '=';
     /* 等号特判（2026-11-05 牛哥反馈「= 打不出来」）：
        主键盘 =、小键盘 = 在不同键盘 / 驱动 / 输入法下，e.code 会分别给成
        Equal、NumpadEqual、Unidentified，甚至空串 —— 只认物理键位必然有漏网。
@@ -4117,6 +4118,19 @@ function bindPlay() {
     cn.addEventListener('keydown', function (e) {
       if (P.done) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
+      /* 2.1.20：小键盘把等号画在 Enter 键上，这里让 Enter 真正上屏成 =。
+         Enter 本身不会产生 input 事件，必须手动喂一次 onInput()。 */
+      if (S.play && S.play.L && Number(S.play.L.stage) === 7 &&
+          S.play.L.text.charAt(S.play.idx) === '=' &&
+          (e.key === 'Enter' || e.code === 'Enter' || e.code === 'NumpadEnter')) {
+        e.preventDefault();
+        e.stopPropagation();
+        flashPressKey('=', null);
+        cn.value = P.typed + (P.errChar || '') + '=';
+        setCaret();
+        onInput();
+        return;
+      }
       var k = evChar(e);
       if (k != null) flashPressKey(k, null);
     });
