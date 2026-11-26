@@ -764,7 +764,7 @@ PET_IDS = ["cat", "dog", "rabbit", "penguin", "panda", "dino", "unicorn", "drago
            "duck", "bear"]
 COND = threading.Condition()
 STARTED = time.time()
-VERSION = "2.1.19"
+VERSION = "2.1.20"
 ONLINE_WINDOW = 300      # 5 分钟内活跃算在线
 # 可内联直出的附件类型（其余一律按下载处理，防止同源执行脚本）
 _INLINE_EXTS = {"png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "pdf",
@@ -818,6 +818,80 @@ except Exception:
 _SSE_MAX = max(50, min(5000, _SSE_MAX))
 _SSE_N = [0]
 _SSE_LOCK = threading.Lock()
+
+# 2.1.20：课表/作息索引缓存。登录自动签到要在同一秒里为每个学生反复问
+# 「这个班今天这节有没有课」，原实现逐节全表扫 periods + lessons。
+# 这里按 (账号, rev) 建一次索引，写库时 rev 变化自动失效；只读、不改库。
+_LESSON_IDX = {}                      # acc -> (rev, period_ids, lessons_by_class)
+_LESSON_IDX_LOCK = threading.RLock()
+
+
+def _idx_int(v, default=None):
+    try:
+        return int(float(v))
+    except (TypeError, ValueError):
+        return default
+
+
+def _lesson_index():
+    """返回 (节次号 -> 可匹配的 period_id 集合, 班级 -> {(周几, period_id)})。"""
+    acc = str(ACC.current_account())
+    try:
+        rev = STORE.rev()
+    except Exception:
+        rev = -1
+    with _LESSON_IDX_LOCK:
+        hit = _LESSON_IDX.get(acc)
+        if hit and hit[0] == rev:
+            return hit[1], hit[2]
+
+        period_ids = {}
+        for p in STORE.table_rows("periods"):
+            if p.get("deleted"):
+                continue
+            vals = set()
+            for k in ("id", "seq"):
+                v = _idx_int(p.get(k))
+                if v is not None:
+                    vals.add(v)
+            seq = _idx_int(p.get("seq") if p.get("seq") not in (None, "") else p.get("id"))
+            if seq is not None and vals:
+                period_ids.setdefault(seq, set()).update(vals)
+
+        by_class = {}
+        for l in STORE.table_rows("lessons"):
+            if l.get("deleted"):
+                continue
+            cid = str(l.get("class_id") or "")
+            dow = _idx_int(l.get("day_of_week"))
+            pid = _idx_int(l.get("period_id"))
+            if not cid or dow is None or pid is None:
+                continue
+            by_class.setdefault(cid, set()).add((dow, pid))
+
+        # 只保留当前账号当前版本的索引，避免频繁写库累积旧版本内存。
+        _LESSON_IDX.clear()
+        _LESSON_IDX[acc] = (rev, period_ids, by_class)
+        return period_ids, by_class
+
+
+def _sorted_classes(rows):
+    """与教师端 classList() 同一口径：先按 sort_order，再按 id。
+
+    2.1.20：打字班级排行榜、积分管理的班级下拉以前直接遍历 rows 表，
+    忽略了老师在小班页上移/下移排好的顺序，看起来「乱序」。
+    """
+    def key(c):
+        try:
+            so = int(float(c.get("sort_order") or 0))
+        except (TypeError, ValueError):
+            so = 0
+        try:
+            cid = int(float(c.get("id") or 0))
+        except (TypeError, ValueError):
+            cid = 0
+        return (0, so, cid) if so else (1, 0, cid)
+    return sorted(rows, key=key)
 
 
 def _sse_enter():
@@ -1288,13 +1362,15 @@ class Handler(LEG.Handler):
                 pass
         BaseHTTPRequestHandler.end_headers(self)
 
-    def _json(self, obj, code=200):
+    def _json(self, obj, code=200, cookie=None):
         self._sec_sent = False
         body = json.dumps(obj, ensure_ascii=False).encode("utf-8")
         self.send_response(code)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        if cookie:
+            self.send_header("Set-Cookie", cookie)
         self.end_headers()
         self.wfile.write(body)
 
@@ -1632,7 +1708,10 @@ class Handler(LEG.Handler):
         self.send_header("Content-Disposition",
                          '%s; filename="%s"' % (disp, os.path.basename(p)))
         self.send_header("X-Content-Type-Options", "nosniff")
-        self.send_header("Cache-Control", "private, max-age=3600")
+        # 2.1.20：更新包覆盖后浏览器仍用1小时内的旧 JS，是「文件更新了、
+        # 功能却像没更新」的常见原因（课表直写/会话复核都因此没跑到）。
+        # 关键小程序静态文件改为回源校验，保证覆盖安装后刷新就拿到新版。
+        self.send_header("Cache-Control", "no-cache, max-age=0, must-revalidate")
         self.end_headers()
         try:
             self.wfile.write(data)
@@ -1761,6 +1840,10 @@ class Handler(LEG.Handler):
                 return self._act_file(path)
             if path.startswith("/teacher/"):
                 return self._teacher_static(path[len("/teacher/"):])
+            # 2.1.20：netsync.js 走根路径兜底静态服务（SimpleHTTP 不发缓存头），
+            # 覆盖安装后浏览器可能继续用旧同步器 —— 单独给它强制回源。
+            if path == "/netsync.js":
+                return self._root_no_cache("netsync.js")
             # 学习单页面（2026-11-17 重做闸门）：
             #   · 教师打开 = 预览，带跨账号兜底与默认模板兜底 ——「查看」绝不
             #     再落到「老师还没有配置自定义提交页」的白页（多教师账号、
@@ -1979,6 +2062,20 @@ class Handler(LEG.Handler):
         self.send_header("Content-Type", "application/javascript; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _root_no_cache(self, rel):
+        """根路径关键 JS：永远回源校验，防止覆盖安装后浏览器跑旧代码。"""
+        full = os.path.normpath(os.path.join(ROOT, rel))
+        if not full.startswith(os.path.normpath(ROOT)) or not os.path.isfile(full):
+            return self._json({"ok": False, "msg": "not found"}, 404)
+        with open(full, "rb") as f:
+            body = f.read()
+        self.send_response(200)
+        self.send_header("Content-Type", "text/javascript; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-cache, max-age=0, must-revalidate")
         self.end_headers()
         self.wfile.write(body)
 
@@ -3007,6 +3104,7 @@ class Handler(LEG.Handler):
                                "port": _port(), "version": VERSION,
                                "activity_tasks": len(ACT.tasks())})
         if path == "/api/v2/auth/session":
+            _tok = A.parse_cookie(self.headers.get("Cookie"))
             s = self._session()
             if not s:
                 return self._json({"ok": False, "role": None}, 401)
@@ -3051,7 +3149,10 @@ class Handler(LEG.Handler):
                 out["student"]["avatar"] = (r or {}).get("avatar", "")   # 像素画头像（服务端权威）
                 cred = STORE.get_cred(s.get("student_id"))
                 out["must_change"] = bool(cred and cred.get("must_change"))
-            return self._json(out)
+            # 2.1.20：教师端30秒心跳顺手把 cookie 的 Max-Age 也续上，
+            # 避免老师连续上课超过12小时后「服务端会话effective、浏览器cookie却到期」。
+            _hours = float(s.get("hours") or (8 if s.get("role") == "student" else 12))
+            return self._json(out, cookie=self._set_cookie(_tok, _hours))
         if path == "/api/v2/public/classes":
             return self._public_classes(qs)
         if path == "/api/v2/public/students":
@@ -3735,7 +3836,7 @@ class Handler(LEG.Handler):
                 return self._json({"ok": False, "msg": "未登录"}, 401)
             data = TYPING.overview()
             classes = []
-            for c in STORE.table_rows("classes"):
+            for c in _sorted_classes(STORE.table_rows("classes")):
                 if c.get("deleted"):
                     continue
                 n = {"id": str(c.get("id")), "name": c.get("name", ""),
@@ -3760,7 +3861,7 @@ class Handler(LEG.Handler):
             if not self._is_teacher():
                 return self._json({"ok": False, "msg": "未登录"}, 401)
             classes = []
-            for c in STORE.table_rows("classes"):
+            for c in _sorted_classes(STORE.table_rows("classes")):
                 if c.get("deleted"):
                     continue
                 uids = [(st.get("id"), st.get("name", ""), st.get("student_no", ""))
@@ -6121,6 +6222,52 @@ class Handler(LEG.Handler):
             TYPING.reset_week()
             STORE.audit("teacher", "typing-reset-week", "")
             return self._json({"ok": True})
+        if path == "/api/v2/teacher/periods-sync":
+            # 2.1.20：课表时间是签到判定的唯一依据。以前前端只写 localStorage，
+            # 服务端仍是旧时间（教师端显示 20:10、学生端按 17:55 判已下课）。
+            # 这是教师显式保存课表时的直写通道，不依赖 1.5s 轮询同步器，
+            # 避免同步器偶发失败导致学生签到时间长期错。
+            if not self._is_teacher():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            rows = body.get("periods") or []
+            if not isinstance(rows, list) or len(rows) > 200:
+                return self._json({"ok": False, "msg": "作息表行数不合法"}, 400)
+            # 2.1.20（牛哥定版）：周一左侧那套作息时间是全校唯一模板。
+            # 不管教师在哪一天改哪一节，最终所有星期几的同一节次都按周一走，
+            # 不保留每天单独的作息。现场旧数据就是周一改了、周四没改导致
+            # 学生端按 17:55 判「已下课」，这里从数据写入口彻底统一。
+            def _seq_of(r):
+                try:
+                    return int(float(r.get("seq") if r.get("seq") not in (None, "")
+                                      else r.get("id")))
+                except Exception:
+                    return None
+            base = {}
+            for r in rows:
+                if isinstance(r, dict) and int(float(r.get("day_of_week") or 0)) == 0:
+                    s = _seq_of(r)
+                    if s is not None:
+                        base[s] = r
+            for r in rows:
+                if not isinstance(r, dict):
+                    continue
+                s = _seq_of(r)
+                b = base.get(s) if s is not None else None
+                if b:
+                    for k in ("label", "start_time", "end_time", "kind"):
+                        if k in b:
+                            r[k] = b[k]
+            n = 0
+            for r in rows:
+                if not isinstance(r, dict):
+                    continue
+                row = dict(r)
+                row.pop("_rev", None)
+                row["updated_at"] = now_str()
+                STORE.upsert("periods", row, "teacher")
+                n += 1
+            notify()
+            return self._json({"ok": True, "applied": n, "rev": STORE.rev()})
         if path == "/api/v2/sync":
             if not self._is_teacher():
                 return self._json({"ok": False, "msg": "只有教师端可以写入"}, 403)
@@ -6716,9 +6863,18 @@ class Handler(LEG.Handler):
         # 窗口起点改成两者取晚：既保留正常课间「上一节下课即可签」的宽松，
         # 又保证节次被大幅后移后，仍按本节开始前 15 分钟才开放。
         early = s - 15
-        start_at = max(prev_end + 1, early) if prev_end is not None else early
+        # 2.1.20 牛哥反馈「签到不按课表设置的课程开始时间」：
+        # 老师把本节开始时间提前到上一节下课之前时，上一节的下课时间不该
+        # 反过来挡住本节。只有本节开始晚于上一节下课，才用「上一节下课+1」
+        # 作为提前量；重叠/倒挂时一律按本节开始时间 -15 分钟开放。
+        if prev_end is not None and s > prev_end:
+            start_at = max(prev_end + 1, early)
+            used_prev = start_at > early
+        else:
+            start_at = early
+            used_prev = False
         if cur < start_at:
-            if prev_end is not None and prev_end + 1 >= early:
+            if used_prev:
                 pe_str = "%d:%02d" % (prev_end // 60, prev_end % 60)
                 return False, "%s 还没到签到时间（上一节 %s 下课，之后才算%s的课前）" % (
                     label, pe_str, label)
@@ -6867,39 +7023,19 @@ class Handler(LEG.Handler):
         考勤行存的 period 是作息表 seq（1~20），lessons.period_id 引用的是
         作息表 id——先把节次号映射回作息表行，再用该行的 id/seq 双口径去匹配。
         """
-        ids = set()
-        for r in STORE.table_rows("periods"):
-            if r.get("deleted"):
-                continue
-            for k in ("seq", "id"):
-                try:
-                    if int(float(r.get(k))) == int(period):
-                        for k2 in ("id", "seq"):
-                            try:
-                                ids.add(int(float(r.get(k2))))
-                            except Exception:
-                                pass
-                        break
-                except Exception:
-                    pass
-        if not ids:
-            ids.add(int(period))          # 没有作息表就按号直比（老数据兜底）
-        has_any = False
-        for l in STORE.table_rows("lessons"):
-            if l.get("deleted"):
-                continue
-            if str(l.get("class_id") or "") != str(cid):
-                continue
-            has_any = True
-            try:
-                if int(float(l.get("day_of_week"))) != int(dow):
-                    continue
-                if int(float(l.get("period_id"))) not in ids:
-                    continue
-            except Exception:
-                continue
-            return True
-        return "no_table" if not has_any else False
+        # 2.1.20：从 (账号, rev) 索引取，避免每次逐节全表扫两张表。
+        period_ids, by_class = _lesson_index()
+        pnum = _idx_int(period)
+        ids = set(period_ids.get(pnum, ())) if pnum is not None else set()
+        if not ids and pnum is not None:
+            ids.add(pnum)                 # 没有作息表就按号直比（老数据兜底）
+        pairs = by_class.get(str(cid) or "", ())
+        if not pairs:
+            return "no_table"
+        want_dow = _idx_int(dow)
+        return True if any(
+            d == want_dow and pid in ids for d, pid in pairs
+        ) else False
 
     def _class_has_lesson_today(self, cid, dow):
         """本班这个星期几有没有课（不看具体第几节）。
@@ -6911,17 +7047,9 @@ class Handler(LEG.Handler):
         两边必须同口径：今天有课就允许签，今天完全没课才拦。
         周末 / 无课日下午的假出勤仍然拦得住（今天一条课都没有）。
         """
-        for l in STORE.table_rows("lessons"):
-            if l.get("deleted"):
-                continue
-            if str(l.get("class_id") or "") != str(cid):
-                continue
-            try:
-                if int(float(l.get("day_of_week"))) == int(dow):
-                    return True
-            except Exception:
-                continue
-        return False
+        _period_ids, by_class = _lesson_index()
+        want = _idx_int(dow)
+        return any(d == want for d, _pid in by_class.get(str(cid) or "", ()))
 
     def _write_checkin(self, sid, st, p, period, d, source):
         """登录自动签到 / 学生手动签到共用的落库核心。
@@ -7655,43 +7783,21 @@ def _periods_today():
 def _lesson_ids_for_period(period):
     """把作息节次号（seq）映射回课表格子用的 period_id（作息表 id）。
     与 _class_lesson_at 同一口径：id / seq 双比，查不到就按号直比。"""
-    ids = set()
-    for r in STORE.table_rows("periods"):
-        if r.get("deleted"):
-            continue
-        try:
-            if int(float(r.get("seq") if r.get("seq") not in (None, "") else r.get("id"))) == int(period):
-                for k in ("id", "seq"):
-                    try:
-                        ids.add(int(float(r.get(k))))
-                    except Exception:
-                        pass
-                break
-        except Exception:
-            continue
-    if not ids:
-        try:
-            ids.add(int(period))
-        except Exception:
-            pass
+    period_ids, _by_class = _lesson_index()
+    pnum = _idx_int(period)
+    ids = set(period_ids.get(pnum, ())) if pnum is not None else set()
+    if not ids and pnum is not None:
+        ids.add(pnum)
     return ids
 
 
 def _classes_with_lesson_at(dow, period):
     """今天这一节真正排了课的班级集合（节次级，不是「当天有课」）。"""
     ids = _lesson_ids_for_period(period)
-    out = set()
-    for l in STORE.table_rows("lessons"):
-        if l.get("deleted") or l.get("class_id") in (None, ""):
-            continue
-        try:
-            if int(float(l.get("day_of_week"))) != int(dow):
-                continue
-            if int(float(l.get("period_id"))) in ids:
-                out.add(str(l.get("class_id")))
-        except Exception:
-            continue
-    return out
+    _period_ids, by_class = _lesson_index()
+    want = _idx_int(dow)
+    return {cid for cid, pairs in by_class.items()
+            if any(d == want and pid in ids for d, pid in pairs)}
 
 
 def _manual_checkin_min():

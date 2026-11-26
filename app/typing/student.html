@@ -286,6 +286,14 @@ html[data-mode="dark"] .sd-origin-pin{
   padding:4px 12px;border-radius:99px;border:1.5px solid var(--sun-line);
   background:var(--card);color:inherit;white-space:nowrap}
 .tw-toggle:hover{background:var(--sun-bg);border-color:var(--sun-ink)}
+/* 2.1.20：教师练习条并入顶栏（紧跟「打字冒险岛 班级工作台」），不再独占一行 */
+.top .teacher-bar.in-top{margin-top:0;padding:4px 10px;flex:0 1 auto;
+  max-width:min(46%,520px);min-width:0;font-size:12.5px}
+.top .teacher-bar.in-top .tw-sum{flex:0 0 auto}
+.top .teacher-bar.in-top .tw-toggle{margin-left:6px}
+@media (max-width:900px){
+  .top .teacher-bar.in-top{max-width:100%;order:3}
+}
 .off-bar{margin:60px auto 0;max-width:460px;text-align:center;background:var(--card);border:1px solid var(--line);
   border-radius:20px;padding:44px 30px;box-shadow:0 8px 24px var(--shadow)}
 .off-bar .big{font-size:44px;margin-bottom:10px}
@@ -429,6 +437,18 @@ body.embed .play-wrap{min-height:calc(100vh - 20px)}
 .art-orig .ch.o .hz{color:var(--ink)}
 .art-orig .ch.c .hz{color:var(--brand)}
 .art-orig.en-line{display:block;font-size:22px;line-height:1.62;letter-spacing:.6px;text-align:left}
+/* 2.1.20：每行下面自带一个可见输入框；真输入框只放在当前行 */
+.art-input{position:relative;min-height:34px;margin-top:4px;padding:3px 9px;
+  border:1.5px solid var(--line);border-radius:9px;background:var(--card);
+  font-size:17px;line-height:26px;color:var(--ink);overflow:hidden}
+.art-row.on .art-input{border-color:var(--brand);background:var(--cur-bg)}
+.art-typed{font-weight:600;color:var(--brand)}
+.art-cin{position:absolute;inset:0;width:100%;height:100%;border:none;outline:none;
+  background:transparent;color:transparent;caret-color:transparent;
+  font:inherit;letter-spacing:0;padding:0;margin:0}
+.art-caret{position:absolute;top:4px;width:2px;height:24px;border-radius:2px;
+  background:var(--brand);animation:caretBlink 1.06s steps(1,end) infinite;pointer-events:none}
+.art-caret[hidden]{display:none}
 .art-echo{display:flex;flex-wrap:wrap;gap:2px 3px;min-height:28px;margin-top:2px;
   border-top:1px dashed color-mix(in srgb,var(--line) 90%,transparent);padding-top:3px}
 .art-echo .ch.d .hz{color:transparent}
@@ -634,10 +654,11 @@ body.embed .play-wrap{min-height:calc(100vh - 20px)}
 /* 左右手底衬：当前要动的那只手整块微微提亮，一眼知道该抬哪边 */
 .hzone{fill:transparent;transition:fill .18s ease}
 .hzone.on{fill:var(--zone-on)}
-.finger .fcircle{fill:var(--surface);stroke:var(--c,#ccc);stroke-width:2.2;transition:fill .16s,stroke .16s}
-/* 高亮环：跟着当前手指一圈圈扩散，比单纯改颜色更容易在余光里捕捉到 */
+.finger .fcircle{fill:var(--surface);stroke:var(--c,#ccc);stroke-width:2.2;transition:fill .08s,stroke .08s}
+/* 高亮环：跟着当前手指扩散。2.1.20 从 .9s 缩到 .32s —— 原来一圈要近一秒，
+   连打时上一根手指的环还没散完，看着像慢半拍。 */
 .finger .fring{fill:none;stroke:var(--c,#ccc);stroke-width:2;opacity:0}
-.finger.active .fring{opacity:.95;stroke-width:3.5;animation:fring .9s ease-out infinite}
+.finger.active .fring{opacity:.95;stroke-width:3.5;animation:fring .32s ease-out infinite}
 @keyframes fring{
   0%{r:19;opacity:.8}
   70%{r:28;opacity:0}
@@ -648,7 +669,7 @@ body.embed .play-wrap{min-height:calc(100vh - 20px)}
    容易读成"点这个按钮"的手指指示，反而误解。指纹图标没有歧义 ——
    它就是手机上解锁时按的那个图案，一眼知道"该用哪根手指去碰键"。 */
 .finger .fp{fill:none;stroke:var(--c,#ccc);stroke-width:2.15;stroke-linecap:round;
-  stroke-linejoin:round;transition:stroke .16s,stroke-opacity .16s}
+  stroke-linejoin:round;transition:stroke .08s,stroke-opacity .08s}
 .finger .fp.dim{stroke-opacity:.42;stroke-width:1.75}
 /* 2026-11-03 牛哥要求：高亮必须「原位置」，不许移动图标 ——
    原来这里带 translateY(-5px) scale(1.07) 的「抬起」动效，
@@ -660,7 +681,7 @@ body.embed .play-wrap{min-height:calc(100vh - 20px)}
   filter:drop-shadow(0 0 6px var(--c,#ccc)) drop-shadow(0 5px 8px rgba(0,0,0,.30))}
 .finger.active .fp{stroke:var(--surface);stroke-width:2.6}
 .finger.active .fp.dim{stroke-opacity:.72}
-/* 敲对了 / 敲错了：按下瞬间给一根手指染色（0.26s 后退回），
+/* 敲对了 / 敲错了：按下瞬间给一根手指染色（0.12s 后退回，按键时旧动画立即收尾），
    这样"我这一下用的是哪根手指"和"应该用哪根"能同时对得上。
    （原 miss 的左右抖动动画已删：同样是位移，一并按「原位置」原则去掉） */
 .finger.hit .fcircle{fill:var(--ok);stroke:var(--surface)}
@@ -672,11 +693,11 @@ body.embed .play-wrap{min-height:calc(100vh - 20px)}
 .finger.aux .fn{fill:var(--c);font-weight:900}
 /* 文字：没轮到的手指名字调暗（2026-11-04：对比出「就是这根」），
    轮到的染成手指色，一眼锁定 */
-.finger .fn{font-size:12.5px;font-weight:800;fill:var(--ink);opacity:.55;transition:fill .16s,opacity .16s;
+.finger .fn{font-size:12.5px;font-weight:800;fill:var(--ink);opacity:.55;transition:fill .08s,opacity .08s;
   paint-order:stroke;stroke:var(--paper);stroke-width:2.6px;stroke-linejoin:round}
 .finger.active .fn{fill:var(--c);opacity:1}
 .finger .fk{font-size:9.5px;font-weight:700;fill:var(--ink2);opacity:.6;font-family:Consolas,Menlo,monospace;
-  letter-spacing:-.2px;transition:fill .16s,opacity .16s;paint-order:stroke;stroke:var(--paper);stroke-width:2.4px;stroke-linejoin:round}
+  letter-spacing:-.2px;transition:fill .08s,opacity .08s;paint-order:stroke;stroke:var(--paper);stroke-width:2.4px;stroke-linejoin:round}
 .finger .fk.s{font-size:8.5px}
 .finger.active .fk{fill:var(--ink);opacity:1}
 /* 矮屏压缩：只收顶部与面板留白，键盘交给整体缩放，不再单独改键高字号 */
@@ -1829,26 +1850,20 @@ function uiToast(msg, tone) {
 
 /* ---------------- 演示数据 ---------------- */
 var DEMO = {
-  me: { id: 'demo', name: '演示同学', class_id: '0', class_name: '三年(1)班' },
+  me: { id: 'demo', name: '演示同学', class_id: '', class_name: '' },
   progress: {
-    stars: 26, week_stars: 12, pts: 300, eggs: 1,
-    pets: ['cat', 'dog'], decos: ['hat-red', 'crown', 'sunglass'],
-    bgs: ['meadow'], effects: [],
-    equip: { pet: 'cat', decos: ['hat-red'], bg: 'meadow', fx: '' },
-    best: { 's1c1l1': { stars: 3, wpm: 34 }, 's1c1l2': { stars: 3, wpm: 31 }, 's1c1l3': { stars: 2, wpm: 27 },
-            's1c1l4': { stars: 2, wpm: 26 }, 's1c1l5': { stars: 3, wpm: 36 }, 's1c1l6': { stars: 1, wpm: 22 },
-            's1c1l7': { stars: 2, wpm: 28 }, 's1c1l8': { stars: 2, wpm: 29 }, 's1c1l9': { stars: 1, wpm: 24 },
-            's1c1l10': { stars: 2, wpm: 27 }, 's2c1l1': { stars: 3, wpm: 41 }, 's2c1l2': { stars: 2, wpm: 36 } }
+    /* 2.1.20：演示档案不再灌入假成绩 / 默认宠物。
+       以前一进教师练习模式就显示「已完成 12 关」+ 默认 cat，容易被当成真实进度。
+       现在演示态与学生态一样：没打就是 0 关，没出战宠物就不显示宠物。 */
+    stars: 0, week_stars: 0, pts: 0, eggs: 0,
+    pets: [], decos: [],
+    bgs: [], effects: [],
+    equip: { pet: '', decos: [], bg: '', fx: '' },
+    best: {}
   },
-  lb: [
-    { name: '李晓明', value: 18, pet: 'dog', decos: ['crown'] },
-    { name: '王小虎', value: 15, pet: 'dino', decos: [] },
-    { name: '张思思', value: 13, pet: 'unicorn', decos: ['bow'] },
-    { name: '陈快乐', value: 9, pet: '', decos: [] },
-    { name: '演示同学', value: 12, pet: 'cat', decos: ['hat-red'], me: true }
-  ]
+  /* 2.1.20：演示榜单不再预置假同学/默认宠物，新账号看起来就是干净的空榜 */
+  lb: []
 };
-var DEMO_LB_NAMES = ['李晓明','王小虎','张思思','陈快乐','刘一一','赵小满','孙齐齐','周多多'];
 
 /* ---------------- 启动 ---------------- */
 function boot() {
@@ -1884,10 +1899,14 @@ function boot() {
     } else {
       S.demo = true;
       S.me = DEMO.me; S.progress = JSON.parse(JSON.stringify(DEMO.progress));
-      try {
-        var saved = localStorage.getItem('wb-typing-demo');
-        if (saved) { var p = JSON.parse(saved); if (p && p.best) S.progress = p; }
-      } catch (e) {}
+      /* 教师练习模式不继承本机演示存档 —— 共用机房里可能残留上一次试用的
+         假成绩/宠物，老师一打开就看到「已完成 N 关」。 */
+      if (!(me && me.role === 'teacher')) {
+        try {
+          var saved = localStorage.getItem('wb-typing-demo');
+          if (saved) { var p = JSON.parse(saved); if (p && p.best) S.progress = p; }
+        } catch (e) {}
+      }
       applyTestHatch();
       S.ranch = ranchFromEquip(S.progress.equip);
       if (me && me.role === 'teacher') {
@@ -1897,7 +1916,16 @@ function boot() {
            2.0.68：不再发 10000 积分。老师默认有 2 次学生作品蛋免费孵化
            （额度由教师端设置下发），演示兑换不再靠虚构积分撑场面。 */
         S.role = 'teacher';
+        /* 2.1.20：教师练习从空白档案开始。老师没打过字，就不该显示
+           已完成关卡；没手动出战宠物，就不该顶着一只默认宠物。 */
+        S.progress.best = {};
+        S.progress.stars = 0;
+        S.progress.week_stars = 0;
         S.progress.pts = 0;
+        S.progress.eggs = 0;
+        S.progress.pets = [];
+        S.progress.decos = [];
+        S.progress.equip = { pet: '', decos: [], bg: '', fx: '' };
         demoSave();
         try {
           var tlb = JSON.parse(localStorage.getItem('wb-typing-teacher-lb') || '{}');
@@ -2244,12 +2272,11 @@ function ranchFromEquip(equip) {
   return { pet: e.pet || '', decos: e.decos || [], bg: e.bg || '', fx: e.fx || '',
            studio_pet: e.studio_pet || '', studio_theme: e.studio_theme || '' };
 }
-/* 顶栏 / 练习条的系统宠物取默认兜底：老档案可能 pet 为空但明明有宠物，
-   作品宠物收回后也应自动显示第一只已拥有的宠物，而不是空爪印。 */
+/* 顶栏 / 练习条只显示「手动出战」的宠物。
+   2.1.20：去掉「自动拿第一只已拥有宠物」的兜底 —— 没点出战却顶着一只
+   默认宠物，会被老师当成学生已经选好了。拥有 ≠ 出战，这里严格区分。 */
 function shownPetId() {
-  if (S.ranch && S.ranch.pet) return S.ranch.pet;
-  var ps = (S.progress && S.progress.pets) || [];
-  return ps.length ? ps[0] : '';
+  return (S.ranch && S.ranch.pet) || '';
 }
 
 /* 学生作品宠物：S.studio 里按 id 取一只（没加载到就返回 null） */
@@ -2350,10 +2377,38 @@ function render() {
                    bg: S.ranch.bg, fx: S.ranch.fx, cls: 'pet-mini',
                    title: petTitleText() });
   var enrolled = !(S.role === 'student' && !S.config.enabled);
+  /* 2.1.20：教师练习模式收进顶栏，跟「打字冒险岛 / 班级工作台」同一行，
+     不再单独占一行。仍然沿用同一套 twBar 折叠状态与事件绑定。 */
+  var teacherBarHtml = (S.demo && S.role === 'teacher')
+    ? '<div class="demo-bar teacher-bar in-top' + (twBarOpen() ? ' is-open' : '') + '" id="twBar">'
+      /* 折叠摘要（默认）：一行说清「现在算不算成绩」，展开才占大块空间 */
+      + '<div class="tw-sum">👩‍🏫 <b>教师练习模式</b>'
+      + '<span class="tw-state">' + twBarState() + '</span>'
+      + '<button class="tw-toggle" type="button">展开设置 ▾</button></div>'
+      /* 展开全文：原来的开关 + 班级下拉 + 说明，外加一个「收起」 */
+      + '<div class="tw-full">👩‍🏫 <b>教师练习模式</b>：和学生同一张冒险地图，成绩默认只存本机。'
+      + '<label class="tw-lb"><input type="checkbox" id="twLb"' + (S.teacherLb && S.teacherLb.on ? ' checked' : '') + '>'
+      + '把我的成绩计入</label>'
+      /* 班级下拉：从 S.teacherClasses 现取现拼（2026-11-04 修复）。
+         以前写死「加载中…」占位，只有 boot 时 overview 回来那一刻才补数据——
+         切一次标签页 render() 重画就永远停在「加载中…」，班级列表识别不到。 */
+      + '<select id="twCls"' + (S.teacherLb && S.teacherLb.on ? '' : ' disabled') + '>'
+      + ((S.teacherClasses && S.teacherClasses.length)
+        ? S.teacherClasses.map(function (c) {
+            return '<option value="' + esc(c.id) + '"' +
+              (c.id === S.teacherLb.class_id ? ' selected' : '') + '>' + esc(c.name) + '</option>';
+          }).join('')
+        : '<option>加载中…</option>')
+      + '</select>'
+      + '<span class="tw-tip">班级排行榜（选班后生效）</span>'
+      + '<button class="tw-toggle" type="button">收起 ▴</button></div>'
+      + '</div>'
+    : '';
   var html =
     '<div class="stick-top">' +
       '<div class="top">' +
         '<span class="logo">⌨️ 打字冒险岛<small>班级工作台</small></span>' +
+        teacherBarHtml +
         '<div class="meter">' +
           '<span class="chip">⭐ ' + (S.progress.stars || 0) + ' 星</span>' +
           ptsChipHtml() +
@@ -2364,35 +2419,11 @@ function render() {
         '</div>' +
       '</div>' +
     '</div>' +
-      /* ↑ .stick-top 到此结束：只有标题行吸顶。
-         演示条 / 教师练习条 / 页签以下都在容器外，随页面正常滚动。 */
+      /* ↑ .stick-top 到此结束：只有标题行吸顶。教师练习条已并入标题行；
+         演示提示条 / 页签仍在容器外，随页面正常滚动。 */
       (S.demo && S.role !== 'teacher'
         ? '<div class="demo-bar">🎬 演示模式：当前未登录，展示的是示例数据，成绩只存在本机。' +
           '学生登录后进入这里，成绩会真实记录并上榜。</div>' : '') +
-      (S.demo && S.role === 'teacher'
-        ? '<div class="demo-bar teacher-bar' + (twBarOpen() ? ' is-open' : '') + '" id="twBar">'
-          /* 折叠摘要（默认）：一行说清「现在算不算成绩」，展开才占大块空间 */
-          + '<div class="tw-sum">👩‍🏫 <b>教师练习模式</b>'
-          + '<span class="tw-state">' + twBarState() + '</span>'
-          + '<button class="tw-toggle" type="button">展开设置 ▾</button></div>'
-          /* 展开全文：原来的开关 + 班级下拉 + 说明，外加一个「收起」 */
-          + '<div class="tw-full">👩‍🏫 <b>教师练习模式</b>：和学生同一张冒险地图，成绩默认只存本机。'
-          + '<label class="tw-lb"><input type="checkbox" id="twLb"' + (S.teacherLb && S.teacherLb.on ? ' checked' : '') + '>'
-          + '把我的成绩计入</label>'
-          /* 班级下拉：从 S.teacherClasses 现取现拼（2026-11-04 修复）。
-             以前写死「加载中…」占位，只有 boot 时 overview 回来那一刻才补数据——
-             切一次标签页 render() 重画就永远停在「加载中…」，班级列表识别不到。 */
-          + '<select id="twCls"' + (S.teacherLb && S.teacherLb.on ? '' : ' disabled') + '>'
-          + ((S.teacherClasses && S.teacherClasses.length)
-            ? S.teacherClasses.map(function (c) {
-                return '<option value="' + esc(c.id) + '"' +
-                  (c.id === S.teacherLb.class_id ? ' selected' : '') + '>' + esc(c.name) + '</option>';
-              }).join('')
-            : '<option>加载中…</option>')
-          + '</select>'
-          + '<span class="tw-tip">班级排行榜（选班后生效）</span>'
-          + '<button class="tw-toggle" type="button">收起 ▴</button></div>'
-          + '</div>' : '') +
       (enrolled
         ? '<div class="tabs">' +
             tabBtn('map', '🗺 冒险地图') + tabBtn('lb', '🏆 排行榜') + tabBtn('ranch', '🐾 宠物牧场') +
@@ -2929,6 +2960,17 @@ function paintKb(ch) {
    ok=false（敲错）用红色，正确/普通用品牌色；100ms 自动退场，连打不糊。
    2026-11-04：180ms 缩短到 100ms（按下立马响应、闪完就收）。
    info.shift 时对应手的 Shift 键一起闪。供 keys / 英文 / 中文三个模式共用。 */
+/* 2.1.20：把旧瞬态「立即结束」，而不是等它自然褪色 —— 连打时不再拖尾。 */
+function _endKeyFx(el) {
+  if (!el) return;
+  if (el._pt) { clearTimeout(el._pt); el._pt = null; }
+  try {
+    if (el.getAnimations) el.getAnimations().forEach(function (a) {
+      try { if (a.playState !== 'finished') a.finish(); } catch (e) {}
+    });
+  } catch (e) {}
+  el.classList.remove('press', 'press-bad');
+}
 function flashPressKey(ch, ok) {
   var box = $('#kbBox');
   if (!box) return;
@@ -2937,15 +2979,16 @@ function flashPressKey(ch, ok) {
   if (!info) return;
   var ids = [info.id];
   if (info.shift) ids.push(info.shift === 'L' ? 'shiftL' : 'shiftR');
+  /* 抢占：上一颗键的按下动画立刻收尾（哪怕定时器还没到 100ms）。 */
+  box.querySelectorAll('.kb-k.press, .kb-k.press-bad').forEach(_endKeyFx);
   ids.forEach(function (id) {
     var el = box.querySelector('[data-kb="' + id + '"]');
     if (!el) return;
+    _endKeyFx(el);
     var cls = ok === false ? 'press-bad' : 'press';
-    el.classList.remove('press', 'press-bad');
     el.getBoundingClientRect();      /* 强制重排：连续快敲时瞬态也能重放 */
     el.classList.add(cls);
-    if (el._pt) clearTimeout(el._pt);
-    el._pt = setTimeout(function () { el.classList.remove('press', 'press-bad'); }, 100);
+    el._pt = setTimeout(function () { _endKeyFx(el); }, 100);
   });
 }
 window.kbDebugPress = function (ch) {
@@ -3072,17 +3115,30 @@ function paintHands(fc, shiftHand) {
     z.classList.toggle('on', h === hand || (!!shiftHand && h === shiftHand));
   });
 }
-/* 敲键瞬间的手指反馈：不影响目标态，只闪一下 */
+/* 敲键瞬间的手指反馈：不影响目标态，只闪一下。
+   2.1.20：按下新键时，先让上一个按键的手指动画「立即完成」——
+   旧实现只清自己那根手指的定时器，换手指后上一根的绿/红还会挂 280ms，
+   视觉上就像慢半拍。现在全图抢占 + 时长 280ms → 120ms。 */
+function _endFingerFx(el) {
+  if (!el) return;
+  if (el._ft) { clearTimeout(el._ft); el._ft = null; }
+  try {
+    if (el.getAnimations) el.getAnimations().forEach(function (a) {
+      try { if (a.playState !== 'finished') a.finish(); } catch (e) {}
+    });
+  } catch (e) {}
+  el.classList.remove('hit', 'miss');
+}
 function flashFinger(f, kind) {
   var box = $('#handsBox');
   if (!box || !f) return;
+  box.querySelectorAll('.finger.hit, .finger.miss').forEach(_endFingerFx);
   var el = box.querySelector('.finger[data-finger="' + f + '"]');
   if (!el) return;
-  el.classList.remove('hit', 'miss');
+  _endFingerFx(el);
   el.getBoundingClientRect();      /* 强制重排：连续快打时动画才会重放 */
   el.classList.add(kind === 'miss' ? 'miss' : 'hit');
-  if (el._ft) clearTimeout(el._ft);
-  el._ft = setTimeout(function () { el.classList.remove('hit', 'miss'); }, 280);
+  el._ft = setTimeout(function () { _endFingerFx(el); }, 120);
 }
 /* 字符 → 手指（与键盘高亮同一套映射，小键盘篇章也走这里） */
 function kbFingerOfKey(ch) {
@@ -3251,6 +3307,9 @@ function echoHtml(text, idx, base) {
   }
   return s;
 }
+function isLongArticle(L) {
+  return !!(L && L.long && L.lines && L.lines.length);
+}
 /* 把透明的真输入框、可见光标一起挪到「当前正在打的那个字」的位置。
    这是输入法候选框定位的关键：浏览器按 input 的 caret 矩形摆候选框，
    input 浮在第 idx 格的格子里，搜狗/微软拼音的候选框就跟着落在那里，
@@ -3263,20 +3322,42 @@ function placeTypingInput() {
     return;
   }
   var cn = document.getElementById('cnInput');
+  if (!cn) return;
+  if (isLongArticle(P.L)) {
+    /* 2.1.20：文章页真输入框就在当前行下面，不再另放底部输入台。 */
+    var cur = artLineOf(P.L, Math.min(P.idx, Math.max(0, P.L.text.length - 1)));
+    var row = document.querySelector('.art-row.on') ||
+              document.querySelector('.art-row[data-line="' + cur + '"]');
+    var slot = row && row.querySelector('.art-input');
+    if (!slot) return;
+    var typed = slot.querySelector('.art-typed');
+    if (cn.parentNode !== slot) slot.appendChild(cn);
+    cn.style.position = 'absolute';
+    cn.style.inset = '0';
+    cn.style.width = '100%';
+    cn.style.height = '100%';
+    var ac = slot.querySelector('.art-caret');
+    if (ac) {
+      ac.hidden = false;
+      /* 2.1.20：光标必须对齐「原文当前格」，不能按输入台里的文字宽度算 ——
+         输入台字号/字距和原文不同，输错时尤其会向左错位。 */
+      var orig = row.querySelector('.art-orig');
+      var base = artLineStarts(P.L)[cur] || 0;
+      var cell = orig && orig.children[Math.min(P.idx - base, orig.children.length - 1)];
+      if (cell) {
+        ac.style.left = Math.max(0,
+          cell.getBoundingClientRect().left - slot.getBoundingClientRect().left) + 'px';
+      } else {
+        ac.style.left = (typed ? typed.offsetWidth : 0) + 'px';
+      }
+    }
+    return;
+  }
   var field = document.getElementById('tbField');
   if (!cn || !field) return;
   var echo = document.getElementById('tbEcho');
-  var mini = document.getElementById('tbMini');
   var left = 8, top = 4, w = 34, h = 32;
-  if (mini) {
-    /* 整篇文章：输入台里显示本行已上屏的字，光标与候选框跟在它后面 */
-    var st = artLineStarts(P.L);
-    var li = artLineOf(P.L, Math.min(P.idx, Math.max(0, P.L.text.length - 1)));
-    var typed = P.L.text.slice(st[li] || 0, P.idx);
-    mini.textContent = typed.length > 40 ? '…' + typed.slice(-40) : typed;
-    left = 8 + mini.offsetWidth;
-    top = 4; w = 34; h = 26;
-  } else if (echo && echo.children.length) {
+  if (echo && echo.children.length) {
     /* 短课文：回显层与课文逐字同列，直接取第 idx 格的 offset */
     var cell = echo.children[Math.min(P.idx, echo.children.length - 1)];
     if (cell) {
@@ -3327,18 +3408,38 @@ function artLineOf(L, idx) {
   }
   return lo;
 }
+/** 某一行已经上屏的文字（2.1.20：直接显示在每行自己的输入框里） */
+function artTypedOf(i) {
+  var L = S.play && S.play.L, P = S.play;
+  if (!L || !P) return '';
+  var st = artLineStarts(L), base = st[i] || 0;
+  var end = (i + 1 < st.length) ? st[i + 1] : L.text.length;
+  if (P.idx <= base) return '';
+  var out = L.text.slice(base, Math.min(P.idx, end));
+  if (P.idx > base && P.idx <= end && P.errChar) out += P.errChar;
+  return out;
+}
 function artRowHtml(i) {
   var L = S.play.L, P = S.play;
   var line = (L.lines || [])[i] || '';
   var base = artLineStarts(L)[i];
   var isCn = L.mode === 'cn';
   var on = P.idx >= base && P.idx < base + line.length;
+  /* 2.1.20：每行下面自带一个输入框。真输入框只放在当前行，
+     行 progressed 时由 placeTypingInput() 搬过去，其余行只显示已上屏文字。 */
   return '<div class="art-row' + (on ? ' on' : '') + '" data-line="' + i + '">' +
     '<span class="art-no">' + (i + 1) + '</span>' +
     '<div class="art-main">' +
       '<div class="art-orig' + (isCn ? '' : ' en-line') + '">' +
         textHtml(line, P.idx, false, base) + '</div>' +
-      '<div class="art-echo">' + echoHtml(line, P.idx, base) + '</div>' +
+      '<div class="art-input" data-line="' + i + '">' +
+        '<span class="art-typed">' + esc(artTypedOf(i)) + '</span>' +
+        (on && isCn
+          ? '<input class="art-cin" id="cnInput" autocomplete="off" autocorrect="off" ' +
+            'autocapitalize="off" spellcheck="false" aria-label="在这行照着原文打字">'
+          : '') +
+        '<span class="art-caret" hidden></span>' +
+      '</div>' +
     '</div></div>';
 }
 /* 只重画「当前行」和「刚刚离开的那一行」：整篇上百行，每敲一个字全部重排会卡 */
@@ -3352,9 +3453,9 @@ function paintArt() {
     var row = document.querySelector('.art-row[data-line="' + i + '"]');
     if (!row) return;
     var line = L.lines[i] || '', base = artLineStarts(L)[i];
-    var o = row.querySelector('.art-orig'), e = row.querySelector('.art-echo');
+    var o = row.querySelector('.art-orig'), tp = row.querySelector('.art-typed');
     if (o) o.innerHTML = textHtml(line, P.idx, false, base);
-    if (e) e.innerHTML = echoHtml(line, P.idx, base);
+    if (tp) tp.textContent = artTypedOf(i);
   });
   var rows = document.querySelectorAll('.art-row');
   for (var k = 0; k < rows.length; k++) {
@@ -3362,14 +3463,15 @@ function paintArt() {
     if (on !== rows[k].classList.contains('on')) rows[k].classList.toggle('on', on);
   }
   P._artPrev = cur;
-  /* 当前行滚进可视区（只滚课文框，不带动整页） */
+  /* 2.1.20：当前行始终居中显示，文字跟着输入进度走。
+     原来只在行滚出可视区时才挪到上 1/3，学生要低头找当前字；
+     现在每敲一个字都把当前行放到课文框垂直中央（短文章不滚）。 */
   var box = document.getElementById('textWrap');
   var row = document.querySelector('.art-row[data-line="' + cur + '"]');
   if (box && row && box.scrollHeight > box.clientHeight + 4) {
     var top = row.offsetTop - box.offsetTop;
-    if (top < box.scrollTop + 6 || top + row.offsetHeight > box.scrollTop + box.clientHeight - 6) {
-      box.scrollTop = Math.max(0, top - box.clientHeight / 3);
-    }
+    var center = top - (box.clientHeight - row.offsetHeight) / 2;
+    box.scrollTop = Math.max(0, Math.min(center, box.scrollHeight - box.clientHeight));
   }
 }
 function renderPlay() {
@@ -3391,20 +3493,21 @@ function renderPlay() {
     var textBox = isLong
       ? '<div class="art-box" id="textWrap">' +
           L.lines.map(function (_, i) { return artRowHtml(i); }).join('') +
-          '<div class="py-pop" id="pyPop" hidden></div></div>'
+          '<div class="py-pop" id="pyPop" hidden></div>' +
+          '<span class="tb-comp" id="tbComp" hidden></span></div>'
       : '<div class="text-wrap" id="textWrap">' +
         '<div class="text-line' + (isCn ? '' : ' en-line') + '" id="textLine">' +
           textHtml(L.text, P.idx, false) + '</div>' +
         '<div class="py-pop" id="pyPop" hidden></div></div>';
     body = imeBarHtml() +
       textBox +
-      (isCn
-        ? '<div class="typing-bar' + (isLong ? ' slim' : '') + '" id="typeBar">' +
+      (isCn && !isLong
+        ? '<div class="typing-bar" id="typeBar">' +
             '<div class="tb-field" id="tbField">' +
-              /* 短课文：回显层与课文共用同一套字符网格，第 i 个字落在课文第 i 个字正下方。
-                 整篇文章：回显已经在每一行下面了，输入台只留「本行已上屏」的小回显，
-                 光标和输入法候选框跟着它走。 */
-              (isLong ? '<span class="tb-mini" id="tbMini" aria-hidden="true"></span>' :
+              /* 2.1.20：文章页只保留一个输入框 —— 原来每行下面有一份回显、
+                 输入台里又有 tb-mini 小回显，看起来像两个输入框。现在文章页
+                 只留这一条输入区，打过的字直接在上方原文里变色。 */
+              (isLong ? '' :
                 '<div class="tb-echo" id="tbEcho" aria-hidden="true">' + echoHtml(L.text, 0) + '</div>') +
               '<input class="tb-input" id="cnInput" autocomplete="off" autocorrect="off" ' +
                 'autocapitalize="off" spellcheck="false" placeholder=" " ' +
@@ -3725,6 +3828,12 @@ function bindPlay() {
     'Comma': '<', 'Period': '>', 'Slash': '?' };
   function evChar(e) {
     var c = e.code, m;
+    /* 2.1.20：小键盘篇章「=」只改按键、不改显示内容 —— 课文仍显示 =，
+       学生按减号键（- / Minus / NumpadSubtract）就当作输入了等号。
+       其他篇章保持原样，- 还是 -。 */
+    if (S.play && S.play.L && Number(S.play.L.stage) === 7 &&
+        S.play.L.text.charAt(S.play.idx) === '=' &&
+        (e.key === '-' || c === 'Minus' || c === 'NumpadSubtract')) return '=';
     /* 等号特判（2026-11-05 牛哥反馈「= 打不出来」）：
        主键盘 =、小键盘 = 在不同键盘 / 驱动 / 输入法下，e.code 会分别给成
        Equal、NumpadEqual、Unidentified，甚至空串 —— 只认物理键位必然有漏网。
@@ -4021,7 +4130,20 @@ function bindPlay() {
     var tbComp = $('#tbComp');
     function placeComp(txt) {
       placeTypingInput();
-      if (!tbComp || !tbf) return;
+      if (!tbComp) return;
+      /* 2.1.20：文章页拼音浮标贴在「当前行输入框」里已上屏文字后面 */
+      if (isLongArticle(L)) {
+        var slot = document.querySelector('.art-row.on .art-input');
+        if (!slot) return;
+        if (tbComp.parentNode !== slot) slot.appendChild(tbComp);
+        var tp = slot.querySelector('.art-typed');
+        tbComp.hidden = false;
+        tbComp.textContent = txt || '　';
+        tbComp.style.left = (tp ? tp.offsetWidth : 0) + 'px';
+        tbComp.style.top = '2px';
+        return;
+      }
+      if (!tbf) return;
       var box = $('#tbEcho'), mini = $('#tbMini');
       var left = 8, top = 4;
       if (box && box.children.length) {
@@ -4394,22 +4516,27 @@ function loadLb() {
         }).catch(function () { paintLb(); });
       return;
     }
-    var names = DEMO_LB_NAMES.slice();
-    var scope = S.lb.scope;
-    var rows = names.map(function (n, i) {
-      var v = scope === 'week' ? Math.max(1, 20 - i * 2 + (i % 3))
-            : scope === 'total' ? 90 - i * 9
-            : Math.round((58 - i * 3.4) * 10) / 10;
-      var pets = ['dog', 'dino', 'unicorn', '', 'cat', 'penguin', 'panda', 'rabbit'];
-      return { name: n, value: v, pet: pets[i], decos: i === 0 ? ['crown'] : (i === 2 ? ['bow'] : []), me: n === S.me.name };
+    /* 2.1.20：演示 / 教师练习不再编造 8 个假同学、假成绩和默认宠物。
+       新账号没打过字 → 空榜；只有本机真的通关过，才把自己的那行放上去。
+       这样「10 多个关卡已通过」「榜上一堆默认宠物」都不会再凭空出现。 */
+    var best = S.progress.best || {};
+    var hasPlayed = Object.keys(best).some(function (k) {
+      return Number((best[k] || {}).stars || 0) > 0;
     });
-    rows.push({ name: S.me.name, value: scope === 'speed' ? 33.6 : (scope === 'week' ? S.progress.week_stars || 0 : S.progress.stars || 0),
-      /* 2026-11-25：演示模式自己这行也要带 studio_pet——否则创意宠物出战后
-         榜单只读 pet 字段，永远显示系统宠物，看着像"出战没生效"。 */
-      pet: shownPetId(), studio_pet: S.ranch.studio_pet || '',
-      decos: S.ranch.decos, bg: S.ranch.bg, fx: S.ranch.fx, me: true });
-    rows.sort(function (a, b) { return b.value - a.value; });
-    S.lb.rows = rows; S.lb.class_name = S.me.class_name;
+    var rows = [];
+    if (hasPlayed) {
+      var scope = S.lb.scope;
+      rows.push({
+        name: S.me.name,
+        value: scope === 'speed' ? (S.progress.best_wpm || 0)
+             : scope === 'week' ? (S.progress.week_stars || 0)
+             : (S.progress.stars || 0),
+        pet: shownPetId(), studio_pet: S.ranch.studio_pet || '',
+        decos: S.ranch.decos, bg: S.ranch.bg, fx: S.ranch.fx, me: true
+      });
+    }
+    S.lb.rows = rows;
+    S.lb.class_name = '';
     paintLb();
     return;
   }

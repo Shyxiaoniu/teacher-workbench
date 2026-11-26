@@ -2274,7 +2274,9 @@
   function suggestChangePwd() {
     if (!/[?&]suggestpwd=1/.test(location.search)) return;
     try {
-      history.replaceState(null, '', location.pathname + location.hash);
+      /* 2.1.20：抹掉 suggestpwd=1 时不能把入口令牌 e 一起抹掉，
+         否则地址栏从 /s/?e=xxx 变成 /s/，学生刷新/换页会丢班级绑定上下文。 */
+      history.replaceState(null, '', sUrl());
     } catch (e) {}
     /* 等主界面渲染稳定再弹，避免和今日卡/SSE 首次刷新抢 DOM */
     setTimeout(function () {

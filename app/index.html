@@ -4173,6 +4173,16 @@ body.colw-dragging { user-select:none; -webkit-user-select:none; cursor:col-resi
 }
 .seat-side-x:hover { color:var(--status-error); border-color:var(--status-error); }
 [data-mode="dark"] .seat-side { box-shadow:-10px 0 28px rgba(0,0,0,.5); }
+/* 2.1.20：未排座提示条里直接放可拖学生标签，不再另开面板 */
+.roster-item{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;
+  border:1px solid var(--status-warn);border-radius:99px;background:var(--bg-surface);
+  font-size:12px;cursor:grab;user-select:none;white-space:nowrap;
+  transition:border-color .14s,background .14s,opacity .14s}
+.roster-item:hover{border-color:var(--brand-primary);background:var(--brand-soft)}
+.roster-item:active{cursor:grabbing}
+.roster-item.dragging{opacity:.42;border-style:dashed}
+.roster-item .ri-name{font-weight:600}
+.roster-item .ri-no{font-size:11px;color:var(--text-secondary)}
 
 
 /* ============================================================
@@ -9276,7 +9286,7 @@ window.quoteInit = quoteInit;
 function openGreetSetting() {
   const c = quoteCfg();
   const body = `
-  <div style="width:340px;max-width:82vw">
+  <div style="width:100%;max-width:340px;box-sizing:border-box;padding-right:8px">
     <div class="field">
       <label>问候语 / 好句字体</label>
       <div class="font-picker">
@@ -9345,7 +9355,9 @@ function openGreetSetting() {
       <button class="btn btn-primary" style="flex:1" onclick="saveGreetSetting()">保存</button>
     </div>
   </div>`;
-  showFloat('问候与好句设置', body);
+  /* 2.1.20：浮窗加宽 + 内容自适应，右侧留足呼吸空间（原来 340px 内容
+     塞进 360px 浮窗，被 30px 内边距和滚动条挤得贴住右边框）。 */
+  showFloat('问候与好句设置', body, { width: 416 });
 
   /* 编辑器初始化（2026-11-05）：浮窗是同步渲染的，这里可以直接拿到节点。
      · 内容用「富文本 → 没有就退回纯文本」，字号用上次保存的整句基准值
@@ -10816,7 +10828,7 @@ const SYNC_TABLES = {
     idOf: r => Number(r.exam_id) * 10000000 + Number(r.student_id) * 100
                + Number(r.course_id) },
   groups: { key:'groups', cn:'小组',
-    cols:['class_id','name','mode','seat_ids','student_ids','roles','locked'] },
+    cols:['class_id','name','mode','seat_ids','student_ids','roles','locked','sort_order'] },
   duty: { key:'dutys', cn:'值日',
     cols:['class_id','day','area','seat_ids','done','skip'] },
   duty_areas: { key:'duty_areas', cn:'值日区域',
@@ -12023,6 +12035,30 @@ async function goToApp(returnTo) {
   /* 启动 2.5 秒后查一次在线更新：有新版本就左下小窗 + 头像角标提醒，
      不和首屏渲染抢网络；离线 / 未登录都静默跳过。 */
   setTimeout(() => { try { updBootstrapHint(); } catch (e) {} }, 2500);
+  /* 2.1.20：教师端启动就直写一次作息时间到服务端。
+     旧包把课表时间只写在浏览器本地，学生端一直按旧时间判「已下课」；
+     现在不依赖老师再去点课表设置，进工作台就自动校正。 */
+  setTimeout(() => { try { pushPeriodsToServer(dbT('periods')); } catch (e) {} }, 900);
+  /* 2.1.20：每 30 秒心跳核对权威会话。服务重启后 cookie 还在但会话已失效，
+     以前页面看着还登录着、各接口却 401（打字页就误显示「未登录演示模式」）。
+     现在真失效会干净地回登录页，不再半登录状态。 */
+  setInterval(async () => {
+    try {
+      if (location.pathname.indexOf('/teacher/login') >= 0) return;
+      if (typeof DEMO !== 'undefined' && DEMO.on) return;
+      const r = await fetch('/api/v2/auth/session', {
+        credentials: 'same-origin', cache: 'no-store'
+      });
+      /* 切回窗口时的偶发 401 不立刻踢人，隔 2.5 秒复查一次仍失效才跳登录 */
+      if (r.status === 401) {
+        await new Promise(res => setTimeout(res, 2500));
+        const r2 = await fetch('/api/v2/auth/session', {
+          credentials: 'same-origin', cache: 'no-store'
+        });
+        if (r2.status === 401) location.href = '/teacher/login';
+      }
+    } catch (e) {}
+  }, 30000);
   /* 座位表状态条要显示签到模式（自动 / 手动 / 已关闭），启动先拉一次 */
   setTimeout(() => { try { checkinCfgLoad(); } catch (e) {} }, 1200);
   /* 刷新页面后恢复进行中的资料包导出/导入进度（需会话 + 数据密码窗口有效） */
@@ -20632,17 +20668,32 @@ function bindPlaceholder() {
        拖到空位 → 搬过去。框选模式下 draggable=false（见卡片模板），不会误触发。
        drop 里不弹确认——拖放本身就是明确意图，弹窗反而费劲（牛哥原话）。 */
     const dragClear = () => content.querySelectorAll(
-      '.seat.dragging,.seat.drag-over').forEach(x => x.classList.remove('dragging', 'drag-over'));
+      '.seat.dragging,.seat.drag-over,.roster-item.dragging')
+      .forEach(x => x.classList.remove('dragging', 'drag-over'));
     content.addEventListener('dragstart', e => {
+      /* 2.1.20：右侧名单里的学生也能拖——未排座直接落座，已排座照样互换/搬移 */
+      const rosterItem = hit(e.target, '.roster-item');
+      if (rosterItem) {
+        if (state.boxActive) { e.preventDefault(); return; }
+        const sid = Number(rosterItem.dataset.rosterStu);
+        if (!sid) { e.preventDefault(); return; }
+        state.__dragRosterStu = sid;
+        state.__dragStu = 0;
+        rosterItem.classList.add('dragging');
+        try { e.dataTransfer.setData('text/plain', 'roster:' + sid); } catch (_) {}
+        e.dataTransfer.effectAllowed = 'move';
+        return;
+      }
       const seat = hit(e.target, '.seat');
       if (!seat || !seat.dataset.student || state.boxActive) { e.preventDefault(); return; }
       state.__dragStu = Number(seat.dataset.student);
+      state.__dragRosterStu = 0;
       seat.classList.add('dragging');
       try { e.dataTransfer.setData('text/plain', String(state.__dragStu)); } catch (_) {}
       e.dataTransfer.effectAllowed = 'move';
     });
     content.addEventListener('dragover', e => {
-      if (!state.__dragStu) return;
+      if (!state.__dragStu && !state.__dragRosterStu) return;
       const seat = hit(e.target, '.seat');
       if (!seat) return;
       e.preventDefault();
@@ -20654,24 +20705,35 @@ function bindPlaceholder() {
     });
     content.addEventListener('drop', e => {
       const src = state.__dragStu;
+      const rosterStu = state.__dragRosterStu;
       dragClear();
-      state.__dragStu = null;
-      if (!src) return;
+      state.__dragStu = 0;
+      state.__dragRosterStu = 0;
+      if (!src && !rosterStu) return;
       const seat = hit(e.target, '.seat');
       if (!seat) return;
       e.preventDefault();
       const dstStu = seat.dataset.student ? Number(seat.dataset.student) : 0;
       const dstSeat = seat.dataset.seat ? Number(seat.dataset.seat) : 0;
+      const r = Number(seat.dataset.row), c = Number(seat.dataset.col);
+      if (rosterStu) {
+        if (dstStu === rosterStu) return;
+        if (dstStu) dragRosterDropToOccupied(rosterStu, dstStu);
+        else if (dstSeat) dragAssignToSeat(rosterStu, dstSeat);
+        else if (r && c) dragAssignToCell(rosterStu, r, c);
+        return;
+      }
       if (dstStu === src) return;
       if (dstStu) dragSwapTo(src, dstStu);
       else if (dstSeat) dragMoveToSeat(src, dstSeat);
       else {
         /* 空格子可能没有座位记录（格子数 > 座位记录数时），按行列补建 */
-        const r = Number(seat.dataset.row), c = Number(seat.dataset.col);
         if (r && c) dragMoveToCell(src, r, c);
       }
     });
-    content.addEventListener('dragend', () => { dragClear(); state.__dragStu = null; });
+    content.addEventListener('dragend', () => {
+      dragClear(); state.__dragStu = 0; state.__dragRosterStu = 0;
+    });
 
     /* 框选：鼠标按下起点，拖动画矩形，松开选中。
        用 grid 容器的坐标算行列，比监听每个座位更省事。 */
@@ -20898,6 +20960,9 @@ function renameGroup(id, name) {
   const g = dbT('groups').find(x => x.id === Number(id));
   if (!g) return;
   g.name = (name||'').trim().slice(0, 12) || g.name;
+  /* 2.1.20：以前只改内存 + 重绘，刷新就没了，也同步不到服务端。
+     座位表小组卡 / 小组面板 / 分组页现在共用这条写回链路。 */
+  dbSet('groups', dbT('groups'));
   renderContent();
 }
 window.renameGroup = renameGroup;
@@ -22211,9 +22276,14 @@ async function savePeriodDialog(id) {
     if (!ok) return;     // 取消：一个字段都没改，弹窗还开着，可以接着改
   }
   /* ③ 确认后才真正写入（之前的实现是一进函数就改内存对象，取消没法回滚） */
+  /* 2.1.20：必须用 dbSet 而不是 dbPersist —— dbPersist 只写浏览器 localStorage，
+     不触发 syncSchedule。结果教师端课表显示新时间、服务端还是旧时间，
+     学生端签到就按旧的「17:55 下课」判。 */
+  const _ts = new Date().toISOString().slice(0, 19).replace('T', ' ');
   if (label) p.label = label;
   if (st) p.start_time = st;
   if (en) p.end_time = en;
+  p.updated_at = _ts;
   /* 2026-11-25 牛哥：节次设置弹窗只改当前那一天，学生端 _periods_today()
      读当天那套还是老时间 → 明明把第9节改成 18:30，17:27 却判成第10节
      「未排课」。和表格直接改(editPeriod)同口径：同一 seq 同步所有星期几。 */
@@ -22222,9 +22292,11 @@ async function savePeriodDialog(id) {
       if (label) x.label = label;
       if (st) x.start_time = st;
       if (en) x.end_time = en;
+      x.updated_at = _ts;
     }
   });
-  dbPersist();   // 改的是内存对象，得显式落盘
+  dbSet('periods', dbT('periods'));   // 落盘 + 立刻同步到服务端
+  pushPeriodsToServer(dbT('periods')); // 直写服务端，签到判定不再用旧时间
   closeFloat();
   renderContent();
   toast(clashes.length
@@ -22309,6 +22381,7 @@ window.periodClashMap = periodClashMap;
 function editPeriod(id, field, val) {
   const p = dbT('periods').find(x => x.id === Number(id));
   if (!p) return;
+  const _ts = new Date().toISOString().slice(0, 19).replace('T', ' ');
   if (field === 'label') p.label = (val||'').trim().slice(0,8) || p.label;
   else {
     const t = (val||'').slice(0,5);
@@ -22316,11 +22389,16 @@ function editPeriod(id, field, val) {
     p[field === 'start' ? 'start_time' : 'end_time'] = t;
     // 同步其他天的同一节次（课表结构按天一致）
     dbT('periods').forEach(x => {
-      if (x.day_of_week !== p.day_of_week && x.seq === p.seq)
+      if (x.day_of_week !== p.day_of_week && Number(x.seq) === Number(p.seq)) {
         x[field === 'start' ? 'start_time' : 'end_time'] = t;
+        x.updated_at = _ts;
+      }
     });
   }
-  dbPersist();   // 直接改字段，不落盘刷新就丢（同 addPeriodRow）
+  p.updated_at = _ts;
+  /* 2.1.20：dbPersist 只写本地，服务端拿不到新时间 → 学生端仍按旧时间判「已下课」 */
+  dbSet('periods', dbT('periods'));
+  pushPeriodsToServer(dbT('periods'));
   renderContent();
 }
 window.editPeriod = editPeriod;
@@ -22345,6 +22423,7 @@ function addPeriodRow() {
   /* id 不能再用 d*100+seq：删过节次、序号重排之后会撞上已有 id（同一 id 两行）。
      改成「全表最大 id + 1」逐行递增，永撞不上。 */
   let nextId = (dbT('periods') || []).reduce((m, x) => Math.max(m, Number(x.id) || 0), 0) + 1;
+  const _ts = new Date().toISOString().slice(0, 19).replace('T', ' ');
   [0,1,2,3,4,5,6].forEach(d => {
     const dup = dbT('periods').some(x =>
       Number(x.day_of_week) === d && Number(x.seq) === seq);
@@ -22353,12 +22432,12 @@ function addPeriodRow() {
       id: nextId++, day_of_week:d, seq,
       label: '第'+seq+'节',
       start_time: toHM(endMin - dur), end_time: toHM(endMin),
-      kind: 'class'
+      kind: 'class', updated_at: _ts
     });
   });
-  /* 2026-10-22 修复：这里是直接 push 内存数组，没走 dbSet，
-     以前只在"顺手有别的操作"时才被节流落盘，加完节次刷新一下就没了。 */
-  dbPersist();
+  /* 2.1.20：dbSet 同时落本地 + 触发同步，避免服务端课表没有新节次。 */
+  dbSet('periods', dbT('periods'));
+  pushPeriodsToServer(dbT('periods'));
   toast('已添加第 ' + seq + ' 节');
   renderContent();
 }
@@ -23014,6 +23093,10 @@ window.setTtDays = setTtDays;
 
 /* 课表工具栏折叠后的设置面板（☰ 三横线按钮触发） */
 function openTtSettings() {
+  /* 2.1.20：兼容修复——老版本只改了浏览器本地课表时间、没同步到服务端，
+     教师端看着是 20:10，学生端还按服务端的 17:55 判「已下课」。
+     打开课表设置时把本地 periods 作为权威提交一次；内容相同则同步器自动忽略。 */
+  try { dbSet('periods', dbT('periods')); pushPeriodsToServer(dbT('periods')); } catch (e) {}
   const days = state.ttDays || 5;
   const body = `
     <div class="tt-set-pop">
@@ -23031,6 +23114,9 @@ function openTtSettings() {
             onclick="addPeriodRow();openTtSettings()">+ 加一节</button>
           <button class="btn" style="width:auto;padding:7px 14px;font-size:13px"
             onclick="openPeriodSetting()">作息时间设置</button>
+          <button class="btn btn-ghost" style="width:auto;padding:7px 14px;font-size:13px"
+            onclick="repairPeriodSync()"
+            title="把当前课表显示的作息时间提交到服务端，并按周一那套时间统一每天同一节次">同步作息到服务端</button>
         </div>
       </div>
       <div class="tt-set-sec">
@@ -23048,6 +23134,35 @@ function openTtSettings() {
   showFloat('课表设置', body);
 }
 window.openTtSettings = openTtSettings;
+
+/** 2.1.20：课表时间直写服务端，不依赖 netsync 轮询（避免偶发同步失败） */
+function pushPeriodsToServer(rows, normalizeFromMonday) {
+  try {
+    fetch('/api/v2/teacher/periods-sync', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ periods: rows,
+                             normalize_from_monday: !!normalizeFromMonday })
+    }).then(function (r) { return r.json(); }).then(function (j) {
+      if (!j || !j.ok) toast('课表时间同步失败：' + ((j && j.msg) || '请稍后重试'));
+    }).catch(function (e) { toast('课表时间同步失败：' + String(e.message || e)); });
+  } catch (e) { toast('课表时间同步失败：' + String(e.message || e)); }
+}
+window.pushPeriodsToServer = pushPeriodsToServer;
+
+/** 2.1.20：一键把课表上显示的作息时间提交到服务端。
+    老版本用 dbPersist 只改本地，服务端仍是旧时间，学生端签到会按旧的
+    「第10节 17:55 下课」提示时间已过。这里强制标新时间戳走正常同步。 */
+function repairPeriodSync(fromMonday) {
+  const _ts = new Date().toISOString().slice(0, 19).replace('T', ' ');
+  const rows = dbT('periods');
+  rows.forEach(p => { p.updated_at = _ts; });
+  dbSet('periods', rows);
+  pushPeriodsToServer(rows, !!fromMonday);
+  toast(fromMonday ? '已按周一时间统一每天作息，学生端稍后刷新即可'
+                   : '课表时间已提交同步，稍等几秒让学生端刷新');
+}
+window.repairPeriodSync = repairPeriodSync;
 
 /* ============================================================
    课表导出：图片(PNG) / 数据(CSV) / 打印(另存PDF)
@@ -25804,10 +25919,41 @@ window.seatTplDel = seatTplDel;
 function toggleBoxMode() {
   state.boxActive = !state.boxActive;
   if (!state.boxActive) { state.boxSel = []; state.boxStart = null; }
-  state.seatMode = state.boxActive ? 'box' : '';
+  /* 框选分组与拖动排座互斥，避免两种拖法抢同一批事件 */
+  if (state.boxActive) state.manualSeatMode = false;
+  state.seatMode = state.boxActive ? 'box'
+                 : state.manualSeatMode ? 'manual' : '';
   renderContent();
 }
 window.toggleBoxMode = toggleBoxMode;
+
+/* 2.1.20：手动拖动排座。入口在「排座设置」弹窗里，
+   与自动排座二选一；开启后未排座学生标签常驻，拖到空位即落座。 */
+function startManualSeatMode() {
+  const okBtn = document.querySelector('.modal-ov .ui-ok');
+  if (okBtn) okBtn.click();                 /* 先关掉排座设置弹窗 */
+  if (state.boxActive) { state.boxActive = false; state.boxSel = []; state.boxStart = null; }
+  state.manualSeatMode = true;
+  state.seatMode = 'manual';
+  renderContent();
+  toast('拖动排座已开启：把下方未排座学生拖到空位');
+  setTimeout(() => {
+    const bar = document.querySelector('.seat-page .notice');
+    if (bar && bar.scrollIntoView) bar.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, 80);
+}
+window.startManualSeatMode = startManualSeatMode;
+
+function toggleManualSeatMode() {
+  state.manualSeatMode = !state.manualSeatMode;
+  if (state.manualSeatMode) {
+    if (state.boxActive) { state.boxActive = false; state.boxSel = []; state.boxStart = null; }
+    state.seatMode = 'manual';
+  } else state.seatMode = '';
+  renderContent();
+  toast(state.manualSeatMode ? '拖动排座已开启' : '已退出拖动排座');
+}
+window.toggleManualSeatMode = toggleManualSeatMode;
 
 function clearBoxSel() {
   state.boxSel = [];
@@ -26426,6 +26572,8 @@ function createEmptyGroup() {
     id: maxId + 1, class_id: cls, name,
     mode: 'teacher_classroom', seat_ids: [], roles: {}, locked: false,
   });
+  /* 2.1.20：显式落盘 + 触发同步；以前只 push 进内存，刷新后小组可能消失。 */
+  dbSet('groups', dbT('groups'));
   closeFloat();
   renderContent();
   toast(`已新建「${name}」，去座位表框选学生加入吧`);
@@ -26489,11 +26637,16 @@ function openGroupDialog() {
 
     <div class="modal-sec">
       <div class="modal-lb">怎么分</div>
+      <!-- 2.1.20：新组名称输入框放在所有小组选项上面，老师一眼能看到。 -->
+      <div id="moNameSec" style="margin-bottom:10px">
+        <input id="moName" class="mo-input" placeholder="新组名称：如 英语角 / 第7组"
+          onkeydown="if(event.key==='Enter')confirmGroup()">
+      </div>
       <div class="modal-opts">
         <button class="mo" id="moNew" onclick="pickMo('new')">
           ${icon('plus',16)}
           <b>新建一个组</b>
-          <span>自己起组名</span>
+          <span>用上面的名字建组</span>
         </button>
         ${groups.map(g=>`
           <button class="mo" onclick="pickMo('add',${g.id})">
@@ -26502,12 +26655,6 @@ function openGroupDialog() {
             <span>现有 ${(g.seat_ids||[]).length} 人</span>
           </button>`).join('')}
       </div>
-    </div>
-
-    <div class="modal-sec" id="moNameSec" style="display:none">
-      <div class="modal-lb">新组名称</div>
-      <input id="moName" class="mo-input" placeholder="如：英语角 / 第7组"
-        onkeydown="if(event.key==='Enter')confirmGroup()">
     </div>
 
     <div class="modal-acts">
@@ -26532,8 +26679,7 @@ function pickMo(kind, gid) {
                              : $$('.mo').find(b => b.onclick &&
                                  b.onclick.toString().includes(String(gid)));
   if (btn) btn.classList.add('on');
-  const sec = document.getElementById('moNameSec');
-  if (sec) sec.style.display = kind === 'new' ? 'block' : 'none';
+  /* 名称框常驻在小组列表上方，选「新建」时只聚焦，不再隐藏/显示造成跳动 */
   if (kind === 'new') setTimeout(() => document.getElementById('moName')?.focus(), 40);
 }
 window.pickMo = pickMo;
@@ -26563,9 +26709,19 @@ function confirmGroup() {
       return;
     }
     closeGroupDialog();
-    applyNewGroup(val);
+    /* 2.1.20：建组已改为 async（多一步「已在别组」确认），这里必须接住异常，
+       否则一次偶发失败会冒到全局 error 捕获器，页面顶部弹红色错误框。 */
+    try {
+      const p = applyNewGroup(val);
+      if (p && typeof p.catch === 'function')
+        p.catch(function (e) { toast('新建小组失败：' + (e && e.message || e)); });
+    } catch (e) { toast('新建小组失败：' + (e && e.message || e)); }
   } else {
-    applyAddGroup(state._moGid);
+    try {
+      const p = applyAddGroup(state._moGid);
+      if (p && typeof p.catch === 'function')
+        p.catch(function (e) { toast('加入小组失败：' + (e && e.message || e)); });
+    } catch (e) { toast('加入小组失败：' + (e && e.message || e)); }
   }
 }
 window.confirmGroup = confirmGroup;
@@ -26594,6 +26750,20 @@ function boxBar() {
     .filter(Boolean);
   const groups = dbT('groups').filter(g => g.class_id === cls);
   const GC = ['#1D9E75','#378ADD','#EF9F27','#D4537E','#7F77DD','#0EA5E9','#E24B4A'];
+  /* 2.1.20：框选到已在别组的学生要明确提示，别静默把他挪走 */
+  const groupOfStu = sid => {
+    const hit = groups.find(g => (g.seat_ids || []).some(raw => {
+      const s = seats.find(x => Number(x.id) === Number(raw));
+      return s && Number(s.student_id) === Number(sid);
+    }));
+    return hit ? hit.name : '';
+  };
+  const already = members.map(m => ({ m, g: groupOfStu(m.id) })).filter(x => x.g);
+  const groupWarning = already.length ? `
+    <div class="bb-row" style="color:var(--status-warn);font-size:11.5px;line-height:1.5">
+      ⚠ 已选 ${already.length} 人已在其他小组：${already.map(x =>
+        esc(x.m.name) + '（' + esc(x.g) + '）').join('、')}。确认分组后他们会从原组移出，只保留在目标组。
+    </div>` : '';
 
   if (n === 0) {
     return `
@@ -26631,6 +26801,7 @@ function boxBar() {
         </span>`).join('')
         : '<span class="bb-tip">选中的座位暂时没有学生</span>'}
     </div>
+    ${groupWarning}
 
     <div class="bb-row bb-set">
       <span class="bb-label">设为</span>
@@ -26639,7 +26810,8 @@ function boxBar() {
         <option value="">— 选择分组方式 —</option>
         <option value="new:">✨ 新建一个组</option>
         ${groups.map((g,i)=>
-          `<option value="add:${g.id}">➕ 加入「${esc(g.name)}」</option>`).join('')}
+          `<option value="add:${g.id}">➕ 加入「${esc(g.name)}」</option>` +
+          `<option value="del:${g.id}">🗑 删除「${esc(g.name)}」</option>`).join('')}
       </select>
       <input type="text" id="boxGname" placeholder="新组名称"
         style="flex:1;min-width:120px;padding:6px 10px;font-size:12.5px;
@@ -26655,6 +26827,28 @@ function boxBar() {
 }
 window.boxBar = boxBar;
 
+/** 2.1.20：框选到已在别组的学生时先问一句，避免静默挪人 */
+async function confirmBoxMove() {
+  const cls = curSeatClass();
+  const seats = dbT('seats').filter(s => s.class_id === cls);
+  const groups = dbT('groups').filter(g => Number(g.class_id) === Number(cls));
+  const picked = state.boxSel.slice();
+  const names = [];
+  picked.forEach(sid => {
+    const seat = seats.find(s => Number(s.id) === Number(sid));
+    if (!seat || !seat.student_id) return;
+    const st = dbT('students').find(x => Number(x.id) === Number(seat.student_id));
+    const g = groups.find(x => (x.seat_ids || []).some(raw => Number(raw) === Number(sid)));
+    if (g && st) names.push(`${st.name}（${g.name}）`);
+  });
+  if (!names.length) return true;
+  return await uiConfirm(
+    `已选中有 ${names.length} 人已经在其他小组：\n\n· ${names.join('\n· ')}\n\n` +
+    '确认后他们会从原组移出，只保留在本次指定的小组。',
+    { title: '框选到已有小组的学生', okText: '仍然分组', danger: false });
+}
+window.confirmBoxMove = confirmBoxMove;
+
 /** 切换分组方式时显示/隐藏组名输入 */
 function previewAssign(val) {
   const nameI = document.getElementById('boxGname');
@@ -26668,13 +26862,18 @@ function previewAssign(val) {
     const cls = curSeatClass();
     const groups = dbT('groups').filter(g => g.class_id === cls);
     const n = state.boxSel.length;
-    if (isNew) {
+    if (val.startsWith('del:')) {
+      pv.textContent = '将删除这个小组（学生和座位保留）';
+      if (btn) btn.textContent = '确认删除';
+    } else if (isNew) {
       const nm = (nameI.value||'').trim() || `第${groups.length+1}组`;
       pv.textContent = `将新建「${nm}」，含 ${n} 人`;
+      if (btn) btn.textContent = '确认';
     } else {
       const g = groups.find(x=>x.id === Number(val.split(':')[1]));
       if (g) pv.textContent = `「${g.name}」将从 ${(g.seat_ids||[]).length} 人变为 ${
         (g.seat_ids||[]).length + n} 人`;
+      if (btn) btn.textContent = '确认';
     }
   }
   if (pv && !val) pv.textContent = '';
@@ -26752,11 +26951,30 @@ function applyBoxAssign() {
   const val = document.getElementById('boxAssign');
   const mode = val ? val.value : '';
   if (!mode) return toast('请先选择分组方式');
+  if (mode.startsWith('del:')) {
+    const gid = Number(mode.split(':')[1]);
+    state.boxSel = [];
+    try {
+      const p = deleteGroup(gid);
+      if (p && typeof p.catch === 'function')
+        p.catch(function (e) { toast('删除小组失败：' + (e && e.message || e)); });
+    } catch (e) { toast('删除小组失败：' + (e && e.message || e)); }
+    renderContent();
+    return;
+  }
   if (mode === 'new:') {
     const nameI = document.getElementById('boxGname');
-    applyNewGroup(nameI ? nameI.value.trim() : '');
+    try {
+      const p = applyNewGroup(nameI ? nameI.value.trim() : '');
+      if (p && typeof p.catch === 'function')
+        p.catch(function (e) { toast('新建小组失败：' + (e && e.message || e)); });
+    } catch (e) { toast('新建小组失败：' + (e && e.message || e)); }
   } else {
-    applyAddGroup(Number(mode.split(':')[1]));
+    try {
+      const p = applyAddGroup(Number(mode.split(':')[1]));
+      if (p && typeof p.catch === 'function')
+        p.catch(function (e) { toast('加入小组失败：' + (e && e.message || e)); });
+    } catch (e) { toast('加入小组失败：' + (e && e.message || e)); }
   }
   state.boxSel = [];
   renderContent();
@@ -26764,10 +26982,11 @@ function applyBoxAssign() {
 window.applyBoxAssign = applyBoxAssign;
 
 /** 新建组：选中的座位先从所有旧组摘掉，再并入新组 */
-function applyNewGroup(name) {
+async function applyNewGroup(name) {
   const cls = curSeatClass();
   const picked = state.boxSel.slice();
   if (!picked.length) return toast('还没有选中座位');
+  if (!(await confirmBoxMove())) return;
   let nm = (name || '').trim();
   if (!nm) {
     // 默认名「第N组」自动找空位，避免撞名
@@ -26787,8 +27006,8 @@ function applyNewGroup(name) {
     if (g.seat_ids.length > 0) normalizeRoles(g);
     else g.roles = {};
   });
-  // 摘空的小组直接移除
-  dbSet('groups', dbT('groups').filter(g => (g.seat_ids||[]).length > 0));
+  /* 2.1.20：不再静默删除摘空的小组 —— 分组页允许空组，删组必须由老师点。
+     这里只清掉它的成员/角色，空组保留，三个入口口径一致、不会误删数据。 */
   if (state.activeGroup && !dbT('groups').some(g => g.id === state.activeGroup))
     state.activeGroup = null;
 
@@ -26800,6 +27019,8 @@ function applyNewGroup(name) {
   };
   dbT('groups').push(ng);
   assignBySeatOrder(ng, 'row');   // 按座位从左到右排，第一个当组长
+  /* 2.1.20：一次写回，座位表 / 小组面板 / 分组页立刻同步。 */
+  dbSet('groups', dbT('groups'));
 
   state.boxSel = [];
   toast(`已新建「${nm}」，共 ${picked.length} 人`);
@@ -26811,13 +27032,14 @@ window.applyNewGroup = applyNewGroup;
    铁律：一个座位只能属于一个组。
    加入目标组前必须先把这些座位从所有其他组里摘掉，
    否则会出现「人已在 A1 组，第2组还显示 1人」的幽灵分组。 */
-function applyAddGroup(gid) {
+async function applyAddGroup(gid) {
   const cls = curSeatClass();
   const target = dbT('groups').find(x =>
     x.id === Number(gid) && Number(x.class_id) === Number(cls));
   if (!target) return toast('这个组不属于当前班级，已阻止（可能是旧数据 id 冲突）');
   const picked = state.boxSel.slice();
   if (!picked.length) return toast('还没有选中座位');
+  if (!(await confirmBoxMove())) return;
 
   // 1. 先算出「新加入」的（原本不在目标组里的）
   const before = new Set((target.seat_ids || []).map(String));
@@ -26827,18 +27049,12 @@ function applyAddGroup(gid) {
   // 2. 从所有其他组里摘掉这些座位（不管是不是新加的，都只能属一组）
   dbT('groups').forEach(g => {
     if (g.id === target.id || !g.seat_ids) return;
-    const oldLen = g.seat_ids.length;
     g.seat_ids = g.seat_ids.filter(id => !picked.includes(id));
-    // 摘空的小组直接删掉，避免留下 0 人/幽灵组
-    if (g.seat_ids.length === 0 && oldLen > 0) {
-      g.__empty = true;
-    }
-    // 原组人数变了，角色要重排（组长可能已经走了）
+    /* 2.1.20：空组保留、不静默删除（分组页也能建空组）。
+       只清角色，老师可以在任意入口手动删除这个组。 */
     if (g.seat_ids.length > 0) normalizeRoles(g);
     else g.roles = {};
   });
-  // 清掉空组
-  dbSet('groups', dbT('groups').filter(g => (g.seat_ids||[]).length > 0));
   if (state.activeGroup && !dbT('groups').some(g => g.id === state.activeGroup))
     state.activeGroup = null;
 
@@ -26848,6 +27064,8 @@ function applyAddGroup(gid) {
   target.seat_ids = Array.from(new Set(
     (target.seat_ids || []).concat(picked).map(Number)));   // Set 去重：同一座位不会进组两次
   normalizeRoles(target);
+  /* 2.1.20：成员变动统一写回，和小组面板 / 分组页同步。 */
+  dbSet('groups', dbT('groups'));
 
   state.boxSel = [];
   toast(added > 0
@@ -26930,11 +27148,15 @@ async function openSeatSetup() {
     </div>
     <div class="term-hint" style="margin-top:4px">
       · 改<b>行列数</b>会按新尺寸重建座位；改<b>排布 / 起始 / 方向 / 排序依据</b>会立即按新规则重排全班并保存。<br>
+      · 讲台位置选好后，可以<b>自动排座</b>（按当前规则重排全班），也可以<b>拖动排座</b>（手动把未排座学生拖到空位，和框选分组一样操作）。<br>
       · 点过「固定序号」的学生重排后仍保持原序号；想全部重排请到下面按钮。
     </div>
     <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
       <button type="button" class="btn btn-primary" style="width:auto;padding:7px 18px;font-size:13px"
-        onclick="doAutoArrange()">按当前规则重排全班</button>
+        onclick="doAutoArrange()">自动排座（按当前规则）</button>
+      <button type="button" class="btn" style="width:auto;padding:7px 16px;font-size:13px"
+        onclick="startManualSeatMode()"
+        title="关闭弹窗并进入手动模式：拖下方未排座学生标签到空位，和框选分组一样直观">拖动排座（手动）</button>
       <button type="button" class="btn" style="width:auto;padding:7px 14px;font-size:13px"
         onclick="seatSeqFreeze()" title="把当前的座位序号固定下来，之后再改排座方向也不会变">固定序号</button>
       <button type="button" class="btn btn-ghost" style="width:auto;padding:7px 12px;font-size:12.5px"
@@ -27816,6 +28038,60 @@ function dragMoveToCell(stuId, row, col) {
   return dragMoveToSeat(stuId, dst.id);
 }
 window.dragMoveToCell = dragMoveToCell;
+
+/* ---------- 2.1.20：从右侧「学生名单」拖学生到座位表 ----------
+   与原有「座位卡互拖」共用落库链路，不另起一套数据：
+   · 空位 → 直接落座（未排座学生也能进）
+   · 已有学生 → 本人也已有座位就互换；本人还没座位则拒绝，绝不挤掉别人
+   · 无座位记录的空格子 → 先按行列补建再落座
+*/
+function dragRosterDropToOccupied(stuId, dstStu) {
+  const from = dbT('seats').find(s => Number(s.student_id) === Number(stuId));
+  if (from) return dragSwapTo(stuId, dstStu);
+  toast('这个座位已经有学生了，请拖到空座位');
+  return false;
+}
+window.dragRosterDropToOccupied = dragRosterDropToOccupied;
+
+function dragAssignToSeat(stuId, seatId) {
+  const cls = curSeatClass();
+  const st = dbT('students').find(x =>
+    Number(x.id) === Number(stuId) && Number(x.class_id) === Number(cls));
+  if (!st) { toast('这个学生不属于当前班级'); return false; }
+  const seats = dbT('seats');
+  const dst = seats.find(s => Number(s.id) === Number(seatId)
+    && Number(s.class_id) === Number(cls));
+  if (!dst || dst.student_id) { toast('这个座位已经有学生了，请拖到空座位'); return false; }
+  /* 名单里也会列出已排座学生：他已有座位，走原来的搬移逻辑 */
+  const from = seats.find(s => Number(s.student_id) === Number(stuId));
+  if (from) return dragMoveToSeat(stuId, dst.id);
+  dst.student_id = Number(stuId);
+  st.seat_no = seatLabel(dst);
+  dbSet('seats', seats);
+  dbSet('students', dbT('students'));
+  toast(`${st.name} 已安排到 ${seatLabel(dst)}`);
+  renderContent();
+  return true;
+}
+window.dragAssignToSeat = dragAssignToSeat;
+
+function dragAssignToCell(stuId, row, col) {
+  const cls = curSeatClass();
+  const seats = dbT('seats');
+  let dst = seats.find(s => Number(s.class_id) === Number(cls)
+    && Number(s.row) === Number(row) && Number(s.col) === Number(col));
+  if (!dst) {
+    dst = {
+      id: seats.reduce((m, s) => Math.max(m, Number(s.id) || 0), 1000) + 1,
+      class_id: cls, seat_no: row + '-' + col,
+      row: Number(row), col: Number(col),
+      student_id: null, is_computer: false
+    };
+    seats.push(dst);
+  }
+  return dragAssignToSeat(stuId, dst.id);
+}
+window.dragAssignToCell = dragAssignToCell;
 
 /** 兼容入口：与「已选中的交换对象」互换（面板按钮用） */
 function swapSeat(id) {
@@ -37121,6 +37397,22 @@ const DEMO_RENDER = {
     const active = state.activeGroup;
     const side = state.stageSide;
 
+    /* 2.1.20：沿用座位表下方原有的「未排座」提示条，直接把学生名字做成
+       可拖标签；不再另开右侧名单面板，少一步操作。 */
+    const seatedIds = new Set(seats.map(s => Number(s.student_id)).filter(Boolean));
+    const unseated = dbT('students')
+      .filter(s => Number(s.class_id) === Number(cls) && !seatedIds.has(Number(s.id)))
+      .slice()
+      .sort((a, b) => String(a.student_no || '').localeCompare(
+        String(b.student_no || ''), 'zh', { numeric: true }) ||
+        String(a.name || '').localeCompare(String(b.name || ''), 'zh'));
+    const unseatedChipsHtml = unseated.map(st =>
+      `<span class="roster-item" draggable="true" data-roster-stu="${st.id}"
+        title="拖到座位表上的空位即可排座">
+        <span class="ri-name">${esc(st.name)}</span>
+        ${st.student_no ? `<span class="ri-no">${esc(st.student_no)}</span>` : ''}
+      </span>`).join(' ');
+
     // 生成完整网格（按行列数）
     /* 点名联动：上一次点到的人（学生 id 列表），在座位上高亮 */
     const hitIds = rollHitIds();
@@ -37249,7 +37541,8 @@ const sid = st ? st.id : '';
           style="--gc:${gColor(g)}" data-grp="${g.id}">
           <div class="grp-head">
             <span class="grp-dot"></span>
-            <span class="grp-name">${esc(g.name)}</span>
+            <button type="button" class="grp-name gp-name-btn" title="点击修改小组名称"
+              onclick="event.stopPropagation();editGroupName(${g.id})">${esc(g.name)}<i class="gp-pen">✎</i></button>
             <span class="grp-num">${members.length} 人</span>
             ${grpSortMode==='manual' ? `<span class="grp-mv">
               <button type="button" class="mv-btn" title="上移一位"
@@ -37331,6 +37624,10 @@ const sid = st ? st.id : '';
           <b>框选模式已开启</b> · 第 1 步：在座位表上<b>按住鼠标拖拽</b>框出要分一组的学生，松手即选中<br>
           第 2 步：在下方出现的成员列表里，指定「新建一个组」或「加入已有组」
         </div>` : ''}
+        ${state.manualSeatMode ? `<div class="box-guide">
+          <b>拖动排座模式已开启</b> · 把座位表下方「没排座」里的学生名字<b>拖到空座位</b>即可；拖到已有学生上会互换。<br>
+          排完点右侧「退出拖动排座」关闭本模式。
+        </div>` : ''}
         <div class="seat-head">
           <div>
             <div class="seat-sub">${esc(clsInfo?clsInfo.name:'')} ·
@@ -37353,6 +37650,10 @@ const sid = st ? st.id : '';
               title="${state.boxActive
                 ? '退出框选模式' : '第一步：拖拽框选学生　第二步：在下方指定小组'}">${
                 state.boxActive?'退出框选':'框选分组'}</button>
+            ${state.manualSeatMode ? `<button class="btn btn-primary"
+              style="width:auto;padding:5px 11px;font-size:12px"
+              onclick="toggleManualSeatMode()"
+              title="退出拖动排座模式">退出拖动排座</button>` : ''}
             <button class="btn ${seatPanelOn() ? 'btn-primary' : ''}"
               style="width:auto;padding:5px 11px;font-size:12px"
               onclick="seatPanelToggle()"
@@ -37385,11 +37686,14 @@ const sid = st ? st.id : '';
           const _seated = (dbT('seats') || [])
             .filter(s => Number(s.class_id) === Number(_c) && s.student_id).length;
           const _miss = _all - _seated;
-          if (!_all || _miss <= 0) return '';
-          return `<div class="notice" data-no-fold style="border-left:3px solid var(--status-warn);
-            background:color-mix(in srgb, var(--status-warn) 7%, var(--bg-surface))">
-            <strong>还有 ${_miss} 名学生没排座</strong>（共 ${_all} 人）·
-            把学生拖到座位上即可完成排座。
+          if (!_all || (_miss <= 0 && !state.manualSeatMode)) return '';
+          const _accent = state.manualSeatMode ? 'var(--brand-primary)' : 'var(--status-warn)';
+          return `<div class="notice" data-no-fold style="border-left:3px solid ${_accent};
+            background:color-mix(in srgb, ${_accent} 7%, var(--bg-surface))">
+            ${_miss > 0
+              ? `<strong>还有 ${_miss} 名学生没排座</strong>（共 ${_all} 人）· 直接拖下面的名字到空座位：`
+              : '<strong>拖动排座中</strong> · 全班都已排座，拖已坐学生的名片可互换。'}
+            ${_miss > 0 ? `<span style="display:inline-flex;flex-wrap:wrap;gap:6px;margin-left:4px">${unseatedChipsHtml}</span>` : ''}
           </div>`;
         })()}
 
@@ -37694,7 +37998,8 @@ async function updLoad() {
   if (!b) return;
   try {
     const r = await fetch('/api/v2/update/status', { credentials: 'same-origin' });
-    if (r.status === 401) { location.href = '/teacher/login'; return; }
+    /* 2.1.20：自动启动请求不能裸跳登录页 —— handleSignedOut 会二次复核会话 */
+    if (r.status === 401) { try { await handleSignedOut(); } catch (e) {} return; }
     UPD_ST = await r.json();
     updRender();
   } catch (e) {

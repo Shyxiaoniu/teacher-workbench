@@ -115,6 +115,15 @@ def weak_password(pwd, min_len=8):
 # ---------------------------------------------------------------------------
 ITERATIONS = 120000
 
+# 2.1.20：口令校验结果短时缓存。
+# 全班同时登录且多数学生设了独立密码时，PBKDF2 是 CPU 热点；同一份哈希+
+# 同一口令在几分钟内重复校验（刷新、重试、同账号多标签）直接复用结果。
+# key 里只放「哈希值 + 口令的 SHA256」，不存明文口令；口令或哈希一变自动 miss。
+_PWD_VERIFY = {}
+_PWD_VERIFY_LOCK = threading.RLock()
+_PWD_VERIFY_MAX = 2048
+_PWD_VERIFY_TTL = 300
+
 
 def hash_password(pwd):
     salt = secrets.token_hex(16)
@@ -127,9 +136,27 @@ def verify_password(pwd, stored):
         algo, iters, salt, want = (stored or "").split("$")
         if algo != "pbkdf2_sha256":
             return False
+        try:
+            pkey = (str(stored), hashlib.sha256(pwd.encode("utf-8")).hexdigest())
+        except Exception:
+            pkey = None
+        now = time.time()
+        if pkey is not None:
+            with _PWD_VERIFY_LOCK:
+                hit = _PWD_VERIFY.get(pkey)
+                if hit and now - hit[1] < _PWD_VERIFY_TTL:
+                    return bool(hit[0])
         dk = hashlib.pbkdf2_hmac("sha256", pwd.encode("utf-8"), salt.encode("utf-8"), int(iters))
         got = base64.b16encode(dk).decode().lower()
-        return hmac.compare_digest(got, want)
+        ok = hmac.compare_digest(got, want)
+        if pkey is not None:
+            with _PWD_VERIFY_LOCK:
+                _PWD_VERIFY[pkey] = (ok, now)
+                if len(_PWD_VERIFY) > _PWD_VERIFY_MAX:
+                    oldest = sorted(_PWD_VERIFY.items(), key=lambda kv: kv[1][1])[:512]
+                    for k, _v in oldest:
+                        _PWD_VERIFY.pop(k, None)
+        return ok
     except Exception:
         return False
 

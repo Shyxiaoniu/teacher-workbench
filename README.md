@@ -3,16 +3,16 @@
 > 给班主任和任课老师用的一套**班级工作台**：教师端与学生端共用一个网页入口，
 > 数据全部存在自己的服务器上，不依赖任何第三方云服务。
 
-当前版本：**2.1.19**（版本号唯一代码源：`app/server.py` 的 `VERSION`）
+当前版本：**2.1.20**（版本号唯一代码源：`app/server.py` 的 `VERSION`）
 
 > 各版本的更新历史（2.1 / 2.0.75 ~ 2.0.13）已移到 **[CHANGELOG.md](CHANGELOG.md)**，
 > 本文件只保留当前使用说明。
 
 ## 下载离线安装包（解压即用，无需装环境）
 
-**2.1.19 最新版**（内置 Python 3.13 运行时 + 全套程序，约 27 MB）：
+**2.1.20 最新版**（内置 Python 3.13 运行时 + 全套程序，约 27 MB）：
 
-> **https://gitee.com/shyxiaoniu/teacher-workbench/releases/download/v2.1.19/班级工作台2.1.19-261126.zip**
+> **https://gitee.com/shyxiaoniu/teacher-workbench/releases/download/v2.1.20/班级工作台2.1.20-261126.zip**
 
 浏览器直接打开即下载，**不用登录 Gitee**、国内满速。下载后解压，双击里面的
 `启动工作台.bat`（Windows）/ `启动教师端.command`（macOS / Linux）即可。

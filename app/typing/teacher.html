@@ -285,7 +285,23 @@ function esc(s) {
 }
 function api(url, opts) {
   return fetch(url, Object.assign({ credentials: 'same-origin' }, opts || {}))
-    .then(function (r) { return r.json().catch(function () { return {}; }); });
+    .then(function (r) {
+      if (r.status !== 401) return r.json().catch(function () { return {}; });
+      /* 2.1.20：偶发 401 不能直接把老师判成「未登录演示模式」。
+         先用权威会话端点复核：真失效 → 回登录页；只是抖动 → 重试一次。 */
+      return fetch('/api/v2/auth/session', {
+        credentials: 'same-origin', cache: 'no-store'
+      }).then(function (q) { return q.json().catch(function () { return {}; }); })
+        .then(function (j) {
+          if (!j || !j.ok || j.role !== 'teacher') {
+            try { window.top.location.href = '/teacher/login'; }
+            catch (e) { location.href = '/teacher/login'; }
+            return { ok: false, msg: '登录已过期' };
+          }
+          return fetch(url, Object.assign({ credentials: 'same-origin' }, opts || {}))
+            .then(function (r2) { return r2.json().catch(function () { return {}; }); });
+        }).catch(function () { return { ok: false, msg: '网络异常' }; });
+    });
 }
 function toast(msg, ms) {
   var t = $('#toast');
@@ -294,17 +310,13 @@ function toast(msg, ms) {
   toast._t = setTimeout(function () { t.classList.remove('show'); }, ms || 1800);
 }
 var DEMO_CLASSES = [
-  { id: '1', name: '三年(1)班', students: 42, joined: 38, levels: 216, stars: 412, best_wpm: 52 },
-  { id: '2', name: '三年(2)班', students: 41, joined: 30, levels: 150, stars: 260, best_wpm: 47 },
-  { id: '3', name: '四年(1)班', students: 43, joined: 12, levels: 44, stars: 96, best_wpm: 38 }
+  /* 2.1.20：接口不可用时的兜底不再编造成绩，避免「没打却已完成 N 关」 */
+  { id: '1', name: '三年(1)班', students: 42, joined: 0, levels: 0, stars: 0, best_wpm: 0 },
+  { id: '2', name: '三年(2)班', students: 41, joined: 0, levels: 0, stars: 0, best_wpm: 0 },
+  { id: '3', name: '四年(1)班', students: 43, joined: 0, levels: 0, stars: 0, best_wpm: 0 }
 ];
-var DEMO_ROWS = [
-  { name: '李晓明', value: 18, pet: 'dog', decos: ['crown'] },
-  { name: '演示同学', value: 15, pet: 'cat', decos: ['hat-red'] },
-  { name: '张思思', value: 13, pet: 'unicorn', decos: ['bow'] },
-  { name: '陈快乐', value: 9, pet: '', decos: [] },
-  { name: '王小虎', value: 7, pet: 'dino', decos: [] }
-];
+/* 2.1.20：不再用假学生/默认宠物撑排行榜。接口失败时空榜比假数据更可信。 */
+var DEMO_ROWS = [];
 
 function boot() {
   api('/api/v2/typing/overview').then(function (r) {

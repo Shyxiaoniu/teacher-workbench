@@ -175,6 +175,11 @@ class Store(object):
         os.makedirs(os.path.dirname(db_path) or ".", exist_ok=True)
         self.conn = sqlite3.connect(db_path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
+        # 读缓存：同一 rev 下业务表内容不变。登录高峰里 _class_period_now /
+        # _class_lesson_at 会对 periods、lessons 反复全表扫描，这里按
+        # (表, rev, FEK) 缓存解析结果，避免重复 SQL + JSON 解密。
+        # 任何 _next_rev() 写操作都会整体清空；rev 从库里读，外部改库也能失效。
+        self._rows_cache = {}
         self._init()
         # 库里一旦出现密文行，后续所有写入都必须有 FEK —— 无 FEK 时宁可拒绝，
         # 也不能把明文混进已加密的库（翻文件夹就会看到明文）。
@@ -309,27 +314,51 @@ class Store(object):
         return {"tables": out, "total": total, "rev": self.rev()}
 
     def table_rows(self, tbl, include_deleted=False):
-        q = "SELECT rid, data, rev, updated_at, deleted FROM rows WHERE tbl=?"
-        if not include_deleted:
-            q += " AND deleted=0"
+        """取一张表的全部业务行。
+
+        2.1.20：同一 rev + 同一 FEK 下结果不变，缓存解析后的行。
+        登录高峰时一个班 45 人会反复读 students / periods / lessons，
+        缓存后只做一次 SQL + JSON 解密，后续仅复制字典，避免串行排队。
+        返回的一定是新 dict，调用方改动不会污染缓存或其他请求。
+        """
         with self.lock:
-            rows = self.conn.execute(q, (tbl,)).fetchall()
-        out = []
-        for r in rows:
-            try:
-                d = self._dec_data(r["data"])
-            except Exception:
-                d = {}
-            if not isinstance(d, dict):
-                d = {}
-            d = dict(d)
-            d.setdefault("id", r["rid"])
-            d["_rev"] = int(r["rev"])
-            d["updated_at"] = r["updated_at"]
-            if r["deleted"]:
-                d["deleted"] = 1
-            out.append(d)
-        return out
+            r = self.conn.execute("SELECT MAX(rev) AS m FROM changelog").fetchone()
+            rev = int(r["m"] or 0)
+            fek_tag = 0
+            if ENC:
+                try:
+                    fek_tag = id(ENC.get_fek())
+                except Exception:
+                    fek_tag = 0
+            key = (tbl, rev, fek_tag)
+            cached = self._rows_cache.get(key)
+            if cached is None:
+                rows = self.conn.execute(
+                    "SELECT rid, data, rev, updated_at, deleted FROM rows WHERE tbl=?",
+                    (tbl,)).fetchall()
+                parsed = []
+                for r0 in rows:
+                    try:
+                        d = self._dec_data(r0["data"])
+                    except Exception:
+                        d = {}
+                    if not isinstance(d, dict):
+                        d = {}
+                    d = dict(d)
+                    d.setdefault("id", r0["rid"])
+                    d["_rev"] = int(r0["rev"])
+                    d["updated_at"] = r0["updated_at"]
+                    if r0["deleted"]:
+                        d["deleted"] = 1
+                    parsed.append(d)
+                # 保留同一 rev 下其他表的缓存；旧 rev 全部作废。
+                for old_key in [k for k in self._rows_cache if k[1] != rev]:
+                    self._rows_cache.pop(old_key, None)
+                self._rows_cache[key] = parsed
+                cached = parsed
+            if include_deleted:
+                return [dict(d) for d in cached]
+            return [dict(d) for d in cached if not d.get("deleted")]
 
     def heal_empty_rows(self):
         """把历史遗留的“只有 id、没有任何业务字段”的空行打成墓碑。
@@ -431,6 +460,8 @@ class Store(object):
     def _next_rev(self):
         c = self.conn.execute(
             "INSERT INTO changelog(tbl,rid,op,ts) VALUES('_','_','_',?)", (_now(),))
+        # 版本号变了，所有表的解析缓存全部作废（宁可多读一次，绝不读脏数据）。
+        self._rows_cache.clear()
         return int(c.lastrowid)
 
     def upsert(self, tbl, row, actor="teacher", force=False):

@@ -56,16 +56,48 @@
   }
 
   /* ---------------- 基础工具 ---------------- */
+  /* 2.1.20：401 不再裸跳登录页。
+     启动瞬间 / 网络抖动 / SSE 重连时偶尔会撞上一个 401，
+     而权威会话端点可能仍然有效 —— 原来这里直接 location.href 会把老师
+     莫名其妙踢回登录页，刷新也一样（新页面再撞一次 401）。
+     现在先复核会话；复核失败/网络不通才跳，避免误伤。 */
+  var _authChecking = false;
+  function sessionStillValid() {
+    if (_authChecking) return Promise.resolve(true);
+    _authChecking = true;
+    function checkOnce() {
+      return fetch('/api/v2/auth/session', {
+        credentials: 'same-origin', cache: 'no-store'
+      }).then(function (q) { return q.json().catch(function () { return {}; }); })
+        .then(function (j) { return !!(j && j.ok && j.role === 'teacher'); });
+    }
+    /* 2.1.20：从别的应用切回来时 visibilitychange 会同时拉/推数据，
+       偶发一次 401 不代表会话真没了 —— 连查两次都失效才允许跳登录。 */
+    return checkOnce().catch(function () { return true; })
+      .then(function (ok) {
+        if (ok) return true;
+        return new Promise(function (r) { setTimeout(r, 1500); })
+          .then(checkOnce).catch(function () { return true; });
+      })
+      .then(function (ok) { _authChecking = false; return ok; });
+  }
+
   function api(url, opt) {
     return fetch(url, Object.assign({
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' }
     }, opt || {})).then(function (r) {
-      if (r.status === 401) {
-        location.href = '/teacher/login';
-        throw new Error('unauthorized');
-      }
-      return r.json();
+      if (r.status !== 401) return r.json();
+      return sessionStillValid().then(function (valid) {
+        if (!valid) {
+          location.href = '/teacher/login';
+          throw new Error('unauthorized');
+        }
+        /* 会话仍有效 → 这是一次误报/抖动，按失败响应交给调用方重试 */
+        return r.json().catch(function () {
+          return { ok: false, msg: '同步请求未授权（会话仍有效，稍后重试）' };
+        });
+      });
     });
   }
 
