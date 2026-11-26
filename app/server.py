@@ -6183,6 +6183,9 @@ class Handler(LEG.Handler):
             # 操作记录进 typing.json 的 pts_log，随快照导入导出。
             if not self._is_teacher():
                 return self._json({"ok": False, "msg": "未登录"}, 401)
+            # 2.1.20：这里原来漏了取会话，下面 _teacher_name(s) 直接
+            # UnboundLocalError，导致点名加分/扣分根本没同步到打字积分。
+            s = self._session()
             try:
                 delta = int(body.get("delta"))
             except Exception:

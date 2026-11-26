@@ -432,21 +432,24 @@ body.embed .play-wrap{min-height:calc(100vh - 20px)}
    下行是这一行真正上屏的字。两行共用同一套字号 / 行高 / 字距，
    第 N 个字上下严格对齐；待输入冷灰、已输入深色，只有打错的那个
    已输入字是红色 —— 原文行永远显示原文，不跟着标红。 */
-.art-orig .ch .hz,.art-echo .ch .hz{font-size:22px;line-height:28px}
+.art-orig .ch .hz,.art-echo .ch .hz,.art-typed .ch .hz{font-size:22px;line-height:28px}
 .art-orig .ch.d .hz{color:var(--art-todo)}
 .art-orig .ch.o .hz{color:var(--ink)}
 .art-orig .ch.c .hz{color:var(--brand)}
 .art-orig.en-line{display:block;font-size:22px;line-height:1.62;letter-spacing:.6px;text-align:left}
-/* 2.1.20：每行下面自带一个可见输入框；真输入框只放在当前行 */
-.art-input{position:relative;min-height:34px;margin-top:4px;padding:3px 9px;
-  border:1.5px solid var(--line);border-radius:9px;background:var(--card);
-  font-size:17px;line-height:26px;color:var(--ink);overflow:hidden}
+/* 2.1.20：每行下面自带一个可见输入框；真输入框只放在当前行。
+   牛哥定版：输入文字和原文同字号 22px / 同 28px 行高 / 同 2px 3px 字距，
+   左右也按原文起点对齐（抵消 1.5px 边框 + 内边距）。 */
+.art-input{position:relative;min-height:36px;margin-top:4px;margin-left:-1.5px;
+  padding:3px 0 0;border:1.5px solid var(--line);border-radius:9px;background:var(--card);
+  font-size:22px;line-height:28px;color:var(--ink);overflow:hidden}
 .art-row.on .art-input{border-color:var(--brand);background:var(--cur-bg)}
-.art-typed{font-weight:600;color:var(--brand)}
+.art-typed{display:flex;flex-wrap:wrap;gap:2px 3px;align-content:flex-start;
+  font-weight:600;color:var(--brand)}
 .art-cin{position:absolute;inset:0;width:100%;height:100%;border:none;outline:none;
   background:transparent;color:transparent;caret-color:transparent;
   font:inherit;letter-spacing:0;padding:0;margin:0}
-.art-caret{position:absolute;top:4px;width:2px;height:24px;border-radius:2px;
+.art-caret{position:absolute;top:3px;width:2px;height:28px;border-radius:2px;
   background:var(--brand);animation:caretBlink 1.06s steps(1,end) infinite;pointer-events:none}
 .art-caret[hidden]{display:none}
 .art-echo{display:flex;flex-wrap:wrap;gap:2px 3px;min-height:28px;margin-top:2px;
@@ -3419,6 +3422,12 @@ function artTypedOf(i) {
   if (P.idx > base && P.idx <= end && P.errChar) out += P.errChar;
   return out;
 }
+/** 上屏文字渲染成与原文相同的 .ch/.hz 格子，保证逐字上下对齐 */
+function artTypedHtml(i) {
+  return Array.prototype.map.call(artTypedOf(i), function (ch) {
+    return '<span class="ch o"><span class="hz">' + esc(ch) + '</span></span>';
+  }).join('');
+}
 function artRowHtml(i) {
   var L = S.play.L, P = S.play;
   var line = (L.lines || [])[i] || '';
@@ -3433,7 +3442,7 @@ function artRowHtml(i) {
       '<div class="art-orig' + (isCn ? '' : ' en-line') + '">' +
         textHtml(line, P.idx, false, base) + '</div>' +
       '<div class="art-input" data-line="' + i + '">' +
-        '<span class="art-typed">' + esc(artTypedOf(i)) + '</span>' +
+        '<span class="art-typed">' + artTypedHtml(i) + '</span>' +
         (on && isCn
           ? '<input class="art-cin" id="cnInput" autocomplete="off" autocorrect="off" ' +
             'autocapitalize="off" spellcheck="false" aria-label="在这行照着原文打字">'
@@ -3455,7 +3464,9 @@ function paintArt() {
     var line = L.lines[i] || '', base = artLineStarts(L)[i];
     var o = row.querySelector('.art-orig'), tp = row.querySelector('.art-typed');
     if (o) o.innerHTML = textHtml(line, P.idx, false, base);
-    if (tp) tp.textContent = artTypedOf(i);
+    /* 2.1.20：上屏文字也拆成和原文一样的 .ch/.hz 格子，字号/字距一致，
+       第 N 个字上下严格对齐（原来是一整段 text，字距对不齐）。 */
+    if (tp) tp.innerHTML = artTypedHtml(i);
   });
   var rows = document.querySelectorAll('.art-row');
   for (var k = 0; k < rows.length; k++) {
