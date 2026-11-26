@@ -1497,6 +1497,18 @@ class Handler(LEG.Handler):
         s = self._session()
         return bool(s and s["role"] == "teacher")
 
+    def _typing_uid(self, s):
+        """打字冒险岛的真实档案键：学生用 student_id，教师用独立账号键。
+        2.1.20：教师练习不再用本机假进度，成绩/积分/宠物都落到服务端
+        typing.json 里属于这个教师账号的档案，重启换机都还在。 """
+        if not s:
+            return ""
+        if s.get("role") == "student":
+            return str(s.get("student_id") or "")
+        if s.get("role") in ("teacher", "admin"):
+            return "teacher:" + str(s.get("account") or ACC.DEFAULT_TEACHER_ID)
+        return ""
+
     def _is_admin(self):
         s = self._session()
         return bool(s and s["role"] == "admin")
@@ -3731,13 +3743,21 @@ class Handler(LEG.Handler):
             s = self._session()
             if not s:
                 return self._json({"ok": False, "msg": "未登录"}, 401)
-            if s["role"] != "student":
-                if s["role"] == "teacher":
-                    # 教师练习模式（2026-11-03）：同一张打字地图教师也能练，
-                    # 成绩默认只存本机；前端页顶有「计入班级排行榜」开关。
-                    return self._json({"ok": False, "role": "teacher",
-                                       "msg": "教师练习模式"})
-                return self._json({"ok": False, "msg": "只有学生有练习档案"}, 403)
+            if s["role"] not in ("student", "teacher"):
+                return self._json({"ok": False, "msg": "只有学生和教师有练习档案"}, 403)
+            uid = self._typing_uid(s)
+            if s["role"] == "teacher":
+                # 2.1.20：教师练习改用教师账号的真实服务端档案，
+                # 不再每次从本机空白假进度开始。
+                t = ACCOUNTS.teacher(s.get("account")) or {}
+                return self._json({"ok": True, "role": "teacher",
+                                   "me": {"id": uid,
+                                          "name": t.get("username") or "teacher",
+                                          "class_id": "", "class_name": ""},
+                                   "config": {"enabled": bool((CFG.get("typing") or {}).get("enabled")),
+                                              "grades": (CFG.get("typing") or {}).get("grades") or []},
+                                   "progress": TYPING.progress(uid),
+                                   "pets": PET_IDS})
             r = student_row(s.get("student_id"))
             if not r:
                 return self._json({"ok": False, "msg": "学生档案不存在"}, 404)
@@ -6073,16 +6093,16 @@ class Handler(LEG.Handler):
             return self._json({"ok": True, "enabled": t["enabled"], "grades": t["grades"]})
         if path == "/api/v2/typing/record":
             s = self._session()
-            if not s or s["role"] != "student":
+            if not s or s.get("role") not in ("student", "teacher"):
                 return self._json({"ok": False, "msg": "未登录"}, 401)
             if not (CFG.get("typing") or {}).get("enabled"):
                 return self._json({"ok": False, "msg": "老师还没有开放打字练习"}, 403)
-            r = student_row(s.get("student_id"))
-            if not r:
-                return self._json({"ok": False, "msg": "学生档案不存在"}, 404)
-            res = TYPING.record(str(r.get("id")), body)
+            uid = self._typing_uid(s)
+            res = TYPING.record(uid, body)
             if res.get("ok") and res.get("new_best"):
-                STORE.audit("student:%s" % r.get("name"), "typing-record",
+                who = self._teacher_name(s) if s.get("role") == "teacher" else "student:%s" % (
+                    (student_row(s.get("student_id")) or {}).get("name", ""))
+                STORE.audit(who, "typing-record",
                             "s%sc%sl%s %s星" % (body.get("stage"), body.get("chapter"),
                                                body.get("level"), res.get("stars")))
             return self._json(res)
@@ -6106,14 +6126,14 @@ class Handler(LEG.Handler):
                                                    body.get("equip") or body))
         if path == "/api/v2/typing/claim":
             s = self._session()
-            if not s or s["role"] != "student":
+            if not s or s.get("role") not in ("student", "teacher"):
                 return self._json({"ok": False, "msg": "未登录"}, 401)
             studio_ids = STUDIO.PET_IDS if STUDIO else []
-            return self._json(TYPING.claim_egg(str(s.get("student_id")),
+            return self._json(TYPING.claim_egg(self._typing_uid(s),
                                                PET_IDS, studio_ids))
         if path == "/api/v2/typing/equip":
             s = self._session()
-            if not s or s["role"] != "student":
+            if not s or s.get("role") not in ("student", "teacher"):
                 return self._json({"ok": False, "msg": "未登录"}, 401)
             # bg / fx / 学生作品缺省不传 = 保持原样（None）；传 '' = 取下来
             kw = {}
@@ -6125,17 +6145,17 @@ class Handler(LEG.Handler):
                 kw["studio_pet"] = str(body.get("studio_pet") or "")
             if "studio_theme" in body:
                 kw["studio_theme"] = str(body.get("studio_theme") or "")
-            return self._json(TYPING.equip(str(s.get("student_id")),
+            return self._json(TYPING.equip(self._typing_uid(s),
                                            str(body.get("pet") or ""),
                                            body.get("decos") or [], **kw))
         if path == "/api/v2/typing/buy":
             # 积分商店：kind = deco（装扮）/ item（道具）/ bg（背景）/ effect（特效）
             s = self._session()
-            if not s or s["role"] != "student":
+            if not s or s.get("role") not in ("student", "teacher"):
                 return self._json({"ok": False, "msg": "未登录"}, 401)
             if not (CFG.get("typing") or {}).get("enabled"):
                 return self._json({"ok": False, "msg": "老师还没有开放打字练习"}, 403)
-            uid = str(s.get("student_id"))
+            uid = self._typing_uid(s)
             kind = str(body.get("kind") or "")
             oid = str(body.get("id") or "")
             if kind == "deco":
@@ -6156,8 +6176,9 @@ class Handler(LEG.Handler):
             elif kind == "studio_egg":
                 # 2.0.56：作品宠物只能通过宠物蛋兑换。
                 # 客户端传 egg_id，服务端查表决定出哪只宠物、扣多少积分。
+                _fq = studio_free_cfg()
                 res = TYPING.buy_studio_egg(uid, oid,
-                                            free_quota=studio_free_cfg()["student"])
+                                            free_quota=_fq["teacher" if s.get("role") == "teacher" else "student"])
             elif kind == "studio_pet":
                 # 老客户端 / 伪造请求：明确拒绝直兑，避免绕过蛋入口。
                 res = {"ok": False, "msg": "作品宠物不能直接兑换，请兑换对应的宠物蛋"}
@@ -6171,12 +6192,9 @@ class Handler(LEG.Handler):
             # 注意这里**不能**校验 enabled —— 教师把练习关掉的那一瞬间
             # 恰恰是学生最需要把进度落盘的时刻（record 那时已拒收）。
             s = self._session()
-            if not s or s["role"] != "student":
+            if not s or s.get("role") not in ("student", "teacher"):
                 return self._json({"ok": False, "msg": "未登录"}, 401)
-            r = student_row(s.get("student_id"))
-            if not r:
-                return self._json({"ok": False, "msg": "学生档案不存在"}, 404)
-            return self._json(TYPING.save_draft(str(r.get("id")), body))
+            return self._json(TYPING.save_draft(self._typing_uid(s), body))
         if path == "/api/v2/typing/admin-points":
             # 教师对学生/全班发放或扣除积分：
             # 全局实时生效（学生端 12 秒内轮询到新余额），
@@ -6215,9 +6233,9 @@ class Handler(LEG.Handler):
             return self._json(res)
         if path == "/api/v2/typing/use-item":
             s = self._session()
-            if not s or s["role"] != "student":
+            if not s or s.get("role") not in ("student", "teacher"):
                 return self._json({"ok": False, "msg": "未登录"}, 401)
-            return self._json(TYPING.use_item(str(s.get("student_id")),
+            return self._json(TYPING.use_item(self._typing_uid(s),
                                               str(body.get("id") or "")))
         if path == "/api/v2/typing/reset-week":
             if not self._is_teacher():

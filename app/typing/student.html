@@ -446,6 +446,9 @@ body.embed .play-wrap{min-height:calc(100vh - 20px)}
 .art-row.on .art-input{border-color:var(--brand);background:var(--cur-bg)}
 .art-typed{display:flex;flex-wrap:wrap;gap:2px 3px;align-content:flex-start;
   font-weight:600;color:var(--brand)}
+/* 2.1.20：错字就在已上屏文字右边就地红底高亮，不吞字、不挪到左边 */
+.art-typed .ch.e .hz{color:var(--bad);background:var(--bad-soft);
+  border-radius:5px;padding:0 2px}
 .art-cin{position:absolute;inset:0;width:100%;height:100%;border:none;outline:none;
   background:transparent;color:transparent;caret-color:transparent;
   font:inherit;letter-spacing:0;padding:0;margin:0}
@@ -1894,7 +1897,9 @@ function boot() {
     return api('/api/v2/typing/me');
   }).then(function (me) {
     if (me && me.ok) {
-      S.role = 'student'; S.demo = false;
+      /* 2.1.20：教师也走服务端真实档案，不再进演示分支 */
+      S.role = (me && me.role === 'teacher') ? 'teacher' : 'student';
+      S.demo = false;
       S.me = me.me; S.progress = me.progress; S.config = me.config || S.config;
       if (!S.progress.equip) S.progress.equip = { pet: '', decos: [] };
       S.ranch = ranchFromEquip(S.progress.equip);
@@ -1914,7 +1919,7 @@ function boot() {
       S.ranch = ranchFromEquip(S.progress.equip);
       if (me && me.role === 'teacher') {
         /* 教师练习模式（2026-11-03）：老师用同一张地图练手，
-           成绩默认只存本机；想跟学生比，可在页顶开关「计入班级排行榜」。
+           成绩/积分/宠物存教师账号真实档案；想跟学生比，可在页顶开关「计入班级排行榜」。
            开关与班级选择记在本机，下次打开保持。
            2.0.68：不再发 10000 积分。老师默认有 2 次学生作品蛋免费孵化
            （额度由教师端设置下发），演示兑换不再靠虚构积分撑场面。 */
@@ -2389,14 +2394,14 @@ function render() {
   var enrolled = !(S.role === 'student' && !S.config.enabled);
   /* 2.1.20：教师练习模式收进顶栏，跟「打字冒险岛 / 班级工作台」同一行，
      不再单独占一行。仍然沿用同一套 twBar 折叠状态与事件绑定。 */
-  var teacherBarHtml = (S.demo && S.role === 'teacher')
+  var teacherBarHtml = (S.role === 'teacher')
     ? '<div class="demo-bar teacher-bar in-top' + (twBarOpen() ? ' is-open' : '') + '" id="twBar">'
       /* 折叠摘要（默认）：一行说清「现在算不算成绩」，展开才占大块空间 */
       + '<div class="tw-sum">👩‍🏫 <b>教师练习模式</b>'
       + '<span class="tw-state">' + twBarState() + '</span>'
       + '<button class="tw-toggle" type="button">展开设置 ▾</button></div>'
       /* 展开全文：原来的开关 + 班级下拉 + 说明，外加一个「收起」 */
-      + '<div class="tw-full">👩‍🏫 <b>教师练习模式</b>：和学生同一张冒险地图，成绩默认只存本机。'
+      + '<div class="tw-full">👩‍🏫 <b>教师练习模式</b>：和学生同一张冒险地图，成绩/积分/宠物都记在教师账号。'
       + '<label class="tw-lb"><input type="checkbox" id="twLb"' + (S.teacherLb && S.teacherLb.on ? ' checked' : '') + '>'
       + '把我的成绩计入</label>'
       /* 班级下拉：从 S.teacherClasses 现取现拼（2026-11-04 修复）。
@@ -2564,7 +2569,7 @@ function twBarOpen() {
 }
 function twBarState() {
   var lb = S.teacherLb || {};
-  if (!lb.on) return '成绩只存本机，不计入班级榜';
+  if (!lb.on) return '成绩计入教师账号，不上班级榜';
   var cls = (S.teacherClasses || []).filter(function (c) { return String(c.id) === String(lb.class_id); })[0];
   return '成绩计入：' + (cls ? cls.name : '所选班级');
 }
@@ -2596,7 +2601,7 @@ function bindTeacherBar() {
     if (sel) sel.disabled = !cb.checked;
     try { localStorage.setItem('wb-typing-teacher-lb', JSON.stringify(S.teacherLb)); } catch (e) {}
     twBarSync();
-    uiToast(cb.checked ? '好，下次通关会把成绩计入所选班级的排行榜' : '成绩恢复为只存本机');
+    uiToast(cb.checked ? '好，下次通关会把成绩计入所选班级的排行榜' : '成绩仍计入教师账号，不再上班级榜');
   };
   if (sel) sel.onchange = function () {
     S.teacherLb = S.teacherLb || { on: false, class_id: '' };
@@ -3346,19 +3351,29 @@ function placeTypingInput() {
     cn.style.inset = '0';
     cn.style.width = '100%';
     cn.style.height = '100%';
+    /* 2.1.20：切到下一行后，上一行不能再留着闪烁光标（看着像还能在那行输入） */
+    var allCarets = document.querySelectorAll('.art-caret');
+    for (var ci = 0; ci < allCarets.length; ci++) {
+      if (allCarets[ci] !== slot.querySelector('.art-caret')) allCarets[ci].hidden = true;
+    }
     var ac = slot.querySelector('.art-caret');
     if (ac) {
       ac.hidden = false;
-      /* 2.1.20：光标必须对齐「原文当前格」，不能按输入台里的文字宽度算 ——
-         输入台字号/字距和原文不同，输错时尤其会向左错位。 */
-      var orig = row.querySelector('.art-orig');
-      var base = artLineStarts(P.L)[cur] || 0;
-      var cell = orig && orig.children[Math.min(P.idx - base, orig.children.length - 1)];
-      if (cell) {
+      /* 有错字时，光标贴在错字右边；没有错字时对齐原文当前格。 */
+      var last = typed && P.errChar ? typed.lastElementChild : null;
+      if (last && last.classList.contains('e')) {
         ac.style.left = Math.max(0,
-          cell.getBoundingClientRect().left - slot.getBoundingClientRect().left) + 'px';
+          last.getBoundingClientRect().right - slot.getBoundingClientRect().left) + 'px';
       } else {
-        ac.style.left = (typed ? typed.offsetWidth : 0) + 'px';
+        var orig = row.querySelector('.art-orig');
+        var base = artLineStarts(P.L)[cur] || 0;
+        var cell = orig && orig.children[Math.min(P.idx - base, orig.children.length - 1)];
+        if (cell) {
+          ac.style.left = Math.max(0,
+            cell.getBoundingClientRect().left - slot.getBoundingClientRect().left) + 'px';
+        } else {
+          ac.style.left = (typed ? typed.offsetWidth : 0) + 'px';
+        }
       }
     }
     return;
@@ -3431,8 +3446,12 @@ function artTypedOf(i) {
 }
 /** 上屏文字渲染成与原文相同的 .ch/.hz 格子，保证逐字上下对齐 */
 function artTypedHtml(i) {
-  return Array.prototype.map.call(artTypedOf(i), function (ch) {
-    return '<span class="ch o"><span class="hz">' + esc(ch) + '</span></span>';
+  var out = artTypedOf(i), err = (S.play && S.play.errChar) || '';
+  return Array.prototype.map.call(out, function (ch, k) {
+    /* 只有行尾那一个才是当前错字：红底高亮，且保持在上屏文字右面 */
+    var bad = err && k === out.length - 1 && ch === err;
+    return '<span class="ch ' + (bad ? 'e' : 'o') + '"><span class="hz">' +
+           esc(ch) + '</span></span>';
   }).join('');
 }
 function artRowHtml(i) {
@@ -4265,7 +4284,7 @@ function clearPlayBindings() {
    ③ 重新进这一关时询问「接着打 / 从头开始」。 */
 function draftFlushNow() {
   var P = S.play;
-  if (!P || P.done || S.demo || S.role !== 'student') return;
+  if (!P || P.done || S.demo || (S.role !== 'student' && S.role !== 'teacher')) return;
   var L = P.L;
   var body = {
     stage: P.stage, chapter: P.chapter, level: P.level,
@@ -4298,7 +4317,7 @@ function startSyncLoop() {
   /* 全局同步：教师发放/扣除积分、开关打字练习，学生端 12 秒内跟上。
      练习中绝不整页重绘（会冲掉正在打的关卡），只在地图/牧场页刷余额。 */
   setInterval(function () {
-    if (S.demo || S.role !== 'student' || document.hidden) return;
+    if (S.demo || (S.role !== 'student' && S.role !== 'teacher') || document.hidden) return;
     api('/api/v2/typing/me').then(function (me) {
       if (!me || !me.ok) return;
       var wasEnabled = !!(S.config && S.config.enabled);
@@ -4531,7 +4550,8 @@ function showResult(stars, wpm, payload, res) {
 
 /* ---------------- 排行榜 ---------------- */
 function loadLb() {
-  if (S.demo) {
+  /* 2.1.20：教师练习用真实账号数据，但排行榜仍按「教师榜」口径显示 */
+  if (S.demo || S.role === 'teacher') {
     /* 教师练习模式且选了班级 → 拉真实班级榜（接口支持教师会话按班查询，
        服务端会把开启上报的教师成绩一并排进去） */
     if (S.role === 'teacher' && S.teacherLb && S.teacherLb.on && S.teacherLb.class_id) {
