@@ -535,7 +535,17 @@
       // 演示 / 教师练习：只改本机进度，不碰服务端，老师可以放心现场演示兑换
       if (isDemo()) {
         if (!window.S || !S.progress) return;
-        if (useFree) S.progress.studio_free_used = freeUsed() + 1;
+        if (useFree) {
+          S.progress.studio_free_used = freeUsed() + 1;
+          /* 2.1.20：教师练习只在本地演示，但已用免费次数要跨刷新保留；
+             不写整个进度，避免把假成绩/宠物带回来。 */
+          if (S.role === 'teacher') {
+            try {
+              localStorage.setItem('wb-typing-teacher-free-used',
+                                   String(S.progress.studio_free_used));
+            } catch (e) {}
+          }
+        }
         else S.progress.pts = Math.max(0, have - price);
         if (isEgg) {
           var petId = item.pet || '';

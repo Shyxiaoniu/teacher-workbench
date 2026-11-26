@@ -1929,6 +1929,13 @@ function boot() {
         S.progress.pets = [];
         S.progress.decos = [];
         S.progress.equip = { pet: '', decos: [], bg: '', fx: '' };
+        /* 2.1.20：老师练习的假成绩/宠物继续每次从空白开始，
+           但创意宠物「免费孵化」已用次数要记住 —— 否则每次刷新都送 2 次。
+           只单独记这一个数字，不恢复上一人的假进度。 */
+        try {
+          var _tf = Number(localStorage.getItem('wb-typing-teacher-free-used'));
+          if (_tf > 0) S.progress.studio_free_used = Math.floor(_tf);
+        } catch (e) {}
         demoSave();
         try {
           var tlb = JSON.parse(localStorage.getItem('wb-typing-teacher-lb') || '{}');
