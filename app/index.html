@@ -7942,6 +7942,8 @@ const state = {
   session: null,
   classes: [],
   currentClass: LS.get('wb-current-class', 'all') || 'all',   // 记住上次选的班，刷新不丢
+  groupTpls: (function(){ try { const a=JSON.parse(LS.get('wb-group-templates','')||'[]'); return Array.isArray(a)?a:[]; } catch(e){ return []; } })(),
+  groupTplLoaded: false,
   keyword: '',
   route: 'home',
   settings: {},
@@ -13139,6 +13141,8 @@ window.mountColResizers = mountColResizers;
 function renderContent(opts = {}) {  const nav = NAV.find(n => n.id === state.route);
   const c = $('#content');
   if (!c) return;
+  /* 分组模板按账号从服务端拉取一次，换设备登录也能看到 */
+  if (!state.groupTplLoaded) { state.groupTplLoaded = true; groupTplLoadServer(); }
   /* 打字积分流水懒加载一次：积分页 / 座位表共用服务端同一份数据 */
   if (!state.typingLogLoaded && (state.route === 'mor' || state.route === 'seats')) {
     state.typingLogLoaded = true;
@@ -16954,17 +16958,42 @@ window.renderLessonCard = renderLessonCard;
 
 /* ============================================================
    分组模板：把当前分组存成模板，之后一键套用（换班/重排后不用重新拉人）
-   模板存本机 LS；成员按「学号优先、姓名兜底」匹配，跨班也能用
+   2.1.20：模板存服务端账号工作区 group_templates.json；LS 只作离线镜像。
+   成员按「学号优先、姓名兜底」匹配，跨班也能用。
    ============================================================ */
 const GROUP_TPL_KEY = 'wb-group-templates';
 function groupTplList() {
-  try {
-    const arr = JSON.parse(LS.get(GROUP_TPL_KEY, '') || '[]');
-    return Array.isArray(arr) ? arr : [];
-  } catch (e) { return []; }
+  return Array.isArray(state.groupTpls) ? state.groupTpls : [];
 }
-function groupTplWrite(arr) { LS.set(GROUP_TPL_KEY, JSON.stringify(arr || [])); }
+function groupTplWrite(arr) {
+  state.groupTpls = Array.isArray(arr) ? arr : [];
+  LS.set(GROUP_TPL_KEY, JSON.stringify(state.groupTpls));
+  /* 服务端是权威：换电脑登录同一账号还能拿到 */
+  fetch('/api/v2/group-templates', {
+    method: 'POST', credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ templates: state.groupTpls })
+  }).catch(function () {});
+}
+async function groupTplLoadServer() {
+  if (typeof DEMO !== 'undefined' && DEMO.on) return;
+  try {
+    const r = await fetch('/api/v2/group-templates', { credentials: 'same-origin', cache: 'no-store' });
+    const j = await r.json().catch(function () { return {}; });
+    if (j && j.ok && Array.isArray(j.templates)) {
+      /* 老版本只存本机：首次登录服务端为空时把本机模板迁上去 */
+      if (!j.templates.length && state.groupTpls.length) {
+        groupTplWrite(state.groupTpls);
+        return;
+      }
+      state.groupTpls = j.templates;
+      LS.set(GROUP_TPL_KEY, JSON.stringify(state.groupTpls));
+      if (state.route === 'groups' && typeof renderContent === 'function') renderContent();
+    }
+  } catch (e) {}
+}
 window.groupTplList = groupTplList;
+window.groupTplLoadServer = groupTplLoadServer;
 
 /** 把当前班的分组存成模板 */
 function saveGroupTemplate() {

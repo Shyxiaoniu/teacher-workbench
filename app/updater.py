@@ -505,14 +505,17 @@ class Updater:
         except Exception:
             return True
         for u in (urls or []):
-            try:
-                req = urllib.request.Request(u, method="HEAD",
-                                             headers={"User-Agent": "class-workbench-updater"})
-                with urllib.request.urlopen(req, timeout=10) as r:
-                    if getattr(r, "status", 200) < 400:
-                        return True
-            except Exception:
-                continue
+            for method in ("HEAD", "GET"):
+                try:
+                    h = {"User-Agent": "class-workbench-updater"}
+                    if method == "GET":
+                        h["Range"] = "bytes=0-0"   # 只探 1 字节，避免拉整包
+                    req = urllib.request.Request(u, method=method, headers=h)
+                    with urllib.request.urlopen(req, timeout=10) as r:
+                        if getattr(r, "status", 200) < 400:
+                            return True
+                except Exception:
+                    continue
         return False
 
     def _zip_url(self, manifest, manifest_url):

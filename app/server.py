@@ -325,6 +325,41 @@ LEG.CW.PATH_FN = WS.courseware_paths
 LEG.ENH.PATH_FN = WS.enhance_paths
 
 
+# ---------- 分组模板（按教师账号存服务端，多设备同步） ----------
+GROUP_TPL_LOCK = threading.Lock()
+
+
+def _group_tpl_path():
+    """当前教师账号工作区下的模板文件；default 仍在原 DATA_DIR。"""
+    p = WS.paths_for(ACC.current_account())
+    return os.path.join(p["dir"], "group_templates.json")
+
+
+def _group_tpl_read():
+    with GROUP_TPL_LOCK:
+        try:
+            with open(_group_tpl_path(), "r", encoding="utf-8") as f:
+                arr = json.load(f)
+            return arr if isinstance(arr, list) else []
+        except Exception:
+            return []
+
+
+def _group_tpl_write(arr):
+    arr = arr if isinstance(arr, list) else []
+    with GROUP_TPL_LOCK:
+        p = _group_tpl_path()
+        try:
+            os.makedirs(os.path.dirname(p), exist_ok=True)
+            tmp = p + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(arr, f, ensure_ascii=False)
+            os.replace(tmp, p)
+            return True
+        except Exception:
+            return False
+
+
 def _archive_after_submit(task, who, res):
     """学生提交成功后立刻归档到「资料」对应文件夹（2026-11-05）。
 
@@ -3110,6 +3145,30 @@ class Handler(LEG.Handler):
         if path == "/api/v2/ping":
             return self._json({"ok": True, "service": "workbench", "version": VERSION,
                                "rev": STORE.rev(), "uptime": int(time.time() - STARTED)})
+        if path == "/api/v2/update/manifest":
+            # 内网镜像：服务器无外网时把 Gitee 的 version.json 镜像到这里
+            p = os.path.join(DATA_DIR, "update_mirror", "version.json")
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    return self._json(json.load(f))
+            except Exception:
+                return self._json({"ok": False, "msg": "没有本地更新镜像"}, 404)
+        if path == "/api/v2/update/package":
+            p = os.path.join(DATA_DIR, "update_mirror", "班级工作台2.1.20-261126.zip")
+            if not os.path.isfile(p):
+                return self._json({"ok": False, "msg": "没有本地更新包"}, 404)
+            try:
+                with open(p, "rb") as f:
+                    data = f.read()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/zip")
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(data)
+                return None
+            except Exception:
+                return self._json({"ok": False, "msg": "读取更新包失败"}, 500)
         if path == "/api/v2/time":
             # 服务端时间是考勤判定的唯一时间源（三端校时用，公开无敏感信息）
             lt = time.localtime()
@@ -3270,6 +3329,10 @@ class Handler(LEG.Handler):
         if path == "/api/v2/checkin/config":
             # 签到配置：教师设置页 / 学生端今日页都要读（不含任何敏感信息）
             return self._json(dict({"ok": True}, **self._checkin_cfg()))
+        if path == "/api/v2/group-templates":
+            if not self._is_teacher():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            return self._json({"ok": True, "templates": _group_tpl_read()})
         if path == "/api/v2/teacher/seat-config":
             # 教师端读回某班已同步的座位表配置（换设备 / 清缓存后本地丢了能补回来）
             if not self._is_teacher():
@@ -5247,6 +5310,15 @@ class Handler(LEG.Handler):
             notify()
             STORE.audit("teacher", "school", "name=%s" % (v or "（清空）"))
             return self._json({"ok": True, "school": v})
+        if path == "/api/v2/group-templates":
+            if not self._is_teacher():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            arr = body.get("templates")
+            if not isinstance(arr, list):
+                return self._json({"ok": False, "msg": "模板格式不对"}, 400)
+            ok = _group_tpl_write(arr)
+            return self._json({"ok": ok, "templates": arr} if ok else
+                              {"ok": False, "msg": "保存模板失败"})
         if path == "/api/v2/teacher/nickname":
             # 教师称呼昵称：账号级写入 accounts.json（不是全局 CFG，多账号互不覆盖）。
             # 前端设置页保存昵称走这里，取代原来只存本机 localStorage 的老逻辑。
