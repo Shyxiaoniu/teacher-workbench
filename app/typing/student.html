@@ -1904,6 +1904,31 @@ function boot() {
       if (!S.progress.equip) S.progress.equip = { pet: '', decos: [] };
       S.ranch = ranchFromEquip(S.progress.equip);
       startSyncLoop();
+      /* 2.1.20：教师真实档案下也要拉班级列表，否则教师条的班级下拉
+         会一直停在「加载中…」（原来只有演示分支拉 overview）。 */
+      if (S.role === 'teacher') {
+        try {
+          var _tlb = JSON.parse(localStorage.getItem('wb-typing-teacher-lb') || '{}');
+          S.teacherLb = { on: !!_tlb.on, class_id: _tlb.class_id || '' };
+        } catch (e) { S.teacherLb = { on: false, class_id: '' }; }
+        api('/api/v2/typing/overview').then(function (ov) {
+          if (ov && ov.ok) {
+            S.teacherClasses = ov.classes || [];
+            if (S.teacherClasses.length && !S.teacherLb.class_id) {
+              S.teacherLb.class_id = S.teacherClasses[0].id;
+            }
+            twBarSync();
+            var sel = $('#twCls');
+            if (sel) {
+              sel.innerHTML = S.teacherClasses.map(function (c) {
+                return '<option value="' + esc(c.id) + '"' +
+                  (c.id === S.teacherLb.class_id ? ' selected' : '') + '>' + esc(c.name) + '</option>';
+              }).join('') || '<option>（暂无班级）</option>';
+              sel.disabled = !S.teacherLb.on;
+            }
+          }
+        }).catch(function () {});
+      }
     } else {
       S.demo = true;
       S.me = DEMO.me; S.progress = JSON.parse(JSON.stringify(DEMO.progress));
@@ -3346,7 +3371,12 @@ function placeTypingInput() {
     var slot = row && row.querySelector('.art-input');
     if (!slot) return;
     var typed = slot.querySelector('.art-typed');
-    if (cn.parentNode !== slot) slot.appendChild(cn);
+    /* 2.1.20：把输入框搬到下一行的 .art-input 会让它失焦，
+       换行后就打不进字 —— 搬完必须立刻抢回焦点。 */
+    if (cn.parentNode !== slot) {
+      slot.appendChild(cn);
+      try { cn.focus({ preventScroll: true }); } catch (e) { cn.focus(); }
+    }
     cn.style.position = 'absolute';
     cn.style.inset = '0';
     cn.style.width = '100%';

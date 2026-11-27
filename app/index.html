@@ -12049,13 +12049,10 @@ async function goToApp(returnTo) {
       const r = await fetch('/api/v2/auth/session', {
         credentials: 'same-origin', cache: 'no-store'
       });
-      /* 切回窗口时的偶发 401 不立刻踢人，隔 2.5 秒复查一次仍失效才跳登录 */
+      /* 2.1.20：统一交给 handleSignedOut() 复核两次（含 cookie 生效延迟），
+         单次/切窗偶发 401 不再把刚登录的老师踢回登录页。 */
       if (r.status === 401) {
-        await new Promise(res => setTimeout(res, 2500));
-        const r2 = await fetch('/api/v2/auth/session', {
-          credentials: 'same-origin', cache: 'no-store'
-        });
-        if (r2.status === 401) location.href = '/teacher/login';
+        try { await handleSignedOut(); } catch (e) {}
       }
     } catch (e) {}
   }, 30000);
@@ -38267,7 +38264,7 @@ async function updOfflineInstall() {
   xhr.onload = () => {
     _updOffXhr = null;
     if (_updOffCancelled) return;   /* 取消时服务端可能仍回了响应，忽略 */
-    if (xhr.status === 401) { location.href = '/teacher/login'; return; }
+    if (xhr.status === 401) { try { handleSignedOut(); } catch (e) {} return; }
     let j = {};
     try { j = JSON.parse(xhr.responseText || '{}'); } catch (e) {}
     if (!j.ok) {
@@ -38406,7 +38403,7 @@ async function acctLoadSec(force) {
   if (ACCT.sec && !force) return ACCT.sec;
   try {
     const r = await fetch('/api/v2/teacher/security', { credentials: 'same-origin' });
-    if (r.status === 401) { location.href = '/teacher/login'; return null; }
+    if (r.status === 401) { try { handleSignedOut(); } catch (e) {} return null; }
     ACCT.sec = await r.json();
   } catch (e) { ACCT.sec = null; }
   return ACCT.sec;
