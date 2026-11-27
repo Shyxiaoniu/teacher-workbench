@@ -432,9 +432,32 @@
         load();
       }).catch(function () { toast('连不上服务器', 'err'); });
     };
-    $('#swAdd').onclick = function () { this.classList.toggle('on'); };
-    $('#swSubmit').onclick = function () { this.classList.toggle('on'); };
-    $('#swAvatar').onclick = function () { this.classList.toggle('on'); };
+    /* 权限开关一键即存：只提交一个字段，别等 30 秒自动刷新把没保存的
+       开关状态刷回去（牛哥反馈：头像开关关掉过一会儿又自己开了）。 */
+    function autoSaveCfg(btn, key, onText, offText) {
+      var next = !btn.classList.contains('on');
+      btn.classList.toggle('on', next);          // 先给即时反馈
+      var body = {}; body[key] = next;
+      api('/api/v2/pixel/config', { method: 'POST', body: JSON.stringify(body) })
+        .then(function (j) {
+          if (!j.ok) throw new Error(j.msg || '保存失败');
+          CFG = Object.assign(CFG, j.cfg || {});
+          paintAll();
+          toast(next ? onText : offText, 'ok');
+        }).catch(function (e) {
+          btn.classList.toggle('on', !next);     // 失败回滚
+          toast(e.message || '保存失败', 'err');
+        });
+    }
+    $('#swAdd').onclick = function () {
+      autoSaveCfg(this, 'allow_add', '已允许学生添加内容', '已关闭学生添加内容');
+    };
+    $('#swSubmit').onclick = function () {
+      autoSaveCfg(this, 'allow_submit', '已允许学生提交作品', '已关闭学生提交');
+    };
+    $('#swAvatar').onclick = function () {
+      autoSaveCfg(this, 'allow_avatar', '已允许学生设为头像', '已关闭：学生端设为头像按钮失效');
+    };
     $('#btnSave').onclick = function () { save(); };
     $('#btnRefresh').onclick = function () { load(); toast('已刷新'); };
 
