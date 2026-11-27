@@ -91,8 +91,15 @@
       </div>
       <div class="fld">
         <span>每人最多提交次数（0 = 不限）</span>
-        <input type="number" id="inpMax" min="0" max="20" step="1"
-               placeholder="1" title="一个人最多能交几版。设 1 就只收一版，交给学生的画板会显示「还能交 N 版」，交满后按钮拦住">
+        <select id="inpMax" title="一个人最多能交几版。设 1 就只收一版，交给学生的画板会显示「还能交 N 版」，交满后按钮拦住">
+          <option value="0">不限</option>
+          <option value="1">1 版</option>
+          <option value="2">2 版</option>
+          <option value="3">3 版</option>
+          <option value="5">5 版</option>
+          <option value="10">10 版</option>
+          <option value="20">20 版</option>
+        </select>
       </div>
       <div class="fld">
         <span>任务说明（显示在画板顶部）</span>
@@ -253,7 +260,12 @@
     $('#inpWindow').value = CFG.window || '';
     $('#inpIntro').value = CFG.intro || '';
     $('#inpSize').value = String(CFG.size || 32);
-    $('#inpMax').value = String(CFG.max_submit == null ? 1 : CFG.max_submit);
+    (function () {
+      var s = $('#inpMax'), v = String(CFG.max_submit == null ? 1 : CFG.max_submit);
+      if (!Array.from(s.options).some(function (o) { return o.value === v; }))
+        s.insertAdjacentHTML('afterbegin', '<option value="' + v + '">' + v + ' 版（自定义）</option>');
+      s.value = v;
+    })();
     $('#dashMsg').textContent = CFG.enabled
       ? '大屏上方课程选「' + (CFG.course || '像素画') + '」'
       : '';

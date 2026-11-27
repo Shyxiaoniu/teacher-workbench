@@ -7223,9 +7223,9 @@ body.colw-dragging { user-select:none; -webkit-user-select:none; cursor:col-resi
 .cw-tree-item.cw-tree-sub:hover .ti-ops,
 .cw-tree-item.cw-tree-sub.on .ti-ops{display:flex}
 /* 树节点折叠箭头（2026-11-07）：课程 / 班级各有一枚，点它只切展开态不选中 */
-.cw-tree-tw{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;
-  flex:none;margin-right:3px;border-radius:4px;cursor:pointer;user-select:none;
-  color:var(--text-secondary);font-size:10px;line-height:1;transition:.12s}
+.cw-tree-tw{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;
+  flex:none;margin-right:5px;border-radius:6px;cursor:pointer;user-select:none;
+  color:var(--text-secondary);font-size:15px;line-height:1;transition:.12s}
 .cw-tree-tw:hover{background:var(--brand-soft);color:var(--brand-primary)}
 .cw-tree-sub .cw-tree-tw{margin-left:-4px}
 .cw-tree-new{margin-top:6px;border-top:1px dashed var(--border);padding-top:8px}
@@ -39773,7 +39773,9 @@ const cwState = { cfg: null, courses: [], files: [], course: '', pendingCourse: 
   /* 2026-11-04：当前课程被「设为学习单」的网页文件 id（/api/cw/list 随列表带出） */
   sheet: '',
   /* 2026-11-04 新建文件夹：当前浏览的课程内子文件夹（'' = 课程根目录） */
-  sub: '', subs: [] };
+  sub: '', subs: [],
+  /* 2026-11-27：资料树默认全折叠，fold[key]=true 表示收起 */
+  fold: {} };
 window.cwState = cwState;
 
 /* 课程列表缓存：大屏每 5 秒轮询一次，别每次都去读磁盘 */
@@ -40413,8 +40415,16 @@ function cwPaintTree() {
     return Array.from(set).sort((a, b) => String(a).localeCompare(String(b), 'zh'));
   };
   /* 2026-11-07 折叠：fold[key]=true 表示收起。课程用「课程名」，班级用「课程名/班级」。
-     默认全部展开；点箭头只切状态、不改变当前选中目录。 */
+     2026-11-27 牛哥定版：默认全部折叠，点箭头只切展开态、不改变当前选中目录。
+     新出现的文件夹也按折叠处理；已经手动点过的保持老师的选择。 */
   const fold = cwState.fold || (cwState.fold = {});
+  (cwState.courses || []).forEach(c => {
+    if (!(c.name in fold)) fold[c.name] = true;
+    (cwState.subs || []).forEach(s => {
+      const k = c.name + '/' + s;
+      if (!(k in fold)) fold[k] = true;
+    });
+  });
   const tw = (key, on) => '<span class="cw-tree-tw" data-tw="' + esc(key) + '"'
     + ' onclick="cwToggleFold(this.dataset.tw, event)" title="' + (on ? '展开' : '收起') + '">'
     + (on ? '▸' : '▾') + '</span>';
@@ -43042,6 +43052,9 @@ function quizPublishOpen(id, paperId){
     class_ids:[], open_at:'', close_at:'', max_attempts:1, allow_multiple:false,
     show_answer:false, show_score:false, status:'published', window:'' };
   const dt = v => String(v||'').replace(' ','T').slice(0,16);
+  const maxOpts = [1,2,3,5,10,20];
+  const maxNow = Math.max(1, Number(d.max_attempts) || 1);
+  if (maxOpts.indexOf(maxNow) < 0) maxOpts.unshift(maxNow);
   const body = '<div class="qz-row"><label>测验名称</label><input id="qzPubTitle" class="qz-inp" value="'+esc(d.title)+'" placeholder="留空则用试卷名"></div>'
     + '<div class="qz-row"><label>试卷</label><select id="qzPubPaper" class="qz-sel">'
     + QT.papers.map(x=>'<option value="'+esc(x.id)+'"'+(String(d.paper_id)===String(x.id)?' selected':'')+'>'+esc(x.title)+'（'+x.questions.length+' 题 / '+x.total+' 分）</option>').join('')+'</select></div>'
@@ -43052,7 +43065,11 @@ function quizPublishOpen(id, paperId){
     + '<div class="qz-row"><label>开放时间</label><input id="qzPubOpen" class="qz-inp" style="width:auto" type="datetime-local" value="'+esc(dt(d.open_at))+'"></div>'
     + '<div class="qz-row"><label>截止时间</label><input id="qzPubClose" class="qz-inp" style="width:auto" type="datetime-local" value="'+esc(dt(d.close_at))+'"></div>'
     + '<div class="qz-note">留空表示不限；时间一律以服务端时钟为准（当前 '+esc((QT.now||{}).date||'')+' '+esc((QT.now||{}).time||'')+'）。</div>'
-    + '<div class="qz-row"><label>提交次数上限</label><input id="qzPubMax" class="qz-inp" style="width:90px" type="number" min="1" max="20" value="'+esc(d.max_attempts||1)+'"></div>'
+    + '<div class="qz-row"><label>提交次数上限</label><select id="qzPubMax" class="qz-sel" style="width:auto;min-width:96px">'
+    + maxOpts.map(function (n) {
+        return '<option value="' + n + '"' + (maxNow === n ? ' selected' : '') + '>' + n + ' 次</option>';
+      }).join('')
+    + '</select></div>'
     + '<div class="qz-row"><label>允许多次提交</label><label class="chk" style="font-size:12.5px"><input type="checkbox" id="qzPubMulti"'+(d.allow_multiple?' checked':'')+'> 开启后按上面的次数上限控制</label></div>'
     + '<div class="qz-row"><label>提交后显示答案</label><label class="chk" style="font-size:12.5px"><input type="checkbox" id="qzPubAns"'+(d.show_answer?' checked':'')+'> 由服务端裁剪，关闭时答案根本不会发给学生</label></div>'
     + '<div class="qz-row"><label>提交后显示分数</label><label class="chk" style="font-size:12.5px"><input type="checkbox" id="qzPubScore"'+(d.show_score?' checked':'')+'> 只显示客观题得分；简答 / 图片待批阅</label></div>'
