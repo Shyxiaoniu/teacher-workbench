@@ -40582,11 +40582,19 @@ function cwToggleFold(key, ev) {
   key = String(key || '');
   if (!key) return;
   cwState.fold = cwState.fold || {};
+  const opening = !!cwState.fold[key];       // true = 原来是收起，这次要点开
   cwState.fold[key] = !cwState.fold[key];
   const tree = document.getElementById('cwTree');
   const keepTop = tree ? tree.scrollTop : 0;
   cwPaintTree();
   if (tree) tree.scrollTop = keepTop;
+  /* 课程子文件夹是靠 cwPickCourse 从服务端列出来的。以前点箭头只画树、
+     没加载课程，subHtml 里 subs 为空 → 明明有文件夹也展开不了，必须再点
+     一次课程名。现在点箭头展开课程时顺手把它选上，一次就能展开。 */
+  if (opening && key.indexOf('/') < 0 &&
+      (String(cwState.course) !== key || !(cwState.subs || []).length)) {
+    cwPickCourse(key);
+  }
 }
 window.cwToggleFold = cwToggleFold;
 
