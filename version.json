@@ -15,5 +15,5 @@
     "在线更新修复：清理旧版本提示、安装包不可达不再显示可下载提示；Gitee 发行版只保留最新版，更新说明改为相对上一版差异；分组模板改存服务端账号工作区，换设备登录自动同步；现场无外网时通过本机更新镜像恢复在线检查"
   ],
   "zip": "https://gitee.com/shyxiaoniu/teacher-workbench/releases/download/v2.1.20/%E7%8F%AD%E7%BA%A7%E5%B7%A5%E4%BD%9C%E5%8F%B02.1.20-261126.zip",
-  "sha256": "5d38dad5b0c51ef44676229c0ddbbbc45a686b910790840842c2a8fd37535695"
+  "sha256": "1a5ec0cc4801eb3a01a919540085801932d63081e1661d63dea7ea1ff4220b7d"
 }

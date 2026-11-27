@@ -3160,8 +3160,21 @@ class Handler(LEG.Handler):
             try:
                 with open(p, "rb") as f:
                     data = f.read()
-                self.send_response(200)
+                total = len(data)
+                rng = self.headers.get("Range") or ""
+                m = re.match(r"bytes=(\d+)-(\d*)", rng)
+                if m:
+                    a = int(m.group(1))
+                    b = int(m.group(2)) if m.group(2) else min(total - 1, a + 1023)
+                    a = max(0, min(a, total - 1))
+                    b = max(a, min(b, total - 1))
+                    data = data[a:b + 1]
+                    self.send_response(206)
+                    self.send_header("Content-Range", "bytes %d-%d/%d" % (a, b, total))
+                else:
+                    self.send_response(200)
                 self.send_header("Content-Type", "application/zip")
+                self.send_header("Accept-Ranges", "bytes")
                 self.send_header("Content-Length", str(len(data)))
                 self.send_header("Cache-Control", "no-store")
                 self.end_headers()
