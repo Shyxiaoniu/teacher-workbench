@@ -7223,9 +7223,10 @@ body.colw-dragging { user-select:none; -webkit-user-select:none; cursor:col-resi
 .cw-tree-item.cw-tree-sub:hover .ti-ops,
 .cw-tree-item.cw-tree-sub.on .ti-ops{display:flex}
 /* 树节点折叠箭头（2026-11-07）：课程 / 班级各有一枚，点它只切展开态不选中 */
-.cw-tree-tw{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;
-  flex:none;margin-right:5px;border-radius:6px;cursor:pointer;user-select:none;
+.cw-tree-tw{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;
+  flex:none;margin-right:5px;border-radius:7px;cursor:pointer;user-select:none;
   color:var(--text-secondary);font-size:15px;line-height:1;transition:.12s}
+.cw-tree-tw svg{display:block;width:15px;height:15px;fill:currentColor}
 .cw-tree-tw:hover{background:var(--brand-soft);color:var(--brand-primary)}
 .cw-tree-sub .cw-tree-tw{margin-left:-4px}
 .cw-tree-new{margin-top:6px;border-top:1px dashed var(--border);padding-top:8px}
@@ -40425,9 +40426,13 @@ function cwPaintTree() {
       if (!(k in fold)) fold[k] = true;
     });
   });
+  /* 用 SVG 实心三角替换 ▸/▾ 字符：字符在不同字体下渲染得很小，老师看不清。 */
   const tw = (key, on) => '<span class="cw-tree-tw" data-tw="' + esc(key) + '"'
     + ' onclick="cwToggleFold(this.dataset.tw, event)" title="' + (on ? '展开' : '收起') + '">'
-    + (on ? '▸' : '▾') + '</span>';
+    + (on
+      ? '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 2.5 13 8l-8 5.5z"/></svg>'
+      : '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 5 8 13l5.5-8z"/></svg>')
+    + '</span>';
   const subHtml = (course) => {
     if (fold[course]) return '';                    // 课程收起：班级整层不渲染
     if (!(cwState.course === course && (cwState.subs || []).length)) return '';

@@ -902,9 +902,16 @@ class TypingStore:
                 stu["updated"] = int(time.time())
                 rows.append({"uid": str(uid), "name": name,
                              "before": before, "after": after, "delta": real})
+                _note = str(note or "")
+                if real != delta:
+                    # 余额最低到 0：老师看到「班务-1分×10=打字-10」却记了 0，
+                    # 以为同步错了。把「应扣/实际」直接写进备注，不用猜。
+                    _act = ("+" + str(real)) if real > 0 else str(real)
+                    _want = ("+" + str(delta)) if delta > 0 else str(delta)
+                    _note += "（应记" + _want + "，余额限制实际" + _act + "）"
                 log.append({"ts": int(time.time()), "by": str(by or "老师"),
                             "uid": str(uid), "name": name,
-                            "delta": real, "note": str(note or "")})
+                            "delta": real, "note": _note})
             if len(log) > self.PTS_LOG_MAX:
                 del log[:len(log) - self.PTS_LOG_MAX]
             if rows:
