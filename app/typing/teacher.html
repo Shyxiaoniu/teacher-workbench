@@ -277,7 +277,7 @@ html[data-mode="dark"] .sd-school-row input{background:var(--paper);color:var(--
 var $ = function (s) { return document.querySelector(s); };
 var app = $('#app');
 var S = { demo: false, enabled: false, grades: [], classes: [], lbClass: '', scope: 'week', rows: [], lbName: '',
-  ptsCls: '', ptsStu: '', ptsData: null, studio: null, tab: 'basic', school: '' };
+  ptsCls: '', ptsStu: '', ptsSort: 'no', ptsData: null, studio: null, tab: 'basic', school: '' };
 
 function esc(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -442,6 +442,11 @@ function body() {
               esc(c.name) + '</option>';
           }).join('') : '<option>（暂无班级）</option>') +
         '</select>' +
+        '<select id="ptsSort" style="width:auto;min-width:130px" title="学生列表排序">' +
+          '<option value="no"' + (S.ptsSort === 'no' ? ' selected' : '') + '>按学号</option>' +
+          '<option value="pts-desc"' + (S.ptsSort === 'pts-desc' ? ' selected' : '') + '>积分：高→低</option>' +
+          '<option value="pts-asc"' + (S.ptsSort === 'pts-asc' ? ' selected' : '') + '>积分：低→高</option>' +
+        '</select>' +
         '<span style="font-size:12px;color:var(--ink3)">数据随学生练习与积分页加减分实时更新</span>' +
       '</div>' +
       '<div class="pts-sec"><b>各班学生余额</b></div>' +
@@ -591,6 +596,8 @@ function bind() {
   /* 积分管理：发/扣 + 记录展示 */
   var pcls = $('#ptsCls');
   if (pcls) pcls.onchange = function () { S.ptsCls = pcls.value; S.ptsStu = ''; paintPointBoxes(); };
+  var psort = $('#ptsSort');
+  if (psort) psort.onchange = function () { S.ptsSort = psort.value; paintPointBoxes(); };
   var pstus = $('#ptsStu');
   if (pstus) pstus.onchange = function () { S.ptsStu = pstus.value; };
   document.querySelectorAll('#ptsTagBox [data-note]').forEach(function (b) {
@@ -748,9 +755,21 @@ function paintPointBoxes() {
   (d.classes || []).forEach(function (c) {
     (c.students || []).forEach(function (s) { noOf[String(s.id)] = s.student_no || ''; });
   });
+  var sorted = clsStudents(S.ptsCls).slice();
+  if (S.ptsSort === 'pts-desc') sorted.sort(function (a, b) {
+    return (Number(b.pts) || 0) - (Number(a.pts) || 0) ||
+      String(a.student_no || '').localeCompare(String(b.student_no || ''), 'zh', { numeric: true });
+  });
+  else if (S.ptsSort === 'pts-asc') sorted.sort(function (a, b) {
+    return (Number(a.pts) || 0) - (Number(b.pts) || 0) ||
+      String(a.student_no || '').localeCompare(String(b.student_no || ''), 'zh', { numeric: true });
+  });
+  else sorted.sort(function (a, b) {
+    return String(a.student_no || '').localeCompare(String(b.student_no || ''), 'zh', { numeric: true });
+  });
   if (stu) {
     var opts = '<option value="">全班所有人</option>';
-    clsStudents(S.ptsCls).forEach(function (s) {
+    sorted.forEach(function (s) {
       opts += '<option value="' + esc(s.id) + '">' +
         esc((s.student_no ? s.student_no + ' ' : '') + s.name) + '（✨' + (s.pts || 0) + '）</option>';
     });
@@ -758,7 +777,7 @@ function paintPointBoxes() {
     stu.value = S.ptsStu || '';
   }
   if (bal) {
-    var list = clsStudents(S.ptsCls);
+    var list = sorted;
     bal.innerHTML = S.demo
       ? '<span class="cl-empty">演示模式：登录后这里显示各班余额</span>'
       : (list.length

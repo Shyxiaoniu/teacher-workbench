@@ -1065,7 +1065,8 @@ class TypingStore:
                 wk = t.get("week") or {}
                 v = wk.get("stars", 0) if wk.get("k") == week_key() else 0
             elif scope == "speed":
-                v = t.get("best_wpm", 0)
+                ws = [float(b.get("wpm", 0) or 0) for b in t.get("best", {}).values()]
+                v = round(sum(ws) / len(ws), 1) if ws else 0
             else:
                 v = t.get("stars", 0)
             return {"value": v, "stars": t.get("stars", 0),
@@ -1115,10 +1116,10 @@ class TypingStore:
                 if scope == "week":
                     v = stu["week"]["stars"] if stu.get("week", {}).get("k") == wk else 0
                 elif scope == "speed":
-                    v = 0
-                    for b in stu.get("best", {}).values():
-                        if b["wpm"] > v:
-                            v = b["wpm"]
+                    # 2.1.20：牛哥定版——排行榜速度取各关平均，不再取单关最高
+                    ws = [float(b.get("wpm", 0) or 0)
+                          for b in stu.get("best", {}).values()]
+                    v = round(sum(ws) / len(ws), 1) if ws else 0
                 else:
                     v = stu.get("stars", 0)
                 out[uid] = {"value": v,
@@ -1139,9 +1140,12 @@ class TypingStore:
         with self.lock:
             for uid, stu in self.data["students"].items():
                 best = stu.get("best", {})
-                wpm = max([b["wpm"] for b in best.values()], default=0)
-                out[uid] = {"levels": len(best), "stars": stu.get("stars", 0),
-                            "best_wpm": wpm, "updated": stu.get("updated", 0)}
+        wpm = max([b["wpm"] for b in best.values()], default=0)
+        ws = [float(b.get("wpm", 0) or 0) for b in best.values()]
+        avg = round(sum(ws) / len(ws), 1) if ws else 0
+        out[uid] = {"levels": len(best), "stars": stu.get("stars", 0),
+                    "best_wpm": wpm, "avg_wpm": avg,
+                    "updated": stu.get("updated", 0)}
         return out
 
     def wipe_student(self, uid):

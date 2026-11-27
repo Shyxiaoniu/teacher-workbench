@@ -1383,12 +1383,20 @@ body.seat-rsz-dragging .seat:hover { transform:none; box-shadow:none; }
    颜色来自 --ck-accent（ckHitColor 专用亮色版，灰色状态也提亮），
    保证任何状态筛选在座位上都一眼可辨。 */
 .seat.ck-hit {
-  outline:3px solid var(--ck-accent, var(--brand-primary)); outline-offset:-1px;
+  outline:4px solid var(--ck-accent, var(--brand-primary)); outline-offset:-2px;
   border-color:var(--ck-accent, var(--brand-primary));
-  background:color-mix(in srgb, var(--ck-accent, var(--brand-primary)) 17%, var(--bg-surface)) !important;
-  box-shadow:0 0 0 3px color-mix(in srgb, var(--ck-accent, var(--brand-primary)) 32%, transparent),
-             0 8px 22px -6px color-mix(in srgb, var(--ck-accent, var(--brand-primary)) 72%, transparent);
-  transform:scale(1.06); z-index:5;
+  opacity:1 !important; filter:none !important;
+  background:color-mix(in srgb, var(--ck-accent, var(--brand-primary)) 24%, var(--bg-surface)) !important;
+  box-shadow:0 0 0 4px color-mix(in srgb, var(--ck-accent, var(--brand-primary)) 42%, transparent),
+             0 10px 26px -6px color-mix(in srgb, var(--ck-accent, var(--brand-primary)) 85%, transparent);
+  transform:scale(1.08); z-index:6;
+  animation:ckHitPulse 1.5s ease-in-out infinite;
+}
+@keyframes ckHitPulse {
+  0%,100% { box-shadow:0 0 0 4px color-mix(in srgb, var(--ck-accent, var(--brand-primary)) 42%, transparent),
+                        0 10px 26px -6px color-mix(in srgb, var(--ck-accent, var(--brand-primary)) 85%, transparent); }
+  50%     { box-shadow:0 0 0 8px color-mix(in srgb, var(--ck-accent, var(--brand-primary)) 12%, transparent),
+                        0 10px 26px -6px color-mix(in srgb, var(--ck-accent, var(--brand-primary)) 85%, transparent); }
 }
 .seat.ck-hit .seat-name { font-weight:700; color:var(--ck-accent, var(--brand-primary)); }
 .seat.ck-hit .mk { border-color:var(--ck-accent, var(--brand-primary)); }
@@ -1423,6 +1431,10 @@ body.seat-rsz-dragging .seat:hover { transform:none; box-shadow:none; }
 .ck-board .ck-cfg-btn { font-size:11.5px; padding:3px 9px; border-radius:8px;
   border:1px solid var(--border); color:var(--text-secondary); background:transparent; cursor:pointer; }
 .ck-board .ck-cfg-btn:hover { color:var(--brand-primary); border-color:var(--brand-primary); }
+.ck-board .seat-ck-cfg { margin-top:10px;padding:12px 14px;border:1px solid var(--border);
+  border-radius:10px;background:var(--bg-surface);box-shadow:var(--shadow-sm); }
+.ck-board #ckOnOffBtn.on { background:var(--ok-soft);color:var(--status-ok);border-color:var(--status-ok); }
+.ck-board #ckOnOffBtn.off { background:var(--warn-soft);color:var(--status-warn);border-color:var(--status-warn); }
 .ck-board .ck-date { font-size:11.5px; color:var(--text-secondary); }
 /* 当前节次：纯文字标签，跟着课表走，不给人切换（2.0.50） */
 .ck-board .ck-now { font-size:12px; font-weight:700; color:var(--text-primary);
@@ -7966,6 +7978,7 @@ const state = {
   morGroupMode: true,   // 积分明细视图：true=按小组组织（默认）/ false=按个人平铺
   /* 本节结算（2026-11-01 晚）：座位表「结算本节」展开的积分记分面板 */
   settleMode: 'group',  // 记分口径：group 以小组为单位 / stu 以个人为单位
+  settleRankLimit: (function(){ try { return Math.max(1, Math.min(99, parseInt(LS.get('wb-settle-rank-limit'), 10) || 10)); } catch(e){ return 10; } })(), // 结算榜显示前 N 名，默认10
   settleHl: null,       // 座位表高亮：null 或 {mode:'group'|'stu', key:id}
   /* 分析报告页（2026-11-01 晚）：成绩页的筛选与对比全部搬到报告页，
      这里就是那套条件的唯一状态源，报告里的 KPI / 图表 / 对比 / 明细表全部读它。 */
@@ -9624,12 +9637,18 @@ function applyGreetFont() {
 }
 window.applyGreetFont = applyGreetFont;
 
-/** 称呼：优先用「账号昵称」（设置-账号与安全，云端同步），没设过再用
-    设置页问候语里那份本机称呼，都没有就默认「老师」 */
-function honorific() {
-  /* 只认「账号昵称」这一个来源：以前还有一份独立的「问候语后半句」，
-     两处都能改同一个称呼，容易打架（牛哥要求合并成一个）。 */
+/** 2.1.20：教师显示名 = 管理员建账号时填的姓名（服务端权威）。
+    左下角直接显示这个名字；问候语自动拼上「老师」。 */
+function teacherDisplayName() {
+  const s = String((typeof state !== 'undefined' && state.serverTeacherName) || '').trim();
+  if (s) return s;
+  const n = String((typeof state !== 'undefined' && state.serverNickname) || '').trim();
+  if (n) return n;
   return LS.get('wb-nickname', '') || '老师';
+}
+function honorific() {
+  const n = teacherDisplayName();
+  return /老师$/.test(n) ? n : n + '老师';
 }
 
 /* 问候语统一格式：前半句按时间段自动变化 + 后半句为可自定义的称呼。
@@ -9946,7 +9965,8 @@ function entryInit() {
       .then(function (j) {
         if (!j || !j.ok) return;
         state.serverNickname = j.nickname || '';
-        if (state.serverNickname) LS.set('wb-nickname', state.serverNickname);
+        state.serverTeacherName = j.name || '';
+        if (state.serverTeacherName) LS.set('wb-nickname', state.serverTeacherName);
         var brand = document.getElementById('sideBrandText');
         if (brand && typeof greetBrand === 'function') brand.textContent = greetBrand();
       }).catch(function () {});
@@ -12221,7 +12241,7 @@ async function goToApp(returnTo) {
           <div class="sup-head">
             ${userAvatarHtml('lg')}
             <div style="min-width:0">
-              <b id="suName2">${esc(honorific())}</b>
+              <b id="suName2">${esc(acctNickname())}</b>
               <i id="suAcct">账号读取中…</i>
             </div>
           </div>
@@ -12232,7 +12252,7 @@ async function goToApp(returnTo) {
             <button type="button" class="sup-q" onclick="userPopGo('greet')">✎ 问候语</button>
           </div>
           <button type="button" class="sup-item" onclick="userPopGo('account')">账号与安全</button>
-          <button type="button" class="sup-item" onclick="userPopGo('nick')">头像与昵称</button>
+          <button type="button" class="sup-item" onclick="userPopGo('nick')">头像设置</button>
           <button type="button" class="sup-item" onclick="userPopGo('theme')">主题与外观</button>
           <button type="button" class="sup-item" onclick="userPopGo('data')">数据导入 / 导出</button>
           <button type="button" class="sup-item" onclick="userPopGo('all')">系统设置（全部）</button>
@@ -12607,9 +12627,7 @@ window.spSave = spSave;
    entryInit() 拉到后放 state.serverNickname；本机 LS 只作离线镜像兜底。
    ============================================================ */
 function acctNickname() {
-  const fromServer = String(state.serverNickname || '').trim();
-  if (fromServer) return fromServer;
-  return LS.get('wb-nickname', '');
+  return teacherDisplayName();
 }
 function nicknameInputVal() {
   const el = $('#nkInput');
@@ -24530,7 +24548,8 @@ function settleBodyHtml(clsOpt) {
   const hl = state.settleHl;
   const medal = n => n <= 3 ? medalSvg(n, 18) : `<b class="stl-rk">${n}</b>`;
   /* 小组榜 */
-  const gRows = sd.groupRows.map(r => {
+  const rankLimit = state.settleRankLimit || 10;
+  const gRows = sd.groupRows.slice(0, rankLimit).map(r => {
     const on = hl && hl.mode === 'group' && Number(hl.key) === Number(r.key);
     return `<div class="stl-row${on ? ' on' : ''}${r.sum > 0 ? '' : ' zero'}"
         onclick="settleHlToggle('group',${r.key})"
@@ -24546,7 +24565,7 @@ function settleBodyHtml(clsOpt) {
     </div>`;
   }).join('');
   /* 个人榜 */
-  const sRows = sd.stuRows.map(r => {
+  const sRows = sd.stuRows.slice(0, rankLimit).map(r => {
     const on = hl && hl.mode === 'stu' && Number(hl.key) === Number(r.key);
     return `<div class="stl-row${on ? ' on' : ''}${r.sum > 0 ? '' : ' zero'}"
         onclick="settleHlToggle('stu',${r.key})"
@@ -24565,7 +24584,11 @@ function settleBodyHtml(clsOpt) {
   <div class="settle-panel in-modal">
     <div class="stl-head">
       <span class="dim">${esc(sd.d)} · ${esc(periodLabel(attPeriod()))}</span>
-      <span class="hw-filter" style="margin-left:auto">
+      <label class="dim" style="margin-left:auto;display:inline-flex;align-items:center;gap:6px">显示名次
+        <input type="number" min="1" max="99" value="${rankLimit}"
+          onchange="settleRankLimitSet(this.value)" style="width:58px;padding:3px 6px">
+      </label>
+      <span class="hw-filter">
         <button class="hw-fbtn ${mode === 'group' ? 'on' : ''}"
           onclick="settleModeSet('group')">以小组为单位</button>
         <button class="hw-fbtn ${mode === 'stu' ? 'on' : ''}"
@@ -24588,6 +24611,13 @@ function settleBodyHtml(clsOpt) {
 window.settleBodyHtml = settleBodyHtml;
 
 /** 切换记分口径：换口径时清掉高亮（高亮和口径是绑定的） */
+function settleRankLimitSet(v) {
+  state.settleRankLimit = Math.max(1, Math.min(99, parseInt(v, 10) || 10));
+  try { LS.set('wb-settle-rank-limit', String(state.settleRankLimit)); } catch (e) {}
+  refreshSettleModal();
+}
+window.settleRankLimitSet = settleRankLimitSet;
+
 function settleModeSet(m) {
   state.settleMode = (m === 'stu') ? 'stu' : 'group';
   state.settleHl = null;
@@ -24932,6 +24962,45 @@ function attListExport(fmt) {
 window.attListExport = attListExport;
 
 /** 座位表 / 考勤页共用的「课堂签到」状态条（标签可点 → 筛选） */
+/** 2.1.20：只刷新座位卡上的考勤状态，不重建整页/学生面板。
+    老师强制设考勤、写备注时用它，避免输入框被 renderContent 冲掉。 */
+function refreshSeatAttendanceUI() {
+  const grid = document.querySelector('.seat-grid');
+  if (!grid) return;
+  const cls = curSeatClass(), d = state.seatDate || state.appDate || today();
+  const seq = attPeriod();
+  const cks = attStatsOf(cls, d, seq);
+  const cfgOn = !window.CHECKIN_CFG || window.CHECKIN_CFG.enabled !== false;
+  const ckShow = !!state.ckFilter || (cfgOn && Number(seq) > 0) ||
+    (cks.checked + cks.late + cks.sick + cks.personal + cks.absent + cks.other) > 0;
+  grid.querySelectorAll('.seat[data-student]').forEach(function (el) {
+    const sid = el.dataset.student;
+    if (!sid) return;
+    const rec = attOfP(sid, d, seq);
+    const st = rec ? rec.status : 'unchecked';
+    el.classList.remove('ck-in', 'ck-late', 'ck-abs', 'ck-leave');
+    if (ckShow) {
+      if (st === 'checked' || st === 'present') el.classList.add('ck-in');
+      else if (st === 'late') el.classList.add('ck-late');
+      else if (st === 'absent' || st === 'unchecked') el.classList.add('ck-abs');
+      else if (st === 'sick' || st === 'personal') el.classList.add('ck-leave');
+    }
+    let mk = el.querySelector('.mk-att');
+    if (!mk && ckShow) {
+      const box = el.querySelector('.seat-marks') || el;
+      mk = document.createElement('span');
+      box.appendChild(mk);
+    }
+    if (mk) {
+      mk.className = 'mk mk-att mk-' + st;
+      mk.title = esc((labelOf('attendance_status', st) || st) +
+        (rec && rec.force ? '（教师强制，签到不改写）' : ''));
+      mk.textContent = (ATT_SHORT[st] || '?') + (rec && rec.force ? '🔒' : '');
+    }
+  });
+}
+window.refreshSeatAttendanceUI = refreshSeatAttendanceUI;
+
 function attBoardHtml(cls, date) {
   let seq = attPeriod();
   const allPs = periodList();              // 今天这一套，已按 seq 去重
@@ -24978,8 +25047,10 @@ function attBoardHtml(cls, date) {
     <div class="ck-row1">
       <span class="ck-ttl">课堂签到</span>
       ${window.checkinCfgTagHtml ? window.checkinCfgTagHtml(window.CHECKIN_CFG) : ''}
-      <button class="ck-cfg-btn" type="button" onclick="goCheckinCfg()"
-        title="去系统设置里开关签到 / 设手动时间">签到设置</button>
+      <button class="ck-cfg-btn" type="button" onclick="toggleSeatCheckinCfg()"
+        title="在座位表上直接设置签到时间">签到设置</button>
+      <button type="button" id="ckOnOffBtn" class="ck-chip ck-chip-btn ${(!CHECKIN_CFG || CHECKIN_CFG.enabled !== false) ? 'on' : 'off'}"
+        onclick="toggleCheckinEnabled()" title="一键开启 / 关闭课堂签到">签到${(!CHECKIN_CFG || CHECKIN_CFG.enabled !== false) ? '已开' : '已关'}</button>
       ${nowTag}
       <span class="ck-grow"></span>
       ${state.route === 'seats' ? `<span class="ck-inline-tools">${clsPickerHtml()}${pageSearchHtml()}</span>` : ''}
@@ -25004,9 +25075,23 @@ function attBoardHtml(cls, date) {
         st.list.length > 12 ? `<span class="ck-more">…等 ${st.list.length} 人</span>` : ''}
       <span class="ck-hint">点名字可登记病假 / 事假</span></div>` : ''}
     ${fRow}
+    <div id="seatCkCfgBox" class="seat-ck-cfg" hidden>
+      ${window.checkinCfgHtml ? checkinCfgHtml(window.CHECKIN_CFG) : ''}
+    </div>
   </div>`;
 }
 window.attBoardHtml = attBoardHtml;
+
+function toggleSeatCheckinCfg() {
+  const box = document.getElementById('seatCkCfgBox');
+  if (box) box.hidden = !box.hidden;
+}
+window.toggleSeatCheckinCfg = toggleSeatCheckinCfg;
+function toggleCheckinEnabled() {
+  const on = !window.CHECKIN_CFG || window.CHECKIN_CFG.enabled !== false;
+  checkinCfgPost({ enabled: !on });
+}
+window.toggleCheckinEnabled = toggleCheckinEnabled;
 
 /** 积分 → 短文字 */
 const MOR_SHORT = { bonus:'+', penalty:'−' };
@@ -25113,7 +25198,7 @@ function forceAttSet(stuId) {
   });
   dbSet('attendance', dbT('attendance'));
   toast('已强制设置为「' + (labelOf('attendance_status', code) || code) + '」，学生签到不再改写');
-  renderContent();
+  refreshSeatAttendanceUI();
 }
 window.forceAttSet = forceAttSet;
 
@@ -25130,7 +25215,7 @@ function forceAttClear(stuId) {
   arr.splice(i, 1);
   dbSet('attendance', arr);
   toast('已解除强制，回到自动判定');
-  renderContent();
+  refreshSeatAttendanceUI();
 }
 window.forceAttClear = forceAttClear;
 
@@ -25139,15 +25224,18 @@ function saveAttNote(stuId) {
   const d = state.seatDate || state.appDate || today();
   const noteEl = document.getElementById('attNote');
   const note = noteEl ? (noteEl.value || '').trim() : '';
+  const seq = attPeriod();
   const i = dbT('attendance').findIndex(a =>
-    a.student_id === stuId && a.date === d);
+    Number(a.student_id) === Number(stuId) && a.date === d &&
+    Number(a.period || 1) === Number(seq));
   if (i >= 0) dbT('attendance')[i].reason = note;
   else dbT('attendance').push({
     id: Date.now() % 100000, class_id: curSeatClass(), date: d,
-    period: 1, student_id: stuId, status: '', reason: note, seated_flag: true
+    period: seq, student_id: stuId, status: '', reason: note, seated_flag: true
   });
+  dbSet('attendance', dbT('attendance'));
   toast('备注已保存');
-  renderContent();
+  refreshSeatAttendanceUI();
 }
 window.saveAttNote = saveAttNote;
 
@@ -25207,8 +25295,11 @@ function syncTypingPoints(stuId, score, reason) {
     const cls = curSeatClass();
     fetch('/api/v2/typing/admin-points', {
       method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+      /* 备注写清原积分与实际打字积分，避免老师看到「+5（积分×10）」误以为少乘了 */
       body: JSON.stringify({ class_id: String(cls), student_id: String(stuId),
-                             delta: delta, note: (reason || '积分同步').slice(0, 60) + '（积分×10）' })
+                             delta: delta,
+                             note: ((reason || '积分同步').slice(0, 40) +
+                                    '（班务' + score + '分×10=打字' + delta + '）').slice(0, 80) })
     }).catch(() => {});
   } catch (e) {}
 }
@@ -28925,6 +29016,9 @@ function morDelRecord(id) {
   }
   /* 删除是破坏操作：立即落盘，避免 600ms 节流窗口内刷新把"已删"又还原。 */
   try { dbPersist(); } catch (e) {}
+  if (r && typeof refreshStuMorFloat === 'function') {
+    try { refreshStuMorFloat(r.student_id); } catch (e) {}
+  }
   renderContent();
   toast(r ? `已删除：${morItemName(r)}` : '已删除该条记录');
 }
@@ -28940,6 +29034,9 @@ async function clearStuMor(sid) {
   const sum = rows.reduce((a, r) => a + (Number(r.score) || 0), 0);
   if (Number(sum)) syncTypingPoints(sid, -sum, '清空积分记录（' + rows.length + '条）');
   try { dbPersist(); } catch (e) {}
+  if (typeof refreshStuMorFloat === 'function') {
+    try { refreshStuMorFloat(sid); } catch (e) {}
+  }
   renderContent();
   toast('已清空 ' + (before - dbT('morality_records').length) + ' 条记录');
 }
@@ -29048,6 +29145,15 @@ function renderStuMorBody(stuId) {
     </div>
   </div>`;
 }
+/** 删除流水后只刷新当前积分详情浮层，不重绘整页 */
+function refreshStuMorFloat(stuId) {
+  const layer = document.getElementById('floatLayer');
+  const body = layer && layer.querySelector('.float-body');
+  if (!body) return;
+  body.innerHTML = renderStuMorBody(stuId);
+  setTimeout(() => drawStuMorTrend(stuId), 30);
+}
+window.refreshStuMorFloat = refreshStuMorFloat;
 /** 学生积分趋势小图（近 14 天每日净分，发散柱状） */
 function drawStuMorTrend(stuId) {
   const cv = document.getElementById('stuMorTrend');
@@ -36646,16 +36752,8 @@ const DEMO_RENDER = {
           onclick="saveGreetSetting()">保存</button>
       </div>
       <div style="height:1px;background:var(--border);margin:14px 0 12px"></div>
-      <div data-set="nick" style="font-size:14px;font-weight:500;margin-bottom:10px">本地资料</div>
-      <div class="hwp-row">
-        <label class="hwp-lbl" for="nkInput">称呼昵称</label>
-        <input id="nkInput" class="fl-inp" style="flex:1;min-width:0" type="text" maxlength="20"
-          value="${esc(acctNickname())}"
-          placeholder="比如：牛老师">
-        <button class="btn btn-sm" type="button" style="width:auto;flex:none"
-          onclick="saveNickname()">保存</button>
-      </div>
-      <div class="term-hint">昵称会显示在侧栏问候「上午好，××」和左下角账号区。保存到服务端，换设备登录自动同步。</div>
+      <div data-set="nick" style="font-size:14px;font-weight:500;margin-bottom:10px">头像设置</div>
+      <div class="term-hint" style="margin-bottom:8px">左下角姓名取自管理员创建教师账号时填写的姓名，不能在此修改；问候语会自动加上「老师」。</div>
       <div class="hwp-row" style="align-items:flex-start">
         <label class="hwp-lbl" style="padding-top:8px">头像设置</label>
         <div style="flex:1;min-width:0">
@@ -36692,15 +36790,6 @@ const DEMO_RENDER = {
         <button class="btn btn-sm" type="button" style="width:auto"
           onclick="dbClearLocalAsk()">清空本机数据</button>
       </div>
-    </div>
-
-    <div class="card" id="ckCfgCard">
-      <div style="font-size:14px;font-weight:500;margin-bottom:4px">课堂签到</div>
-      <div class="term-hint" style="margin-bottom:10px">
-        默认开启：学生登录即按课表当节课时间自动签到；关闭后学生端不再签到，后台也不再自动记缺勤。
-        需要固定时间签到时，填一个手动时间即可。
-      </div>
-      <div id="ckCfgBody"><span class="dim">加载中…</span></div>
     </div>
 
     <div class="card" id="updCard">
@@ -37436,8 +37525,10 @@ const DEMO_RENDER = {
     const cks = attStatsOf(cls, ATT_DATE, attPeriod());
     /* 这节课已经有人在记考勤（或正在筛选）→ 每张卡都显示状态色块，
        否则整节课一条记录都没有时，全班挂满「未」反而是噪音。 */
-    const ckShow = !!CKF || (cks.checked + cks.late + cks.sick + cks.personal +
-                             cks.absent + cks.other) > 0;
+    const ckOn = !window.CHECKIN_CFG || window.CHECKIN_CFG.enabled !== false;
+    const ckShow = !!CKF || (ckOn && Number(attPeriod()) > 0) ||
+                   (cks.checked + cks.late + cks.sick + cks.personal +
+                    cks.absent + cks.other) > 0;
     const grid = [];
     for (let r = 1; r <= rows; r++)
       for (let c = 1; c <= cols; c++) {
@@ -37874,13 +37965,22 @@ async function checkinCfgLoad() {
     const j = await r.json();
     if (j && j.ok) { CHECKIN_CFG = j; window.CHECKIN_CFG = j; }
   } catch (e) { /* 离线时沿用上一次读到的值 */ }
-  const b = document.getElementById('ckCfgBody');
-  if (b) b.innerHTML = checkinCfgHtml(CHECKIN_CFG);
+  ['ckCfgBody', 'seatCkCfgBox'].forEach(function (id) {
+    const b = document.getElementById(id);
+    if (b) b.innerHTML = checkinCfgHtml(CHECKIN_CFG);
+  });
   const on = document.getElementById('ckCfgOn');
   if (on) on.onchange = function () {
     const t = document.getElementById('ckCfgTime');
     if (t) t.disabled = !on.checked;
   };
+  const btn = document.getElementById('ckOnOffBtn');
+  if (btn) {
+    const enabled = !CHECKIN_CFG || CHECKIN_CFG.enabled !== false;
+    btn.textContent = '签到' + (enabled ? '已开' : '已关');
+    btn.classList.toggle('on', enabled);
+    btn.classList.toggle('off', !enabled);
+  }
 }
 window.checkinCfgLoad = checkinCfgLoad;
 
@@ -37894,7 +37994,7 @@ async function checkinCfgPost(body) {
     CHECKIN_CFG = j; window.CHECKIN_CFG = j;
     toast('签到设置已保存');
     checkinCfgLoad();
-    if (state.route === 'seats') renderContent({ keepScroll: true });
+    if (state.route === 'seats') refreshSeatAttendanceUI();
   } catch (e) { toast('保存失败：' + String(e.message || e)); }
 }
 function checkinCfgSave() {

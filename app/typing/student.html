@@ -4610,7 +4610,7 @@ function loadLb() {
       var scope = S.lb.scope;
       rows.push({
         name: S.me.name,
-        value: scope === 'speed' ? (S.progress.best_wpm || 0)
+        value: scope === 'speed' ? (S.progress.avg_wpm || 0)
              : scope === 'week' ? (S.progress.week_stars || 0)
              : (S.progress.stars || 0),
         pet: shownPetId(), studio_pet: S.ranch.studio_pet || '',

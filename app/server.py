@@ -3397,7 +3397,12 @@ class Handler(LEG.Handler):
             s = self._session()
             if not s or s["role"] != "teacher":
                 return self._json({"ok": False, "msg": "未登录"}, 401)
-            return self._json({"ok": True, "nickname": ACCOUNTS.nickname_of(s.get("account"))})
+            t = ACCOUNTS.teacher(s.get("account")) or {}
+            # 2.1.20：牛哥定版——显示名直接取管理员建账号时填的姓名，
+            # 不再让老师自己改昵称（系统设置里的改名入口已删除）。
+            return self._json({"ok": True,
+                               "name": str(t.get("name") or t.get("username") or "老师"),
+                               "nickname": ACCOUNTS.nickname_of(s.get("account"))})
         if path == "/api/v2/teacher/activity":
             if not self._is_teacher():
                 return self._json({"ok": False, "msg": "未登录"}, 401)
