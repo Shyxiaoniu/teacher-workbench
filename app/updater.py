@@ -187,6 +187,8 @@ def _fetch(url, timeout=CHECK_TIMEOUT, what="请求", allow_insecure=None):
 
 
 class Updater:
+    # server.py 里 UPD 是实例，暴露模块级默认源判定给它
+    _is_default_source = staticmethod(_is_default_source)
     def __init__(self, data_dir, current_version, code_root, default_url=""):
         self.data_dir = data_dir
         self.version = str(current_version)
