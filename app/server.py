@@ -93,6 +93,15 @@ WS = ACC.Workspace(DATA_DIR)
 # 路由的代理；端口/更新/备份等部署设置仍读原 config.json。
 CFG = ACFG.AccountConfig(CONFIG_PATH, WS)
 ACCOUNTS = ACC.AccountStore(DATA_DIR, legacy_teacher=CFG.get("teacher") or {})
+# 2.1.20：工作区按教师账号名建文件夹，不再用 t2/t3 这种内部 id
+WS.bind_store(ACCOUNTS)
+ACC.bind_workspace(WS)
+# 旧版 t2/t3 目录一次性迁成账号名，不用等老师下次登录
+for _acc in ACCOUNTS.teacher_ids():
+    try:
+        WS.ensure(_acc)
+    except Exception:
+        pass
 # 存量账号首次启动时把当时共享的配置快照成自己的初值，之后互不影响。
 CFG.migrate_existing(ACCOUNTS.teacher_ids())
 SESS = A.Sessions()
@@ -3637,11 +3646,60 @@ class Handler(LEG.Handler):
                                    "cls": sub.get("班级") or "",
                                    "at": sub.get("submitted_at") or "",
                                    "url": (img or {}).get("url") or "",
-                                   "file": (img or {}).get("name") or ""})
+                                   "file": (img or {}).get("name") or "",
+                                   "sub": int(sub.get("_submission_id") or sub.get("id") or 0)})
             return self._json({"ok": True, "cfg": cfg, "courses": names,
                                "task": ({"task_id": t["task_id"], "title": t.get("title") or "",
                                          "course": t.get("course") or ""} if t else None),
                                "stats": stats, "recent": recent})
+        if path == "/api/v2/pixel/work/delete":
+            # 教师端像素画作品删除：活动提交记录 + 资料归档文件一起删
+            if not self._is_teacher():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            try:
+                sub_id = int(body.get("sub") or 0)
+            except Exception:
+                sub_id = 0
+            if not sub_id:
+                return self._json({"ok": False, "msg": "提交号不合法"}, 400)
+            d = pixel_cfg()
+            task = pixel_task(str(d.get("course") or ""))
+            target = None
+            if task:
+                for sub in (ACT.submissions(task["task_id"]) or []):
+                    try:
+                        if int(sub.get("_submission_id") or sub.get("id") or 0) == sub_id:
+                            target = sub
+                            break
+                    except Exception:
+                        continue
+            if not target:
+                return self._json({"ok": False, "msg": "作品不存在"}, 404)
+            if not ACT.delete_submission(sub_id):
+                return self._json({"ok": False, "msg": "删除提交记录失败"}, 500)
+            removed = 0
+            try:
+                root = WS.courseware_paths()["root"]
+                course_dir = os.path.join(root, LEG.CW.safe_course(d.get("course") or "像素画"))
+                cls_name = str(target.get("班级") or "未分班")
+                cls_dir = os.path.join(course_dir, LEG.CW._safe_folder(cls_name, "未分班"))
+                no = str(target.get("学号") or "")
+                name = str(target.get("姓名") or "")
+                stu_folder = LEG.CW._student_folder(no, name, cls_dir)
+                stu_dir = os.path.join(cls_dir, stu_folder)
+                if os.path.isdir(stu_dir):
+                    for fn in os.listdir(stu_dir):
+                        if fn.startswith(stu_folder + "-") or "像素画" in fn:
+                            rel = os.path.relpath(os.path.join(stu_dir, fn), root)
+                            if LEG.CW.delete_file(rel).get("ok"):
+                                removed += 1
+                    if not os.listdir(stu_dir):
+                        os.rmdir(stu_dir)
+            except Exception:
+                pass
+            STORE.audit("teacher", "pixel-work-delete",
+                        "%s %s（归档文件 %d 个）" % (sub_id, target.get("姓名") or "", removed))
+            return self._json({"ok": True, "msg": "作品与归档文件已删除", "removed": removed})
         if path == "/api/v2/pixel/me":
             # 像素画（2.0.47）：学生打开画板时拿初始状态（权限 / 草稿 / 上次提交）
             s = self._session()
@@ -3726,7 +3784,8 @@ class Handler(LEG.Handler):
                                    "cls": sub.get("班级") or "",
                                    "at": sub.get("submitted_at") or "",
                                    "url": (img or {}).get("url") or "",
-                                   "file": (img or {}).get("name") or ""})
+                                   "file": (img or {}).get("name") or "",
+                                   "sub": int(sub.get("_submission_id") or sub.get("id") or 0)})
             return self._json({"ok": True, "cfg": cfg, "courses": names,
                                "task": ({"task_id": t["task_id"], "title": t.get("title") or "",
                                          "course": t.get("course") or ""} if t else None),

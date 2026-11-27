@@ -292,6 +292,10 @@ html[data-mode="dark"] .px-works .tc-work .th{
   object-fit:contain;image-rendering:pixelated;padding:8px;
 }
 .px-works .tc-work{cursor:zoom-in}
+.px-works .tc-work-del{display:inline-block;margin-top:5px;padding:2px 7px;
+  border:1px solid var(--line);border-radius:6px;background:transparent;
+  color:var(--ink3);font-size:11px;cursor:pointer}
+.px-works .tc-work-del:hover{border-color:var(--bad);color:var(--bad);background:var(--bad-soft)}
 
 /* 看大图弹层（点作品缩略图） */
 .px-view{

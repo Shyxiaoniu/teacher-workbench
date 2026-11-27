@@ -31,6 +31,21 @@ DEFAULT_ADMIN_PASSWORD = "t12345678"
 DEFAULT_TEACHER_ID = "default"
 
 _ctx = threading.local()
+_WS = None                         # 服务器注入的工作区，供改账号名时同步改文件夹名
+
+
+def bind_workspace(ws):
+    global _WS
+    _WS = ws
+
+
+def safe_folder_name(name):
+    """账号名 → 文件夹名：中文/字母数字保留，路径分隔符等换成下划线。"""
+    s = str(name or "").strip()
+    out = []
+    for ch in s:
+        out.append("_" if ch in '\\/:*?"<>|' or ord(ch) < 32 else ch)
+    return ("".join(out).strip(" .") or "")
 
 
 def current_account():
@@ -57,7 +72,37 @@ class Workspace(object):
         acc = str(acc or DEFAULT_TEACHER_ID)
         if acc == DEFAULT_TEACHER_ID:
             return self.data_dir
-        return os.path.join(self.data_dir, "accounts", acc)
+        store = getattr(self, "account_store", None)
+        t = (store.teacher(acc) or {}) if store else {}
+        folder = safe_folder_name(t.get("username")) or acc
+        root = os.path.join(self.data_dir, "accounts")
+        old = os.path.join(root, acc)
+        new = os.path.join(root, folder)
+        # 老版本按 t2/t3 建目录：第一次访问时自动迁到账号名，零手工搬运
+        if folder != acc and os.path.isdir(old) and not os.path.exists(new):
+            try:
+                os.makedirs(root, exist_ok=True)
+                os.rename(old, new)
+            except Exception:
+                pass
+        return new
+
+    def rename_account_dir(self, old_name, new_name):
+        """管理员改账号名时，把资料文件夹一起改名。"""
+        old = safe_folder_name(old_name)
+        new = safe_folder_name(new_name)
+        if not old or not new or old == new:
+            return
+        root = os.path.join(self.data_dir, "accounts")
+        a, b = os.path.join(root, old), os.path.join(root, new)
+        if os.path.isdir(a) and not os.path.exists(b):
+            try:
+                os.rename(a, b)
+            except Exception:
+                pass
+
+    def bind_store(self, store):
+        self.account_store = store
 
     def paths_for(self, acc):
         acc = str(acc or DEFAULT_TEACHER_ID)
@@ -465,7 +510,14 @@ class AccountStore(object):
                         if x["id"] != t["id"] and \
                                 str(x.get("username") or "") == u:
                             return {"ok": False, "msg": "这个账号名已经被用了"}
+                    old_user = str(t.get("username") or "")
                     t["username"] = u
+                    # 2.1.20：数据文件夹跟账号名走，不再留 t2/t3 这种内部 id
+                    try:
+                        if _WS:
+                            _WS.rename_account_dir(old_user, u)
+                    except Exception:
+                        pass
                 if password is not None and str(password) != "":
                     # 静态加密（P5，牛哥拍板）：管理员不能重置已加密教师的密码。
                     # 改密会让 FEK 失包，账号下全部文件永久打不开 —— 只能本人

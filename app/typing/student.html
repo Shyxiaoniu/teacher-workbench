@@ -3354,6 +3354,16 @@ function isLongArticle(L) {
    这是输入法候选框定位的关键：浏览器按 input 的 caret 矩形摆候选框，
    input 浮在第 idx 格的格子里，搜狗/微软拼音的候选框就跟着落在那里，
    不会再跑到输入台（甚至整页）最左边。每敲一个字都会重算一次。 */
+/* 已上屏文字的右边缘（相对当前行输入框），光标/拼音浮标都贴这里。
+   不能用 .art-typed.offsetWidth —— flex 容器占满整行，
+   offsetWidth 是框宽，会把候选框推到最右边。 */
+function artTypedEndLeft(slot) {
+  var typed = slot && slot.querySelector('.art-typed');
+  var last = typed && typed.lastElementChild;
+  if (!last) return 0;
+  return Math.max(0, last.getBoundingClientRect().right -
+                     slot.getBoundingClientRect().left);
+}
 function placeTypingInput() {
   var P = S.play;
   var caret = document.getElementById('tbCaret');
@@ -3390,21 +3400,9 @@ function placeTypingInput() {
     if (ac) {
       ac.hidden = false;
       /* 有错字时，光标贴在错字右边；没有错字时对齐原文当前格。 */
-      var last = typed && P.errChar ? typed.lastElementChild : null;
-      if (last && last.classList.contains('e')) {
-        ac.style.left = Math.max(0,
-          last.getBoundingClientRect().right - slot.getBoundingClientRect().left) + 'px';
-      } else {
-        var orig = row.querySelector('.art-orig');
-        var base = artLineStarts(P.L)[cur] || 0;
-        var cell = orig && orig.children[Math.min(P.idx - base, orig.children.length - 1)];
-        if (cell) {
-          ac.style.left = Math.max(0,
-            cell.getBoundingClientRect().left - slot.getBoundingClientRect().left) + 'px';
-        } else {
-          ac.style.left = (typed ? typed.offsetWidth : 0) + 'px';
-        }
-      }
+      /* 2.1.20：光标永远贴在「已上屏文字」右边，和输入框里看到的位置一致；
+         以前对齐原文当前格，打错字时光标会离已输入文字很远。 */
+      ac.style.left = artTypedEndLeft(slot) + 'px';
     }
     return;
   }
@@ -4217,10 +4215,11 @@ function bindPlay() {
         var slot = document.querySelector('.art-row.on .art-input');
         if (!slot) return;
         if (tbComp.parentNode !== slot) slot.appendChild(tbComp);
-        var tp = slot.querySelector('.art-typed');
         tbComp.hidden = false;
         tbComp.textContent = txt || '　';
-        tbComp.style.left = (tp ? tp.offsetWidth : 0) + 'px';
+        var left = artTypedEndLeft(slot);
+        var maxLeft = slot.clientWidth - tbComp.offsetWidth - 6;
+        tbComp.style.left = Math.max(0, Math.min(left, maxLeft)) + 'px';
         tbComp.style.top = '2px';
         return;
       }

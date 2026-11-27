@@ -361,6 +361,23 @@ class Updater:
                                          "sha256": "", "error": str(pe)}
                 rv, lv = vtuple(m.get("version")), vtuple(self.version)
                 if rv > lv:
+                    urls = ((self.state.get("pkg") or {}).get("urls") or [])
+                    if urls and not self._package_reachable(urls):
+                        # 有新版本但包下不到：不弹「下载并安装」，只在更新页
+                        # 留一条明确错误，避免老师点了才看到 404。
+                        self.state["manifest"] = {}
+                        self.state["phase"] = "idle"
+                        self.state["last_error"] = (
+                            "发现 v%s，但安装包下载地址不可达（404/403）。"
+                            "请等待发行版附件上传完成，或用离线包更新。" % m.get("version"))
+                        try:
+                            self._save_state()
+                        except Exception:
+                            pass
+                        return {"ok": True, "has_update": False,
+                                "manifest": {}, "local_version": self.version,
+                                "relation": "package_unreachable"}
+                if rv > lv:
                     self.state["phase"] = "available"
                     self.state["msg"] = "发现新版本 v%s" % m.get("version")
                     r = {"ok": True, "has_update": True, "manifest": m,
@@ -479,6 +496,24 @@ class Updater:
             if u not in out:
                 out.append(u)
         return out
+
+    def _package_reachable(self, urls):
+        """manifest 说有新版本还不够：包本身必须能下载，否则只显示更新提示、
+           点下载却 404——这正是 2.1.20 安装包未挂到发行版时踩的坑。 """
+        try:
+            import urllib.request
+        except Exception:
+            return True
+        for u in (urls or []):
+            try:
+                req = urllib.request.Request(u, method="HEAD",
+                                             headers={"User-Agent": "class-workbench-updater"})
+                with urllib.request.urlopen(req, timeout=10) as r:
+                    if getattr(r, "status", 200) < 400:
+                        return True
+            except Exception:
+                continue
+        return False
 
     def _zip_url(self, manifest, manifest_url):
         """保留旧调用方的单值语义（pending.json / 状态里只用主候选）。"""

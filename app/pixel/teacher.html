@@ -123,6 +123,12 @@
     <div class="card">
       <h2>学生提交概览</h2>
       <p class="hint" id="statHint">读取中…</p>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:8px 0 2px">
+        <span style="font-size:12.5px;color:var(--ink3)">班级筛选</span>
+        <select id="workCls" style="min-width:150px;padding:5px 8px;border:1px solid var(--line);
+          border-radius:8px;background:#fff;color:var(--ink);font-size:13px"></select>
+        <span style="font-size:11.5px;color:var(--ink3)">删除作品会同步删除资料里的归档文件</span>
+      </div>
       <div class="tc-stats">
         <div class="tc-stat"><b id="stPeople">0</b><span>已提交人数</span></div>
         <div class="tc-stat"><b id="stFiles">0</b><span>作品文件</span></div>
@@ -170,6 +176,7 @@
               max_submit: 1 };
   var STAT = null;
   var ACTIVE_CLS_NAME = '';   // 当前课表/所选班级，作品墙只显示这个班
+  var CLASSES = [];           // 班级筛选下拉
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -280,7 +287,10 @@
           '<div class="th">' + (r.url ? '<img src="' + esc(r.url) + '" alt="' + esc(r.name) +
             '" loading="lazy">' : '') + '</div>' +
           '<div class="mt"><b>' + esc(r.name || '—') + '</b>' +
-          '<span>' + esc(r.no || '') + ' · ' + esc(String(r.at || '').slice(5, 16)) + '</span></div>' +
+          '<span>' + esc(r.no || '') + ' · ' + esc(String(r.at || '').slice(5, 16)) + '</span>' +
+          (r.sub ? '<button type="button" class="tc-work-del" title="删除作品和归档文件"' +
+            ' onclick="event.stopPropagation();delWork(' + r.sub + ')">✕ 删除</button>' : '') +
+          '</div>' +
           '</div>';
       }).join('');
       box.querySelectorAll('[data-work]').forEach(function (el) {
@@ -300,6 +310,20 @@
         '已提交：<b>' + (s.people || 0) + '</b> 人';
     }
   }
+
+  /* 删除作品：服务端同时删活动提交和资料里的归档文件 */
+  function delWork(sub) {
+    if (!confirm('确定删除这幅作品？资料里的归档文件也会一起删除，不能恢复。')) return;
+    api('/api/v2/pixel/work/delete', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sub: sub })
+    }).then(function (j) {
+      toast(j.ok ? ('已删除作品，归档文件同步删除 ' + (j.removed || 0) + ' 个')
+                 : (j.msg || '删除失败'), j.ok ? 'ok' : 'err');
+      if (j.ok) load();
+    }).catch(function () { toast('删除失败：网络不通', 'err'); });
+  }
+  window.delWork = delWork;
 
   /* 看大图：像素画要放大才看得出细节，缩略图里只能看个大概 */
   function viewWork(r) {
@@ -326,11 +350,21 @@
     /* 教师端工作台把当前班级存在 localStorage；这里同域 iframe 直接读 */
     return api('/api/v2/typing/overview').then(function (j) {
       var cs = (j && j.classes) || [];
+      CLASSES = cs;
       var id = '';
       try { id = localStorage.getItem('wb-current-class') || ''; } catch (e) {}
       var c = cs.filter(function (x) { return String(x.id) === String(id); })[0];
       if (!c && (id === 'all' || !id) && cs.length) c = cs[0];
       ACTIVE_CLS_NAME = c ? String(c.name || '') : '';
+      var sel = $('#workCls');
+      if (sel) {
+        sel.innerHTML = cs.map(function (x) {
+          return '<option value="' + esc(x.name) + '"' +
+            (String(x.name) === ACTIVE_CLS_NAME ? ' selected' : '') + '>' +
+            esc(x.name) + '</option>';
+        }).join('') || '<option value="">（暂无班级）</option>';
+        sel.onchange = function () { ACTIVE_CLS_NAME = sel.value; paintStats(); };
+      }
     }).catch(function () {});
   }
 
