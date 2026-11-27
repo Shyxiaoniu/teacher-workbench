@@ -37745,7 +37745,7 @@ const sid = st ? st.id : '';
           ${sid && !state.boxActive ? 'draggable="true"' : ''}
           ${sid ? `role="button" tabindex="0" data-click="seat"` : ''}>
           <span class="seat-no">${dispRowNo(r)}-${c}</span>
-          ${seq ? `<span class="seat-seq" title="座位序号（按排座顺序）">${seq}</span>` : ''}
+          ${sid && seq ? `<span class="seat-seq" title="座位序号（按排座顺序）">${seq}</span>` : ''}
           ${g?`<span class="seat-gname"><span class="gn-t">${isLeader?'★':''}${esc(g.name)}</span>${
               isLeader ? '<i class="sg-lead">组长</i>'
             : `<i class="sg-mem">${
