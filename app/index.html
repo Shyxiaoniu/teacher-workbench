@@ -37597,6 +37597,27 @@ const DEMO_RENDER = {
     const cls = curSeatClass();
     const rows = state.seatRows, cols = state.seatCols;
     const seats = dbT('seats').filter(s => s.class_id === cls);
+    /* 2.1.20：第一次进一个还没排座的班，弹一次引导直接去排座设置 */
+    if (!seats.length && !state.__seatGuidePending) {
+      const key = 'wb-seat-empty-guide-' + cls;
+      let seen = '';
+      try { seen = sessionStorage.getItem(key) || ''; } catch (e) {}
+      if (!seen) {
+        state.__seatGuidePending = true;
+        setTimeout(function () {
+          uiConfirm('这个班还没有排座。第一次使用建议先到「排座设置」确认行列数和讲台位置，' +
+            '再点弹窗里的「拖动排座（手动）」，把下方学生标签拖到空座位。<br><br>' +
+            '<b>第一次使用只要设置一次</b>，之后进这个班就不会再提示。', {
+            title: '第一次使用座位表 · 先排座', okText: '去排座设置', cancelText: '稍后再说',
+            danger: false
+          }).then(async function (yes) {
+            if (yes) { try { await openSeatSetup(); } catch (e) {} }
+            try { sessionStorage.setItem(key, '1'); } catch (e) {}
+            state.__seatGuidePending = false;
+          });
+        }, 260);
+      }
+    }
     const grpSortMode = groupSortMode();
     /* 默认按组名；切到「手动」后按老师上移/下移的顺序（sort_order） */
     const groups = sortedGroupsOf(cls, grpSortMode);
@@ -37912,12 +37933,18 @@ const sid = st ? st.id : '';
           const _miss = _all - _seated;
           if (!_all || (_miss <= 0 && !state.manualSeatMode)) return '';
           const _accent = state.manualSeatMode ? 'var(--brand-primary)' : 'var(--status-warn)';
+          /* 未排座名单只在拖动排座模式打开后出现；没开时只给入口，避免一眼看去全是名字 */
+          const _chips = state.manualSeatMode && _miss > 0
+            ? `<span style="display:inline-flex;flex-wrap:wrap;gap:6px;margin-left:4px">${unseatedChipsHtml}</span>`
+            : (_miss > 0 ? `<button class="btn btn-primary" style="width:auto;padding:4px 10px;font-size:12px"
+                onclick="toggleManualSeatMode()">开启拖动排座，显示未排座名单</button>` : '');
           return `<div class="notice" data-no-fold style="border-left:3px solid ${_accent};
             background:color-mix(in srgb, ${_accent} 7%, var(--bg-surface))">
             ${_miss > 0
-              ? `<strong>还有 ${_miss} 名学生没排座</strong>（共 ${_all} 人）· 直接拖下面的名字到空座位：`
+              ? `<strong>还有 ${_miss} 名学生没排座</strong>（共 ${_all} 人）· ${
+                  state.manualSeatMode ? '直接拖下面的名字到空座位：' : '先在排座设置里开启拖动排座：'}`
               : '<strong>拖动排座中</strong> · 全班都已排座，拖已坐学生的名片可互换。'}
-            ${_miss > 0 ? `<span style="display:inline-flex;flex-wrap:wrap;gap:6px;margin-left:4px">${unseatedChipsHtml}</span>` : ''}
+            ${_chips}
           </div>`;
         })()}
 
