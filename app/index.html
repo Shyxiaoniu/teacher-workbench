@@ -6404,7 +6404,6 @@ body.colw-dragging { user-select:none; -webkit-user-select:none; cursor:col-resi
 .stl-meta { font-size:11.5px; color:var(--text-secondary); flex:none;
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:34%; }
 .stl-score { margin-left:auto; font-weight:600; font-size:13.5px; flex:none; }
-.stl-act { flex:none; }
 .stl-note { font-size:11px; color:var(--text-secondary); margin-top:8px;
   border-top:1px dashed var(--border, #DCE5E0); padding-top:7px; }
 .stl-foot { display:flex; align-items:center; gap:10px; margin-top:8px; flex-wrap:wrap; }
@@ -9844,7 +9843,7 @@ function userPopFill() {
       if (el) el.textContent = DEMO.on ? '预览模式 · 未登录' : '教师账号';
     });
   var nm = $('#suName2');
-  if (nm) nm.textContent = honorific();
+  if (nm) nm.textContent = acctNickname();
   refreshAvatarEls();
 }
 
@@ -9967,8 +9966,7 @@ function entryInit() {
         state.serverNickname = j.nickname || '';
         state.serverTeacherName = j.name || '';
         if (state.serverTeacherName) LS.set('wb-nickname', state.serverTeacherName);
-        var brand = document.getElementById('sideBrandText');
-        if (brand && typeof greetBrand === 'function') brand.textContent = greetBrand();
+        refreshTeacherNameUI();
       }).catch(function () {});
   }
 }
@@ -12232,7 +12230,7 @@ async function goToApp(returnTo) {
           onclick="toggleUserPop(event)" aria-haspopup="true" aria-expanded="false">
           ${userAvatarHtml('', 'suAv')}
           <span class="su-txt">
-            <b id="suName">${esc(honorific())}</b>
+            <b id="suName">${esc(acctNickname())}</b>
             <i id="suRole">教师</i>
           </span>
           <span class="su-gear" aria-hidden="true">⚙</span>
@@ -12629,6 +12627,16 @@ window.spSave = spSave;
 function acctNickname() {
   return teacherDisplayName();
 }
+function refreshTeacherNameUI() {
+  const n = teacherDisplayName();
+  ['suName', 'suName2'].forEach(function (id) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = n;
+  });
+  const brand = document.getElementById('sideBrandText');
+  if (brand && typeof greetBrand === 'function') brand.textContent = greetBrand();
+}
+window.refreshTeacherNameUI = refreshTeacherNameUI;
 function nicknameInputVal() {
   const el = $('#nkInput');
   return el ? el.value.trim() : '';
@@ -16787,14 +16795,26 @@ function dowOfDate(ds) {
   const w = d.getDay();
   return w === 0 ? 7 : w;
 }
-/** 我的姓氏/称呼：用来从课表里挑「我要上的课」，可在首页卡片上改 */
-function myTeacherTag() { return LS.get('wb-my-tag', '牛'); }
+/** 我的姓氏/称呼：默认取教师账号姓名；可在首页卡片上改（按账号隔离） */
+function myTeacherTagKey() { return 'wb-my-tag:' + teacherDisplayName(); }
+function myTeacherTag() {
+  const custom = LS.get(myTeacherTagKey(), '');
+  return custom || teacherDisplayName();
+}
+function teacherTagMatches(courseTeacher, tag) {
+  const t = String(tag || '').trim();
+  if (!t) return true;
+  const c = String(courseTeacher || '');
+  /* 「许家媚老师」和课表里的「许家媚」算同一人；反之亦然 */
+  const variants = [t, t.replace(/老师$/, '')].filter(Boolean);
+  return variants.some(function (v) { return c.indexOf(v) >= 0; });
+}
 function openMyTagDialog() {
   showFloat('筛选我的课', `
     <div style="width:340px;max-width:86vw">
       <div class="imp-tip">
-        课表里会排很多老师的课。填你的姓氏或名字（如「牛」），
-        首页「今日课程」就只显示<b>你自己要上的课</b>；留空则显示全部。
+        默认按教师账号里的姓名筛选。也可改成课表里用的名字/关键字，
+        首页「今日课程」只显示<b>你自己要上的课</b>；留空则恢复按账号姓名。
       </div>
       <div class="hwp-row" style="margin-top:10px">
         <label class="hwp-lbl" for="mtTag">关键字</label>
@@ -16810,8 +16830,11 @@ function openMyTagDialog() {
 }
 window.openMyTagDialog = openMyTagDialog;
 function setMyTeacherTag(v) {
-  LS.set('wb-my-tag', String(v || '').trim().slice(0, 10));
+  const tag = String(v || '').trim().slice(0, 10);
+  if (tag) LS.set(myTeacherTagKey(), tag);
+  else LS.del(myTeacherTagKey());   // 留空 = 默认按账号姓名
   renderContent();
+  toast(tag ? ('已按「' + tag + '」筛选我的课') : '已恢复按账号姓名筛选');
 }
 window.setMyTeacherTag = setMyTeacherTag;
 
@@ -16839,7 +16862,7 @@ function lessonsOn(dow, clsId) {
       end: per.end_time || '',
       course: co.name || '', teacher: co.teacher || '', room: co.location || '',
       clsName: cl.name || '', color: co.color || '',
-      mine: myTeacherTag() ? String(co.teacher || '').includes(myTeacherTag()) : true,
+      mine: teacherTagMatches(co.teacher, myTeacherTag()),
     };
   }).sort((a, b) => a.seq - b.seq);
 }
@@ -24559,9 +24582,6 @@ function settleBodyHtml(clsOpt) {
       <b class="stl-name">${esc(r.g.name)}</b>
       <span class="stl-meta">${r.n} 人</span>
       <span class="stl-score ${r.sum > 0 ? 'up' : r.sum < 0 ? 'dn' : ''}">${r.sum > 0 ? '+' : ''}${r.sum}</span>
-      <button type="button" class="btn btn-ghost btn-sm stl-act"
-        onclick="event.stopPropagation();customGroupMorality(${r.key})"
-        title="给全组每人记一条积分（以小组为单位）">记分</button>
     </div>`;
   }).join('');
   /* 个人榜 */
@@ -24575,18 +24595,20 @@ function settleBodyHtml(clsOpt) {
       <b class="stl-name">${esc(r.stu.name)}<span class="stl-no">${esc(r.stu.student_no || '')}</span></b>
       <span class="stl-meta">${esc(r.gname)}</span>
       <span class="stl-score ${r.sum > 0 ? 'up' : r.sum < 0 ? 'dn' : ''}">${r.sum > 0 ? '+' : ''}${r.sum}</span>
-      <button type="button" class="btn btn-ghost btn-sm stl-act"
-        onclick="event.stopPropagation();customMorality(${r.key})"
-        title="给 ${esc(r.stu.name)} 记一条积分（以个人为单位）">记分</button>
     </div>`;
   }).join('');
   return `
   <div class="settle-panel in-modal">
     <div class="stl-head">
       <span class="dim">${esc(sd.d)} · ${esc(periodLabel(attPeriod()))}</span>
-      <label class="dim" style="margin-left:auto;display:inline-flex;align-items:center;gap:6px">显示名次
-        <input type="number" min="1" max="99" value="${rankLimit}"
-          onchange="settleRankLimitSet(this.value)" style="width:58px;padding:3px 6px">
+      <label class="dim" style="margin-left:auto;display:inline-flex;align-items:center;gap:8px">显示名次
+        <select class="sel" style="width:auto;min-width:86px"
+          onchange="settleRankLimitSet(this.value)">
+          ${[5, 10, 20, 30, 50, 99].map(function (n) {
+            return '<option value="' + n + '"' + (rankLimit === n ? ' selected' : '') + '>' +
+                   (n === 99 ? '全部' : '前 ' + n + ' 名') + '</option>';
+          }).join('')}
+        </select>
       </label>
       <span class="hw-filter">
         <button class="hw-fbtn ${mode === 'group' ? 'on' : ''}"

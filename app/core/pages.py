@@ -545,7 +545,8 @@ async function load(){
         '<td style="padding:8px 4px">'+(t.has_password?'已设密码':'<span style="color:#B4692E">未设密码</span>')+
         (t.builtin?' · <span title="系统内置的原始账号，班级、学生、成绩等最初的数据都挂在它名下，不能删除。改名不影响数据。" style="color:#5F6E68;border-bottom:1px dotted #9AA9A2;cursor:help">默认账号（原始数据）</span>':'')+'</td>'+
         '<td style="padding:8px 4px"><div style="display:flex;gap:6px;flex-wrap:wrap">'+
-        '<button type="button" class="wbd-row-btn" data-act="name" data-id="'+esc(t.id)+'" data-u="'+esc(t.username)+'">改名</button>'+
+        '<button type="button" class="wbd-row-btn" data-act="name" data-id="'+esc(t.id)+'" data-u="'+esc(t.username)+'">改账号名</button>'+
+        '<button type="button" class="wbd-row-btn" data-act="realname" data-id="'+esc(t.id)+'" data-n="'+esc(t.name||'')+'">改姓名</button>'+
         '<button type="button" class="wbd-row-btn" data-act="pwd" data-id="'+esc(t.id)+'">重置密码</button>'+
         (t.builtin?'':'<button type="button" class="wbd-row-btn danger" data-act="del" data-id="'+esc(t.id)+'">删除</button>')+
         '</div></td></tr>';
@@ -558,6 +559,15 @@ async function load(){
           value:b.getAttribute('data-u')||'',placeholder:'登录账号'});
         if(!u)return; var r=await A('/api/v2/admin/teacher/update',{id:id,username:u});
         adToast(r.ok?'账号名已更新':(r.msg||'改名失败'),r.ok?'ok':'err');
+        if(r.ok)load();
+      }else if(act==='realname'){
+        /* 2.1.20：显示姓名单独可改——教师端左下角和问候语都取这个值 */
+        var n=await adPrompt('新的显示姓名：',{title:'修改显示姓名',
+          value:b.getAttribute('data-n')||'',placeholder:'如：许家媚'});
+        if(n==null)return; n=String(n).trim();
+        if(!n){adToast('姓名不能为空','err');return;}
+        var r=await A('/api/v2/admin/teacher/update',{id:id,name:n});
+        adToast(r.ok?'姓名已更新':(r.msg||'修改失败'),r.ok?'ok':'err');
         if(r.ok)load();
       }else if(act==='pwd'){
         var p=await adPrompt('新的初始密码（至少 8 位）：',{title:'重置密码',
