@@ -555,7 +555,7 @@ def _design_student_last(course, no, name):
 #   · 归档：<课程>/<班级>/<学号-姓名>/ 同一套目录
 # 数据同样分两处：草稿进 PIXEL（pixel.json），提交进 ACT。
 # ---------------------------------------------------------------------------
-PIXEL_SIZES = (16, 24, 32, 48, 64)
+PIXEL_SIZES = (16, 24, 32, 48, 64, 128, 256)
 
 
 def pixel_cfg():
@@ -632,6 +632,7 @@ def pixel_public_cfg():
     return {"enabled": bool(d.get("enabled")),
             "allow_add": bool(d.get("allow_add")),
             "allow_submit": bool(d.get("allow_submit")),
+            "allow_avatar": bool(d.get("allow_avatar", True)),
             "course": str(d.get("course") or ""),
             "window": str(d.get("window") or ""),
             "intro": str(d.get("intro") or ""),
@@ -734,6 +735,7 @@ if not isinstance(CFG.get("pixel"), dict):
 CFG["pixel"].setdefault("enabled", False)
 CFG["pixel"].setdefault("allow_add", True)
 CFG["pixel"].setdefault("allow_submit", True)
+CFG["pixel"].setdefault("allow_avatar", True)
 CFG["pixel"].setdefault("course", "像素画")
 CFG["pixel"].setdefault("window", "像素画作品")
 CFG["pixel"].setdefault("intro", "")
@@ -5748,6 +5750,11 @@ class Handler(LEG.Handler):
                 return self._json({"ok": True, "avatar": ""})
             if not png.startswith("data:image/png;base64,"):
                 return self._json({"ok": False, "msg": "头像格式不对"}, 400)
+            # 2.1.20：像素画页的「设为头像」受教师开关约束；别的头像入口不受影响
+            if (str(body.get("from") or "") == "pixel" and s["role"] == "student"
+                    and not pixel_cfg().get("allow_avatar", True)):
+                return self._json({"ok": False,
+                                   "msg": "老师关闭了像素画设置头像，暂时不能这样设置"}, 403)
             try:
                 raw = base64.b64decode(png.split(",", 1)[1])
             except Exception:
@@ -5922,6 +5929,8 @@ class Handler(LEG.Handler):
                 d["allow_add"] = bool(body["allow_add"])
             if "allow_submit" in body:
                 d["allow_submit"] = bool(body["allow_submit"])
+            if "allow_avatar" in body:
+                d["allow_avatar"] = bool(body["allow_avatar"])
             if "course" in body:
                 c = " ".join(str(body.get("course") or "").split())[:40]
                 if not c:

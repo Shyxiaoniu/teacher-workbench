@@ -42,7 +42,7 @@ def max_stars(stage):
     return v if v in (1, 2, 3) else 3
 
 
-WPM_CAP = 120          # 速度封顶：超过视为异常，直接压线
+WPM_CAP = 160          # 速度封顶：超过视为异常，直接压线（与前端星级/排行榜口径一致）
 MIN_DURATION = 3       # 秒：太短的成绩不收
 
 # 装扮解锁里程碑（与 typing-data.js 的 DECOS need 一致）

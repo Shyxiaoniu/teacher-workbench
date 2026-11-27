@@ -605,6 +605,12 @@
   /** 把当前像素画设为学生账号头像：本机保存 + 通知父窗口即时刷新头像 */
   function setAvatar() {
     if (!window.WBUI) { toast('弹窗组件没加载好，请刷新页面再试', 'err'); return; }
+    /* 2.1.20：教师可关掉「像素画设为头像」，关掉后按钮直接提示并不发请求 */
+    if (S.cfg && S.cfg.allow_avatar === false) {
+      WBUI.warn({ title: '老师关闭了这个功能',
+                  message: '老师暂时不允许把像素画设置成头像，作品还是可以正常提交。' });
+      return;
+    }
     if (S.demo || !S.role) {
       WBUI.warn({ title: '请先登录', message: '请先登录工作台账号，再把自己的像素画设为头像。' });
       return;
@@ -631,7 +637,7 @@
          不再只存本机。localStorage 仅作即时缓存，服务端失败就不写。 */
       api('/api/v2/avatar', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ png: png })
+        body: JSON.stringify({ png: png, from: 'pixel' })
       }).then(function (j) {
         if (!j || !j.ok) {
           WBUI.alert({ title: '设置失败', message: (j && j.msg) || '服务器保存失败，请重试。', tone: 'err' });

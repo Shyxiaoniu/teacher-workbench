@@ -60,6 +60,11 @@
           <span>关掉只能画与保存草稿，交不上来</span></div>
         <button class="sw on" id="swSubmit"></button>
       </div>
+      <div class="sw-row">
+        <div class="t"><b>允许学生把像素画设为头像</b>
+          <span>关掉后学生端「设为头像」按钮不起作用，并弹窗提示</span></div>
+        <button class="sw on" id="swAvatar"></button>
+      </div>
 
       <h2 style="margin-top:18px">归档与大屏</h2>
       <p class="hint">作品进 <b>资料/课程/班级/学号-姓名/</b>，文件名带学号姓名前缀。</p>
@@ -80,6 +85,8 @@
           <option value="32">32 × 32（推荐）</option>
           <option value="48">48 × 48</option>
           <option value="64">64 × 64（细节多，费时间）</option>
+          <option value="128">128 × 128（大画布）</option>
+          <option value="256">256 × 256（超大画布）</option>
         </select>
       </div>
       <div class="fld">
@@ -229,6 +236,7 @@
     paintSwitch($('#swMain'), CFG.enabled);
     paintSwitch($('#swAdd'), CFG.allow_add);
     paintSwitch($('#swSubmit'), CFG.allow_submit);
+    paintSwitch($('#swAvatar'), CFG.allow_avatar !== false);
     $('#swTxt').textContent = CFG.enabled ? '已开启' : '已关闭';
     var pill = $('#pill');
     pill.textContent = CFG.enabled ? '服务运行中' : '服务已关闭';
@@ -332,7 +340,8 @@
       size: parseInt($('#inpSize').value, 10) || 32,
       max_submit: Math.max(0, Math.min(parseInt($('#inpMax').value, 10) || 0, 20)),
       allow_add: $('#swAdd').classList.contains('on'),
-      allow_submit: $('#swSubmit').classList.contains('on')
+      allow_submit: $('#swSubmit').classList.contains('on'),
+      allow_avatar: $('#swAvatar').classList.contains('on')
     }, extra || {});
     if (!body.course) { toast('归档课程不能为空', 'err'); return Promise.resolve(false); }
     return api('/api/v2/pixel/config', { method: 'POST', body: JSON.stringify(body) })
@@ -370,6 +379,7 @@
     };
     $('#swAdd').onclick = function () { this.classList.toggle('on'); };
     $('#swSubmit').onclick = function () { this.classList.toggle('on'); };
+    $('#swAvatar').onclick = function () { this.classList.toggle('on'); };
     $('#btnSave').onclick = function () { save(); };
     $('#btnRefresh').onclick = function () { load(); toast('已刷新'); };
 

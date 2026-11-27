@@ -41369,7 +41369,12 @@ function cwGroupLabelOf(no, name) {
 function cwCollectWorks(rows) {
   const out = [];
   const gcache = {};
+  /* 2.1.20：作品墙只显示当前班级/本节课的作品；其它班的历史提交仍留在
+     资料归档里，不会因为切班就混到当前课堂的作品墙。 */
+  const curCls = actCurClass();
+  const clsStus = curCls ? actClassStudents(curCls) : null;
   (rows || []).forEach(s => {
+    if (curCls && clsStus && !actSubMatchClass(s, clsStus)) return;
     const who = actRosterName(s) || '—';
     const no = actRosterNo(s);
     const ts = actRosterTs(s);
