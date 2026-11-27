@@ -169,6 +169,7 @@
               course: '像素画', window: '像素画作品', intro: '', size: 32,
               max_submit: 1 };
   var STAT = null;
+  var ACTIVE_CLS_NAME = '';   // 当前课表/所选班级，作品墙只显示这个班
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -252,17 +253,25 @@
   }
 
   function paintStats() {
-    var s = (STAT && STAT.stats) || { people: 0, files: 0, last_at: '' };
+    var hint = $('#statHint');
+    /* 2.1.20：学生提交页只显示当前班级，其它已交作品仍在资料里归档 */
+    var allRows = (STAT && STAT.recent) || [];
+    var rows = ACTIVE_CLS_NAME
+      ? allRows.filter(function (r) { return String(r.cls || '') === String(ACTIVE_CLS_NAME); })
+      : allRows;
+    var s = { people: rows.length, files: rows.length * 2,
+              last_at: rows.length ? rows[0].at : '' };
     $('#stPeople').textContent = s.people || 0;
     $('#stFiles').textContent = s.files || 0;
     $('#stLast').textContent = s.last_at ? String(s.last_at).slice(5, 16) : '—';
-    var hint = $('#statHint');
     if (!CFG.enabled) hint.textContent = '服务关闭中，学生暂时进不了画板。';
-    else if (!s.people) hint.textContent = '还没有学生提交。开课后这里会自动出现作品缩略图。';
-    else hint.textContent = '共 ' + s.people + ' 位学生提交，按学号去重、只算最新一版；点缩略图看大图。';
+    else if (!s.people) hint.textContent = (ACTIVE_CLS_NAME
+      ? '当前班级「' + ACTIVE_CLS_NAME + '」还没有学生提交。'
+      : '还没有学生提交。') + '开课后这里会自动出现作品缩略图。';
+    else hint.textContent = '仅显示当前班级「' + ACTIVE_CLS_NAME + '」：共 ' + s.people +
+      ' 位学生提交，按学号去重、只算最新一版；其它班级作品已归档在资料里。';
 
     var box = $('#works');
-    var rows = (STAT && STAT.recent) || [];
     if (!rows.length) {
       box.innerHTML = '<div class="tc-empty" style="grid-column:1/-1">还没有作品</div>';
     } else {
@@ -313,6 +322,18 @@
     });
   }
 
+  function resolveActiveClass() {
+    /* 教师端工作台把当前班级存在 localStorage；这里同域 iframe 直接读 */
+    return api('/api/v2/typing/overview').then(function (j) {
+      var cs = (j && j.classes) || [];
+      var id = '';
+      try { id = localStorage.getItem('wb-current-class') || ''; } catch (e) {}
+      var c = cs.filter(function (x) { return String(x.id) === String(id); })[0];
+      if (!c && (id === 'all' || !id) && cs.length) c = cs[0];
+      ACTIVE_CLS_NAME = c ? String(c.name || '') : '';
+    }).catch(function () {});
+  }
+
   function load() {
     api('/api/v2/pixel/config').then(function (j) {
       if (!j.ok) {
@@ -326,7 +347,7 @@
         return '<option value="' + esc(n) + '"></option>';
       }).join('');
       paintAll();
-      paintStats();
+      resolveActiveClass().then(function () { paintStats(); });
     }).catch(function (e) {
       toast((e && e.message) || '读取失败，请刷新', 'err');
     });

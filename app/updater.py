@@ -854,6 +854,19 @@ class Updater:
     def info(self, uc):
         with self.lock:
             m = self.state.get("manifest") or {}
+            # 2.1.20：离线升级源曾留下 2.1.20.1 的旧 manifest，
+            # 但本机实际版本仍是 2.1.20。已记录为 installed/backup 的
+            # 版本就是本机装过的版本，不能再当成「可更新」反复提示。
+            inst = self.state.get("installed") or {}
+            if m and (str(m.get("version") or "") in (
+                    str(inst.get("from_version") or ""),
+                    str(inst.get("to_version") or ""))):
+                self.state["manifest"] = {}
+                try:
+                    self._save_state()
+                except Exception:
+                    pass
+                m = {}
             b = self.state.get("backup") or None
             return {
                 "ok": True,

@@ -924,6 +924,38 @@ class TypingStore:
                 return []
             return list(reversed(log[-int(limit):]))
 
+    def delete_points_log(self, ts, uid):
+        """删除一条打字积分流水，并把对应积分冲回（最低到0）。
+        积分页 / 打字页共用同一份权威数据，删完两边自然同步。 """
+        try:
+            ts = int(ts)
+        except Exception:
+            return {"ok": False, "msg": "流水标识不对"}
+        uid = str(uid or "")
+        with self.lock:
+            log = self._pts_log()
+            idx = -1
+            for i, e in enumerate(log):
+                try:
+                    if int(e.get("ts", 0)) == ts and str(e.get("uid") or "") == uid:
+                        idx = i
+                        break
+                except Exception:
+                    continue
+            if idx < 0:
+                return {"ok": False, "msg": "这条流水已经不存在"}
+            e = log.pop(idx)
+            delta = int(e.get("delta", 0) or 0)
+            stu = self.data["students"].get(uid)
+            if stu and delta:
+                stu["pts"] = max(0, int(stu.get("pts", 0) or 0) - delta)
+                stu["updated"] = int(time.time())
+            try:
+                self._save()
+            except Exception:
+                pass
+        return {"ok": True, "name": e.get("name") or "", "delta": delta}
+
     def students_points(self, uids):
         """按 roster 顺序取每个学生的积分余额（没有档案的按 0 算）。"""
         out = []

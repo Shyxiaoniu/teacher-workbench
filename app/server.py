@@ -6209,6 +6209,15 @@ class Handler(LEG.Handler):
             if not s or s.get("role") not in ("student", "teacher"):
                 return self._json({"ok": False, "msg": "未登录"}, 401)
             return self._json(TYPING.save_draft(self._typing_uid(s), body))
+        if path == "/api/v2/typing/points-log/delete":
+            # 积分页 / 打字页共用：删除一条打字积分流水并冲回打字积分
+            if not self._is_teacher():
+                return self._json({"ok": False, "msg": "未登录"}, 401)
+            res = TYPING.delete_points_log(body.get("ts"), body.get("uid"))
+            if res.get("ok"):
+                STORE.audit("teacher", "typing-points-log-delete",
+                            "%s %s" % (body.get("uid") or "", body.get("ts") or ""))
+            return self._json(res)
         if path == "/api/v2/typing/admin-points":
             # 教师对学生/全班发放或扣除积分：
             # 全局实时生效（学生端 12 秒内轮询到新余额），

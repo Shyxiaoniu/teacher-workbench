@@ -7966,6 +7966,8 @@ const state = {
   morSelStus: [],       // 积分页快速记分：选中的学生 id
   morPickItem: 0,       // 积分页快速记分：选中的项目 id（0=未选）
   morLogFilter: 'all',  // 积分流水筛选：all/bonus/penalty
+  typingLog: [],        // 打字积分流水（服务端权威，和打字页共用一份）
+  typingLogLoaded: false,
   morHover: null,       // 积分图表悬停：{chart:'daily',idx} | {chart:'item',code}
   curExam: 0,           // 成绩页当前选中的考试 id
   scoreSelStus: [],     // 成绩批量录入：选中的学生
@@ -13137,6 +13139,11 @@ window.mountColResizers = mountColResizers;
 function renderContent(opts = {}) {  const nav = NAV.find(n => n.id === state.route);
   const c = $('#content');
   if (!c) return;
+  /* 打字积分流水懒加载一次：积分页 / 座位表共用服务端同一份数据 */
+  if (!state.typingLogLoaded && (state.route === 'mor' || state.route === 'seats')) {
+    state.typingLogLoaded = true;
+    loadTypingLog({ refresh: true });
+  }
   /* 几乎所有写操作最后都会走到这里重绘，所以把"落盘"挂在这：
      不用给几千处增删改逐个加持久化调用。节流 600ms，连点也不卡。 */
   dbPersistSoon();
@@ -27766,19 +27773,8 @@ function oneMorPanel(stu, mor) {
   const term = morSumOf(stu.id, TERM_START, today());
   /* 该生最近 30 条流水，按日期倒序；复用全局 morDelRecord 删除，
      记录存在全局 morality_records，删后自动同步到积分页/报表/趋势图。 */
-  const recs = (dbT('morality_records') || [])
-    .filter(r => r.student_id === stu.id)
-    .sort((a, b) => (a.date < b.date ? 1 : (a.date > b.date ? -1 : (b.id - a.id))))
-    .slice(0, 30);
-  const logRows = recs.map(r => {
-    const v = +r.score || 0;
-    return `<div class="mor-log-row">
-      <span class="mor-log-date">${esc(dateWithWeek(r.date))}</span>
-      <span class="mor-log-item">${esc(morItemName(r))}</span>
-      <span class="mor-log-score ${v>0?'up':'dn'}">${v>0?'+':''}${v}</span>
-      <button class="mor-log-del" onclick="morDelRecord(${r.id})" title="删除该条记录">✕</button>
-    </div>`;
-  }).join('') || '<div class="grp-empty">暂无积分记录</div>';
+  const recs = mergedMorLogs(null, stu.id, 30);
+  const logRows = recs.map(r => morLogRowHtml(r, false)).join('') || '<div class="grp-empty">暂无积分记录</div>';
   return `
     <div class="sp-mor-tip">加减分标签是<b>全班通用</b>的一套：点「编辑标签」改一次，换到任何学生都在，不用逐个设置。</div>
     <div class="sp-mor-sum">
@@ -27929,6 +27925,7 @@ function clearGroupMorality(gid) {
   });
   toast('已清空该组 ' + (before - dbT('morality_records').length) + ' 条记录');
   renderContent();
+  setTimeout(function () { loadTypingLog({ refresh: true }); }, 350);
 }
 window.clearGroupMorality = clearGroupMorality;
 
@@ -28480,6 +28477,92 @@ function morSumOf(stuId, from, to) {
   return { sum, bonus, penalty };
 }
 /** 班级积分记录（区间内，按日期倒序） */
+/* ---------- 打字积分流水：与打字页共用同一份权威数据 ---------- */
+function typingLogKey(e) { return String(e.ts) + '::' + String(e.uid); }
+function typingLogItems(cls, sid) {
+  const out = [];
+  (state.typingLog || []).forEach(function (e) {
+    const stu = (dbT('students') || []).find(s => String(s.id) === String(e.uid));
+    if (!stu) return;
+    if (cls && Number(stu.class_id) !== Number(cls)) return;
+    if (sid && String(stu.id) !== String(sid)) return;
+    const d = new Date((Number(e.ts) || 0) * 1000);
+    const date = ymdLocal(d);
+    const hh = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+    out.push({ typing: true, key: typingLogKey(e), date: date, time: hh,
+               student_id: stu.id, name: stu.name, student_no: stu.student_no || '',
+               score: Number(e.delta) || 0, item: '打字 · ' + String(e.note || '打字积分'),
+               by: e.by || '老师', sortTs: Number(e.ts) || 0 });
+  });
+  return out;
+}
+function mergedMorLogs(cls, sid, limit) {
+  const base = (dbT('morality_records') || []).filter(function (r) {
+    if (cls && Number(r.class_id) !== Number(cls)) return false;
+    if (sid && String(r.student_id) !== String(sid)) return false;
+    return true;
+  }).map(function (r) {
+    return { typing: false, id: r.id, date: r.date, time: '',
+             student_id: r.student_id, score: Number(r.score) || 0,
+             item: morItemName(r), by: r.by || '',
+             sortTs: Date.parse(r.date + 'T00:00:00') || 0 };
+  });
+  return base.concat(typingLogItems(cls, sid))
+    .sort((a, b) => (b.sortTs || 0) - (a.sortTs || 0))
+    .slice(0, limit || 60);
+}
+function morLogRowHtml(r, withName) {
+  const v = Number(r.score) || 0;
+  const stu = (dbT('students') || []).find(s => String(s.id) === String(r.student_id));
+  const del = r.typing
+    ? `typingLogDel('${esc(r.key)}')`
+    : `morDelRecord(${r.id})`;
+  return `<div class="mor-log-row">
+    <span class="mor-log-date">${esc(dateWithWeek(r.date))}${r.time ? ' ' + esc(r.time) : ''}</span>
+    ${withName ? `<span class="mor-log-nm" role="button" tabindex="0"
+      onclick="morJumpStu(${r.student_id})"
+      title="点击去座位表查看 ${esc(stu ? stu.name : '')}">${esc(stu ? stu.name : (r.name || '?'))}</span>` : ''}
+    <span class="mor-log-item">${esc(r.item)}</span>
+    <span class="mor-log-score ${v > 0 ? 'up' : 'dn'}">${v > 0 ? '+' : ''}${v}</span>
+    <button class="mor-log-del" onclick="${del}" title="删除这条记录">✕</button>
+  </div>`;
+}
+async function loadTypingLog(opts) {
+  const o = opts || {};
+  if (typeof DEMO !== 'undefined' && DEMO.on) { state.typingLog = []; return; }
+  try {
+    const r = await fetch('/api/v2/typing/points-admin', { credentials: 'same-origin', cache: 'no-store' });
+    const j = await r.json().catch(function () { return {}; });
+    if (j && j.ok) state.typingLog = j.log || [];
+  } catch (e) {}
+  if (o.refresh) {
+    renderContent();
+    if (typeof refreshStuMorFloat === 'function' && state.curStuMor) {
+      try { refreshStuMorFloat(state.curStuMor); } catch (e) {}
+    }
+  }
+}
+async function typingLogDel(key) {
+  const parts = String(key).split('::');
+  if (parts.length < 2) return;
+  const ok = await uiConfirm('删除这条打字积分流水？对应打字积分会同步冲回。',
+    { title: '删除流水', okText: '删除', danger: true });
+  if (!ok) return;
+  try {
+    const r = await fetch('/api/v2/typing/points-log/delete', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ts: Number(parts[0]), uid: parts.slice(1).join('::') })
+    }).then(x => x.json());
+    toast(r && r.ok ? '打字积分流水已删除，积分已同步冲回' : ((r && r.msg) || '删除失败'));
+    if (r && r.ok) loadTypingLog({ refresh: true });
+  } catch (e) { toast('删除失败：网络不通'); }
+}
+window.loadTypingLog = loadTypingLog;
+window.typingLogDel = typingLogDel;
+window.mergedMorLogs = mergedMorLogs;
+window.morLogRowHtml = morLogRowHtml;
+
 function morRecordsOf(cls, from, to) {
   return (dbT('morality_records') || [])
     .filter(r => r.class_id === cls && r.date >= from && r.date <= to)
@@ -29043,6 +29126,7 @@ function morDelRecord(id) {
   }
   renderContent();
   toast(r ? `已删除：${morItemName(r)}` : '已删除该条记录');
+  setTimeout(function () { loadTypingLog({ refresh: true }); }, 350);
 }
 /** 清空某学生的全部积分记录（座位表面板用） */
 async function clearStuMor(sid) {
@@ -29061,6 +29145,7 @@ async function clearStuMor(sid) {
   }
   renderContent();
   toast('已清空 ' + (before - dbT('morality_records').length) + ' 条记录');
+  setTimeout(function () { loadTypingLog({ refresh: true }); }, 350);
 }
 window.clearStuMor = clearStuMor;
 /** 联动：跳到座位表并打开该学生的操作面板 */
@@ -29087,6 +29172,7 @@ window.setMorGroupMode = setMorGroupMode;
 function openStuMor(stuId) {
   const stu = dbT('students').find(s => s.id === stuId);
   if (!stu) return;
+  state.curStuMor = stuId;
   showFloat('积分详情 · ' + stu.name, renderStuMorBody(stuId));
   const layer = document.getElementById('floatLayer');
   if (layer) layer.classList.add('wide');
@@ -29100,18 +29186,8 @@ function renderStuMorBody(stuId) {
   const todayMor = morOf(stuId, state.seatDate || state.appDate || today());
   const note = noteOf(stuId, 'moral') || { text: '', flag: false };
   const g = hwGroupOfSid(stuId);
-  const recs = (dbT('morality_records') || [])
-    .filter(r => r.student_id === stuId)
-    .sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 40);
-  const logRows = recs.map(r => {
-    const v = +r.score || 0;
-    return `<div class="mor-log-row">
-      <span class="mor-log-date">${esc(dateWithWeek(r.date))}</span>
-      <span class="mor-log-item">${esc(morItemName(r))}</span>
-      <span class="mor-log-score ${v>0?'up':'dn'}">${v>0?'+':''}${v}</span>
-      <button class="mor-log-del" onclick="morDelRecord(${r.id})" title="删除">✕</button>
-    </div>`;
-  }).join('') || '<div class="grp-empty">暂无记录</div>';
+  const recs = mergedMorLogs(null, stuId, 40);
+  const logRows = recs.map(r => morLogRowHtml(r, false)).join('') || '<div class="grp-empty">暂无记录</div>';
   return `
   <div class="sd">
     <div class="sd-head">
@@ -35954,24 +36030,16 @@ const DEMO_RENDER = {
 
     /* 最近流水（可筛选/删除） */
     const lf = state.morLogFilter || 'all';
-    let logs = recs.slice(0, 60);
+    /* 打字积分流水也并入这里：同一份服务端数据，按班级/学生过滤，可在这里删 */
+    const baseLogs = recs.map(function (r) {
+      return { typing: false, id: r.id, date: r.date, time: '',
+               student_id: r.student_id, score: Number(r.score) || 0,
+               item: morItemName(r), sortTs: Date.parse(r.date + 'T00:00:00') || 0 };
+    });
+    let logs = baseLogs.concat(typingLogItems(cls)).sort((a, b) => b.sortTs - a.sortTs).slice(0, 60);
     if (lf === 'bonus') logs = logs.filter(r => (+r.score||0) > 0);
     else if (lf === 'penalty') logs = logs.filter(r => (+r.score||0) < 0);
-    const logRows = logs.map(r => {
-      const stu = dbT('students').find(s => s.id === r.student_id);
-      const v = +r.score || 0;
-      return `<div class="mor-log-row">
-        <span class="mor-log-date">${esc(dateWithWeek(r.date))}</span>
-        <span class="mor-log-nm" role="button" tabindex="0"
-          onclick="morJumpStu(${r.student_id})"
-          onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();morJumpStu(${r.student_id})}"
-          title="点击去座位表查看 ${esc(stu ? stu.name : '')}">${esc(stu ? stu.name : '?')}</span>
-        <span class="mor-log-item">${esc(morItemName(r))}</span>
-        <span class="mor-log-score ${v>0?'up':'dn'}">${v>0?'+':''}${v}</span>
-        <button class="mor-log-del" onclick="morDelRecord(${r.id})"
-          title="删除这条记录">✕</button>
-      </div>`;
-    }).join('') || '<div class="grp-empty">暂无记录</div>';
+    const logRows = logs.map(r => morLogRowHtml(r, true)).join('') || '<div class="grp-empty">暂无记录</div>';
 
     setTimeout(drawMorCharts, 60);
 
