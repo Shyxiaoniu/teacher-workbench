@@ -747,7 +747,7 @@ function paintPointBoxes() {
     var opts = '<option value="">全班所有人</option>';
     clsStudents(S.ptsCls).forEach(function (s) {
       opts += '<option value="' + esc(s.id) + '">' +
-        esc((s.student_no ? s.student_no + ' ' : '') + s.name) + '（✨' + (s.pts || 0) + '）</option>';
+        esc((s.student_no ? s.student_no + ' ' : '') + '学生' + s.name) + '（✨' + (s.pts || 0) + '）</option>';
     });
     stu.innerHTML = opts;
     stu.value = S.ptsStu || '';
@@ -758,7 +758,7 @@ function paintPointBoxes() {
       ? '<span class="cl-empty">演示模式：登录后这里显示各班余额</span>'
       : (list.length
         ? list.map(function (s) {
-            return '<span class="pts-chip">' + esc(s.name) +
+            return '<span class="pts-chip">' + esc('学生' + s.name) +
               ' <b>✨ ' + (s.pts || 0) + '</b></span>';
           }).join('')
         : '<span class="cl-empty">这个班还没有学生</span>');
@@ -773,7 +773,7 @@ function paintPointBoxes() {
           return '<div class="cl-row">' +
             '<span class="cl-time">' + ts + '</span>' +
             '<span class="cl-who">' + esc(e.by || '老师') + '</span>' +
-            '<span class="cl-nm">' + esc(e.name || '?') + '</span>' +
+            '<span class="cl-nm">' + esc(e.name ? '学生' + e.name : '?') + '</span>' +
             '<span class="cl-delta ' + (up ? 'up' : 'dn') + '">' +
               (up ? '+' : '') + (e.delta || 0) + '</span>' +
             (e.note ? '<span class="cl-note" title="' + esc(e.note) + '">' + esc(e.note) + '</span>' : '') +

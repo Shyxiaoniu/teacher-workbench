@@ -27803,9 +27803,17 @@ function clearGroupMorality(gid) {
   const ids = dbT('seats').filter(x =>
     x.class_id === cls && (g.seat_ids||[]).includes(x.id))
     .map(x => x.student_id);
+  const removed = dbT('morality_records').filter(r =>
+    ids.includes(r.student_id) && r.date === d);
   const before = dbT('morality_records').length;
   dbSet('morality_records', dbT('morality_records').filter(r =>
     !(ids.includes(r.student_id) && r.date === d)));
+  /* 2.1.20：整组清空也按人按 1:10 冲回打字积分并留流水 */
+  ids.forEach(sid => {
+    const sum = removed.filter(r => r.student_id === sid)
+      .reduce((a, r) => a + (Number(r.score) || 0), 0);
+    if (Number(sum)) syncTypingPoints(sid, -sum, '清空小组今日积分');
+  });
   toast('已清空该组 ' + (before - dbT('morality_records').length) + ' 条记录');
   renderContent();
 }
@@ -28910,6 +28918,11 @@ function morSubmit() {
 function morDelRecord(id) {
   const r = dbT('morality_records').find(x => x.id === id);
   dbSet('morality_records', dbT('morality_records').filter(x => x.id !== id));
+  /* 删除也要冲回打字积分：原来加分 +N → 打字 +N×10，删除就 -N×10。
+     流水里会留一条「删除积分记录」的操作，打字页积分流水同步可见。 */
+  if (r && r.student_id && Number(r.score)) {
+    syncTypingPoints(r.student_id, -Number(r.score), '删除积分记录：' + morItemName(r));
+  }
   /* 删除是破坏操作：立即落盘，避免 600ms 节流窗口内刷新把"已删"又还原。 */
   try { dbPersist(); } catch (e) {}
   renderContent();
@@ -28920,8 +28933,12 @@ async function clearStuMor(sid) {
   const n = (dbT('morality_records') || []).filter(r => r.student_id === sid).length;
   if (!n) return toast('该生暂无记录可清空');
   if (!(await uiConfirm('确定清空该学生的全部 ' + n + ' 条积分记录？此操作不可撤销。', { title: '清空积分记录', okText: '清空' }))) return;
+  const rows = (dbT('morality_records') || []).filter(r => r.student_id === sid);
   const before = dbT('morality_records').length;
   dbSet('morality_records', dbT('morality_records').filter(r => r.student_id !== sid));
+  /* 2.1.20：批量清空同样按 1:10 冲回打字积分，并在流水里留下操作记录 */
+  const sum = rows.reduce((a, r) => a + (Number(r.score) || 0), 0);
+  if (Number(sum)) syncTypingPoints(sid, -sum, '清空积分记录（' + rows.length + '条）');
   try { dbPersist(); } catch (e) {}
   renderContent();
   toast('已清空 ' + (before - dbT('morality_records').length) + ' 条记录');
