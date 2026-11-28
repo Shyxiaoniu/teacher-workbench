@@ -556,17 +556,12 @@
     var snTxt = document.createElement('span'); snTxt.className = 'sn-txt';
     var snVer = document.createElement('span'); snVer.className = 'sn-ver';
     bar.appendChild(snDot); bar.appendChild(snTxt); bar.appendChild(snVer);
-    /* 定位与配色写内联：这份脚本不依赖 index.html 的样式表也能站对位置 */
-    var DOCK_CSS = 'position:static;display:inline-flex;align-items:center;gap:6px;' +
-      'padding:3px 10px;border:1px solid transparent;border-radius:999px;flex:none;' +
-      'margin:7px 0 0;max-width:100%;' +
-      'font:600 11.5px/1.5 ui-monospace,Menlo,Consolas,monospace;' +
-      'white-space:nowrap;overflow:hidden;cursor:pointer;' +
-      'user-select:none;pointer-events:auto;opacity:.94';
-    var FLOAT_CSS = 'position:fixed;z-index:61;left:16px;right:auto;bottom:12px;' +
+    /* 定位与配色写内联：这份脚本不依赖 index.html 的样式表也能站对位置。
+       2026-11-28 定版：状态条固定在视口左下角，与居中备案号、右下角署名同行。 */
+    var FLOAT_CSS = 'position:fixed;z-index:61;left:14px;right:auto;bottom:11px;' +
       'display:inline-flex;align-items:center;gap:6px;padding:3px 10px;' +
-      'border:1px solid transparent;border-radius:999px;font:600 11.5px/1.5 ui-monospace,Menlo,Consolas,monospace;' +
-      'white-space:nowrap;max-width:46vw;overflow:hidden;cursor:pointer;' +
+      'border:1px solid transparent;border-radius:999px;font:600 11px/1.5 ui-monospace,Menlo,Consolas,monospace;' +
+      'white-space:nowrap;max-width:28vw;overflow:hidden;cursor:pointer;' +
       'user-select:none;pointer-events:auto;opacity:.94';
     bar.onclick = function () {
       var s = NetSync.status();
@@ -576,21 +571,9 @@
       if (window.uiAlert) window.uiAlert(msg, { title: '同步状态' });
       else alert(msg);
     };
-    /** 落位：侧栏用户卡(.side-user)存在 → 停到用户名下方（文档流成员，
-        2026-11-01 从顶栏改到侧栏左下角；底部与右下角设计者署名同一条水平线）；
-        没有侧栏（登录 / 锁屏）→ 固定在左下角，避开登录卡右下角的署名徽章 */
+    /** 落位：始终固定在视口左下角。左下角状态条 / 居中备案号 / 右下角署名
+        三者 bottom 都是 11px，严格同一条水平线；不进侧栏文档流（会差十几像素）。 */
     function placeSyncBar() {
-      var sideUser = document.querySelector('.side-user');
-      if (sideUser) {
-        if (bar.parentNode !== sideUser) {
-          bar.style.cssText = DOCK_CSS;
-          sideUser.appendChild(bar);
-        }
-        /* ICP 备案号固定在视口左下角、与右下角署名同一水平线（2026-11-23 定版）：
-           不进侧栏（进了文档流就跟 fixed 署名差十几像素，对不齐）。
-           DOM 本体在 index.html body 末尾，CSS 用 fixed 定位即可。 */
-        return;
-      }
       if (bar.parentNode !== document.body) document.body.appendChild(bar);
       if (bar.style.position !== 'fixed') bar.style.cssText = FLOAT_CSS;
       paintSyncBar();

@@ -469,14 +469,14 @@ label{display:block;font-size:13px;color:var(--text-secondary);margin:12px 0 6px
   .af-credit{font-size:11px;padding:2px 8px}
   .corner-credit{right:10px;bottom:11px}
 }
-/* 备案号（2026-11-23 定版）：固定视口左下角，与右下角「牛老师设计」严格同一水平线。
-   bottom 与署名 .corner-credit 完全一致（所有屏幕都是 11px）；
-   left 14px（窄屏 10px）贴左边。2026-11-23 取消底部 Tab 栏后不再需要让位。 */
+/* 底部状态行（2026-11-28 定版）：ICP+网安备案号并排居中，
+   与右下角「牛老师设计」严格同一水平线（bottom 都是 11px）。 */
 .beian-foot{
-  position:fixed;left:14px;right:auto;bottom:11px;z-index:60;
-  display:flex;flex-direction:column;align-items:flex-start;gap:0;
-  font-size:10px;line-height:1.45;color:var(--text-secondary,#849690);
-  opacity:.82;user-select:none;-webkit-user-select:none;white-space:nowrap;
+  position:fixed;left:50%;right:auto;bottom:11px;z-index:60;
+  transform:translateX(-50%);
+  display:flex;flex-direction:row;align-items:center;justify-content:center;gap:10px;
+  max-width:60vw;font-size:10.5px;line-height:1.45;color:var(--text-secondary,#849690);
+  opacity:.92;user-select:none;-webkit-user-select:none;white-space:nowrap;
 }
 .beian-foot a{color:inherit;text-decoration:none}
 .beian-foot a:hover{text-decoration:underline}
@@ -484,16 +484,18 @@ label{display:block;font-size:13px;color:var(--text-secondary);margin:12px 0 6px
 .beian-gong{display:inline-flex;align-items:center;gap:4px}
 .beian-gong img{width:20px;height:20px;display:block;flex:none}
 @media (max-width:860px){
-  .beian-foot{left:10px;bottom:11px}
+  .beian-foot{bottom:11px;font-size:8.5px;gap:5px;max-width:56vw}
+  .beian-gong img{width:16px;height:16px}
 }
 /* 登录/改密卡片内：署名+备案号贴卡片底部内侧（相对 .login absolute），
    left/right 对齐卡片 padding(30px)，不再贴视口边缘、不越出卡片边框。
    两者 bottom 同为 8px，严格同一水平线。 */
 .login .corner-credit{position:absolute;right:30px;bottom:8px}
-.login .beian-foot{position:absolute;left:30px;right:auto;bottom:8px;z-index:auto}
+.login .beian-foot{position:absolute;left:30px;right:auto;bottom:8px;z-index:auto;
+  transform:none;max-width:none;font-size:9px;gap:6px}
 @media (max-width:860px){
   .login .corner-credit{right:24px;bottom:8px}
-  .login .beian-foot{left:24px;bottom:8px}
+  .login .beian-foot{left:24px;bottom:8px;font-size:8px}
 }
 /* 矮屏（≤900px 高）压缩登录/改密卡片，一屏放下、不出滚动条（2026-11-23）。
    加了页脚后卡片变高，手机上要滚一下才看全——这里收紧各处间距。 */

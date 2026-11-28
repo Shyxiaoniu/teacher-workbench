@@ -3308,26 +3308,26 @@ body.seat-rsz-dragging .seat:hover { transform:none; box-shadow:none; }
    (.mini-bar, z-index 520) 出现时自动隐藏让位，保证不重叠。 */
 .corner-credit { position:fixed; right:14px; bottom:11px; z-index:60; }
 body:has(.mini-bar) .corner-credit { display:none; }
-/* 备案号（2026-11-23 定版）：固定视口左下角，与右下角「牛老师设计」严格同一水平线。
-   bottom 与署名 .corner-credit 的 11px 完全一致；left 14px 贴左边。
-   不进侧栏文档流（进了就比 fixed 署名高一截，对不齐）。 */
+/* 底部状态行（2026-11-28 定版）：服务器状态在左、ICP+网安备案号居中、
+   「牛老师设计」在右，三者严格同一水平线（bottom 全部 11px）。
+   备案号不再丢在左下角，ICP 与网安并排显示，不折行。 */
 .beian-foot {
-  position:fixed; left:14px; right:auto; bottom:11px; z-index:60;
-  display:flex; flex-direction:column; align-items:flex-start; gap:0;
-  font-size:10.5px; line-height:1.5; color:var(--text-secondary,#849690);
-  opacity:.82; user-select:none; white-space:nowrap;
+  position:fixed; left:50%; right:auto; bottom:11px; z-index:60;
+  transform:translateX(-50%);
+  display:flex; flex-direction:row; align-items:center; justify-content:center; gap:12px;
+  max-width:60vw; font-size:11px; line-height:1.5; color:var(--text-secondary,#849690);
+  opacity:.92; user-select:none; white-space:nowrap;
 }
 .beian-foot a { color:inherit; text-decoration:none; }
 .beian-foot a:hover { text-decoration:underline; }
 /* 公安备案图标按官方 20×20 原尺寸显示，不放大，避免糊成一团 */
 .beian-gong { display:inline-flex; align-items:center; gap:4px; }
 .beian-gong img { width:20px; height:20px; display:block; flex:none; }
-/* 窄屏：署名 right:10/bottom:9，备案号同步 left:10/bottom:9，仍严格同行 */
+/* 窄屏：三者仍同一行，缩小字号让得开左右两侧 */
 @media (max-width:820px) {
-  .beian-foot { left:10px; bottom:9px; font-size:10px; }
+  .beian-foot { bottom:11px; font-size:9px; gap:6px; max-width:56vw; }
+  .beian-gong img { width:16px; height:16px; }
 }
-/* 迷你计时条出现时署名隐藏，备案号仍留左下（不隐藏，备案号是法定要求） */
-body:has(.mini-bar) .beian-foot { bottom:9px; }
 @media (max-width:820px) {
   .af-credit { font-size:11px; padding:2px 8px; }
   .corner-credit { right:10px; bottom:9px; }
