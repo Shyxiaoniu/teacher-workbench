@@ -150,7 +150,7 @@ body{
   background:color-mix(in srgb, var(--bg-surface) 88%, transparent);
   backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);
   border-right:1px solid var(--border);
-  padding:16px 0;display:flex;flex-direction:column;
+  padding:16px 0 50px;display:flex;flex-direction:column;
   position:sticky;top:0;height:100vh;overflow:hidden;
 }
 .side-brand{
@@ -238,7 +238,7 @@ html[data-mode="dark"] .side-item .side-ico svg{
 .su-gear{font-size:15px;color:var(--text-secondary);flex:none;transition:color .16s,transform .3s var(--ease-out)}
 .su-btn:hover .su-gear{color:var(--brand-primary);transform:rotate(60deg)}
 /* 主内容区 */
-.main{flex:1;padding:20px 22px 46px;min-width:0}
+.main{flex:1;padding:20px 22px 62px;min-width:0}
 .page-head{
   display:flex;align-items:flex-end;justify-content:space-between;
   flex-wrap:wrap;gap:10px;margin-bottom:14px;
@@ -437,12 +437,12 @@ label{display:block;font-size:13px;color:var(--text-secondary);margin:12px 0 6px
    主内容区仍有足够宽度；tabbar 全部隐藏。 */
 .tabbar{display:none !important}
 @media (max-width:860px){
-  .sidebar{width:172px;flex-basis:172px;padding:12px 0}
+  .sidebar{width:172px;flex-basis:172px;padding:12px 0 50px}
   .side-brand{padding:0 10px 10px;font-size:13.5px}
   .side-brand small{display:none}
   .nav-gt{padding:6px 10px 3px;font-size:10.5px}
   .side-item{padding:9px 10px;font-size:13px;gap:7px}
-  .main{padding:14px 14px 24px}
+  .main{padding:14px 14px 62px}
   .cols2{grid-template-columns:1fr}
 }
 @media (max-width:560px){
@@ -464,19 +464,32 @@ label{display:block;font-size:13px;color:var(--text-secondary);margin:12px 0 6px
   font-size:11.5px;font-weight:600;letter-spacing:.4px;
   cursor:default;user-select:none;-webkit-user-select:none;white-space:nowrap;
 }
-.corner-credit{position:fixed;right:14px;bottom:11px;z-index:60}
+/* 常驻吸底状态栏（2026-11-28 定版，与教师端同款）：整条有底色和顶边，
+   内容滚到底时停在横条上方，不再从备案号文字底下穿过。颜色全走本端主题
+   变量（--bg-surface / --border / --text-secondary），浅色、夜间、各主题自动适配。
+   登录/改密页没有 .main，横条自动隐藏，那里仍由卡片内页脚负责。 */
+.wb-bottom-bar{
+  display:none;
+  position:fixed;left:0;right:0;bottom:0;z-index:59;
+  height:34px;background:var(--bg-surface);
+  border-top:1px solid var(--border);
+  pointer-events:none;
+}
+body:has(.main) .wb-bottom-bar{display:block}
+.corner-credit{position:fixed;right:14px;bottom:7px;z-index:60;pointer-events:auto}
 @media (max-width:860px){
   .af-credit{font-size:11px;padding:2px 8px}
-  .corner-credit{right:10px;bottom:11px}
+  .corner-credit{right:10px;bottom:5px}
 }
 /* 底部状态行（2026-11-28 定版）：ICP+网安备案号并排居中，
-   与右下角「牛老师设计」严格同一水平线（bottom 都是 11px）。 */
+   与右下角「牛老师设计」落在吸底栏中线（bottom 都是 7px）。 */
 .beian-foot{
-  position:fixed;left:50%;right:auto;bottom:11px;z-index:60;
+  position:fixed;left:50%;right:auto;bottom:7px;z-index:60;
   transform:translateX(-50%);
   display:flex;flex-direction:row;align-items:center;justify-content:center;gap:10px;
   max-width:60vw;font-size:10.5px;line-height:1.45;color:var(--text-secondary,#849690);
   opacity:.92;user-select:none;-webkit-user-select:none;white-space:nowrap;
+  pointer-events:auto;
 }
 .beian-foot a{color:inherit;text-decoration:none}
 .beian-foot a:hover{text-decoration:underline}
@@ -484,7 +497,7 @@ label{display:block;font-size:13px;color:var(--text-secondary);margin:12px 0 6px
 .beian-gong{display:inline-flex;align-items:center;gap:4px}
 .beian-gong img{width:20px;height:20px;display:block;flex:none}
 @media (max-width:860px){
-  .beian-foot{bottom:11px;font-size:8.5px;gap:5px;max-width:56vw}
+  .beian-foot{bottom:5px;font-size:8.5px;gap:5px;max-width:56vw}
   .beian-gong img{width:16px;height:16px}
 }
 /* 登录/改密卡片内：署名+备案号贴卡片底部内侧（相对 .login absolute），

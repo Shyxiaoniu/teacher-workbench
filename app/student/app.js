@@ -35,6 +35,9 @@
   /* 备案号由 /beian.js 按访问域名动态填入 window.WB_BEIAN_HTML，
      这里只留空壳；离线部署 / 本地 IP 访问时永远为空，不把站主备案号带进包里。 */
   var FOOT_HTML =
+    /* 常驻吸底栏必须跟署名/备案号一起重建：登录后 document.body.innerHTML
+       会被整体替换，只写在 index.html 里的那一分会丢（2026-11-28 踩过）。 */
+    '<div class="wb-bottom-bar" aria-hidden="true"></div>' +
     '<span class="af-credit corner-credit" title="班级工作台 · 设计者">🐮 牛老师设计</span>' +
     '<span class="beian-foot"></span>';
   var WD = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
