@@ -435,6 +435,16 @@
   function renderPreview() {
     var seq = ++renderSeq;
     var doc = composeDoc();
+    /* 浏览器标签式显示 <title>：srcdoc 的标题不会出现在 iframe 页面里，
+       学生写了 title 却看不到效果，这里同步读出来贴到预览区顶部（2026-11-28）。 */
+    var titleEl = document.getElementById('pvTitle');
+    if (titleEl) {
+      var m = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(doc);
+      var t = m ? m[1].replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim() : '';
+      titleEl.textContent = t || '未设置页面标题';
+      titleEl.title = t ? ('页面标题：' + t) : '代码里还没有 <title> 标签';
+      if (titleEl.classList) titleEl.classList.toggle('empty', !t);
+    }
     return new Promise(function (resolve) {
       var done = false;
       function fin() {

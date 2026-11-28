@@ -247,6 +247,15 @@ body.ds-resizing .code-pane textarea{pointer-events:none}
 .ds-pv-head{display:flex;align-items:center;gap:8px;padding:8px 12px;flex:none;
   border-bottom:1px solid var(--line);background:var(--card)}
 .ds-pv-head b{font-size:13px;font-weight:600;color:var(--ink2)}
+/* 浏览器标签式标题（2026-11-28）：iframe srcdoc 的 <title> 只会落在浏览器标签上，
+   学生写代码时看不到。这里把当前文档标题读出来贴在预览头部，改代码即刻同步。 */
+.ds-pv-head .pv-title{display:inline-flex;align-items:center;gap:5px;max-width:38%;min-width:0;
+  padding:3px 9px;border:1px solid var(--line);border-radius:7px;
+  background:var(--card-2);color:var(--ink2);font-size:11.5px;font-weight:600;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ds-pv-head .pv-title::before{content:'';flex:none;width:8px;height:8px;border-radius:50%;
+  background:var(--brand,#b45b33)}
+.ds-pv-head .pv-title.empty{color:var(--ink3);font-weight:400}
 .ds-pv-head .size{font-size:11.5px;color:var(--ink3);font-variant-numeric:tabular-nums}
 .ds-stage{flex:1;overflow:auto;padding:16px 16px 26px;min-height:0;background:
   radial-gradient(rgba(180,91,51,.10) 1px, transparent 1px) 0 0/16px 16px,

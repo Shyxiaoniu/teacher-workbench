@@ -3411,10 +3411,16 @@ function placeTypingInput() {
   var echo = document.getElementById('tbEcho');
   var left = 8, top = 4, w = 34, h = 32;
   if (echo && echo.children.length) {
-    /* 短课文：回显层与课文逐字同列，直接取第 idx 格的 offset */
-    var cell = echo.children[Math.min(P.idx, echo.children.length - 1)];
+    /* 2.1.21：光标 / 输入法候选框贴「已上屏文字」右缘，而不是当前格左缘。
+       有错字时已上屏文字比 P.idx 多一格，旧算法按 P.idx 取当前格，光标会
+       跳回左边；直接画在格子左缘还会压住字。这里统一右移并留 3px 间距，
+       错误内容也始终跟在文字右边，闪烁光标不再和字母重叠。 */
+    var typedN = Math.min((P.typed ? P.typed.length : P.idx) + (P.errChar ? 1 : 0),
+                          echo.children.length);
+    var cell = echo.children[Math.max(0, typedN - 1)];
     if (cell) {
-      left = cell.offsetLeft; top = cell.offsetTop;
+      left = cell.offsetLeft + cell.offsetWidth + 3;
+      top = cell.offsetTop;
       w = Math.max(26, cell.offsetWidth);
       h = Math.max(26, cell.offsetHeight);
     }
@@ -4227,9 +4233,14 @@ function bindPlay() {
       var box = $('#tbEcho'), mini = $('#tbMini');
       var left = 8, top = 4;
       if (box && box.children.length) {
-        var at = box.children[Math.min(P.idx, box.children.length - 1)];
+        /* 与 placeTypingInput 同口径：贴已上屏文字右缘，错字也算一格；
+           再错开 4px，拼音浮标不压住闪烁光标和输入框里的字母。 */
+        var typedN = Math.min((P.typed ? P.typed.length : P.idx) + (P.errChar ? 1 : 0),
+                              box.children.length);
+        var at = box.children[Math.max(0, typedN - 1)];
         if (!at) { tbComp.hidden = true; return; }
-        left = at.offsetLeft; top = at.offsetTop + 3;
+        left = at.offsetLeft + at.offsetWidth + 4;
+        top = at.offsetTop + 3;
       } else if (mini) {
         left = 8 + mini.offsetWidth; top = 4;
       }

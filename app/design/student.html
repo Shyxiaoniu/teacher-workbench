@@ -80,6 +80,9 @@
     <section class="ds-preview">
       <div class="ds-pv-head">
         <b>实时预览</b>
+        <!-- 浏览器标签式展示代码里 <title> 的内容：srcdoc 的标题不会显示在 iframe 页面里，
+             学生写了 title 却看不到效果，这里实时把标题读出来贴在预览区顶部。 -->
+        <span class="pv-title" id="pvTitle" title="当前页面代码里 <title> 的内容">未设置页面标题</span>
         <span class="sp"></span>
         <button class="btn ghost sm" id="btnRefresh" title="重新渲染一次（改完代码会自动刷新）"><svg class="i-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.5-5.8"/><path d="M20 4.6V9.2h-4.6"/></svg>刷新</button>
       </div>
