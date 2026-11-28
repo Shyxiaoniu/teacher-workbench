@@ -45,6 +45,7 @@ sys.path.insert(0, os.path.join(ROOT, "submission-system"))
 import auth as A                       # noqa: E402
 import accounts as ACC                 # noqa: E402  管理员 / 多教师账号 + 工作区隔离
 import account_config as ACFG          # noqa: E402  账号级配置代理（config.json 不再全服务共享）
+import beian as BEIAN                  # noqa: E402  备案号按访问域名动态展示
 import pages as P                      # noqa: E402
 import projection as PJ                # noqa: E402
 import ports as PORTX                  # noqa: E402
@@ -1823,6 +1824,12 @@ class Handler(LEG.Handler):
                 return self._v2_get(path, qs)
             if path in ("/", "/index.html"):
                 return self._entry()
+            # 备案号按访问域名动态下发（2026-11-28）：离线包默认不展示，
+            # 只有数据卷 beian.json 配的域名命中请求 Host 才返回备案信息。
+            if path == "/beian.js":
+                return self._public_asset("beian.js", "application/javascript; charset=utf-8")
+            if path == "/beian-icon.png":
+                return self._beian_icon()
             # 站点图标：Windows「新建 → 快捷方式」填网址后，系统只会去取根目录的
             # /favicon.ico；没有它，桌面上就是一个白纸图标。学生端页面另有自己的
             # /s/favicon.ico（_student_static 直接发），两边互不影响。
@@ -1840,12 +1847,12 @@ class Handler(LEG.Handler):
             if path in ("/core/cipher.js", "/login-import.js"):
                 return self._login_asset(path)
             if path == "/teacher/forgot":
-                return self._html(P.forgot_page())
+                return self._html(P.forgot_page(self.headers.get("Host", "")))
             # 管理员控制台：只管教师账号，不承载任何业务设置
             if path in ("/admin", "/admin/"):
                 if not self._is_admin():
                     return self._redirect("/teacher/login")
-                return self._html(P.admin_page(VERSION))
+                return self._html(P.admin_page(VERSION, self.headers.get("Host", "")))
             if path == "/teacher/console":
                 if not self._is_teacher():
                     return self._redirect("/teacher/login")
@@ -2105,7 +2112,7 @@ class Handler(LEG.Handler):
     def _teacher_login_page(self):
         # 2.0.13：登录页默认就是管理员登录界面，教师账号由管理员统一注册，
         # 不再有「首次设置 / 注册」这一步（login_page_setup 已停用）。
-        return self._html(P.login_page())
+        return self._html(P.login_page(host=self.headers.get("Host", "")))
 
     def _login_asset(self, path):
         """登录页公开静态脚本（无登录态）：白名单只放这两个文件。"""
@@ -2160,6 +2167,34 @@ class Handler(LEG.Handler):
         self.send_response(200)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _public_asset(self, name, ctype):
+        """根目录公开的纯静态小文件（beian.js），师生端都要用，不能塞进账号工作区。"""
+        full = os.path.normpath(os.path.join(ROOT, name))
+        if not full.startswith(os.path.normpath(ROOT)) or not os.path.isfile(full):
+            return self._html("<h1>页面不存在</h1>", 404)
+        with open(full, "rb") as f:
+            body = f.read()
+        self.send_response(200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-cache")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _beian_icon(self):
+        """公安备案图标：官方 20×20 原图，按原始尺寸显示，避免放大糊掉。"""
+        full = os.path.join(ROOT, "icons", "gong-an-beian-20.png")
+        if not os.path.isfile(full):
+            return self._html("<h1>页面不存在</h1>", 404)
+        with open(full, "rb") as f:
+            body = f.read()
+        self.send_response(200)
+        self.send_header("Content-Type", "image/png")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "public, max-age=86400")
         self.end_headers()
         self.wfile.write(body)
 
@@ -3145,6 +3180,8 @@ class Handler(LEG.Handler):
         if path == "/api/v2/ping":
             return self._json({"ok": True, "service": "workbench", "version": VERSION,
                                "rev": STORE.rev(), "uptime": int(time.time() - STARTED)})
+        if path == "/api/v2/beian":
+            return self._json(BEIAN.info(self.headers.get("Host", "")))
         if path == "/api/v2/update/manifest":
             # 内网镜像：服务器无外网时把 Gitee 的 version.json 镜像到这里
             p = os.path.join(DATA_DIR, "update_mirror", "version.json")

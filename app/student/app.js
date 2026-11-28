@@ -32,12 +32,11 @@
      学生端三处会重写 body（登录/改密/主界面），以前备案号写在 index.html 里
      被 innerHTML 抹掉 → 任何页面都看不到。现在把署名+备案号做成一段，
      每次 body 重建都带上，且并排同一行、永远不丢。 */
+  /* 备案号由 /beian.js 按访问域名动态填入 window.WB_BEIAN_HTML，
+     这里只留空壳；离线部署 / 本地 IP 访问时永远为空，不把站主备案号带进包里。 */
   var FOOT_HTML =
     '<span class="af-credit corner-credit" title="班级工作台 · 设计者">🐮 牛老师设计</span>' +
-    '<span class="beian-foot"><a href="https://beian.miit.gov.cn/" target="_blank" ' +
-    'rel="noopener">豫ICP备2026058674号-1</a>' +
-    '<a href="https://beian.mps.gov.cn/" target="_blank" rel="noopener" hidden>' +
-    '粤公网安备 XXXXXXXXXXXXXX号</a></span>';
+    '<span class="beian-foot"></span>';
   var WD = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
   /* 学生自己「添加」H5 网页设计页签的标记：老师开放 + 学生点过入口卡才为 1。
      换设备要重新添加一次，避免把入口强塞给还没准备用的同学。 */

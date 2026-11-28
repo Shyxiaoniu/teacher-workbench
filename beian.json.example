@@ -1,0 +1,9 @@
+{
+  "_note": "复制到数据卷根目录并改名为 beian.json。在线更新只换程序文件，数据卷不会丢，配一次就一直生效。",
+  "hosts": ["workbench.example.com", "*.your-domain.com"],
+  "icp": "粤ICP备XXXXXXXX号-X",
+  "gong": "粤公网安备 XXXXXXXXXXXXXX号",
+  "gong_code": "XXXXXXXXXXXXXX",
+  "icp_url": "https://beian.miit.gov.cn/",
+  "gong_url": "https://beian.mps.gov.cn/#/query/webSearch?code=XXXXXXXXXXXXXX"
+}

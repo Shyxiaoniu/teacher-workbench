@@ -480,6 +480,9 @@ label{display:block;font-size:13px;color:var(--text-secondary);margin:12px 0 6px
 }
 .beian-foot a{color:inherit;text-decoration:none}
 .beian-foot a:hover{text-decoration:underline}
+/* 公安备案图标按官方 20×20 原尺寸显示，不放大，避免糊成一团 */
+.beian-gong{display:inline-flex;align-items:center;gap:4px}
+.beian-gong img{width:20px;height:20px;display:block;flex:none}
 @media (max-width:860px){
   .beian-foot{left:10px;bottom:11px}
 }

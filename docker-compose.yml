@@ -93,6 +93,11 @@ services:
       # 对外地址（可选）：留空 = 跟随浏览器访问的地址（推荐）。
       # 只有前面还套了一层域名/端口映射时才需要写死，例如 http://nas.example.lan:8080
       WB_PUBLIC_URL: "${WB_PUBLIC_URL:-}"
+      # 备案号（2026-11-28）：只按域名白名单展示，离线包 / 本地 IP 访问不展示。
+      # 也可改用数据卷里的 beian.json；在线更新不会丢。
+      WB_BEIAN_HOSTS: "${WB_BEIAN_HOSTS:-}"
+      WB_ICP_NO: "${WB_ICP_NO:-}"
+      WB_GONG_NO: "${WB_GONG_NO:-}"
       # 信任内网反向代理传来的 X-Forwarded-For（网关容器 → 本容器）。
       # 不开的话所有师生会共用网关那一个 IP：限速互相拖累、日志分不清是谁。
       WB_TRUST_PROXY: "1"

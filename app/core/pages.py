@@ -71,27 +71,19 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.6px;backgrou
 LOGO = '<div class="logo">班</div>'
 
 
-# 公安备案 / ICP 备案信息（2026-11-22 加）：所有服务端渲染页统一挂页脚。
-# 公安备案号待下发后填 BEIAN_GONG 即可，不用再改各页面。
-ICP_NO = "豫ICP备2026058674号-1"
-GONG_NO = ""   # 例：粤公网安备 4406050200xxxx号，拿到后填这里
-BEIAN_FOOT = (
-    '<div style="max-width:420px;margin:26px auto 18px;text-align:center;'
-    'font-size:11.5px;line-height:1.9;color:#849690">'
-    '<a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener" '
-    'style="color:inherit;text-decoration:none">' + ICP_NO + '</a>'
-    + ('<br><a href="https://beian.mps.gov.cn/" target="_blank" rel="noopener" '
-       'style="color:inherit;text-decoration:none">' + GONG_NO + '</a>' if GONG_NO else '')
-    + '</div>'
-)
+# 公安备案 / ICP 备案信息（2026-11-28 改为按访问域名动态判定）：
+# 备案号不再写进代码 / 离线包，只有数据卷 beian.json 配了域名白名单，
+# 且请求 Host 命中时才展示。详见 core/beian.py。
+import beian as BEIAN
 
 
-def _page(title, body, extra_head=""):
+def _page(title, body, extra_head="", host=""):
     return """<!DOCTYPE html>
 <html lang="zh-CN"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>%s</title><style>%s</style>%s</head>
-<body><div class="wrap">%s</div>%s</body></html>""" % (title, BASE_CSS, extra_head, body, BEIAN_FOOT)
+<body><div class="wrap">%s</div>%s</body></html>""" % (title, BASE_CSS, extra_head, body,
+                                                      BEIAN.foot(host))
 
 
 LOGIN_BODY = """
@@ -268,15 +260,15 @@ LOGIN_SCRIPTS = ('<script src="/core/cipher.js"></script>'
                  '<script src="/login-import.js"></script>')
 
 
-def login_page(msg=""):
+def login_page(msg="", host=""):
     body = LOGIN_BODY.replace("__LOGO__", LOGO).replace("__MSG__", msg)
-    return _page("登录 · 班级工作台", body, LOGIN_SCRIPTS)
+    return _page("登录 · 班级工作台", body, LOGIN_SCRIPTS, host)
 
 
-def login_page_setup(msg=""):
+def login_page_setup(msg="", host=""):
     # 2.0.13：账号注册已取消（教师账号由管理员统一创建）。
     # 保留函数只是为了让旧调用 / 旧书签落到登录页，不再出现创建账号表单。
-    return login_page(msg)
+    return login_page(msg, host)
 
 
 # ---------------------------------------------------------------------------
@@ -626,11 +618,11 @@ load();
 </script>"""
 
 
-def admin_page(version=""):
+def admin_page(version="", host=""):
     return _page("管理员控制台 · 班级工作台",
                  ADMIN_BODY.replace("__LOGO__", LOGO)
                            .replace("__VER__", str(version or "")),
-                 ADMIN_UI)
+                 ADMIN_UI, host)
 
 
 FORGOT_BODY = """
@@ -764,8 +756,8 @@ document.addEventListener('keydown',function(e){
 </script>"""
 
 
-def forgot_page():
-    return _page("找回密码 · 班级工作台", FORGOT_BODY.replace("__LOGO__", LOGO))
+def forgot_page(host=""):
+    return _page("找回密码 · 班级工作台", FORGOT_BODY.replace("__LOGO__", LOGO), "", host)
 
 
 # 「/join 扫码进入班级」整页已删除（2026-11-01 牛哥：不要扫码功能）。
