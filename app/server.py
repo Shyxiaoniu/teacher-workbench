@@ -1847,12 +1847,12 @@ class Handler(LEG.Handler):
             if path in ("/core/cipher.js", "/login-import.js"):
                 return self._login_asset(path)
             if path == "/teacher/forgot":
-                return self._html(P.forgot_page(self.headers.get("Host", "")))
+                return self._html(P.forgot_page(self._request_host()))
             # 管理员控制台：只管教师账号，不承载任何业务设置
             if path in ("/admin", "/admin/"):
                 if not self._is_admin():
                     return self._redirect("/teacher/login")
-                return self._html(P.admin_page(VERSION, self.headers.get("Host", "")))
+                return self._html(P.admin_page(VERSION, self._request_host()))
             if path == "/teacher/console":
                 if not self._is_teacher():
                     return self._redirect("/teacher/login")
@@ -2112,7 +2112,7 @@ class Handler(LEG.Handler):
     def _teacher_login_page(self):
         # 2.0.13：登录页默认就是管理员登录界面，教师账号由管理员统一注册，
         # 不再有「首次设置 / 注册」这一步（login_page_setup 已停用）。
-        return self._html(P.login_page(host=self.headers.get("Host", "")))
+        return self._html(P.login_page(host=self._request_host()))
 
     def _login_asset(self, path):
         """登录页公开静态脚本（无登录态）：白名单只放这两个文件。"""
@@ -2169,6 +2169,10 @@ class Handler(LEG.Handler):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    def _request_host(self):
+        """备案域名判定用：反向代理场景优先 X-Forwarded-Host，退化到 Host。"""
+        return (self.headers.get("X-Forwarded-Host") or self.headers.get("Host") or "")
 
     def _public_asset(self, name, ctype):
         """根目录公开的纯静态小文件（beian.js），师生端都要用，不能塞进账号工作区。"""
@@ -3181,7 +3185,7 @@ class Handler(LEG.Handler):
             return self._json({"ok": True, "service": "workbench", "version": VERSION,
                                "rev": STORE.rev(), "uptime": int(time.time() - STARTED)})
         if path == "/api/v2/beian":
-            return self._json(BEIAN.info(self.headers.get("Host", "")))
+            return self._json(BEIAN.info(self._request_host()))
         if path == "/api/v2/update/manifest":
             # 内网镜像：服务器无外网时把 Gitee 的 version.json 镜像到这里
             p = os.path.join(DATA_DIR, "update_mirror", "version.json")
