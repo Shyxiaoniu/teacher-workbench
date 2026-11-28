@@ -3419,7 +3419,10 @@ function placeTypingInput() {
                           echo.children.length);
     var cell = echo.children[Math.max(0, typedN - 1)];
     if (cell) {
-      left = cell.offsetLeft + cell.offsetWidth + 3;
+      /* 2.1.23：一个字都还没上屏时（新关卡 / 续打 idx=0），typedN=0，
+         clamp 到 children[0] 后不能再取右缘 —— 那会把光标放到第一个字
+         右边，跟上方课文第 0 格对不上（2.1.22 引入的回归）。此时贴左缘。 */
+      left = cell.offsetLeft + (typedN > 0 ? cell.offsetWidth + 3 : 0);
       top = cell.offsetTop;
       w = Math.max(26, cell.offsetWidth);
       h = Math.max(26, cell.offsetHeight);
@@ -3579,7 +3582,7 @@ function renderPlay() {
                  输入台里又有 tb-mini 小回显，看起来像两个输入框。现在文章页
                  只留这一条输入区，打过的字直接在上方原文里变色。 */
               (isLong ? '' :
-                '<div class="tb-echo" id="tbEcho" aria-hidden="true">' + echoHtml(L.text, 0) + '</div>') +
+                '<div class="tb-echo" id="tbEcho" aria-hidden="true">' + echoHtml(L.text, P.idx) + '</div>') +
               '<input class="tb-input" id="cnInput" autocomplete="off" autocorrect="off" ' +
                 'autocapitalize="off" spellcheck="false" placeholder=" " ' +
                 'aria-label="照着上面的课文打字，所打的字会出现在课文对应的位置">' +
@@ -3596,8 +3599,9 @@ function renderPlay() {
       /* 长文（整篇文章）不显示键盘与指法图：屏幕空间全留给课文本身
          （2026-11-04 牛哥定版：整篇连续练习，练习界面不再显示键盘和指法） */
       (L.long ? '' : kbDiagram() + legendRow() + handsDiagram()) +
-      '<div class="prog-row"><div class="progress-track"><div class="progress-fill" style="width:0%"></div></div>' +
-        (isCn ? '<span class="tb-count" id="tbCount">0 / ' + L.text.length + '</span>' : '') + '</div>';
+      '<div class="prog-row"><div class="progress-track"><div class="progress-fill" style="width:' +
+        (L.text.length ? Math.round(P.idx / L.text.length * 100) : 0) + '%"></div></div>' +
+        (isCn ? '<span class="tb-count" id="tbCount">' + P.idx + ' / ' + L.text.length + '</span>' : '') + '</div>';
   }
   app.classList.remove('ui-big');   /* 练习页回到原来的紧凑布局 */
   app.classList.add('in-play');     /* 练习页锁一屏：键盘自动缩，不出滚动条 */
@@ -4102,8 +4106,12 @@ function bindPlay() {
        打错的字会被截回，退格可整字回退。 */
     var cn = $('#cnInput');
     if (!cn) return;
-    P.typed = '';
-    cn.value = '';
+    /* 2.1.23：断点续打时 openLevel() 已把 P.idx 恢复到上次打到的位置，
+       这里要同步回填输入回显 —— 以前无条件清空，课文区变绿了、
+       输入框/回显层却是空的（牛哥截图「啥都没有」）。新关卡 idx=0，
+       slice 结果就是空串，行为与原来一致。 */
+    P.typed = L.text.slice(0, P.idx);
+    cn.value = P.typed;
     cn.focus();
     function setCaret() {
       try { cn.selectionStart = cn.selectionEnd = cn.value.length; } catch (e) {}
@@ -4239,7 +4247,8 @@ function bindPlay() {
                               box.children.length);
         var at = box.children[Math.max(0, typedN - 1)];
         if (!at) { tbComp.hidden = true; return; }
-        left = at.offsetLeft + at.offsetWidth + 4;
+        /* 与 placeTypingInput 同口径：没上屏任何字时贴第 0 格左缘 */
+        left = at.offsetLeft + (typedN > 0 ? at.offsetWidth + 4 : 0);
         top = at.offsetTop + 3;
       } else if (mini) {
         left = 8 + mini.offsetWidth; top = 4;

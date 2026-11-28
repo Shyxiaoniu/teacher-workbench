@@ -5,16 +5,16 @@
 > 给班主任和任课老师用的一套**班级工作台**：教师端与学生端共用一个网页入口，
 > 数据全部存在自己的服务器上，不依赖任何第三方云服务。
 
-当前版本：**2.1.22**（版本号唯一代码源：`app/server.py` 的 `VERSION`）
+当前版本：**2.1.23**（版本号唯一代码源：`app/server.py` 的 `VERSION`）
 
 > 各版本的更新历史（2.1 / 2.0.75 ~ 2.0.13）已移到 **[CHANGELOG.md](CHANGELOG.md)**，
 > 本文件只保留当前使用说明。
 
 ## 下载离线安装包（解压即用，无需装环境）
 
-**2.1.22 最新版**（内置 Python 3.13 运行时 + 全套程序，约 27 MB）：
+**2.1.23 最新版**（内置 Python 3.13 运行时 + 全套程序，约 27 MB）：
 
-> **https://gitee.com/shyxiaoniu/teacher-workbench/releases/download/v2.1.22/班级工作台2.1.22-281128.zip**
+> **https://gitee.com/shyxiaoniu/teacher-workbench/releases/download/v2.1.23/班级工作台2.1.23-281128.zip**
 
 浏览器直接打开即下载，**不用登录 Gitee**、国内满速。下载后解压，双击里面的
 `启动工作台.bat`（Windows）/ `启动教师端.command`（macOS / Linux）即可。
@@ -374,10 +374,10 @@ Ubuntu 20.04+ 自带 `python3`，标准库够用，**不需要 apt 装任何东�
 
 ```bash
 sudo mkdir -p /opt/workbench
-unzip -q 班级工作台2.1.22-281128.zip -d /tmp/wb
-sudo cp -a /tmp/wb/班级工作台2.1.22-281128/. /opt/workbench/
+unzip -q 班级工作台2.1.23-281128.zip -d /tmp/wb
+sudo cp -a /tmp/wb/班级工作台2.1.23-281128/. /opt/workbench/
 # 连 unzip 都没有？用自带的 python3 解：
-# python3 -c "import zipfile;zipfile.ZipFile('班级工作台2.1.22-281128.zip').extractall('/tmp/wb')"
+# python3 -c "import zipfile;zipfile.ZipFile('班级工作台2.1.23-281128.zip').extractall('/tmp/wb')"
 ```
 
 2. 先前台试跑一次（Ctrl+C 停）：
@@ -593,9 +593,9 @@ docker compose up -d --no-build
 
 | # | 文件 | 位置 |
 |---|---|---|
-| 1 | `app/server.py` | `VERSION = "2.1.22"` —— **唯一代码源** |
-| 2 | `.env.example` | `IMAGE_TAG=2.1.22` |
-| 3 | `docker-compose.yml` | `image: …:${IMAGE_TAG:-2.1.22}`（init 与 workbench **两处**） |
+| 1 | `app/server.py` | `VERSION = "2.1.23"` —— **唯一代码源** |
+| 2 | `.env.example` | `IMAGE_TAG=2.1.23` |
+| 3 | `docker-compose.yml` | `image: …:${IMAGE_TAG:-2.1.23}`（init 与 workbench **两处**） |
 | 4 | `README.md` | 文首「当前版本」 |
 | 5 | `version.json` | 随发版手工同步 |
 
@@ -684,7 +684,7 @@ docker compose up -d --no-build
 mirror/                                  ← 任意 http 服务能访问到的目录
 ├── version.json                          ← 从仓库根目录同步
 └── dist/
-    └── 班级工作台2.1.22-281128.zip        ← version.json 里 zip 指向的那个包
+    └── 班级工作台2.1.23-281128.zip        ← version.json 里 zip 指向的那个包
 ```
 
 > 仓库里的 `version.json` 的 `zip` 是**完整 Gitee Release 直链**，在线更新直接下载它。
@@ -757,7 +757,7 @@ Gitee / GitHub —— 这是故意的：老师指定了内网源，就不该偷�
   （manifest 含版本 / 日期 / zip 文件名 / sha256 / notes）；设置页不再提供源地址入口，
   避免填错地址导致更新失败；启动发现新版本会在左下小窗与头像角标提醒；
 - `version.json` 的 `zip` 当前写**完整 Gitee Release 直链**
-  （`https://gitee.com/shyxiaoniu/teacher-workbench/releases/download/v2.1.22/<包名>.zip`），
+  （`https://gitee.com/shyxiaoniu/teacher-workbench/releases/download/v2.1.23/<包名>.zip`），
   国内下载满速；仓库 `dist/<包名>.zip` 仍保留，供内网镜像与备份使用。
   更新器同时兼容相对路径与纯文件名的 manifest（先试 `dist/`、再试仓库根）；全部 404 时明确提示
   「安装包与 manifest 不一致」而不是笼统的「检查更新源地址」；
