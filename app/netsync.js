@@ -558,7 +558,7 @@
     bar.appendChild(snDot); bar.appendChild(snTxt); bar.appendChild(snVer);
     /* 定位与配色写内联：这份脚本不依赖 index.html 的样式表也能站对位置。
        2026-11-28 定版：状态条固定在视口左下角，与居中备案号、右下角署名同行。 */
-    var FLOAT_CSS = 'position:fixed;z-index:61;left:14px;right:auto;bottom:11px;' +
+    var FLOAT_CSS = 'position:fixed;z-index:61;left:14px;right:auto;bottom:7px;' +
       'display:inline-flex;align-items:center;gap:6px;padding:3px 10px;' +
       'border:1px solid transparent;border-radius:999px;font:600 11px/1.5 ui-monospace,Menlo,Consolas,monospace;' +
       'white-space:nowrap;max-width:28vw;overflow:hidden;cursor:pointer;' +
